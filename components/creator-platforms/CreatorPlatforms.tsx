@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronRight, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import BrowserConnect from "./BrowserConnect";
+import HostedConnect from "./HostedConnect";
 import SessionConnect from "./SessionConnect";
 import styles from "./CreatorPlatforms.module.css";
 import { PLATFORM_SCHEMA, type CreatorPlatforms as Snapshot, type PlatformChannel } from "@/lib/creator-platforms/model";
@@ -10,6 +11,7 @@ import { PLATFORM_SCHEMA, type CreatorPlatforms as Snapshot, type PlatformChanne
 export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   const [data,setData]=useState(initial),[busy,setBusy]=useState<PlatformChannel|null>(null);
   const [notice,setNotice]=useState(""),[connecting,setConnecting]=useState(false);
+  const [connectingAccount,setConnectingAccount]=useState<string|null>(null);
   const active=useRef(true),generation=useRef(0),submitting=useRef(false);
   const dialog=useRef<HTMLDialogElement>(null),opener=useRef<HTMLElement|null>(null);
   const existingAttempts=useRef(new Set<string>());
@@ -71,7 +73,11 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
         current=next;
       }
       if(!active.current)return;
-      if(channel==="onlyfans"){existingAttempts.current=new Set(current.onlyfans.enrollments.map(row=>row.id));setConnecting(true);}
+      if(channel==="onlyfans"){
+        existingAttempts.current=new Set(current.onlyfans.enrollments.map(row=>row.id));
+        const reconnect=current.onlyfans.accounts.find(account=>account.connection?.status!=="verified"||!account.connection.expiresAt||Date.parse(account.connection.expiresAt)<=Date.now());
+        setConnectingAccount(reconnect?.id??null);setConnecting(true);
+      }
       else setNotice("Your Telegram setup is saved. Continue with your existing profile and content below.");
     } catch(error){if(active.current)setNotice(error instanceof Error?error.message:"Setup could not be confirmed. Please refresh.");}
     finally{submitting.current=false;if(active.current)setBusy(null);}
@@ -129,7 +135,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     <footer className={styles.footer}><p><Sparkles size={19} aria-hidden="true"/>Your profile, content and agency stay together.</p><div><button className={styles.textLink} disabled={!!busy} onClick={()=>void refresh()}><RefreshCw size={14}/>Refresh status</button><Link className={styles.textLink} href="/creator">Back to my space<ArrowRight size={14}/></Link></div></footer>
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="connect-heading" onCancel={closeConnection} onClose={()=>{if(connecting)closeConnection();}}>
       {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect your OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
-        <BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>
+        {data.onlyfans.signIn==="hosted"?<HostedConnect key={data.profileId||"none"} profileId={data.profileId||""} accountId={connectingAccount} disabled={data.readOnly||!data.profileId} onChanged={refresh}/>:<BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>}
         <details className={styles.assisted}><summary>Agency-assisted connection</summary><SessionConnect disabled={data.readOnly||!data.profileId} onChanged={refresh}/></details>
       </div>}
     </dialog>

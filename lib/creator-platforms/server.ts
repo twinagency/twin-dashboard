@@ -12,6 +12,7 @@ import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend"
 import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { canonicalConnection } from "@/lib/onlyfans-connections/contract";
 import { PLATFORM_SCHEMA, type CreatorPlatforms } from "./model";
+import { configuredSignInBackend } from "@/lib/onlyfans-sign-in/backend";
 export const platformResponse = (body: unknown, status=200) => NextResponse.json(body,{status,headers:{"Cache-Control":"private, no-store"}});
 export const platformFailure = (status:number,error:string) => platformResponse({schemaVersion:PLATFORM_SCHEMA,ok:false,error},status);
 export async function platformIdentity(write=false) {
@@ -65,7 +66,7 @@ export async function platformSnapshot(creator:Awaited<ReturnType<typeof platfor
     if(!connections)throw new Error("OnlyFans connection setup is temporarily unavailable.");
     const enrollments=profile.id?await connections.enrollments(profile.id):{ok:true as const,data:[]};
     if(!enrollments.ok)throw new Error("OnlyFans connection setup is temporarily unavailable.");
-    onlyfans={status:"ready",error:null,enrollments:enrollments.data,accounts:await Promise.all(accounts.map(async account=>{const connection=await connections.get(account.accountId);return{id:account.accountId,handle:account.binding.handle,health:account.health,connection:connection.ok?connection.data:null};}))};
+    onlyfans={status:"ready",error:null,signIn:configuredSignInBackend()?"hosted":"desktop",enrollments:enrollments.data,accounts:await Promise.all(accounts.map(async account=>{const connection=await connections.get(account.accountId);return{id:account.accountId,handle:account.binding.handle,health:account.health,connection:connection.ok?connection.data:null};}))};
   }catch(error){onlyfans={status:"unavailable",accounts:[],enrollments:[],error:error instanceof Error?error.message:"OnlyFans connection status is unavailable."};}
   return{schemaVersion:PLATFORM_SCHEMA,creatorName:creator.creatorName,profileId:profile.id,requested:profile.requested||[],readOnly:creator.readOnly,telegram,onlyfans};
 }

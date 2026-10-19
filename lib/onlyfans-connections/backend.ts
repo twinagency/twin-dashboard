@@ -17,6 +17,14 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
     return { ok: false, status: 502, outcome: "unconfirmed", error: "The connection outcome is not confirmed. Refresh or retry the same request." } as ConnectionFailure;
   }
   return {
+    async captureContext(creatorId:string,accountId:string|null) {
+      const result=await post(root+'/capture-context',{creatorId,accountId});
+      if(!result.ok)return result;
+      const body=result.body as {ok?:boolean;context?:import('@/lib/onlyfans-sign-in/backend').SignInNetwork};
+      const data=body?.ok===true?body.context:null;
+      if(data&&data.accountId===accountId&&(data.ownerId===null||Number.isSafeInteger(data.ownerId)&&data.ownerId>0)&&(data.proxyUrl===null||typeof data.proxyUrl==='string'&&/^[\x20-\x7e]{1,4096}$/.test(data.proxyUrl))&&/^[a-f0-9]{64}$/.test(data.fingerprint))return {ok:true as const,data};
+      return {ok:false as const,status:503,error:'Your login connection could not be prepared.'};
+    },
     async enroll(command: ConnectionEnrollmentRequest & Identity) {
       const result=await post(root+"/enrollments",command);if(!result.ok)return result;
       const body=result.body as {ok?:boolean;enrollment?:unknown},data=body?.ok===true?parseEnrollment(body.enrollment):null;

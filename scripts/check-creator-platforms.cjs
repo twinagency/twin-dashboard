@@ -11,6 +11,10 @@ async function main(){
  f.db={from(table){const q={table,filters:[]};f.queries.push(q);const b={select(value){q.select=value;return b},eq(k,v){q.filters.push([k,v]);return b},neq(k,v){q.filters.push([k,'neq',v]);return b},async maybeSingle(){return {error:null,data:table==='creator_accounts'?{id:creator.accountId,auth_user_id:creator.userId,platform_creator_id:f.profile,requested_channels:['onlyfans']}:table==='creator_clone_links'?(f.linked?{clone_id:f.linked}:null):null}}};return b},async rpc(name,args){f.calls.push({name,args});return {data:f.profile,error:null}}};
  f.read={async listAccounts(scope){f.calls.push({name:'accounts',scope});return {ok:true,data:f.accounts}},async listConversations(account,cursor){f.calls.push({name:'list',account,cursor});return {ok:true,data:{items:f.list,nextCursor:null}}},async getConversation(account,id){f.calls.push({name:'detail',account,id});return {ok:true,data:f.detail}}};
  f.connection={async enroll(command){f.calls.push({name:'enroll',command});return {ok:true,data:{id:'request-1',status:'pending',accountId:null,error:null,expiresAt:new Date(Date.now()+3600000).toISOString()}}},async enrollments(){return{ok:true,data:[]}},async get(account){f.calls.push({name:'connection-get',account});return {ok:true,data:{accountId:account}}},async command(account,command){f.calls.push({name:'command',account,command});return {ok:true,ack:{ok:true}}}};
+ f.SignInBackendError=class extends Error{constructor(status,message){super(message);this.status=status}};
+ f.attempt={id:'a'.repeat(8)+'-aaaa-4aaa-aaaa-'+ 'a'.repeat(12),phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};
+ f.connection.captureContext=async(creatorId,accountId)=>{f.calls.push({name:'capture-context',creatorId,accountId});return {ok:true,data:{accountId,ownerId:accountId?123:null,proxyUrl:accountId?'http://synthetic-private-proxy.example':null,fingerprint:'a'.repeat(64)}}};
+ f.signIn={async start(scope,startKey,network){f.calls.push({name:'signin-start',scope,startKey,network});return f.attempt},async status(scope,id){f.calls.push({name:'signin-status',scope,id});return f.attempt},async input(scope,id,input){f.calls.push({name:'signin-input',scope,id,input});return f.attempt},async frame(scope,id){f.calls.push({name:'signin-frame',scope,id});return new Uint8Array([255,216,255,217]).buffer},async cancel(){throw new f.SignInBackendError(410,'Your sign-in expired. Start again.')},async capture(scope,id){f.calls.push({name:'signin-capture',scope,id});return f.signInCapture},async acknowledge(scope,id,enrollmentId){f.calls.push({name:'signin-ack',scope,id,enrollmentId});if(f.ackFail)throw new Error('synthetic lost acknowledgment');return {...f.attempt,phase:'submitted',enrollmentId}}};
  const stubs={
   'server-only':'',
   'next/headers':`export async function cookies(){return {get(name){return name==='creator_session'?{value:globalThis.__creatorPlatformsTest.token}:undefined}}}`,
@@ -21,9 +25,10 @@ async function main(){
   '@/lib/view-as-banner':`export async function getViewAsBannerInfo(){return globalThis.__creatorPlatformsTest.viewAs?{}:null}`,
   '@/lib/onlyfans/backend':`export function configuredOnlyFansBackend(){return globalThis.__creatorPlatformsTest.read}`,
   '@/lib/onlyfans-connections/backend':`export function configuredConnectionBackend(){return globalThis.__creatorPlatformsTest.connection}`,
+  '@/lib/onlyfans-sign-in/backend':`export const SignInBackendError=globalThis.__creatorPlatformsTest.SignInBackendError;export function configuredSignInBackend(){return globalThis.__creatorPlatformsTest.signIn}`,
  };
  try{
-  await build({stdin:{contents:`export * as server from './lib/creator-platforms/server';export * as setup from './app/creator-auth/platforms/route';export * as enroll from './app/creator-auth/platforms/onlyfans/route';export * as browser from './app/creator-auth/platforms/onlyfans/browser/route';export * as account from './app/creator-auth/platforms/onlyfans/[accountId]/route';export * as history from './app/creator-auth/onlyfans/[[...path]]/route';export * as policy from './lib/creator-dashboard-policy';export * as model from './lib/creator-platforms/model';export {middleware} from './middleware';`,resolveDir:root,loader:'ts'},outfile:join(dir,'routes.cjs'),bundle:true,platform:'node',format:'cjs',alias:{'@':root},external:['next/server'],plugins:[{name:'isolated-adapters',setup(b){b.onResolve({filter:/.*/},a=>Object.hasOwn(stubs,a.path)?{path:a.path,namespace:'stub'}:undefined);b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:stubs[a.path],loader:'ts'}))}}]});
+  await build({stdin:{contents:`export * as server from './lib/creator-platforms/server';export * as setup from './app/creator-auth/platforms/route';export * as enroll from './app/creator-auth/platforms/onlyfans/route';export * as browser from './app/creator-auth/platforms/onlyfans/browser/route';export * as signin from './app/creator-auth/platforms/onlyfans/sign-in/route';export * as account from './app/creator-auth/platforms/onlyfans/[accountId]/route';export * as history from './app/creator-auth/onlyfans/[[...path]]/route';export * as policy from './lib/creator-dashboard-policy';export * as model from './lib/creator-platforms/model';export {middleware} from './middleware';`,resolveDir:root,loader:'ts'},outfile:join(dir,'routes.cjs'),bundle:true,platform:'node',format:'cjs',alias:{'@':root},external:['next/server'],plugins:[{name:'isolated-adapters',setup(b){b.onResolve({filter:/.*/},a=>Object.hasOwn(stubs,a.path)?{path:a.path,namespace:'stub'}:undefined);b.onLoad({filter:/.*/,namespace:'stub'},a=>({contents:stubs[a.path],loader:'ts'}))}}]});
   const m=require(join(dir,'routes.cjs'));
   const request=(path,body,headers={})=>new NextRequest('https://dashboard.example'+path,{method:body===undefined?'GET':'POST',headers:{host:'dashboard.example',origin:'https://dashboard.example','sec-fetch-site':'same-origin','content-type':'application/json',...headers},...(body===undefined?{}:{body:typeof body==='string'?body:JSON.stringify(body)})});
   const accountContext=id=>({params:Promise.resolve({accountId:id})}),historyContext=path=>({params:Promise.resolve({path})});
@@ -80,6 +85,35 @@ async function main(){
   const badBrowser=structuredClone(browserCommand);badBrowser.session.browser.samples[0].url='https://foreign.example/api2/v2/users/me';
   assert.equal((await m.browser.POST(request('/creator-auth/platforms/onlyfans/browser',badBrowser))).status,400);
   f.creator={...creator,readOnly:true};assert.equal((await m.browser.POST(request('/creator-auth/platforms/onlyfans/browser',browserCommand))).status,403);f.creator=creator;
+  const signInPath='/creator-auth/platforms/onlyfans/sign-in',start={action:'start',profileId:f.profile,accountId:'of-123',startKey:f.attempt.id};
+  const sendSignIn=body=>m.signin.POST(request(signInPath,body));
+  for(const extra of [{creatorId:'foreign'},{actor:'foreign'},{proxyUrl:'http://foreign.example'}])assert.equal((await sendSignIn({...start,...extra})).status,400);
+  assert.equal((await sendSignIn({...start,profileId:'stale'})).status,409);
+  assert.equal((await sendSignIn({...start,accountId:'of-999'})).status,404);
+  assert.equal((await m.signin.POST(request(signInPath,start,{origin:'https://foreign.example'}))).status,403);
+  f.token='';assert.equal((await sendSignIn(start)).status,401);assert.equal((await m.signin.GET(request(signInPath+'?attempt='+f.attempt.id))).status,401);f.token='real-creator-cookie';
+  for(const protectedView of ['readOnly','viewAs']){
+    if(protectedView==='readOnly')f.creator={...creator,readOnly:true};else f.viewAs=true;
+    assert.equal((await sendSignIn(start)).status,403);assert.equal((await m.signin.GET(request(signInPath+'?attempt='+f.attempt.id))).status,403);
+    f.creator=creator;f.viewAs=false;
+  }
+  const startedResponse=await sendSignIn(start);assert.equal(startedResponse.status,200);assert.deepEqual(await startedResponse.json(),{ok:true,attempt:f.attempt});
+  const signInStart=f.calls.find(c=>c.name==='signin-start');assert.equal(signInStart.scope.creatorId,f.profile);assert.match(signInStart.scope.actor,/^creator-session:[a-f0-9]{64}$/);assert.equal(signInStart.network.proxyUrl,'http://synthetic-private-proxy.example');
+  const frameResponse=await m.signin.GET(request(signInPath+'?attempt='+f.attempt.id+'&frame=1'));assert.equal(frameResponse.status,200);assert.equal(frameResponse.headers.get('content-type'),'image/jpeg');assert.equal(frameResponse.headers.get('cache-control'),'private, no-store');assert.equal(frameResponse.headers.get('cross-origin-resource-policy'),'same-origin');
+  assert.deepEqual(f.calls.at(-1).scope,signInStart.scope);
+  assert.equal((await sendSignIn({action:'cancel',profileId:f.profile,attempt:f.attempt.id})).status,410,'Expired attempts permit a fresh start');
+  f.attempt={...f.attempt,phase:'ready',handle:'synthetic'};f.signInCapture={...browserCommand,session:{...browserSession,networkFingerprint:'a'.repeat(64)}};f.ackFail=true;
+  const confirm={action:'confirm',profileId:f.profile,attempt:f.attempt.id};
+  const confirmed=await sendSignIn(confirm);assert.equal(confirmed.status,200);const publicConfirmation=await confirmed.json();assert.equal(publicConfirmation.attempt.phase,'submitted');assert(!JSON.stringify(publicConfirmation).includes('synthetic-session'));assert(!JSON.stringify(publicConfirmation).includes('networkFingerprint'));
+  const frozen=f.calls.filter(c=>c.name==='enroll').at(-1).command;
+  f.ackFail=false;assert.equal((await sendSignIn(confirm)).status,200);assert.deepEqual(f.calls.filter(c=>c.name==='enroll').at(-1).command,frozen,'Lost acknowledgment reuses the exact native enrollment command');
+  assert(!f.calls.some(c=>c.name==='command'&&c.command?.action==='activate'));
+  // Exercise the real broker response parser and private HTTP adapter as well.
+  await build({entryPoints:[join(root,'lib/onlyfans-sign-in/backend.ts')],outfile:join(dir,'signin-backend.cjs'),bundle:true,platform:'node',format:'cjs',alias:{'@':root},plugins:[{name:'server-marker',setup(b){b.onResolve({filter:/^server-only$/},()=>({path:'marker',namespace:'empty'}));b.onLoad({filter:/.*/,namespace:'empty'},()=>({contents:''}))}}]});
+  const signinAdapter=require(join(dir,'signin-backend.cjs'));
+  assert(signinAdapter.parseSignInAttempt(f.attempt));for(const extra of [{keyboard:'file'},{cookies:[]},{token:'secret'},{width:400}])assert.equal(signinAdapter.parseSignInAttempt({...f.attempt,...extra}),null);
+  const expiredBackend=signinAdapter.createSignInBackend({baseUrl:'https://private.example',token:'synthetic-private-token',fetchImpl:async()=>new Response('{}',{status:404})});
+  await assert.rejects(()=>expiredBackend.cancel(signInStart.scope,f.attempt.id),error=>error instanceof signinAdapter.SignInBackendError&&error.status===410);
   const before=f.calls.length;assert.equal((await m.account.GET(request('/'),accountContext('of-999'))).status,404);assert(!f.calls.slice(before).some(c=>c.name==='connection-get'));
   assert.equal((await m.account.POST(request('/',{action:'activate',expectedRevision:0,payload:{limitUnits:7,throttleSeconds:2,mediaEnabled:false}}),accountContext('of-123'))).status,400);
   assert.equal((await m.account.POST(request('/',{action:'session',expectedRevision:0,payload:command.session}),accountContext('of-123'))).status,200);
@@ -95,11 +129,12 @@ async function main(){
   assert.equal((await m.history.GET(request('/',undefined,{'next-action':'forged'}),historyContext(['accounts']))).status,403);
   for(const path of ['/creator-auth/platforms','/creator-auth/platforms/onlyfans/of-123','/creator-auth/onlyfans/accounts/of-123/conversations'])assert(m.policy.creatorPlatformApiAllowed(path,'GET',false));
   assert(m.policy.creatorPlatformApiAllowed('/creator-auth/platforms/onlyfans','POST',false));assert(m.policy.creatorPlatformApiAllowed('/creator-auth/platforms/onlyfans/browser','POST',false));assert(!m.policy.creatorPlatformApiAllowed('/creator-auth/platforms/onlyfans/browser','GET',false));assert(m.policy.creatorPlatformApiAllowed('/creator-auth/platforms/onlyfans/connector','GET',false));assert(!m.policy.creatorPlatformApiAllowed('/creator-auth/onlyfans/accounts/of-123/conversations','POST',false));assert(!m.policy.creatorPlatformApiAllowed('/creator-auth/platforms','GET',true));assert(!m.policy.creatorPlatformApiAllowed('/creator-auth/platforms/unknown','POST',false));assert(m.policy.isCreatorPlatformPage('/creator/platforms'));assert(!m.policy.isCreatorPlatformPage('/creator/edit'));
+  for(const method of ['GET','HEAD','POST'])assert(m.policy.creatorPlatformApiAllowed(signInPath,method,false));assert(!m.policy.creatorPlatformApiAllowed(signInPath,'POST',true));assert(!m.policy.creatorPlatformApiAllowed(signInPath+'/capture','GET',false));
   f.creator={...creator,onboarded:false,cloneIds:[]};
   const authenticated=path=>request(path,undefined,{cookie:'creator_session=real-creator-cookie'});
   assert.equal((await m.middleware(authenticated('/creator/platforms'))).status,200);assert.equal((await m.middleware(authenticated('/creator/onlyfans/inbox'))).status,200);assert.equal((await m.middleware(authenticated('/creator/edit'))).status,307);
   assert.equal((await m.middleware(authenticated('/creator-auth/platforms'))).status,200);assert.equal((await m.middleware(authenticated('/creator-auth/onlyfans/accounts'))).status,200);
-  console.log('PASS creator platforms: cookie identity, view-as/origin/body guards, canonical profile, forged/foreign account refusal, verified enrollment scope, no creator activation, read-only owned history, exact middleware routes.');
+  console.log('PASS creator platforms: authenticated sign-in/frame/confirmation, private capture context, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, canonical profile, forged/foreign account refusal, no creator activation, read-only owned history, exact middleware routes.');
  }finally{delete globalThis.__creatorPlatformsTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
