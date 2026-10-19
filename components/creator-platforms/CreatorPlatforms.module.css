@@ -1,0 +1,13 @@
+/* Inherit the existing creator studio palette without altering its homepage. */
+:global([data-creator-studio]) .root {
+  --color-bg: var(--studio-bg);
+  --color-panel: var(--studio-panel);
+  --color-ink: var(--studio-ink);
+  --color-muted: var(--studio-muted);
+  --color-line: var(--studio-line);
+  --color-accent: var(--studio-accent);
+  --color-accent-deep: var(--studio-accent-deep);
+  --card: var(--studio-panel);
+  --card-foreground: var(--studio-ink);
+  color: var(--studio-ink);
+}
