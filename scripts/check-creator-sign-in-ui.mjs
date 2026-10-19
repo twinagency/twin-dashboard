@@ -6,15 +6,17 @@ import {mkdirSync,readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {chromium,webkit} from 'playwright';
+import postcss from 'postcss';
+import tailwind from '@tailwindcss/postcss';
 const root=process.cwd(),out=resolve('test-results/creator-sign-in');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:'canonical-creator',requested:['onlyfans'],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',signIn:'hosted',error:null,accounts:[],enrollments:[]}};
 let snapshot,attempt,posted,expired,denied,lostConfirm;
 const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;};reset();
 async function until(check){for(let n=0;n<100;n++){if(check())return;await new Promise(r=>setTimeout(r,50));}assert(check(),'Expected fixture request was not received');}
-const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';createRoot(document.getElementById('root')).render(<React.StrictMode><Platforms initial={${JSON.stringify(initial)}}/></React.StrictMode>);`;
-const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'links',setup(b){b.onResolve({filter:/^next\/link$/},a=>({path:a.path,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},()=>({resolveDir:root,loader:'jsx',contents:`import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`}))}}]});
+const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';import Shell from './components/CreatorStudioShell';import {creatorStudioStatus} from './lib/creator-studio-model';createRoot(document.getElementById('root')).render(<React.StrictMode><Shell brand="moxy" creatorName="Fixture creator" status={creatorStudioStatus(false,"Draft / unfinished",null)} contentHref="/creator/onboarding?step=content"><Platforms initial={${JSON.stringify(initial)}}/></Shell></React.StrictMode>);`;
+const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'links',setup(b){b.onResolve({filter:/^next\/(link|navigation)$|\/CurrencyProvider$/},a=>({path:a.path,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({resolveDir:root,loader:'jsx',contents:a.path==='next/link'?`import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`:a.path==='next/navigation'?`export const usePathname=()=>'/creator/platforms';export const useRouter=()=>({refresh(){}});`:`export const useCurrency=()=>({currency:'AUD',setCurrency(){}});`}))}}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
-const css=bundle.outputFiles.find(f=>f.path.endsWith('.css')).text+'\n*{box-sizing:border-box}body{margin:0;padding:16px;font-family:Arial,sans-serif;background:#faf7f5;color:#182630}button,input{font:inherit}';
+const css=(await postcss([tailwind()]).process('@import "./app/globals.css";',{from:resolve('creator-sign-in-review.css')})).css+'\n'+bundle.outputFiles.find(f=>f.path.endsWith('.css')).text+'\nbody{margin:0;font-family:Arial,sans-serif}html{--font-heading:Arial,sans-serif}';
 const chrome=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.platform==='win32'?[]:['--no-sandbox']});
 const framePage=await chrome.newPage({viewport:{width:432,height:720}});
 await framePage.setContent('<html><body style="font:18px Arial;margin:40px"><h1>OnlyFans fixture</h1><p>Local test account</p><label>Email<input type="email" style="display:block;width:100%;height:48px"></label><p><label>Password<input type="password" style="display:block;width:100%;height:48px"></label></p><button style="padding:12px">Sign in</button></body></html>');
@@ -47,7 +49,7 @@ const server=createServer(async(req,res)=>{try{
   }
   return res.end(JSON.stringify({ok:true,attempt}));
  }
- if(path.startsWith('/brand/')){res.setHeader('Content-Type','image/svg+xml');return res.end(readFileSync(resolve(root,'public',path.slice(1))))}
+ if(/^\/(?:brand\/(?:platforms\/)?|moxy\/)[^.\/]+\.(svg|png|webp)$/.test(path)){res.setHeader('Content-Type',path.endsWith('.svg')?'image/svg+xml':path.endsWith('.png')?'image/png':'image/webp');return res.end(readFileSync(resolve(root,'public',path.slice(1))))}
  res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><main id="root"></main><script src="/bundle.js"></script></html>');
 }catch{res.statusCode=500;res.end('{}')}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
@@ -58,6 +60,7 @@ try{
   reset();const context=await browser.newContext({viewport:{width,height:844},...(name==='webkit-mobile'?{isMobile:true,hasTouch:true}:{})});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();
   const screen=page.getByLabel('OnlyFans sign-in screen');await screen.waitFor();
+  assert(await page.getByRole('dialog').evaluate(el=>!['transparent','rgba(0, 0, 0, 0)'].includes(getComputedStyle(el).backgroundColor)),'The real creator theme supplies an opaque dialog');
   assert.equal(posted.filter(b=>b.action==='start').length,1,'StrictMode must not launch twice');
   assert.equal(await page.getByText('Install Twin connector',{exact:false}).count(),0);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
