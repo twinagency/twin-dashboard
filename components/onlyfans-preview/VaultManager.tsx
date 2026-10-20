@@ -13,13 +13,14 @@ import VaultOrganization from "./VaultOrganization";
 import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
 import { MediaLibraryFilters } from "@/components/CreatorMediaLibrary";
+import VaultUploader from "./VaultUploader";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const SYNC_STATUS = { pending: "Queued", running: "Syncing", complete: "Complete", failed: "Failed", superseded: "Replaced by a newer request" } as const;
 type Pending = { kind: "sync"; body: VaultSyncRequest } | { kind: "create"; body: VaultCreateRequest };
 
-export default function VaultManager({ accountId }: { accountId: string }) {
+export default function VaultManager({ accountId, readOnly = false }: { accountId: string; readOnly?: boolean }) {
   const router = useRouter();
   const [data, setData] = useState<VaultRead | null>(null), [cursor, setCursor] = useState<string | null>(null);
   const [busy, setBusy] = useState(true), [denied, setDenied] = useState(false), [notice, setNotice] = useState("Loading recorded vault…");
@@ -115,15 +116,17 @@ export default function VaultManager({ accountId }: { accountId: string }) {
 
   return <Card className="mb-6 min-w-0 p-4" data-of-vault-manager>
     <h2 className="font-semibold">Vault and catalogue products</h2>
+    {readOnly ? <p className="mt-2 text-xs text-muted">Read-only team access</p> : null}
     <p className="mt-1 text-xs text-muted">Sync this account’s existing OnlyFans vault, then choose assets and save a catalogue item for eligible offers.</p>
     {notice ? <p role="status" className="mt-3 text-sm" data-of-vault-notice>{notice}</p> : null}
     {!denied ? <div className="mt-3 flex flex-wrap gap-2">
       <button type="button" className={buttonClass} data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}>Refresh vault</button>
-      <button type="button" className={buttonClass} data-of-vault-sync disabled={busy || !!retry || data?.connectionRevision == null || data?.sync?.status === "pending" || data?.sync?.status === "running"}
+      <button type="button" className={buttonClass} data-of-vault-sync disabled={readOnly || busy || !!retry || data?.connectionRevision == null || data?.sync?.status === "pending" || data?.sync?.status === "running"}
         onClick={() => { if (data?.connectionRevision) void execute({ kind: "sync", body: { requestId: crypto.randomUUID(), expectedConnectionRevision: data.connectionRevision } }); }}>Sync vault</button>
       {data?.connectionRevision == null ? <Link className="self-center text-xs font-semibold text-accent" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
     </div> : null}
     {data && !denied ? <>
+      {!readOnly ? <VaultUploader key={accountId} accountId={accountId} connectionRevision={data.connectionRevision} onChanged={organizationChanged}/> : null}
       <div className="mt-4 rounded-lg border border-line p-3 text-xs" data-of-vault-sync-status>
         {data.sync ? <><p>Last sync: <strong>{SYNC_STATUS[data.sync.status]}</strong> · {data.sync.pagesRead} pages · {data.sync.itemsSeen} assets observed</p><p className="mt-1 text-muted">Updated {new Date(data.sync.updatedAt).toLocaleString()}{data.sync.completedAt ? ` · Completed ${new Date(data.sync.completedAt).toLocaleString()}` : ""}</p>{data.sync.lastError ? <p className="mt-1 text-muted">Sync needs review. Check the account connection and request a new sync when ready.</p> : null}</> : <p>No vault synchronization has been recorded.</p>}
       </div>
@@ -137,22 +140,22 @@ export default function VaultManager({ accountId }: { accountId: string }) {
           activeTab={mediaKind} onTabChange={setMediaKind} search={search} onSearchChange={setSearch} disabled={busy || !!retry} searchLimit={120} />
         <button type="submit" data-of-vault-search className={buttonClass} disabled={busy || !!retry}>Search vault</button>
       </form>
-      <VaultOrganization accountId={accountId} assetId={assetId} selectedIds={[...selected.keys()]} folderId={folderId}
-        onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/>
+      {!readOnly ? <VaultOrganization accountId={accountId} assetId={assetId} selectedIds={[...selected.keys()]} folderId={folderId}
+        onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/> : null}
       <fieldset disabled={busy || !!retry || organizationBusy} className="mt-4 min-w-0">
         <legend className="text-sm font-semibold">Choose assets</legend>
         <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3" data-of-vault-grid>
           {data.items.map(row => <article key={row.mediaId} className="min-w-0 overflow-hidden rounded-2xl border border-line bg-panel" data-of-vault-item={row.mediaId}>
-            <div className="flex items-center justify-between gap-3 px-4 py-3"><label className="flex items-center gap-2 text-xs"><input data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /><span className="capitalize">{row.kind}</span></label><span className="text-xs text-muted">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</span></div>
-            <VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind}/>
-            <div className="p-4"><p className="line-clamp-3 break-words text-sm">{row.description || "No saved description"}</p><p className="mt-2 text-xs text-muted">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</p><button type="button" data-of-vault-edit={row.mediaId} className="mt-3 text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata →</button><details className="mt-2"><summary>Asset details</summary><p className="break-all text-xs text-muted">Asset #{row.mediaId}</p></details></div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3"><label className="flex items-center gap-2 text-xs"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /><span className="capitalize">{row.kind}</span></label><span className="text-xs text-muted">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</span></div>
+            <VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly}/>
+            <div className="p-4"><p className="line-clamp-3 break-words text-sm">{row.description || "No saved description"}</p><p className="mt-2 text-xs text-muted">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</p><button type="button" disabled={readOnly} data-of-vault-edit={row.mediaId} className="mt-3 text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata →</button><details className="mt-2"><summary>Asset details</summary><p className="break-all text-xs text-muted">Asset #{row.mediaId}</p></details></div>
           </article>)}
         </div>
         {!data.items.length ? <p className="mt-3 text-sm text-muted">No vault assets are recorded on this page.</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">{data.nextCursor ? <button type="button" data-of-vault-next className={buttonClass} onClick={() => void refresh(data.nextCursor)}>Next vault page →</button> : null}{cursor ? <button type="button" className={buttonClass} onClick={() => void refresh(null)}>First vault page</button> : null}</div>
       </fieldset>
       {selected.size>0&&!readySelection?<p className="mt-3 text-xs text-muted" data-of-vault-readiness-hold>Selected assets need verified availability before creating a catalogue item. You can still organize them in folders.</p>:null}
-      <form className="mt-5 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
+      {!readOnly ? <form className="mt-5 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>
           {selected.size ? <ul className="space-y-2">{[...selected.values()].map(row => <li key={row.mediaId} className="flex flex-wrap items-center gap-3 rounded-lg border border-line p-2 text-xs">
@@ -166,7 +169,7 @@ export default function VaultManager({ accountId }: { accountId: string }) {
           <label className="flex items-start gap-2 text-sm"><input data-of-vault-product-enabled type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /><span>Enable this item for eligible offers</span></label>
           <button type="submit" data-of-vault-create className={buttonClass} disabled={!productValid}>Create catalogue item</button>
         </fieldset>
-      </form>
+      </form> : null}
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" data-of-vault-retry className={buttonClass} disabled={busy} onClick={() => void execute(retry)}>Retry same request</button><button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { setRetry(null); clearSelection(); setNotice("Review the recorded catalogue and sync status before starting another request. The previous command may already have committed."); }}>Use refreshed vault</button></div> : null}

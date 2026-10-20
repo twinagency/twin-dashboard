@@ -117,7 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // extra identity lookup, and the shell below can only offer channels that
   // will actually render.
   const channelScope = await resolveChannelScope(
-    channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo }),
+    channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo, onlyFansAgency: !!agency?.userId && agency.name !== "Twin Technologies" }),
   );
   // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
   // canManage grant: this admin is looking, not administering as them.

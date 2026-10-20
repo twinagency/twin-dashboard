@@ -226,7 +226,7 @@ group("1. The operator session is verified positively, and nothing else is admit
       "app/api/onlyfans/accounts/route.ts",
       "app/api/onlyfans/accounts/[accountId]/conversations/route.ts",
       "app/api/onlyfans/accounts/[accountId]/conversations/[conversationId]/route.ts",
-    ].every((file) => /requireOnlyFansRead\(\)/.test(source(file))),
+    ].every((file) => /requireOnlyFansRead\(\{ agency: true \}\)/.test(source(file))),
   );
   check(
     "and the read-only boundary exposes no write handler",

@@ -5,7 +5,7 @@ import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "@/lib/onlyfans-preview/types";
 
 export const dynamic = "force-dynamic";
 export async function GET(request: Request, context: { params: Promise<{ accountId: string; section: string }> }) {
-  const ctx = await requireOnlyFansRead();
+  const ctx = await requireOnlyFansRead({ agency: true });
   if (ctx instanceof NextResponse) return ctx;
   const params = await context.params;
   const accountId = requestId(params.accountId);

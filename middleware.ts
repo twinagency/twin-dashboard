@@ -1,3 +1,4 @@
+import { agencyOnlyFansRequest } from "@/lib/onlyfans/agency-scope";
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
@@ -208,6 +209,11 @@ export async function middleware(req: NextRequest) {
     if (!identity) return agencyToken ? NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req))) : NextResponse.redirect(new URL("/admin/view-as", dashboardOrigin(req)));
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
+    const ofManage = canManage && identity.canManage === true;
+    if (identity.userId && identity.name !== "Twin Technologies" && !viewAs && agencyOnlyFansRequest(pathname, req.method, serverAction, ofManage)) {
+      if (!["GET", "HEAD"].includes(req.method) && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", { status: 403 });
+      return privateResponse(withPathname(req));
+    }
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
     if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
     if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});

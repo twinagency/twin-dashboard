@@ -62,7 +62,7 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
     },
   };
 }
-export function configuredVaultBackend() {
+export function configuredVaultBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CONTENT");
-  return options ? createVaultBackend(options) : null;
+  return options ? createVaultBackend({ ...options, fetchImpl }) : null;
 }

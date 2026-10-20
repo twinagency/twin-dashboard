@@ -26,7 +26,7 @@ export const HEALTH_LABEL: Record<ConnectionHealth, Pill> = {
 
 export const MODE_LABEL: Record<AutomationMode, Pill> = {
   automated: { label: "Replies: automatic", tone: "green" },
-  human_controlled: { label: "Replies: you", tone: "blue" },
+  human_controlled: { label: "Replies: human", tone: "blue" },
   paused: { label: "Replies: paused", tone: "gold" },
   no_contact: { label: "No further contact", tone: "slate" },
 };
@@ -34,7 +34,7 @@ export const MODE_LABEL: Record<AutomationMode, Pill> = {
 export const TAKEOVER_LABEL: Record<TakeoverState, Pill | null> = {
   none: null,
   requested: { label: "Takeover requested", tone: "gold" },
-  effective: { label: "You have control", tone: "blue" },
+  effective: { label: "Human control", tone: "blue" },
 };
 
 export const DELIVERY_LABEL: Record<DeliveryOutcome, Pill> = {

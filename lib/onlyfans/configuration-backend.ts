@@ -29,7 +29,7 @@ export function createConfigurationBackend(options: { baseUrl: string; token: st
     },
   };
 }
-export function configuredConfigurationBackend() {
+export function configuredConfigurationBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CONFIGURATION");
-  return options ? createConfigurationBackend(options) : null;
+  return options ? createConfigurationBackend({ ...options, fetchImpl }) : null;
 }

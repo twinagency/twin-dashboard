@@ -9,7 +9,7 @@ import CampaignManager from "./CampaignManager";
 export default async function CampaignWorkspace({ searchParams }: { searchParams: Promise<{ account?: string | string[]; creator?: string | string[] }> }) {
   const description = "Plan a message for your fans and see how it performs.";
   const unavailable = (message: string, connect = false) => <div className="dashboard-page"><CreatorPlatformHeading title="Campaigns" description={description} /><CreatorPlatformEmpty title={connect ? "Start with your creator account." : "Let’s get this ready."} description={message} actionHref={connect ? "/onlyfans/accounts" : undefined} /></div>;
-  const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return unavailable("Sign in to read campaigns.");
+  const ctx = await requireOnlyFansRead({ agency: true }); if (ctx instanceof NextResponse) return unavailable("Sign in to read campaigns.");
   if (!ctx.backend) return unavailable("The OnlyFans backend is not configured.");
   const query = await searchParams;
   const requested = typeof query.account === "string" ? requestId(query.account) : null;
@@ -24,7 +24,7 @@ export default async function CampaignWorkspace({ searchParams }: { searchParams
       aria-current={item.accountId === account.accountId ? "page" : undefined}
       className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}
       href={workspaceHref("/onlyfans/campaigns", { creatorId, accountId: item.accountId })}>{item.binding.creatorName} · @{item.binding.handle}</Link>)}</nav>
-    {configuredCampaignBackend() ? <CampaignManager key={account.accountId} accountId={account.accountId} /> : <p role="status" className="text-sm text-muted">Campaign management is not configured for this environment.</p>}
+    {configuredCampaignBackend(ctx.fetch) ? <CampaignManager key={account.accountId} accountId={account.accountId} readOnly={!ctx.canManage} /> : <p role="status" className="text-sm text-muted">Campaign management is not configured for this environment.</p>}
     <Link className="mt-6 inline-block text-sm font-semibold text-accent" href={workspaceHref("/onlyfans/inbox", { creatorId, accountId: account.accountId })}>Open inbox →</Link>
   </div>;
 }

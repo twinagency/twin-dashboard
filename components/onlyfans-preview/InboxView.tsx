@@ -684,8 +684,10 @@ export default function InboxView({
   loadingMore,
   onLoadMore,
   showPreviewChrome = true,
+  handover,
 }: {
   controls?: ReactNode;
+  handover?: ReactNode;
   /**
    * False on a live surface: the sample-data badge and the developer controls
    * describe fixture data and must not appear over real reads.
@@ -708,6 +710,7 @@ export default function InboxView({
   loadingMore: boolean;
   onLoadMore: () => void;
 }) {
+  const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
 
@@ -732,20 +735,25 @@ export default function InboxView({
   return (
     <div className="users-workspace lg:h-full" data-of-surface="onlyfans-inbox">
       <CreatorPlatformHeading title="Inbox" description="A little closer to your fans. Your conversations and their details, together." />
-      {viewer.kind === "view_as" ? (
+      {!viewer.canManage ? (
         <div
           data-of-readonly
           className="mb-3 rounded-xl border border-[#dce8fb] bg-[#edf3fc] p-3 text-xs leading-5 text-[#2f6fed]"
         >
-          Read only. You are viewing as the creator. Every write action is refused, including from
-          this session.
+          Read-only access. You can review assigned accounts and conversations. A team manager handles changes and replies.
         </div>
       ) : null}
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
 
+      <nav aria-label="Inbox panels" className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
+        {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Controls"] ] as const).map(([key, label]) =>
+          <button key={key} type="button" data-of-mobile-panel={key} aria-pressed={mobilePanel === key}
+            onClick={() => setMobilePanel(key)} disabled={key !== "conversations" && !selectedConversationId}
+            className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-ink text-white" : "text-muted"}`}>{label}</button>)}
+      </nav>
       <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-3" data-of-inbox-layout>
-        <Card size="sm" className="users-panel users-panel-list flex h-[34rem] flex-col overflow-hidden p-0 lg:h-full">
+        <Card size="sm" className={`users-panel users-panel-list h-[min(34rem,65dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "conversations" ? "flex" : "hidden lg:flex"}`}>
           <RequestStateBlock
             state={accountsState}
             label="account scope"
@@ -757,7 +765,7 @@ export default function InboxView({
             <ConversationList
               conversations={conversations}
               selectedConversationId={selectedConversationId}
-              onSelectConversation={onSelectConversation}
+              onSelectConversation={id => { onSelectConversation(id); setMobilePanel("chat"); }}
               nextCursor={nextCursor}
               loadingMore={loadingMore}
               onLoadMore={onLoadMore}
@@ -765,11 +773,10 @@ export default function InboxView({
           </div>
         </Card>
 
-        <Card size="sm" className="users-panel users-panel-chat flex h-[42rem] flex-col overflow-hidden p-0 lg:h-full">
+        <Card size="sm" className={`users-panel users-panel-chat h-[min(42rem,75dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "chat" ? "flex" : "hidden lg:flex"}`}>
           {!activeAccount || !detail ? (
             <div className="flex flex-1 items-center justify-center gap-2 p-6 text-sm text-muted">
-              <MessageCircle className="size-4" />
-              Select a conversation to read it.
+              {detailState ? <RequestStateBlock state={detailState} label="conversation" render={() => null} /> : <><MessageCircle className="size-4" />Select a conversation to read it.</>}
             </div>
           ) : (
             <>
@@ -815,7 +822,7 @@ export default function InboxView({
           )}
         </Card>
 
-        <Card size="sm" className="users-panel users-panel-profile overflow-y-auto p-4 lg:h-full">
+        <Card size="sm" className={`users-panel users-panel-profile overflow-y-auto p-4 lg:h-full ${mobilePanel === "controls" ? "block" : "hidden lg:block"}`}>
           {!activeAccount || !detail || !actionSet ? (
             <div className="flex h-full items-center justify-center text-center text-xs text-muted">
               Pick a conversation to see the fan and the controls.
@@ -839,6 +846,7 @@ export default function InboxView({
                 </div>
               </div>
 
+              {handover}
               <ActionColumn
                 actionSet={actionSet}
                 viewer={viewer}

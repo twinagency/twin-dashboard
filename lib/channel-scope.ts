@@ -48,7 +48,7 @@ import {
  * somebody is a look, never an administration, and the dashboard already
  * forces view-as read-only for that reason.
  */
-export type ChannelAccess = { isOperator: boolean };
+export type ChannelAccess = { isOperator: boolean; onlyFansAgency?: boolean };
 
 /**
  * The gate, as a pure function so it can be asserted without a request.
@@ -65,7 +65,7 @@ export function channelVerdict(
   if (channel === "all") {
     return { allowed: true, reason: "The existing dashboard, unchanged." };
   }
-  if (access.isOperator) {
+  if (access.isOperator || (channel === "onlyfans" && access.onlyFansAgency)) {
     return { allowed: true, reason: "Operator workspace." };
   }
   return {
@@ -74,8 +74,8 @@ export function channelVerdict(
   };
 }
 
-export function channelAccess(input: { hasAgency: boolean; hasViewAs: boolean }): ChannelAccess {
-  return { isOperator: !input.hasAgency && !input.hasViewAs };
+export function channelAccess(input: { hasAgency: boolean; hasViewAs: boolean; onlyFansAgency?: boolean }): ChannelAccess {
+  return { isOperator: !input.hasAgency && !input.hasViewAs, onlyFansAgency: !!input.onlyFansAgency && !input.hasViewAs };
 }
 
 export function allowedChannels(access: ChannelAccess): DashboardChannel[] {
@@ -105,7 +105,7 @@ export type ChannelScope = {
  */
 const resolveAccess = cache(async (): Promise<ChannelAccess> => {
   const agency = await getDashboardAccess();
-  if (agency) return channelAccess({ hasAgency: true, hasViewAs: false });
+  if (agency) return channelAccess({ hasAgency: true, hasViewAs: !!(await getViewAsBannerInfo()), onlyFansAgency: !!agency.userId && agency.name !== "Twin Technologies" });
   return channelAccess({ hasAgency: false, hasViewAs: !!(await getViewAsBannerInfo()) });
 });
 

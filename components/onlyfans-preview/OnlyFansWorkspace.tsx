@@ -84,6 +84,8 @@ import PreviewControlsPanel from "./PreviewControlsPanel";
 import type { PreviewPreset } from "./PreviewControlsPanel";
 import AccountsView from "./AccountsView";
 import InboxView from "./InboxView";
+import HandoverPanel from "./HandoverPanel";
+import type { Handover } from "@/lib/onlyfans/handover";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 export type OnlyFansView = "inbox" | "accounts";
@@ -188,6 +190,8 @@ export default function OnlyFansWorkspace({
   source: sourceMode,
   connectionsConfigured = false,
   connectionCreators = [],
+  canManage = true,
+  agencyViewer = false,
 }: {
   view: OnlyFansView;
   /**
@@ -197,6 +201,8 @@ export default function OnlyFansWorkspace({
   source: OnlyFansSourceMode;
   connectionsConfigured?: boolean;
   connectionCreators?: ConnectionCreator[];
+  canManage?: boolean;
+  agencyViewer?: boolean;
 }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -215,6 +221,13 @@ export default function OnlyFansWorkspace({
   const commandBusy = useRef(false);
 
   const { state, ref, commit } = useSelectionStore();
+  const [handover, setHandover] = useState<Handover | null>(null);
+  const [handoverLoading, setHandoverLoading] = useState(false);
+  const [handoverRefresh, setHandoverRefresh] = useState(0);
+  const selectedDetail = currentConversationState(state);
+  const selectedSummary = selectedDetail && (selectedDetail.status === "ready" || selectedDetail.status === "stale") ? selectedDetail.data.summary : null;
+  const handoverCurrent = handover && !handoverLoading && selectedSummary && handover.accountId === state.selectedAccountId &&
+    handover.conversationId === selectedSummary.conversationId && handover.revision === selectedSummary.revision ? handover : null;
   const requested = useRef<{ conversations: Set<string>; details: Set<string> }>({
     conversations: new Set(),
     details: new Set(),
@@ -229,8 +242,8 @@ export default function OnlyFansWorkspace({
     () =>
       sourceMode === "creator" ? { kind: "view_as", label: "Your OnlyFans account", canManage: false, scopedAccountIds: [] } : controls.viewAs
         ? readOnlyView(fixtureAccountIdsForCreator(requestedScope.creatorId))
-        : operatorViewer(),
-    [controls.viewAs, requestedScope.creatorId, sourceMode],
+        : { ...operatorViewer(), canManage, label: agencyViewer ? "Agency team" : "Operator" },
+    [controls.viewAs, requestedScope.creatorId, sourceMode, canManage, agencyViewer],
   );
 
   const scenarios = useMemo(() => buildScenarios(controls, viewer), [controls, viewer]);
@@ -414,6 +427,36 @@ export default function OnlyFansWorkspace({
   }, [state, authorizedIds]);
 
   const detailState = currentConversationState(state);
+  const handoverAccount = state.selectedAccountId;
+  const handoverConversation = selectedSummary?.conversationId;
+  const handoverRevision = selectedSummary?.revision;
+  useEffect(() => {
+    if (sourceMode !== "server" || view !== "inbox" || !handoverAccount || !handoverConversation) { setHandover(null); return; }
+    const controller = new AbortController(); let active = true;
+    setHandoverLoading(true); setHandover(null);
+    void fetch(`/api/onlyfans/accounts/${encodeURIComponent(handoverAccount)}/conversations/${encodeURIComponent(handoverConversation)}/handover`, {
+      credentials: "same-origin", cache: "no-store", redirect: "error", signal: controller.signal,
+    }).then(async response => {
+      const data = response.ok ? await response.json() as Handover : null;
+      if (active) setHandover(data?.schemaVersion === "of-handover.v1" && data.accountId === handoverAccount && data.conversationId === handoverConversation ? data : null);
+    }).catch(() => { if (active) setHandover(null); }).finally(() => { if (active) setHandoverLoading(false); });
+    return () => { active = false; controller.abort(); };
+  }, [sourceMode, view, handoverAccount, handoverConversation, handoverRevision, handoverRefresh]);
+  const actionViewer = useMemo(() => ({ ...viewer, ...(agencyViewer ? { canActAsOwner: !!handoverCurrent?.canActAsOwner } : {}) }), [viewer, agencyViewer, handoverCurrent]);
+  const refreshHandover = useCallback(() => {
+    setHandoverRefresh(value => value + 1);
+    if (!handoverAccount || !handoverConversation) return;
+    const pending = requestConversation(ref.current, handoverAccount, handoverConversation);
+    commit(pending.state);
+    void source.getConversation(handoverAccount, handoverConversation).then(result => {
+      commit(applyConversation(ref.current, handoverAccount, handoverConversation, pending.generation, pending.seq, result).state);
+    });
+  }, [handoverAccount, handoverConversation, source, ref, commit]);
+  useEffect(() => {
+    if (sourceMode !== "server" || view !== "inbox" || !handoverConversation) return;
+    const timer = setInterval(refreshHandover, 15000);
+    return () => clearInterval(timer);
+  }, [sourceMode, view, handoverConversation, refreshHandover]);
 
   // One account list feeds both surfaces, so Accounts and Inbox can never
   // disagree about whose accounts are on screen. Every request state passes
@@ -523,7 +566,7 @@ export default function OnlyFansWorkspace({
       const actionSet = availableActions({
         account,
         summary: detail.summary,
-        viewer,
+        viewer: actionViewer,
         deliveryIncident: detail.deliveryIncident,
       });
       const request = createCommandRequest({
@@ -536,7 +579,7 @@ export default function OnlyFansWorkspace({
       // One explicit click has one identity. An uncertain retry keeps this
       // request; a later intentional repeat of the same text gets a new one.
       if (action === "send_manual_message") request.idempotencyKey = crypto.randomUUID();
-      if (!canSubmitCommand(viewer, actionSet, action)) {
+      if (!canSubmitCommand(actionViewer, actionSet, action)) {
         setCommandResult({
           simulated: true,
           applied: false,
@@ -549,7 +592,7 @@ export default function OnlyFansWorkspace({
       }
       await executeCommand(request);
     },
-    [ref, viewer, executeCommand],
+    [ref, actionViewer, executeCommand],
   );
 
   const handleCommand = useCallback(
@@ -597,7 +640,7 @@ export default function OnlyFansWorkspace({
         accountsState={scopedAccounts}
         activeAccountId={state.selectedAccountId}
         onSelectAccount={handleSelectAccount}
-        readOnly={viewer.kind === "view_as"}
+        readOnly={!viewer.canManage}
         creatorName={creatorName}
         sourceLabel={source.label}
         connectionsConfigured={sourceMode === "server" && connectionsConfigured}
@@ -626,7 +669,8 @@ export default function OnlyFansWorkspace({
       }
       onSelectConversation={handleSelectConversation}
       detailState={detailState}
-      viewer={viewer}
+      viewer={actionViewer}
+      handover={sourceMode === "server" ? <HandoverPanel value={handoverCurrent} loading={handoverLoading} onRefresh={refreshHandover} /> : undefined}
       onCommand={handleCommand}
       commandResult={commandResult}
       commandPending={commandPending}
