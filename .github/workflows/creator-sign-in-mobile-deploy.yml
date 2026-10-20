@@ -1,4 +1,4 @@
-name: Deploy mobile sign-in and verification fix
+name: Deploy scoped creator testing access
 on:
   workflow_dispatch:
   push:
@@ -28,27 +28,21 @@ jobs:
         run: node deployment/creator-sign-in-mobile-fix.cjs preflight
       - name: Pull tested images
         run: node deployment/creator-sign-in-mobile-fix.cjs pull
-      - name: Update private browser and verify headed sandbox
+      - name: Check the existing verified private browser
         id: browser
         run: node deployment/creator-sign-in-mobile-fix.cjs browser
-      - name: Verify anonymous provider captcha resources
-        id: resources
-        run: node deployment/creator-sign-in-mobile-fix.cjs resources
       - name: Update dashboard and verify services
         id: dashboard
         run: node deployment/creator-sign-in-mobile-fix.cjs dashboard
-      - name: Verify live anonymous screen resolution
-        id: display
-        run: node deployment/creator-sign-in-mobile-fix.cjs display
       - name: Final health
         id: health
         run: node deployment/creator-sign-in-mobile-fix.cjs health
       - name: Restore the previous release if rollout verification fails
-        if: failure() && (steps.browser.outcome == 'failure' || steps.resources.outcome == 'failure' || steps.dashboard.outcome == 'failure' || steps.display.outcome == 'failure' || steps.health.outcome == 'failure')
+        if: failure() && (steps.browser.outcome == 'failure' || steps.dashboard.outcome == 'failure' || steps.health.outcome == 'failure')
         run: node deployment/creator-sign-in-mobile-fix.cjs rollback
       - name: Retain command identifiers
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: signin-mobile-deployment-commands
-          path: /tmp/twin-signin-mobile-fix-69dffdf.json
+          name: creator-testing-deployment-commands
+          path: /tmp/twin-creator-testing-fix-92f3e10.json

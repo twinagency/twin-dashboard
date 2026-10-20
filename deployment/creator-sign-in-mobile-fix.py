@@ -1,11 +1,11 @@
-"""Deploy the tested sign-in mobile form and verification update; private settings stay on host."""
+"""Deploy the tested sign-in temporary creator access update; private settings stay on host."""
 import json, os, pathlib, subprocess, sys, time, shutil
 BASE=pathlib.Path('/etc/twin-onlyfans')
 OVERLAY=BASE/'creator-sign-in-release-compose.json'
 COMPOSE=pathlib.Path('/opt/twin-onlyfans/releases/0525e51aa690b44d1c9f1dc0bc2b9aed6baa627a/deploy/onlyfans-compose.yml')
-BACKUP=pathlib.Path('/var/backups/twin-signin-mobile-69dffdf')
-EXPECTED='34d2cb271b807909c9d3d02dee9bfde3c148e7a5'
-FIX='69dffdf7ba14482f651b918adc29312cc0949e8d'
+BACKUP=pathlib.Path('/var/backups/twin-creator-testing-92f3e10')
+EXPECTED='69dffdf7ba14482f651b918adc29312cc0949e8d'
+FIX='92f3e10bef86ade67a71405ae2cfc0ec820a69f2'
 NAMES=['next-app','twin-onlyfans-api-1','twin-onlyfans-worker-1','twin-onlyfans-database-1','flirt-bot','flirt-dashboard']
 manifest=json.loads(sys.argv[2])
 assert manifest.get('dashboardCommit')==FIX
@@ -51,31 +51,21 @@ def pull():
     password=run(['aws','ecr','get-login-password','--region','ap-southeast-2'])
     run(['docker','login','--username','AWS','--password-stdin','323149985112.dkr.ecr.ap-southeast-2.amazonaws.com'],password)
     password=None
-    for key in ['browserImage','dashboardImage']:
+    for key in ['dashboardImage']:
         run(['docker','pull',manifest[key]],timeout=900)
         info=json.loads(run(['docker','image','inspect',manifest[key]]))[0]
         assert manifest[key] in info['RepoDigests']
         if key=='browserImage':
             assert info['Config']['Labels'].get('org.opencontainers.image.revision')=='f76f37f7daba18bed1951aa55832127b5a988994'
-    print('PASS both immutable images pulled',flush=True)
+    print('PASS immutable dashboard image pulled',flush=True)
 def browser_deploy():
-    gate()
-    before=json.loads((BACKUP/'before.json').read_text());b=browser()
-    assert b['Config']['Image'] in [before['browserImage'],manifest['browserImage']]
-    config=json.loads(OVERLAY.read_text());config['services']['creator-sign-in']['image']=manifest['browserImage']
-    private(OVERLAY,json.dumps(config))
-    compose('up','--no-build','--no-deps','-d','creator-sign-in')
-    for _ in range(35):
-        b=browser()
-        if b['State'].get('Health',{}).get('Status')=='healthy':break
-        time.sleep(2)
-    else:raise RuntimeError('Browser health failed')
+    gate(); b=browser()
+    assert b['Config']['Image']==manifest['browserImage'] and b['State'].get('Health',{}).get('Status')=='healthy','Existing verified browser changed'
     h=b['HostConfig']
-    assert b['Config']['Image']==manifest['browserImage'] and b['Config']['User']=='pwuser' and h['ReadonlyRootfs'] and h['CapDrop']==['ALL'] and not h['PortBindings'] and h['Memory']==1536*1024**2
-    result=run(['docker','exec','-e','TWIN_SIGNIN_TEST_HEADED=1','-e','TWIN_SIGNIN_TEST_SANDBOX=1',b['Id'],'xvfb-run','-a','node','creator-sign-in/check.mjs'],timeout=180)
-    assert b'PASS self-hosted sign-in' in result
+    assert b['Config']['User']=='pwuser' and h['ReadonlyRootfs'] and h['CapDrop']==['ALL'] and not h['PortBindings'] and h['Memory']==1536*1024**2
     private(BACKUP/'browser-verified.json',json.dumps({'image':manifest['browserImage']}))
-    print('PASS target-host headed browser fixture, private isolation and health',flush=True)
+    print('PASS existing verified private browser image, sandbox configuration and health; no browser restart',flush=True)
+
 def dashboard():
     gate();assert json.loads((BACKUP/'browser-verified.json').read_text())['image']==manifest['browserImage']
     run(['/usr/local/bin/twin-pull.sh',manifest['dashboardImage'],'next-app','/home/ubuntu/allieai2-dashboard','-p','127.0.0.1:3001:3001','-e','PORT=3001','--network','twin-onlyfans_default'],timeout=300)
