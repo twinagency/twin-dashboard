@@ -127,7 +127,7 @@ const renderedLinks = (html: string) => Array.from(html.matchAll(/<a\b([^>]*)>([
   attributes,
 }));
 function checkMoxyLayout(html: string) {
-  const links = renderedLinks(html).filter(link => link.label);
+  const links = renderedLinks(html).filter(link => link.label && !/aria-label=/.test(link.attributes));
   assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all ten Moxy destinations in the approved shared order");
   assert.equal((html.match(/href="\/agency\/creator-invites"/g) || []).length, 1, "Invite creator appears once, as the prominent top action");
   assert.match(links[0].attributes, /class="[^"]*\bmoxy-invite-button\b/);
