@@ -22,8 +22,18 @@ jobs:
           gh release download creator-sign-in-0525e51-20261020 --repo "$GITHUB_REPOSITORY" --pattern twin-native-0525e51-release.tar --dir release
           echo '5eead8614969a6833e3f9dfb48c9870c3e8eaeccf9299af139ae930e8fd3fb7f  release/twin-native-0525e51-release.tar' | sha256sum --check
           tar -xf release/twin-native-0525e51-release.tar -C native
+          python3 - <<'PY'
+          import pathlib
+          for name in ('service.mjs', 'check.mjs'):
+              p = pathlib.Path('native/creator-sign-in') / name
+              p.write_bytes(p.read_bytes().replace(b'\r\n', b'\n'))
+          PY
+          echo '4f6c639ab3f9c468962d7a0b4e4366ff3f140d89a04b4da026cc6dfbc6b256f6  native/creator-sign-in/service.mjs' | sha256sum --check
+          echo '9fd181a999f0bb00316dfae18f8df6af9cd9525ef8d6d548c4d42572b88f4c5e  native/creator-sign-in/check.mjs' | sha256sum --check
           git apply --check --directory=native deployment/creator-sign-in-mobile-native.patch
           git apply --directory=native deployment/creator-sign-in-mobile-native.patch
+          echo 'f3274af5ad3bb69dd4451af8b2933c560f2aec0f8ab48be8d6846e417f38807b  native/creator-sign-in/service.mjs' | sha256sum --check
+          echo 'e5d406d645146194399ffa7985b51c0fca6cd51821aa46b8fbf870557bd21544  native/creator-sign-in/check.mjs' | sha256sum --check
 
       - name: Build and verify private browser
         run: |
