@@ -1,0 +1,32 @@
+name: Creator sign-in verification
+on:
+  pull_request:
+    paths: ['app/creator-auth/platforms/**', 'components/creator-platforms/**', 'lib/creator-platforms/**', 'lib/onlyfans-sign-in/**', 'lib/onlyfans-connections/**', 'lib/creator-dashboard-policy.ts', 'scripts/check-creator-platforms*', 'scripts/check-creator-sign-in*', '.github/workflows/creator-sign-in.yml']
+  push:
+    branches: [codex/creator-seamless-connect-20261020]
+permissions:
+  contents: read
+concurrency:
+  group: creator-sign-in-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx tsc --noEmit
+      - run: node scripts/check-creator-testing.cjs
+      - run: node scripts/check-creator-platforms.cjs
+      - run: node scripts/check-creator-sign-in-ui.mjs
+      - run: node scripts/check-creator-platforms-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-sign-in-verification
+          path: test-results/creator-sign-in
+          retention-days: 3

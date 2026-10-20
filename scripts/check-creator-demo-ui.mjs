@@ -14,13 +14,17 @@ const link=`import React from 'react';export default function Link({children,hre
 const cloneScope=`export async function setCloneScope(){}`;
 const loginActions=`export async function logout(){}`;
 const fixture=`import React from 'react';import{createRoot}from'react-dom/client';import Shell from'./components/CreatorWorkspaceShell';import Revenue from'./components/RevenueDashboard';import Fix from'./components/RevenueTooltipFix';import Banner from'./components/CreatorDemoBanner';document.documentElement.dataset.brandTheme='lynq-light';document.documentElement.dataset.creatorWorkspace='true';createRoot(document.getElementById('root')).render(<Shell agencyName="LYNQ" creatorName="ZANE" connected={true} allTimeStars={10000}><Banner/><Fix/><Revenue cloneId="demo-zane"/></Shell>);`;
-const bundle=await build({stdin:{contents:fixture,resolveDir:root,sourcefile:'zane-demo-fixture.tsx',loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},banner:{js:'var process={env:{NODE_ENV:"production",NEXT_PUBLIC_REPORT_TIMEZONE:"Australia/Sydney"},browser:true};'},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/^(next\/link|next\/navigation|@\/app\/actions\/clone-scope|@\/app\/login\/actions)$|(?:^|\/)TwinAssistant(?:\.tsx)?$/},args=>({path:args.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},args=>({loader:'jsx',resolveDir:root,contents:args.path.includes('TwinAssistant')?'export default function Assistant(){return null}':args.path==='next/link'?link:args.path==='next/navigation'?navigation:args.path.includes('clone-scope')?cloneScope:loginActions}));}}]});
+const bundle=await build({stdin:{contents:fixture,resolveDir:root,sourcefile:'zane-demo-fixture.tsx',loader:'tsx'},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},banner:{js:'var process={env:{NODE_ENV:"production",NEXT_PUBLIC_REPORT_TIMEZONE:"Australia/Sydney"},browser:true};'},plugins:[{name:'fixture',setup(b){b.onResolve({filter:/^(next\/link|next\/navigation|@\/app\/actions\/clone-scope|@\/app\/login\/actions)$|(?:^|\/)TwinAssistant(?:\.tsx)?$/},args=>({path:args.path,namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},args=>({loader:'jsx',resolveDir:root,contents:args.path.includes('TwinAssistant')?'export default function Assistant(){return null}':args.path==='next/link'?link:args.path==='next/navigation'?navigation:args.path.includes('clone-scope')?cloneScope:loginActions}));}}]});
+const script=bundle.outputFiles.find(file=>file.path.endsWith('.js'));
+const moduleStyles=bundle.outputFiles.filter(file=>file.path.endsWith('.css')).map(file=>file.text).join('\n');
+assert.ok(script,'The earnings fixture must emit JavaScript');
+assert.ok(moduleStyles,'The actual workspace CSS must be bundled');
 const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/creator-workspace.css";',{from:path.join(root,'zane-verification.css')});
 const requests=[],responses=[];
 const server=createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
- if(u.pathname==='/styles.css'){res.setHeader('content-type','text/css');return res.end(css.css)}
- if(u.pathname==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end(bundle.outputFiles[0].text)}
+ if(u.pathname==='/styles.css'){res.setHeader('content-type','text/css');return res.end(css.css+'\n'+moduleStyles)}
+ if(u.pathname==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end(script.text)}
  if(u.pathname.startsWith('/api/')){
   requests.push(u.pathname);res.setHeader('content-type','application/json');
   if(u.pathname==='/api/fx')return res.end(JSON.stringify({rate:1.5,audPerUsd:1.5}));

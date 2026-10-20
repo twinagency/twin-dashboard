@@ -80,6 +80,15 @@ export async function middleware(req: NextRequest) {
     if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }
+  // Fixed-account, fixed-expiry owner testing link. The handler checks the key
+  // and current account before issuing the ordinary scoped creator session.
+  if (/^\/creator-testing\/[a-f0-9]{64}$/.test(pathname)) {
+    if (req.method !== "GET" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    const response = privateResponse(withPathname(req));
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
   // Only this exact entry route is public. Its handler verifies the private
   // review key before issuing an ordinary, isolated creator session.
   if (/^\/onboarding-review\/[a-f0-9]{64}$/.test(pathname)) {

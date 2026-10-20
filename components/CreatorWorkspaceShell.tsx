@@ -30,6 +30,7 @@ export default function CreatorWorkspaceShell({
   activeCloneId,
   connected,
   onboardingFinished = true,
+  connectionPage = false,
   allTimeStars,
   usdPerStar,
   children,
@@ -43,6 +44,7 @@ export default function CreatorWorkspaceShell({
   activeCloneId: string | null;
   connected: boolean;
   onboardingFinished?: boolean;
+  connectionPage?: boolean;
   allTimeStars: number;
   usdPerStar?: number;
   children: ReactNode;
@@ -84,8 +86,8 @@ export default function CreatorWorkspaceShell({
               />
               <MainShell>
                 {cloneBeingCreated && <CreatorCloneSetupBanner brand="moxy" />}
-                <CreatorContentAccess />
-                {!connected && !cloneBeingCreated && (
+                {!connectionPage && <CreatorContentAccess />}
+                {!connectionPage && !connected && !cloneBeingCreated && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     {onboardingFinished
                       ? "Your onboarding has been submitted. Live earnings and your Pay Per View catalogue will become available when your AI creator profile is connected."
@@ -101,4 +103,3 @@ export default function CreatorWorkspaceShell({
     </DashboardAccessProvider>
   );
 }
-

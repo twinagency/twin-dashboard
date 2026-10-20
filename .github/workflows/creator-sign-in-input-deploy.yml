@@ -1,0 +1,43 @@
+name: Deploy tested sign-in input fix
+on:
+  push:
+    branches: [codex/creator-seamless-connect-20261020]
+    paths: ['.github/workflows/creator-sign-in-input-deploy.yml']
+permissions:
+  contents: write
+concurrency:
+  group: twin-sign-in-input-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested image manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download creator-sign-in-0525e51-20261020 --repo "$GITHUB_REPOSITORY" --pattern creator-sign-in-input-images.json --dir deployment
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Check running release and save rollback metadata
+        run: node deployment/creator-sign-in-input-fix.cjs preflight
+      - name: Pull tested images
+        run: node deployment/creator-sign-in-input-fix.cjs pull
+      - name: Update private browser and verify headed sandbox
+        run: node deployment/creator-sign-in-input-fix.cjs browser
+      - name: Update dashboard and verify services
+        run: node deployment/creator-sign-in-input-fix.cjs dashboard
+      - name: Verify live anonymous screen resolution
+        run: node deployment/creator-sign-in-input-fix.cjs display
+      - name: Final health
+        run: node deployment/creator-sign-in-input-fix.cjs health
+      - name: Retain command identifiers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signin-input-deployment-commands
+          path: /tmp/twin-signin-input-fix-34d2cb2.json

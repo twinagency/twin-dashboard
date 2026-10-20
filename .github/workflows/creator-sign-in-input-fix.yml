@@ -1,0 +1,34 @@
+name: Build dashboard with temporary creator access
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/creator-seamless-connect-20261020]
+    paths: ['.github/workflows/creator-sign-in-input-fix.yml']
+permissions:
+  contents: write
+env:
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dashboard
+        run: docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$ECR_REPO:$GITHUB_SHA" .
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Push dashboard and retain the verified live browser
+        run: |
+          docker push "$ECR_REPO:$GITHUB_SHA"
+          DASHBOARD=$(docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:$GITHUB_SHA")
+          BROWSER="$ECR_REPO@sha256:a1877e26d7901128cd514268987bd243afd0dff435b5e108a85f707ccb8d5e53"
+          jq -n --arg commit "$GITHUB_SHA" --arg dashboard "$DASHBOARD" --arg browser "$BROWSER" '{dashboardCommit:$commit,dashboardImage:$dashboard,browserImage:$browser}' > creator-sign-in-input-images.json
+      - name: Save manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload creator-sign-in-0525e51-20261020 creator-sign-in-input-images.json --repo "$GITHUB_REPOSITORY" --clobber

@@ -16,20 +16,25 @@ const {chromium,webkit}=require('playwright');
   'createRoot(document.getElementById("root")).render(<Shell agencyName={q.get("brand")||"Moxy"} creatorName="Disposable navigation fixture" clones={[]} activeCloneId={null} connected={q.get("connected")==="1"} onboardingFinished={q.get("submitted")==="1"} onboardingEditable={true} allTimeStars={0}><h1>Pay Per View fixture</h1></Shell>);'
  ].join('\n');
  const bundle=await build({stdin:{contents:fixture,resolveDir:root,sourcefile:'content-access-fixture.tsx',loader:'tsx'},
-  bundle:true,write:false,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},
+  bundle:true,write:false,outdir:out,platform:'browser',format:'iife',jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},
   plugins:[{name:'unrelated-dashboard-widgets',setup(b){
    b.onResolve({filter:/^(next\/link|\.\/(?:BlurProvider|CurrencyProvider|DashboardAccessProvider|MainShell|MobileMenu|Sidebar|TopBar|TwinWordmark))$/},a=>({path:a.path,namespace:'fixture'}));
    b.onLoad({filter:/.*/,namespace:'fixture'},a=>({loader:'jsx',resolveDir:root,contents:a.path==='next/link'
     ?'import React from "react";export default function Link({children,href,...p}){return <a href={href} {...p}>{children}</a>;}'
     :a.path==='./MainShell'?'import React from "react";export default function Main({children}){return <main className="overflow-y-auto p-4">{children}</main>;}'
+    :a.path==='./CurrencyProvider'?'export const useCurrency=()=>({currency:"AUD",setCurrency(){}});export default function Provider({children}){return children;}'
     :/Provider/.test(a.path)?'export default function Provider({children}){return children;}'
     :'export default function Widget(){return null;}'}));
   }}]});
+ const script=bundle.outputFiles.find(file=>file.path.endsWith('.js'));
+ const moduleStyles=bundle.outputFiles.filter(file=>file.path.endsWith('.css')).map(file=>file.text).join('\n');
+ assert.ok(script,'The creator fixture must emit JavaScript');
+ assert.ok(moduleStyles,'The actual creator shell CSS must be bundled');
  const css=await postcss([tailwind()]).process('@import "./app/globals.css";',{from:path.join(root,'content-access-fixture.css')});
  const server=createServer((req,res)=>{
   const u=new URL(req.url,'http://localhost');
-  if(u.pathname==='/fixture.js'){res.setHeader('Content-Type','text/javascript');return res.end(bundle.outputFiles[0].text);}
-  if(u.pathname==='/fixture.css'){res.setHeader('Content-Type','text/css');return res.end(css.css);}
+  if(u.pathname==='/fixture.js'){res.setHeader('Content-Type','text/javascript');return res.end(script.text);}
+  if(u.pathname==='/fixture.css'){res.setHeader('Content-Type','text/css');return res.end(css.css+'\n'+moduleStyles);}
   res.setHeader('Content-Type','text/html');
   if(u.pathname==='/creator/onboarding')return res.end('<h1>'+(u.searchParams.get('step')==='content'?'Saved uploads destination':'Onboarding details destination')+'</h1>');
   res.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/fixture.css"><div id="root"></div><script src="/fixture.js"></script>');
@@ -37,7 +42,8 @@ const {chromium,webkit}=require('playwright');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
  try{
   for(const[name,engine]of [['chromium',chromium],['webkit',webkit]]){
-   const browser=await engine.launch({headless:true});
+   const executablePath=name==='chromium'?process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH:undefined;
+   const browser=await engine.launch({headless:true,...(executablePath?{executablePath}:{})});
    try{
     for(const brand of ['Moxy','FLIRT'])for(const width of [390,1280])for(const connected of [0,1])for(const submitted of [0,1]){
      const page=await browser.newPage({viewport:{width,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));

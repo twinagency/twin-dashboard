@@ -35,11 +35,12 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       activeCloneId={cloneId}
       connected={!!cloneId}
       onboardingFinished={creator.applicationSubmitted !== false}
+      connectionPage={pathname === "/creator/platforms"}
       allTimeStars={allTimeStars}
       usdPerStar={usdPerStar}
     >
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
-      <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink" data-creator-platform-access>My platforms</Link></div>
+      {pathname !== "/creator/platforms" && <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink" data-creator-platform-access>My platforms</Link></div>}
       {children}
     </CreatorWorkspaceShell>
   );
