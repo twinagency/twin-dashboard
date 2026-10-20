@@ -3,9 +3,9 @@ import json, os, pathlib, subprocess, sys, time, shutil
 BASE=pathlib.Path('/etc/twin-onlyfans')
 OVERLAY=BASE/'creator-sign-in-release-compose.json'
 COMPOSE=pathlib.Path('/opt/twin-onlyfans/releases/0525e51aa690b44d1c9f1dc0bc2b9aed6baa627a/deploy/onlyfans-compose.yml')
-BACKUP=pathlib.Path('/var/backups/twin-keyboard-9fea6a3')
-EXPECTED='92f3e10bef86ade67a71405ae2cfc0ec820a69f2'
-FIX='9fea6a344abbac1cd952d041c5add9534d99266c'
+BACKUP=pathlib.Path('/var/backups/twin-keyboard-54684dd')
+EXPECTED='4327c766ed9c1c6a87b0c4cab79effb07af99e0e'
+FIX='54684dd5a7eae051e48161b67ade8b96101cf512'
 NAMES=['next-app','twin-onlyfans-api-1','twin-onlyfans-worker-1','twin-onlyfans-database-1','flirt-bot','flirt-dashboard']
 manifest=json.loads(sys.argv[2])
 assert manifest.get('dashboardCommit')==FIX

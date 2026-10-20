@@ -2,12 +2,12 @@ const {spawnSync}=require('node:child_process');
 const fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const mode=process.argv[2],instance='i-09a9dd3bd749643a5';
 if(!['preflight','pull','browser','dashboard','health','display','resources','rollback'].includes(mode))throw Error('Explicit phase required');
-const statePath=path.join(os.tmpdir(),'twin-keyboard-fix-9fea6a3.json');
+const statePath=path.join(os.tmpdir(),'twin-keyboard-fix-54684dd.json');
 const state=fs.existsSync(statePath)?JSON.parse(fs.readFileSync(statePath,'utf8')):{};
 function aws(args){const r=spawnSync('aws',[...(process.env.GITHUB_ACTIONS?[]:['--profile','tsocial']),'--region','ap-southeast-2','--no-cli-pager','--cli-connect-timeout','10','--cli-read-timeout','20',...args,'--output','json'],{encoding:'utf8',timeout:30000,maxBuffer:4*1024*1024,windowsHide:true,env:{...process.env,AWS_MAX_ATTEMPTS:'1'}});if(r.status!==0)throw Error('AWS request failed: '+(r.stderr?.slice(-800)||r.error?.message));return JSON.parse(r.stdout);}
 (async()=>{
  if(aws(['sts','get-caller-identity']).Account!=='323149985112')throw Error('Wrong AWS account');
- const manifest=mode==='preflight'?JSON.stringify({dashboardCommit:'9fea6a344abbac1cd952d041c5add9534d99266c'}):fs.readFileSync(path.join(__dirname,'creator-sign-in-input-images.json'),'utf8');
+ const manifest=mode==='preflight'?JSON.stringify({dashboardCommit:'54684dd5a7eae051e48161b67ade8b96101cf512'}):fs.readFileSync(path.join(__dirname,'creator-sign-in-input-images.json'),'utf8');
  const source=fs.readFileSync(path.join(__dirname,'creator-sign-in-mobile-fix.py'),'utf8');
  const command="sudo python3 - '"+mode+"' '"+JSON.stringify(JSON.parse(manifest))+"' <<'TWIN_SIGNIN_INPUT_FIX'\n"+source+"\nTWIN_SIGNIN_INPUT_FIX";
  state.commands??={};let id=state.commands[mode];
