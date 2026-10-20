@@ -37,7 +37,7 @@ export function createControlBackend(options: { baseUrl: string; token: string; 
   };
 }
 
-export function configuredControlBackend() {
+export function configuredControlBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CONTROL");
-  return options ? createControlBackend(options) : null;
+  return options ? createControlBackend({ ...options, fetchImpl }) : null;
 }

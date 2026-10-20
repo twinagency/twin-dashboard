@@ -22,7 +22,7 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
   const title = TITLES[section];
   const description = section === "content" ? "Your content, organised and ready to share." : section === "sales" ? "See your purchases, payments and refunds." : "Your personality, preferences and AI reply settings.";
   const unavailable = (message: string, connect = false) => <div className="dashboard-page"><CreatorPlatformHeading title={title} description={description} /><CreatorPlatformEmpty title={connect ? "Bring your account into your studio." : "Let’s get this ready."} description={message} actionHref={connect ? "/onlyfans/accounts" : undefined} /></div>;
-  const ctx = await requireOnlyFansRead();
+  const ctx = await requireOnlyFansRead({ agency: true });
   if (ctx instanceof NextResponse) return unavailable("Your session cannot read this section. Sign in again.");
   if (!ctx.backend?.getWorkspace) return unavailable("This section is not configured.");
   const query = await searchParams;
@@ -52,14 +52,14 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
       <p>{data.historyRecoveryRequired ? "Your account history is still syncing." : "Your account history is synced."}</p>
       <p className="mt-1 text-xs text-muted">Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
     </div>
-    {section === "content" && configuredContentBackend() ? <VaultManager key={account.accountId} accountId={account.accountId} /> : null}
-    {section !== "settings" ? <WorkspaceBody data={data} contentEditable={section === "content" && !!configuredContentBackend()} /> : null}
-    {section === "settings" && configuredConfigurationBackend() ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
+    {section === "content" && configuredContentBackend(ctx.fetch) ? <VaultManager key={account.accountId} accountId={account.accountId} readOnly={!ctx.canManage} /> : null}
+    {section !== "settings" ? <WorkspaceBody data={data} contentEditable={ctx.canManage && section === "content" && !!configuredContentBackend(ctx.fetch)} /> : null}
+    {section === "settings" && ctx.canManage && configuredConfigurationBackend(ctx.fetch) ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
     {section === "settings" ? <details className="mt-6 rounded-xl border border-line bg-panel p-5"><summary>Advanced account details</summary><div className="mt-4"><WorkspaceBody data={data} /></div></details> : null}
     {next ? <Link data-of-next-page className="mt-5 inline-block rounded-lg border border-line px-4 py-2 text-sm font-semibold text-accent"
       href={`${href}${href.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(next)}`}>Next page →</Link> : null}
     {cursor ? <Link className="ml-4 mt-5 inline-block text-sm text-accent" href={href}>Back to first page</Link> : null}
-    <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-accent"><Link href={workspaceHref("/onlyfans/inbox", { creatorId, accountId: account.accountId })}>Open inbox →</Link><Link href={workspaceHref("/onlyfans/operations", { creatorId, accountId: account.accountId })}>Processing status →</Link></div>
+    <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-accent"><Link href={workspaceHref("/onlyfans/inbox", { creatorId, accountId: account.accountId })}>Open inbox →</Link>{!ctx.auth.agency ? <Link href={workspaceHref("/onlyfans/operations", { creatorId, accountId: account.accountId })}>Processing status →</Link> : null}</div>
   </div>;
 }
 

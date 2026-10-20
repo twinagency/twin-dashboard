@@ -420,7 +420,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // A profile opened from Dashboard may differ from the global scope cookie.
   // Keep its configuration links on the creator actually displayed.
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
-  const channel = channelDefinition(workspaceChannel(pathname, searchParams.get("workspace"), isAdmin));
+  const rawChannel = channelDefinition(workspaceChannel(pathname, searchParams.get("workspace"), isAdmin));
+  const channel = isAgency && rawChannel.channel === "onlyfans" ? { ...rawChannel, nav: rawChannel.nav.filter(item => item.key !== "of-operations") } : rawChannel;
   const channelScoped = channel.channel !== "all";
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);

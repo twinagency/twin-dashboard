@@ -170,6 +170,10 @@ group("2. The server derives the channel scope, and gates on it");
     channelVerdict("onlyfans", agency).reason.includes("operator"),
   );
 
+  const verifiedAgency = channelAccess({ hasAgency: true, hasViewAs: false, onlyFansAgency: true });
+  check("verified agency memberships have the scoped OnlyFans channel", channelVerdict("onlyfans", verifiedAgency).allowed);
+  check("OnlyFans access does not grant Telegram operator access", !channelVerdict("telegram", verifiedAgency).allowed);
+  check("view-as cannot inherit agency channel access", !channelVerdict("onlyfans", channelAccess({ hasAgency: true, hasViewAs: true, onlyFansAgency: true })).allowed);
   const operatorScope = allowedChannels(operator);
   const agencyScope = allowedChannels(agency);
   check("the operator scope is all three channels", operatorScope.length === 3);

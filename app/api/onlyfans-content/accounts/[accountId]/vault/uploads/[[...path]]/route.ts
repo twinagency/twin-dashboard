@@ -8,19 +8,19 @@ export const dynamic="force-dynamic";
 export const runtime="nodejs";
 type Context={params:Promise<{accountId:string;path?:string[]}>};
 export async function GET(request:NextRequest,context:Context){
-  const auth=await requireOnlyFansRead();if(auth instanceof NextResponse)return auth;
+  const auth=await requireOnlyFansRead({ agency: true });if(auth instanceof NextResponse)return auth;
   const {accountId:raw,path=[]}=await context.params,accountId=requestId(raw);
   if(!accountId||path.length||request.nextUrl.searchParams.size)return vaultRefusal(400,"That upload status request is invalid.");
-  const backend=configuredVaultMediaBackend();if(!backend)return vaultRefusal(503,"Media management is not configured.");
+  const backend=configuredVaultMediaBackend(auth.fetch);if(!backend)return vaultRefusal(503,"Media management is not configured.");
   const r=await backend.uploads(accountId);
   return r.ok?vaultAnswer({schemaVersion:CONTENT_SCHEMA,ok:true,accountId,uploads:r.data}):vaultRefusal(r.status,r.error);
 }
 export async function POST(request:NextRequest,context:Context){
   const {accountId:raw,path=[]}=await context.params,accountId=requestId(raw);
   if(!accountId)return vaultRefusal(400,"That upload account is invalid.");
-  const backend=configuredVaultMediaBackend();if(!backend)return vaultRefusal(503,"Media management is not configured.");
   if(path.length===3&&mediaUuid(path[0])&&path[1]==="files"&&mediaUuid(path[2])){
     const ctx=await vaultSessionContext(request,"application/octet-stream");if(ctx instanceof NextResponse)return ctx;
+    const backend=configuredVaultMediaBackend(ctx.fetch);if(!backend)return vaultRefusal(503,"Media management is not configured.");
     const query=request.nextUrl.searchParams,digest=request.headers.get("x-upload-sha256"),offset=query.get("offset");
     if(query.size!==1||query.getAll("offset").length!==1||!offset||!/^\d{1,12}$/.test(offset)||!digest||!/^[a-f0-9]{64}$/.test(digest))return vaultRefusal(400,"That upload chunk is invalid.");
     if(!request.body)return vaultRefusal(400,"Choose a file chunk to upload.");
@@ -32,6 +32,7 @@ export async function POST(request:NextRequest,context:Context){
     return r.ok?vaultAnswer({schemaVersion:CONTENT_SCHEMA,ok:true,accountId,jobId:path[0],fileId:path[2],receivedBytes:r.receivedBytes}):vaultRefusal(r.status,r.error);
   }
   const ctx=await vaultCommandContext(request);if(ctx instanceof NextResponse)return ctx;
+    const backend=configuredVaultMediaBackend(ctx.fetch);if(!backend)return vaultRefusal(503,"Media management is not configured.");
   if(request.nextUrl.searchParams.size||!mediaObject(ctx.body)||!mediaUuid(ctx.body.requestId))return vaultRefusal(400,"That upload request is invalid.");
   if(path.length===0){
     if(Object.keys(ctx.body).sort().join(",")!=="expectedConnectionRevision,files,requestId"||!validUploadFiles(ctx.body.files)

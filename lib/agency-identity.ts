@@ -1,5 +1,5 @@
 import { serviceClient } from "./supabase-service";
-export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; canManage?: boolean };
+export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; canManage?: boolean; userId?: string };
 export async function agencyIdentity(token: string | undefined): Promise<AgencyIdentity | null> {
   if (!token) return null;
   const db = serviceClient();
@@ -11,7 +11,7 @@ export async function agencyIdentity(token: string | undefined): Promise<AgencyI
   const identity = await agencyIdentityById(member.data.agency_id);
   // This permission is server-owned membership data. Never copy it from Auth
   // metadata, a browser cookie, branding, or a submitted form field.
-  return identity && member.data.can_manage === true ? { ...identity, canManage: true } : identity;
+  return identity ? { ...identity, userId: data.user.id, canManage: member.data.can_manage === true } : null;
 }
 
 // Builds the SAME identity shape a real login produces, but keyed directly by

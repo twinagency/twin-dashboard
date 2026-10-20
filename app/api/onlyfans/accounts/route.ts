@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
-  const context = await requireOnlyFansRead();
+  const context = await requireOnlyFansRead({ agency: true });
   if (context instanceof NextResponse) return context;
 
   const url = new URL(request.url);

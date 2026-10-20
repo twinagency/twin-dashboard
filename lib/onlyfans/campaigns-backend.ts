@@ -30,7 +30,7 @@ export function createCampaignBackend(options: { baseUrl: string; token: string;
     change: (accountId: string, id: string, input: CampaignChange & { actor: string; commandKey: string }) => post(accountId, id, input, { accountId, campaignId: id, commandKey: input.commandKey, action: input.action, expectedRevision: input.expectedRevision }),
   };
 }
-export function configuredCampaignBackend() {
+export function configuredCampaignBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CAMPAIGN");
-  return options ? createCampaignBackend(options) : null;
+  return options ? createCampaignBackend({ ...options, fetchImpl }) : null;
 }

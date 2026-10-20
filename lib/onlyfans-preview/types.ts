@@ -231,6 +231,8 @@ export type PreviewViewer = {
   kind: "operator" | "view_as";
   label: string;
   canManage: boolean;
+  /** Live staff ownership for the selected conversation; undefined in fixtures. */
+  canActAsOwner?: boolean;
   /** Account ids this viewer may read. A view-as session is always narrower. */
   scopedAccountIds: string[];
 };

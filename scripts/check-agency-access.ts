@@ -51,7 +51,7 @@ async function main() {
   try {
     assert.equal(await agencyIdentity(undefined),null);
     assert.equal(calls.length,0);
-    assert.deepEqual(await agencyIdentity("verified-token"),{id:"lynq",name:"LYNQ",cloneIds:["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]});
+    assert.deepEqual(await agencyIdentity("verified-token"),{id:"lynq",name:"LYNQ",userId:"verified-user",canManage:false,cloneIds:["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]});
     for (const path of ["/revenue","/clones","/users","/flows","/media","/logs","/info","/api/dashboard","/api/users/live"]) {
       const req=new NextRequest(`https://twin.test${path}`,{headers:{cookie:"twin_agency_access=verified-token"}});
       assert.equal((await middleware(req)).status,200,`Shared page allowed: ${path}`);

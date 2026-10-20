@@ -115,6 +115,9 @@ export function availableActions(input: {
         : "Your role cannot change conversations for this account.";
     }
 
+    if (viewer.canActAsOwner === false && ["send_manual_message", "release_takeover"].includes(action)) {
+      return "Only the staff member handling this conversation can reply or hand it back. Refresh to check ownership.";
+    }
     if (account.health !== "connected" && action === "send_manual_message") {
       return account.healthReason ?? "This account cannot send until the connection is restored.";
     }

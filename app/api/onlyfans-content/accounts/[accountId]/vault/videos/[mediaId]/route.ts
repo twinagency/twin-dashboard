@@ -9,10 +9,10 @@ export const dynamic="force-dynamic";
 export const runtime="nodejs";
 type Context={params:Promise<{accountId:string;mediaId:string}>};
 export async function GET(request:NextRequest,context:Context){
-  const auth=await requireOnlyFansRead();if(auth instanceof NextResponse)return auth;
+  const auth=await requireOnlyFansRead({ agency: true });if(auth instanceof NextResponse)return auth;
   const p=await context.params,accountId=requestId(p.accountId);
   if(!accountId||!vaultMediaId(p.mediaId)||request.nextUrl.searchParams.size)return vaultRefusal(400,"That video reference is invalid.");
-  const backend=configuredVaultMediaBackend();if(!backend)return vaultRefusal(503,"Media management is not configured.");
+  const backend=configuredVaultMediaBackend(auth.fetch);if(!backend)return vaultRefusal(503,"Media management is not configured.");
   const r=await backend.video(accountId,p.mediaId);
   return r.ok?vaultAnswer({schemaVersion:CONTENT_SCHEMA,ok:true,accountId,video:r.video}):vaultRefusal(r.status,r.error);
 }
@@ -21,7 +21,7 @@ export async function POST(request:NextRequest,context:Context){
   const p=await context.params,accountId=requestId(p.accountId);
   if(!accountId||!vaultMediaId(p.mediaId)||request.nextUrl.searchParams.size||!mediaObject(ctx.body)
     ||Object.keys(ctx.body).join(",")!=="requestId"||!mediaUuid(ctx.body.requestId))return vaultRefusal(400,"That video request is invalid.");
-  const backend=configuredVaultMediaBackend();if(!backend)return vaultRefusal(503,"Media management is not configured.");
+  const backend=configuredVaultMediaBackend(ctx.fetch);if(!backend)return vaultRefusal(503,"Media management is not configured.");
   const r=await backend.video(accountId,p.mediaId,ctx.identity(accountId,"video:"+p.mediaId));
   return r.ok?vaultAnswer({schemaVersion:CONTENT_SCHEMA,ok:true,accountId,video:r.video}):vaultRefusal(r.status,r.error);
 }
