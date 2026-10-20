@@ -13,7 +13,7 @@ IMAGE=manifest['browserImage']
 assert IMAGE.startswith('323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard@sha256:') and len(IMAGE.rsplit(':',1)[1])==64
 def run(args,data=None,timeout=180):
     r=subprocess.run(args,input=data,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout)
-    if r.returncode:raise RuntimeError(args[0]+' failed with exit '+str(r.returncode))
+    if r.returncode:raise RuntimeError(' '.join(args[:2])+' failed with exit '+str(r.returncode)+((': '+r.stderr.decode()[:240]) if args[:2] in (['docker','inspect'],['docker','top']) else ''))
     return r.stdout
 def records(names):return json.loads(run(['docker','inspect',*names]))
 def env(v):return dict(x.split('=',1) for x in v['Config']['Env'] if '=' in x)
@@ -26,6 +26,7 @@ def idle():
     names=run(['docker','top',browser()['Id'],'-eo','comm']).decode().lower().splitlines()[1:]
     assert not any('chrome' in x or 'chromium' in x for x in names),'A creator is still signing in; retry after that browser closes'
 def preflight():
+    print('Running container names: '+run(['docker','ps','--format','{{.Names}}']).decode().strip().replace('\n',', '),flush=True)
     r=records(NAMES);assert all(x['State']['Running'] for x in r)
     assert env(r[0]).get('GIT_SHA')==expected,'Dashboard changed; inspect before rollout'
     b=browser();assert b['Config']['Image']==OLD and b['State'].get('Health',{}).get('Status')=='healthy'
