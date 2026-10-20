@@ -59,7 +59,7 @@ try{
  for(const [name,browser,width]of [['chromium',chrome,1440],['webkit-mobile',safari,390]]){
   reset();const context=await browser.newContext({viewport:{width,height:844},...(name==='webkit-mobile'?{isMobile:true,hasTouch:true}:{})});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();
-  const screen=page.getByLabel('OnlyFans sign-in screen');await screen.waitFor();
+  await page.getByLabel('Email address',{exact:true}).fill('fixture@example.test');await page.getByLabel('OnlyFans password',{exact:true}).fill('fixture-password');const formBounds=await page.getByLabel('Email address',{exact:true}).boundingBox();assert(formBounds.width>=300,'Mobile login uses normal full-width inputs');await page.screenshot({path:out+'/'+name+'-native-login.png',fullPage:true});await page.getByRole('button',{name:'Sign in',exact:true}).click();await until(()=>posted.some(b=>b.input?.type==='login'));const screen=page.getByLabel('OnlyFans sign-in screen');await screen.waitFor();
   assert(await page.getByRole('dialog').evaluate(el=>!['transparent','rgba(0, 0, 0, 0)'].includes(getComputedStyle(el).backgroundColor)),'The real creator theme supplies an opaque dialog');
   assert.equal(posted.filter(b=>b.action==='start').length,1,'StrictMode must not launch twice');
   assert.equal(await page.getByText('Install Twin connector',{exact:false}).count(),0);
@@ -70,8 +70,8 @@ try{
   await page.getByRole('button',{name:'Next field',exact:true}).click();
   await page.keyboard.type('fixture-password');await input.press('Backspace');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Type in the selected OnlyFans field"]')?.type==='password');
-  await until(()=>posted.some(b=>b.input?.key==='Backspace'));assert.equal(await screen.evaluate(el=>el.width),864,'Preserve high resolution frame pixels');
-  const inputs=posted.filter(b=>b.action==='input').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
+  await until(()=>posted.some(b=>b.input?.key==='Backspace'));await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.width===864);assert.equal(await screen.evaluate(el=>el.width),864,'Preserve high resolution frame pixels');
+  const inputs=posted.filter(b=>b.action==='input'&&b.input.type!=='login').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
   assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
   await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
   attempt={...attempt,phase:'ready',handle:'fixture_creator'};
@@ -91,9 +91,9 @@ try{
   assert.deepEqual(errors,[]);await context.close();
  }
  // Expiry removes the attempt server-side; restarting must still reach start.
- reset();const page=await chrome.newPage({viewport:{width:390,height:844}});await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await page.getByLabel('OnlyFans sign-in screen').waitFor();
+ reset();const page=await chrome.newPage({viewport:{width:390,height:844}});await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await page.getByRole('button',{name:'Other sign-in options',exact:true}).click();await page.getByLabel('OnlyFans sign-in screen').waitFor();
  unavailableFrame=true;const frameNotice=page.getByText('Your sign-in screen could not be loaded. Restart sign-in to continue.',{exact:true});await frameNotice.waitFor();unavailableFrame=false;await frameNotice.waitFor({state:'hidden'});
- const firstStart=posted.find(b=>b.action==='start');expired=true;await page.getByText('Your sign-in expired. Start again.').waitFor();await page.getByRole('button',{name:'Restart sign-in'}).click();await until(()=>posted.filter(b=>b.action==='start').length===2);await page.getByLabel('OnlyFans sign-in screen').waitFor();
+ const firstStart=posted.find(b=>b.action==='start');expired=true;await page.getByText('Your sign-in expired. Start again.').waitFor();await page.getByRole('button',{name:'Restart sign-in'}).click();await until(()=>posted.filter(b=>b.action==='start').length===2);await page.getByRole('button',{name:'Other sign-in options',exact:true}).click();await page.getByLabel('OnlyFans sign-in screen').waitFor();
  assert.equal(posted.filter(b=>b.action==='start').length,2);assert.notEqual(posted.filter(b=>b.action==='start')[1].startKey,firstStart.startKey);
  denied=true;await page.getByRole('button',{name:'Close connection setup'}).click();await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByText('Sign in to your creator account again.',{exact:true}).first().waitFor();assert(await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).isDisabled());await page.close();
  console.log('PASS creator sign-in UI: Chromium and mobile WebKit, one start in StrictMode, serialized input, explicit account confirmation, exact retry, pending/verified states, frame failure/recovery, expired restart and authentication loss. Physical phone keyboard and live provider pilot remain release checks.');
