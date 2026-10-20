@@ -3,7 +3,7 @@ import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { agencyIdentity, agencyIdentityById } from "../lib/agency-identity";
 import { agencyCanManage, MOXY_MANAGEMENT_AGENCY_ID, LYNQ_MANAGEMENT_AGENCY_ID } from "../lib/agency-management-policy";
-import { JESS_KATE_PORTAL, TETHER_PORTAL } from "../lib/partner-portals";
+import { JESS_KATE_PORTAL, TETHER_PORTAL, TOP_ONLYFANS_AGENCY } from "../lib/partner-portals";
 import { withDashboardAccess, accessCacheKey } from "../lib/dashboard-access";
 import { dashboardFetch } from "../lib/agency-fetch";
 import { requireManagedClone, guardDashboardAction } from "../lib/agency-management";
@@ -120,6 +120,20 @@ async function main() {
     signedInAgency = agencyOther;
     assert.equal(agencyCanManage(await agencyIdentity("verified-token")), false, "same flag on unrelated agency never enables management");
     assert.equal((await middleware(request("/users"))).status, 403);
+    signedInAgency = TOP_ONLYFANS_AGENCY.id;
+    canManage = false;
+    assert.equal(agencyCanManage(await agencyIdentity("verified-token")), false);
+    canManage = true;
+    const topOwner = await agencyIdentity("verified-token");
+    assert.ok(topOwner && agencyCanManage(topOwner));
+    assert.equal((await middleware(request(`/clones/${assigned}`))).status, 200);
+    assert.equal((await middleware(request(`/clones/${other}`))).status, 403);
+    assert.equal((await middleware(request("/agency-admin"))).status, 403);
+    await withDashboardAccess(topOwner, async () => {
+      await guardDashboardAction("app/clones/actions.ts#toggleClonePause", [assigned, true]);
+      await assert.rejects(guardDashboardAction("app/clones/actions.ts#toggleClonePause", [other, true]));
+      await assert.rejects(guardDashboardAction("app/settings/actions.ts#saveApiKeys", []));
+    });
     for (const id of [LYNQ_MANAGEMENT_AGENCY_ID, JESS_KATE_PORTAL.id, TETHER_PORTAL.id])
       assert.equal(agencyCanManage({ id }), true, "existing managers remain unchanged");
     assert.equal(agencyCanManage({ id: MOXY_MANAGEMENT_AGENCY_ID }), false);
