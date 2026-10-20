@@ -53,15 +53,17 @@ async function main() {
     new NextRequest(origin + path, { method, headers: { ...headers, ...extra } });
   try {
     const readonly = await agencyIdentity("verified-token");
-    assert.deepEqual(readonly, { id: MOXY_MANAGEMENT_AGENCY_ID, name: "Moxy", cloneIds: [assigned] });
+    assert.deepEqual(readonly, { id: MOXY_MANAGEMENT_AGENCY_ID, name: "Moxy", userId: "verified-user", canManage: false, cloneIds: [assigned] });
     assert.equal(agencyCanManage(readonly), false, "spoofed Auth metadata does not grant management");
     assert.equal((await middleware(request("/users"))).status, 403, "cookies/headers cannot promote read-only Moxy");
     canManage = "true";
-    assert.equal((await agencyIdentity("verified-token"))?.canManage, undefined, "permission must be boolean true");
+    assert.equal((await agencyIdentity("verified-token"))?.canManage, false, "permission must be boolean true");
     canManage = true;
     const owner = await agencyIdentity("verified-token");
     assert.ok(owner);
     assert.equal(owner.canManage, true);
+    assert.equal(owner.userId, "verified-user", "actor identity comes from the verified user");
+    assert.equal((await agencyIdentityById(MOXY_MANAGEMENT_AGENCY_ID))?.userId, undefined, "view-as cannot claim a signed-in member");
     assert.equal(agencyCanManage(owner), true);
     assert.equal((await agencyIdentityById(MOXY_MANAGEMENT_AGENCY_ID))?.canManage, undefined, "view-as keeps existing default");
     assert.notEqual(accessCacheKey(owner), accessCacheKey(readonly), "permission-dependent reads never share cache keys");
