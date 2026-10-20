@@ -19,10 +19,7 @@ jobs:
       EXPECTED_DASHBOARD_COMMIT: ${{ inputs.dashboard_commit }}
     steps:
       - uses: actions/checkout@v4
-      - name: Download tested browser manifest
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download creator-sign-in-0525e51-20261020 --repo "$GITHUB_REPOSITORY" --pattern creator-sign-in-polish-browser.json --dir deployment
+      # Pinned immutable image from successful verification build 39371054792.
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
