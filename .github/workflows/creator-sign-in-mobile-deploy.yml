@@ -1,0 +1,54 @@
+name: Deploy mobile sign-in and verification fix
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/creator-seamless-connect-20261020]
+    paths: ['.github/workflows/creator-sign-in-mobile-deploy.yml']
+permissions:
+  contents: write
+concurrency:
+  group: twin-sign-in-input-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download tested image manifest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download creator-sign-in-0525e51-20261020 --repo "$GITHUB_REPOSITORY" --pattern creator-sign-in-input-images.json --dir deployment
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Check running release and save rollback metadata
+        run: node deployment/creator-sign-in-mobile-fix.cjs preflight
+      - name: Pull tested images
+        run: node deployment/creator-sign-in-mobile-fix.cjs pull
+      - name: Update private browser and verify headed sandbox
+        id: browser
+        run: node deployment/creator-sign-in-mobile-fix.cjs browser
+      - name: Verify anonymous provider captcha resources
+        id: resources
+        run: node deployment/creator-sign-in-mobile-fix.cjs resources
+      - name: Update dashboard and verify services
+        id: dashboard
+        run: node deployment/creator-sign-in-mobile-fix.cjs dashboard
+      - name: Verify live anonymous screen resolution
+        id: display
+        run: node deployment/creator-sign-in-mobile-fix.cjs display
+      - name: Final health
+        id: health
+        run: node deployment/creator-sign-in-mobile-fix.cjs health
+      - name: Restore the previous release if rollout verification fails
+        if: failure() && (steps.browser.outcome == 'failure' || steps.resources.outcome == 'failure' || steps.dashboard.outcome == 'failure' || steps.display.outcome == 'failure' || steps.health.outcome == 'failure')
+        run: node deployment/creator-sign-in-mobile-fix.cjs rollback
+      - name: Retain command identifiers
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: signin-mobile-deployment-commands
+          path: /tmp/twin-signin-mobile-fix-69dffdf.json
