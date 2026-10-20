@@ -1,6 +1,6 @@
 export const AGENCY_COOKIE = "twin_agency_access";
 import { portalForPath } from "./partner-portals";
-import { isMoxy } from "./agency-brand";
+import { isMoxy, usesAgencyOverview } from "./agency-brand";
 import { AGENCY_LIVE_CRM_ROUTES } from "./agency-management-policy";
 export const isAgencyPath = (path: string) => path === "/agency" || path.startsWith("/agency/") || !!portalForPath(path);
 export function agencyRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
@@ -22,7 +22,7 @@ export const isPartnerPreview = (agencyName?: string) => agencyName === PARTNER_
 const PREVIEW_PATHS = ["/", "/revenue", "/clones", "/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/fx", "/api/avatar", "/api/media-sign", "/api/models", "/api/voice", "/api/business-account", "/api/business-connection"];
 
 export function agencyDashboardPath(path: string, agencyName?: string, canManage = false): boolean {
-  if (path === '/api/agency-overview') return isMoxy(agencyName);
+  if (path === '/api/agency-overview') return usesAgencyOverview(agencyName);
   if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path) || /^\/clones\/[0-9a-f-]{36}$/i.test(path);
   if (isMoxy(agencyName) && (path === "/api/models" || path === "/crm" || path.startsWith("/crm/"))) return false;
   if (canManage && (Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,path) || ["/api/caption","/api/compile"].includes(path))) return true;

@@ -168,14 +168,14 @@ async function main() {
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
     "@/lib/clone-scope": { getCloneScope: async () => "live-clone-id" },
     "@/lib/dashboard-access": { getDashboardAccess: async () => reportingAccess },
-    "@/lib/agency-brand": { isMoxy: (name: string) => name === "Moxy" },
+    "@/lib/agency-brand": { usesAgencyOverview: (name: string) => ["Moxy", "Top Onlyfans Agency"].includes(name) },
     "@/lib/agency-overview": { getAgencyOverview: async () => [] },
     "@/components/agency-overview/AgencyOverview": { __esModule: true, default: () => null },
     "@/components/RevenueDashboard": { __esModule: true, default: () => null },
     "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
   }).default;
   await assert.rejects(Earnings({}), /redirect:\/dashboard$/);
-  for (const name of ["Moxy", "Flirt", "Creator account"]) {
+  for (const name of ["Moxy", "Top Onlyfans Agency", "Flirt", "Creator account"]) {
     reportingAccess = { name };
     const page = await Earnings({});
     assert.ok(page, `${name} keeps existing earnings reporting`);

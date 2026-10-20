@@ -127,7 +127,7 @@ const renderedLinks = (html: string) => Array.from(html.matchAll(/<a\b([^>]*)>([
   attributes,
 }));
 function checkMoxyLayout(html: string) {
-  const links = renderedLinks(html).filter(link => link.label);
+  const links = renderedLinks(html).filter(link => link.label && !/aria-label=/.test(link.attributes));
   assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all ten Moxy destinations in the approved shared order");
   assert.equal((html.match(/href="\/agency\/creator-invites"/g) || []).length, 1, "Invite creator appears once, as the prominent top action");
   assert.match(links[0].attributes, /class="[^"]*\bmoxy-invite-button\b/);
@@ -317,7 +317,7 @@ console.log("Sidebar: grouped admin navigation, collapsed More, destination cove
 
 
 
-// Top Onlyfans Agency shares Moxy destinations while retaining Twin branding.
+// Top Onlyfans Agency shares Moxy geometry and destinations while retaining Twin branding.
 pathname = "/revenue"; query = new URLSearchParams();
 for (const mobile of [false, true]) {
   const html = render(portals.TOP_ONLYFANS_AGENCY.name, true, clone, mobile);
@@ -326,7 +326,9 @@ for (const mobile of [false, true]) {
   assert.equal(links.filter(link => link.href === "/agency/creator-invites").length, 1);
   assert.match(html, /Top Onlyfans Agency · Owner/);
   assert.match(html, />Twin<\/span>/);
-  assert.doesNotMatch(html, /moxy-ai-|moxy-sidebar-brand|>CRM<|href="\/agency-admin"|href="\/settings"|href="\/api-access"/);
+  checkMoxyLayout(html);
+  assert.match(html, /moxy-sidebar-brand/);
+  assert.doesNotMatch(html, /moxy-ai-|>CRM<|href="\/agency-admin"|href="\/settings"|href="\/api-access"/);
 }
 
 async function checkAdminInteractions() {
@@ -367,3 +369,11 @@ async function checkAdminInteractions() {
 }
 checkAdminInteractions().catch(error => { console.error(error); process.exitCode = 1; });
 
+
+assert.equal(agencyBrand.usesAgencyOverview("Moxy"), true);
+assert.equal(agencyBrand.usesAgencyOverview(portals.TOP_ONLYFANS_AGENCY.name), true);
+assert.equal(agencyBrand.isMoxy(portals.TOP_ONLYFANS_AGENCY.name), false, "Shared layout never changes agency identity");
+for (const name of ["LYNQ", "Twin Technologies", "Unassigned"]) {
+  assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", name), false);
+}
+assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", portals.TOP_ONLYFANS_AGENCY.name), true);

@@ -1,7 +1,10 @@
 // Branding never grants access. Identity and creator assignments come from
 // the verified membership in agency-identity.ts.
-import { PARTNER_PORTALS, portalForPath } from "./partner-portals";
+import { PARTNER_PORTALS, TOP_ONLYFANS_AGENCY, portalForPath } from "./partner-portals";
 export const isMoxy = (name?: string) => name?.trim().toLowerCase() === "moxy";
+// Shared presentation only. Membership and assigned creator scopes stay unchanged.
+export const isTopOnlyfansAgency = (name?: string) => name?.trim().toLowerCase() === TOP_ONLYFANS_AGENCY.name.toLowerCase();
+export const usesAgencyOverview = (name?: string) => isMoxy(name) || isTopOnlyfansAgency(name);
 export const isLynq = (name?: string) => name?.trim().toLowerCase() === "lynq";
 export const AGENCY_PORTAL_COOKIE = "twin_agency_portal";
 export const portalLoginPath = (portal?: string) => portal === "twin" ? "/agency/login" : PARTNER_PORTALS.find(p => p.slug === portal)?.loginPath ?? "/link";
