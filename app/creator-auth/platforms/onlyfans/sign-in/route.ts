@@ -17,7 +17,7 @@ export async function GET(request:NextRequest){
     const scope={creatorId:profile.id,actor:actorFor(creator.accountId)};
     if(request.nextUrl.searchParams.get('frame')==='1'){
       const image=await backend.frame(scope,identity);
-      return new NextResponse(image,{headers:{'Content-Type':'image/jpeg','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'}});
+      return new NextResponse(image,{headers:{'Content-Type':new Uint8Array(image)[0]===137?'image/png':'image/jpeg','Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin'}});
     }
     return platformResponse({ok:true,attempt:await backend.status(scope,identity)});
   }catch(error){return platformFailure(error instanceof SignInBackendError?error.status:503,error instanceof Error?error.message:'Your sign-in could not be loaded.');}

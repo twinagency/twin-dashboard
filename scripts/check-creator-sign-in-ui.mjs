@@ -20,7 +20,7 @@ const css=(await postcss([tailwind()]).process('@import "./app/globals.css";',{f
 const chrome=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.platform==='win32'?[]:['--no-sandbox']});
 const framePage=await chrome.newPage({viewport:{width:432,height:720},deviceScaleFactor:2});
 await framePage.setContent('<html><body style="font:18px Arial;margin:40px"><h1>OnlyFans fixture</h1><p>Local test account</p><label>Email<input type="email" style="display:block;width:100%;height:48px"></label><p><label>Password<input type="password" style="display:block;width:100%;height:48px"></label></p><button style="padding:12px">Sign in</button></body></html>');
-const jpeg=await framePage.screenshot({type:'jpeg'});await framePage.close();
+const png=await framePage.screenshot({type:'png'});const jpeg=await framePage.screenshot({type:'jpeg'});await framePage.close();
 const server=createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost'),path=url.pathname;res.setHeader('Cache-Control','no-store');
  if(path==='/bundle.js'){res.setHeader('Content-Type','text/javascript');return res.end(js)}
@@ -30,7 +30,7 @@ const server=createServer(async(req,res)=>{try{
   if(denied){res.statusCode=401;return res.end(JSON.stringify({error:'Sign in to your creator account again.'}))}
   if(path==='/creator-auth/platforms')return res.end(JSON.stringify(snapshot));
   if(expired&&req.method==='GET'){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
-  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/jpeg');return res.end(jpeg)}
+  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/png');return res.end(png)}
   if(req.method==='POST'){
    let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);posted.push(body);
    if(body.action==='cancel'&&expired){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
@@ -59,12 +59,13 @@ try{
  for(const [name,browser,width]of [['chromium',chrome,1440],['webkit-mobile',safari,390]]){
   reset();const context=await browser.newContext({viewport:{width,height:844},...(name==='webkit-mobile'?{isMobile:true,hasTouch:true}:{})});const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();
+  const dialogBounds=await page.getByRole('dialog').boundingBox();assert(Math.abs(dialogBounds.x+dialogBounds.width/2-width/2)<2,'Connection dialog is horizontally centered');if(name==='chromium')assert(Math.abs(dialogBounds.y+dialogBounds.height/2-844/2)<2,'Desktop connection dialog is vertically centered');
   await page.getByLabel('Email address',{exact:true}).fill('fixture@example.test');await page.getByLabel('OnlyFans password',{exact:true}).fill('fixture-password');const formBounds=await page.getByLabel('Email address',{exact:true}).boundingBox();assert(formBounds.width>=300,'Mobile login uses normal full-width inputs');await page.screenshot({path:out+'/'+name+'-native-login.png',fullPage:true});await page.getByRole('button',{name:'Sign in',exact:true}).click();await until(()=>posted.some(b=>b.input?.type==='login'));const screen=page.getByLabel('OnlyFans sign-in screen');await screen.waitFor();
   assert(await page.getByRole('dialog').evaluate(el=>!['transparent','rgba(0, 0, 0, 0)'].includes(getComputedStyle(el).backgroundColor)),'The real creator theme supplies an opaque dialog');
   assert.equal(posted.filter(b=>b.action==='start').length,1,'StrictMode must not launch twice');
   assert.equal(await page.getByText('Install Twin connector',{exact:false}).count(),0);
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
-  const bounds=await screen.boundingBox();assert(bounds.width>200&&bounds.height<=720,'Whole remote viewport is scaled without clipping');
+  await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.dataset.ready==='true');const bounds=await screen.boundingBox();assert(bounds.width>200&&bounds.height<=720,'Whole remote viewport is scaled without clipping');
   await screen.click({position:{x:bounds.width*.4,y:bounds.height*.2}});
   const input=page.getByLabel('Type in the selected OnlyFans field');assert(await input.evaluate(el=>document.activeElement!==el),'Verification taps must not open the phone keyboard');await page.getByRole('button',{name:'Show keyboard',exact:true}).click();assert(await input.evaluate(el=>document.activeElement===el),'Typing remains available explicitly');await page.keyboard.type('fixture@example.test');
   await page.getByRole('button',{name:'Next field',exact:true}).click();
@@ -73,7 +74,7 @@ try{
   await until(()=>posted.some(b=>b.input?.key==='Backspace'));await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.width===864);assert.equal(await screen.evaluate(el=>el.width),864,'Preserve high resolution frame pixels');
   const inputs=posted.filter(b=>b.action==='input'&&b.input.type!=='login').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
   assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
-  await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});assert(await input.evaluate(el=>document.activeElement!==el),'Tapping verification dismisses an already-open keyboard');await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
+  await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});assert(await input.evaluate(el=>document.activeElement!==el),'Tapping verification dismisses an already-open keyboard');const refreshedBounds=await screen.boundingBox();assert(Math.abs(refreshedBounds.width-bounds.width)<1&&Math.abs(refreshedBounds.x-bounds.x)<1,'High-resolution refresh does not resize or move the verification frame');const closeBounds=await page.getByRole('button',{name:'Close connection setup'}).boundingBox(),backBounds=await page.getByRole('button',{name:'Back to sign-in',exact:true}).boundingBox();assert(closeBounds.y>=0&&backBounds.y+backBounds.height<=844,'Close and verification controls remain in the viewport');await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
   attempt={...attempt,phase:'ready',handle:'fixture_creator'};
   await page.getByRole('heading',{name:'Connect @fixture_creator?'}).waitFor();
   assert.equal(await page.locator('[data-state="connected"]').count(),0,'Capture alone must not claim connected');
@@ -90,6 +91,8 @@ try{
   await page.screenshot({path:out+'/'+name+'-connected.png',fullPage:true});
   assert.deepEqual(errors,[]);await context.close();
  }
+ // Smaller phones retain a visible close button, the entire frame and its controls.
+ for(const [width,height]of [[320,667],[430,932]]){reset();const context=await safari.newContext({viewport:{width,height},isMobile:true,hasTouch:true});const phone=await context.newPage();await phone.goto(url);await phone.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await phone.getByRole('button',{name:'Other sign-in options',exact:true}).click();await phone.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.dataset.ready==='true');const frame=await phone.getByLabel('OnlyFans sign-in screen').boundingBox(),back=await phone.getByRole('button',{name:'Back to sign-in',exact:true}).boundingBox();assert(frame.width>=240&&frame.y>=0&&frame.y+frame.height<=height,'Whole verification frame stays visible on small phones');assert(back.y+back.height<=height,'Phone controls stay visible');assert(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No phone horizontal overflow');await context.close();}
  // Expiry removes the attempt server-side; restarting must still reach start.
  reset();const page=await chrome.newPage({viewport:{width:390,height:844}});await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await page.getByRole('button',{name:'Other sign-in options',exact:true}).click();await page.getByLabel('OnlyFans sign-in screen').waitFor();
  unavailableFrame=true;const frameNotice=page.getByText('Your sign-in screen could not be loaded. Restart sign-in to continue.',{exact:true});await frameNotice.waitFor();unavailableFrame=false;await frameNotice.waitFor({state:'hidden'});

@@ -42,7 +42,7 @@ export function createSignInBackend({baseUrl,token,fetchImpl}:{baseUrl:string;to
       if(!/^[a-f0-9]{64}$/.test(networkFingerprint)||!validBrowserSession(session))throw new Error('Your sign-in could not be verified.');
       return c;
     },
-    async frame(scope:SignInScope,identity:string){const r=await call(scope,suffix(identity)+'/frame');if(r.headers.get('content-type')?.split(';')[0]!=='image/jpeg')throw new Error('Your sign-in screen could not be loaded.');const b=await r.arrayBuffer();if(b.byteLength>2*1024*1024)throw new Error('Your sign-in screen could not be loaded.');return b;}
+    async frame(scope:SignInScope,identity:string){const r=await call(scope,suffix(identity)+'/frame?format=png');if(!['image/jpeg','image/png'].includes(r.headers.get('content-type')?.split(';')[0]??''))throw new Error('Your sign-in screen could not be loaded.');const b=await r.arrayBuffer();const bytes=new Uint8Array(b),png=bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71,jpeg=bytes[0]===255&&bytes[1]===216&&bytes[2]===255;if((r.headers.get('content-type')?.split(';')[0]==='image/png'?!png:!jpeg)||b.byteLength>2*1024*1024)throw new Error('Your sign-in screen could not be loaded.');return b;}
   };
 }
 export function configuredSignInBackend(){
