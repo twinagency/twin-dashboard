@@ -1,0 +1,111 @@
+diff --git a/creator-sign-in/check.mjs b/creator-sign-in/check.mjs
+index 93caaae..848c8c2 100644
+--- a/creator-sign-in/check.mjs
++++ b/creator-sign-in/check.mjs
+@@ -35,20 +35,20 @@ try{
+   await until(()=>{const phase=service.status(scope,started.id).phase;if(phase==='failed')throw Error('The fixture browser could not open; check the CI browser diagnostics.');return phase==='waiting';});
+   await assert.rejects(()=>service.start(other,{startKey:randomUUID(),network}),e=>e.status===429);
+   assert.throws(()=>service.status(other,started.id),e=>e.status===404);
+-  const frame=await service.frame(scope,started.id);assert.equal(frame[0],0xff);assert.equal(frame[1],0xd8);
++  const frame=await service.frame(scope,started.id);assert.equal(frame[0],0xff);assert.equal(frame[1],0xd8);clock+=400;const png=await service.frame(scope,started.id,{format:'png'});assert.deepEqual([...png.subarray(0,8)],[137,80,78,71,13,10,26,10]);await assert.rejects(()=>service.frame(scope,started.id,{format:'svg'}),e=>e.status===400);await assert.rejects(()=>service.input(scope,started.id,{type:'scroll',delta:30,x:2,y:0}),e=>e.status===400);await service.input(scope,started.id,{type:'scroll',delta:0,x:.5,y:.5});
+   await service.input(scope,started.id,{type:'click',x:100/432,y:100/720});
+   assert.equal(service.status(scope,started.id).keyboard,'email');
+   await service.input(scope,started.id,{type:'text',text:'fixture@example.invalid'});
+   await service.input(scope,started.id,{type:'key',key:'Tab'});
+   assert.equal(service.status(scope,started.id).keyboard,'password');
+   await service.input(scope,started.id,{type:'text',text:'synthetic-password'});
+-  await service.input(scope,started.id,{type:'key',key:'Enter'});
++  await service.input(scope,started.id,{type:'login',email:'fixture@example.invalid',password:'synthetic-password'});
+   await until(()=>service.status(scope,started.id).phase==='ready');
+   const captured=service.capture(scope,started.id);assert.equal(captured.profileId,scope.creatorId);assert.equal(captured.session.ownerId,123);assert.equal(captured.session.networkFingerprint,network.fingerprint);
+   assert.equal(captured.handle,'synthetic_creator');assert.equal(captured.session.browser.samples.length,2);
+   assert.deepEqual(service.capture(scope,started.id),captured,'A lost native response must retry the exact capture');
+   assert(!JSON.stringify(service.status(scope,started.id)).includes('synthetic-session'));
+-  assert(!JSON.stringify(captured).includes('must-not-transfer'));
++  assert(!JSON.stringify(captured).includes('must-not-transfer'));assert(!JSON.stringify(captured).includes('synthetic-password'));assert(!JSON.stringify(service.status(scope,started.id)).includes('synthetic-password'));
+   await assert.rejects(()=>service.input(scope,started.id,{type:'text',text:'must not send'}));
+   await assert.rejects(()=>service.frame(scope,started.id));
+   const enrollment=randomUUID();assert.equal((await service.acknowledge(scope,started.id,enrollment)).phase,'submitted');
+@@ -57,7 +57,7 @@ try{
+   const second=await service.start(scope,{startKey:randomUUID(),network});assert.notEqual(second.id,started.id);
+   await service.cancel(scope,second.id);assert.equal(service.status(scope,second.id).phase,'cancelled');
+   const third=await service.start(scope,{startKey:randomUUID(),network});clock+=16*60_000;await service.collect();assert.throws(()=>service.status(scope,third.id),e=>e.status===404);
+-  for(const [url,method,expected]of [['https://onlyfans.com/api2/v2/chats/123/messages','POST',false],['https://onlyfans.com/api2/v2/payments','POST',false],['https://onlyfans.com/api2/v2/users/login','POST',true],['http://127.0.0.1/private','GET',false],['https://foreign.example/','GET',false]]){
++  for(const [url,method,expected]of [['https://onlyfans.com/api2/v2/chats/123/messages','POST',false],['https://onlyfans.com/api2/v2/payments','POST',false],['https://onlyfans.com/api2/v2/users/login','POST',true],['http://127.0.0.1/private','GET',false],['https://recaptcha.net/recaptcha/enterprise.js','GET',true],['https://www.recaptcha.net/recaptcha/api2/anchor','GET',true],['https://brunhild.challenges.cloudflare.com/cdn-cgi/challenge-platform/test','GET',true],['https://onlyfans.com/api2/v2/webauthn/login/options','POST',true],['https://recaptcha.net.attacker.example/recaptcha/enterprise.js','GET',false],['https://foreign.example/','GET',false],['https://abs-0.twimg.com/login/tfw-base.css','GET',true],['https://pbs.twimg.com/app_img/icon','GET',true],['https://abs-0.twimg.com/login/base.js','POST',false],['https://abs-0.twimg.com/elsewhere/test.js','GET',false],['https://api.x.com/1.1/statuses/update.json','POST',false]]){
+     assert.equal(allowedRequest({url:()=>url,method:()=>method,isNavigationRequest:()=>false}),expected);
+   }
+   console.log('PASS self-hosted sign-in: actual browser input and capture, one start/resume, isolated creator scope, capacity, frozen retry, minimal metadata, native handoff acknowledgement, cleanup, expiry, no fan sends or purchases.');
+diff --git a/creator-sign-in/server.mjs b/creator-sign-in/server.mjs
+index 3de8613..ed35ed3 100644
+--- a/creator-sign-in/server.mjs
++++ b/creator-sign-in/server.mjs
+@@ -21,7 +21,7 @@ const server=createServer(async(req,res)=>{
+     if(!match)return json({ok:false,error:'not_found'},404);
+     const [,identity,action]=match;
+     if(!action&&req.method==='GET')return json({ok:true,attempt:service.status(scope,identity)});
+-    if(action==='frame'&&req.method==='GET'){const frame=await service.frame(scope,identity);res.setHeader('Content-Type','image/jpeg');return res.end(frame);}
++    if(action==='frame'&&req.method==='GET'){const format=url.searchParams.get('format')??'jpeg',frame=await service.frame(scope,identity,{format});res.setHeader('Content-Type',format==='png'?'image/png':'image/jpeg');return res.end(frame);}
+     if(action==='capture'&&req.method==='GET')return json({ok:true,capture:service.capture(scope,identity)});
+     if(action==='input'&&req.method==='POST')return json({ok:true,attempt:await service.input(scope,identity,await body(req))});
+     if(action==='cancel'&&req.method==='POST'){const b=await body(req);if(Object.keys(b).length)throw new SignInError('invalid_request',400);return json({ok:true,attempt:await service.cancel(scope,identity)});}
+diff --git a/creator-sign-in/service.mjs b/creator-sign-in/service.mjs
+index 1161d29..4d7218e 100644
+--- a/creator-sign-in/service.mjs
++++ b/creator-sign-in/service.mjs
+@@ -17,13 +17,14 @@ export function allowedRequest(request){
+   let u;try{u=new URL(request.url());}catch{return false;}
+   if(u.protocol!=='https:')return false;
+   const of=u.hostname==='onlyfans.com'||u.hostname.endsWith('.onlyfans.com');
+-  const challenge=u.hostname==='challenges.cloudflare.com'||u.hostname==='hcaptcha.com'||u.hostname.endsWith('.hcaptcha.com');
+-  const recaptcha=['www.google.com','www.gstatic.com'].includes(u.hostname)&&u.pathname.startsWith('/recaptcha/');
+-  if(!of&&!challenge&&!recaptcha)return false;
++  const challenge=(u.hostname==='challenges.cloudflare.com'||u.hostname.endsWith('.challenges.cloudflare.com'))||u.hostname==='hcaptcha.com'||u.hostname.endsWith('.hcaptcha.com');
++  const recaptcha=['www.google.com','www.gstatic.com','recaptcha.net','www.recaptcha.net'].includes(u.hostname)&&u.pathname.startsWith('/recaptcha/');
++  const loginAsset=['GET','HEAD'].includes(request.method())&&((['abs-0.twimg.com','abs.twimg.com'].includes(u.hostname)&&u.pathname.startsWith('/login/'))||(u.hostname==='pbs.twimg.com'&&u.pathname.startsWith('/app_img/')));
++  if(!of&&!challenge&&!recaptcha&&!loginAsset)return false;
+   if(request.isNavigationRequest()&&request.frame().parentFrame()===null&&u.origin!==OF)return false;
+   if(of&&!['GET','HEAD','OPTIONS'].includes(request.method())){
+     let p;try{p=decodeURIComponent(u.pathname);}catch{return false;}
+-    if(!p.startsWith('/cdn-cgi/challenge-platform/')&&!/^\/api2\/v2\/(?:users\/(?:login|logout|otp|auth|2fa|two-factor)|auth|login|otp|captcha|challenge)(?:\/|$)/.test(p))return false;
++    if(p!=='/api2/v2/webauthn/login/options'&&!p.startsWith('/cdn-cgi/challenge-platform/')&&!/^\/api2\/v2\/(?:users\/(?:login|logout|otp|auth|2fa|two-factor)|auth|login|otp|captcha|challenge)(?:\/|$)/.test(p))return false;
+   }
+   return true;
+ }
+@@ -79,7 +80,7 @@ export function createSignInService({launch,transport,now=Date.now,ttl=15*60_000
+       if(j.closed||j.deadline<=now()){await browser.close();return;}
+       j.browser=browser;
+       browser.on('disconnected',()=>{if(!j.closed&&!['ready','submitted'].includes(j.phase))void discard(j,'failed');});
+-      j.context=await browser.newContext({viewport:{width:WIDTH,height:HEIGHT},acceptDownloads:false,serviceWorkers:'block'});
++      j.context=await browser.newContext({viewport:{width:WIDTH,height:HEIGHT},deviceScaleFactor:2,acceptDownloads:false,serviceWorkers:'block'});
+       j.context.on('page',p=>{if(j.page&&p!==j.page)void p.close().catch(()=>{});});
+       await j.context.route('**/*',async route=>{
+         if(!allowedRequest(route.request()))return route.abort('blockedbyclient');
+@@ -117,19 +118,25 @@ export function createSignInService({launch,transport,now=Date.now,ttl=15*60_000
+       allocation=operation.catch(()=>{});return operation;
+     },
+     status(s,identity){return view(lookup(s,identity));},
+-    async frame(s,identity){const j=lookup(s,identity);return sequential(j,async()=>{
++    async frame(s,identity,{format='jpeg'}={}){if(!['jpeg','png'].includes(format))fail('invalid_frame_format',400);const j=lookup(s,identity);return sequential(j,async()=>{
+       if(j.closed||j.phase!=='waiting'||!j.page)fail('frame_unavailable',409);
+       if(now()-(j.lastFrame??0)<350)fail('frame_limit',429);j.lastFrame=now();
+-      const frame=await j.page.screenshot({type:'jpeg',quality:60,timeout:3000});
++      const frame=await j.page.screenshot({type:format,...(format==='jpeg'?{quality:95}:{}),timeout:3000});
+       if(frame.length>2*1024*1024)fail('frame_unavailable',409);return frame;
+     });},
+     async input(s,identity,event){const j=lookup(s,identity);return sequential(j,async()=>{
+       if(j.closed||j.phase!=='waiting'||!j.page)fail('input_unavailable',409);
+       const keys=Object.keys(event??{}).sort().join(',');
+       if(event?.type==='click'&&keys==='type,x,y'&&[event.x,event.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1))await j.page.mouse.click(event.x*WIDTH,event.y*HEIGHT);
++      else if(event?.type==='login'&&keys==='email,password,type'&&typeof event.email==='string'&&typeof event.password==='string'&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(event.email)&&Buffer.byteLength(event.email)<=320&&event.password.length>0&&Buffer.byteLength(event.password)<=4096&&!/[\x00-\x1f]/.test(event.email+event.password)){
++        // Values live only in this temporary provider page; never in job/capture metadata.
++        const email=j.page.locator('input[name="email"],input[type="email"]').first();
++        const password=j.page.locator('input[name="password"],input[type="password"]').first();
++        await email.fill(event.email);await password.fill(event.password);await password.press('Enter');
++      }
+       else if(event?.type==='text'&&keys==='text,type'&&typeof event.text==='string'&&event.text.length>0&&Buffer.byteLength(event.text)<=512&&!/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(event.text))await j.page.keyboard.insertText(event.text);
+       else if(event?.type==='key'&&keys==='key,type'&&['Enter','Tab','Backspace','Delete','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key))await j.page.keyboard.press(event.key);
+-      else if(event?.type==='scroll'&&keys==='delta,type'&&typeof event.delta==='number'&&Number.isFinite(event.delta)&&Math.abs(event.delta)<=1000)await j.page.mouse.wheel(0,event.delta);
++      else if(event?.type==='scroll'&&['delta,type','delta,type,x,y'].includes(keys)&&typeof event.delta==='number'&&Number.isFinite(event.delta)&&Math.abs(event.delta)<=1000&&(keys==='delta,type'||[event.x,event.y].every(n=>typeof n==='number'&&Number.isFinite(n)&&n>=0&&n<=1))){if(keys==='delta,type,x,y')await j.page.mouse.move(event.x*WIDTH,event.y*HEIGHT);await j.page.mouse.wheel(0,event.delta);}
+       else fail('invalid_input',400);
+       if(j.page&&j.phase==='waiting')j.keyboard=await j.page.evaluate(()=>{const el=document.activeElement;if(!el||!['INPUT','TEXTAREA'].includes(el.tagName))return null;return el.getAttribute('type')==='password'?'password':el.getAttribute('type')==='email'?'email':'text';}).catch(()=>null);
+       return view(j);
