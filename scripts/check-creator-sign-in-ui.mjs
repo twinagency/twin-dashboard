@@ -18,7 +18,7 @@ const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bu
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
 const css=(await postcss([tailwind()]).process('@import "./app/globals.css";',{from:resolve('creator-sign-in-review.css')})).css+'\n'+bundle.outputFiles.find(f=>f.path.endsWith('.css')).text+'\nbody{margin:0;font-family:Arial,sans-serif}html{--font-heading:Arial,sans-serif}';
 const chrome=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.platform==='win32'?[]:['--no-sandbox']});
-const framePage=await chrome.newPage({viewport:{width:432,height:720}});
+const framePage=await chrome.newPage({viewport:{width:432,height:720},deviceScaleFactor:2});
 await framePage.setContent('<html><body style="font:18px Arial;margin:40px"><h1>OnlyFans fixture</h1><p>Local test account</p><label>Email<input type="email" style="display:block;width:100%;height:48px"></label><p><label>Password<input type="password" style="display:block;width:100%;height:48px"></label></p><button style="padding:12px">Sign in</button></body></html>');
 const jpeg=await framePage.screenshot({type:'jpeg'});await framePage.close();
 const server=createServer(async(req,res)=>{try{
@@ -66,13 +66,13 @@ try{
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
   const bounds=await screen.boundingBox();assert(bounds.width>200&&bounds.height<=720,'Whole remote viewport is scaled without clipping');
   await screen.click({position:{x:bounds.width*.4,y:bounds.height*.2}});
-  const input=page.getByLabel('Type in the selected OnlyFans field');await input.fill('fixture@example.test');
+  const input=page.getByLabel('Type in the selected OnlyFans field');assert(await input.evaluate(el=>document.activeElement===el),'Clicking the login screen must keep keyboard focus');await page.keyboard.type('fixture@example.test');
   await page.getByRole('button',{name:'Next field',exact:true}).click();
-  await input.fill('fixture-password');await input.press('Backspace');
+  await page.keyboard.type('fixture-password');await input.press('Backspace');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Type in the selected OnlyFans field"]')?.type==='password');
-  await page.waitForTimeout(350);
+  await until(()=>posted.some(b=>b.input?.key==='Backspace'));assert.equal(await screen.evaluate(el=>el.width),864,'Preserve high resolution frame pixels');
   const inputs=posted.filter(b=>b.action==='input').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
-  assert.deepEqual(inputs.slice(1),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
+  assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
   await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
   attempt={...attempt,phase:'ready',handle:'fixture_creator'};
   await page.getByRole('heading',{name:'Connect @fixture_creator?'}).waitFor();

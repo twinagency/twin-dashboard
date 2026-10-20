@@ -9,7 +9,7 @@ class SignInRequestError extends Error{constructor(readonly status:number,messag
 export default function HostedConnect({profileId,accountId,disabled,onChanged}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:()=>Promise<boolean>}){
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
   const live=useRef(false),current=useRef<SignInAttempt|null>(null),started=useRef(false),startKey=useRef('');
-  const canvas=useRef<HTMLCanvasElement>(null),keyboard=useRef<HTMLInputElement>(null),queue=useRef(Promise.resolve());
+  const canvas=useRef<HTMLCanvasElement>(null),keyboard=useRef<HTMLInputElement>(null),queue=useRef(Promise.resolve()),pendingInputs=useRef<Array<{input:Record<string,unknown>;identity:string;version:number}>>([]);
   const generation=useRef(0),pointer=useRef<{x:number;y:number}|null>(null),changed=useRef(onChanged);changed.current=onChanged;
   const save=useCallback((value:SignInAttempt)=>{if(live.current){current.current=value;setAttempt(value);}},[]);
   const command=useCallback(async(action:string,extra:Record<string,unknown>={})=>{
@@ -41,24 +41,33 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
     const draw=async()=>{try{
       const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:controller.signal});
       if(!r.ok||!r.headers.get('content-type')?.startsWith('image/jpeg'))throw new Error('frame_unavailable');
-      const blob=await r.blob(),image=await createImageBitmap(blob);if(active&&canvas.current){canvas.current.getContext('2d')?.drawImage(image,0,0,432,720);badFrames=0;setNotice(value=>value===screenError?'':value);}image.close();
+      const blob=await r.blob(),image=await createImageBitmap(blob);if(active&&canvas.current){if(canvas.current.width!==image.width||canvas.current.height!==image.height){canvas.current.width=image.width;canvas.current.height=image.height;}canvas.current.getContext('2d')?.drawImage(image,0,0);badFrames=0;setNotice(value=>value===screenError?'':value);}image.close();
     }catch{if(active&&++badFrames>=3)setNotice(screenError);}finally{if(active)timer=window.setTimeout(()=>void draw(),800);}};
     void draw();return()=>{active=false;controller.abort();clearTimeout(timer);};
   },[attempt?.id,attempt?.phase,disabled]);
   function send(input:Record<string,unknown>){
     if(disabled||current.current?.phase!=='waiting')return;
     const identity=current.current.id,version=generation.current;
+    pendingInputs.current.push({input,identity,version});
     queue.current=queue.current.then(async()=>{
-      if(!live.current||version!==generation.current)return;
-      try{save(await command('input',{attempt:identity,input}));}
+      const next=pendingInputs.current.shift();if(!next)return;
+      if(!live.current||next.version!==generation.current)return;
+      let payload=next.input;
+      // Merge only adjacent text; clicks and field changes retain their order.
+      while(payload.type==='text'&&pendingInputs.current[0]?.input.type==='text'&&pendingInputs.current[0].identity===next.identity&&pendingInputs.current[0].version===next.version){
+        const text=String(payload.text)+String(pendingInputs.current[0].input.text);
+        if(new TextEncoder().encode(text).length>512)break;
+        pendingInputs.current.shift();payload={type:'text',text};
+      }
+      try{save(await command('input',{attempt:next.identity,input:payload}));}
       catch{if(live.current){setNotice('That input was not confirmed. Restart sign-in to continue.');save({...current.current!,phase:'failed'});generation.current++;}}
     });
   }
   function type(event:KeyboardEvent<HTMLInputElement>){
     if(['Enter','Tab','Backspace','Delete','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();send({type:'key',key:event.key});}
   }
-  function press(event:PointerEvent<HTMLCanvasElement>){pointer.current={x:event.clientX,y:event.clientY};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.focus({preventScroll:true});}
-  function release(event:PointerEvent<HTMLCanvasElement>){const p=pointer.current;pointer.current=null;if(!p)return;const box=event.currentTarget.getBoundingClientRect(),dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height))});else send({type:'click',x:Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),y:Math.max(0,Math.min(1,(event.clientY-box.top)/box.height))});}
+  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();pointer.current={x:event.clientX,y:event.clientY};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.focus({preventScroll:true});}
+  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();keyboard.current?.focus({preventScroll:true});const p=pointer.current;pointer.current=null;if(!p)return;const box=event.currentTarget.getBoundingClientRect(),dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height))});else send({type:'click',x:Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),y:Math.max(0,Math.min(1,(event.clientY-box.top)/box.height))});}
   async function confirm(){if(!attempt||busy)return;setBusy(true);setNotice('');try{save(await command('confirm',{attempt:attempt.id}));await changed.current();}catch(error){setNotice(error instanceof Error?error.message:'Your connection could not be confirmed. Retry the same confirmation.');}finally{if(live.current)setBusy(false);}}
   async function restart(){if(busy)return;setBusy(true);generation.current++;try{if(current.current){try{await command('cancel',{attempt:current.current.id});}catch(error){if(!(error instanceof SignInRequestError&&[404,410].includes(error.status)))throw error;}}current.current=null;setAttempt(null);startKey.current=crypto.randomUUID();await start();}catch{setNotice('Your previous sign-in could not be closed. Please try again.');}finally{if(live.current)setBusy(false);}}
   const failed=attempt&&['failed','wrong_account','expired','cancelled'].includes(attempt.phase);
