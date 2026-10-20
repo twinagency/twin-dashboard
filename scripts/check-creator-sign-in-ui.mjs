@@ -66,14 +66,14 @@ try{
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
   const bounds=await screen.boundingBox();assert(bounds.width>200&&bounds.height<=720,'Whole remote viewport is scaled without clipping');
   await screen.click({position:{x:bounds.width*.4,y:bounds.height*.2}});
-  const input=page.getByLabel('Type in the selected OnlyFans field');assert(await input.evaluate(el=>document.activeElement===el),'Clicking the login screen must keep keyboard focus');await page.keyboard.type('fixture@example.test');
+  const input=page.getByLabel('Type in the selected OnlyFans field');assert(await input.evaluate(el=>document.activeElement!==el),'Verification taps must not open the phone keyboard');await page.getByRole('button',{name:'Show keyboard',exact:true}).click();assert(await input.evaluate(el=>document.activeElement===el),'Typing remains available explicitly');await page.keyboard.type('fixture@example.test');
   await page.getByRole('button',{name:'Next field',exact:true}).click();
   await page.keyboard.type('fixture-password');await input.press('Backspace');
   await page.waitForFunction(()=>document.querySelector('[aria-label="Type in the selected OnlyFans field"]')?.type==='password');
   await until(()=>posted.some(b=>b.input?.key==='Backspace'));await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.width===864);assert.equal(await screen.evaluate(el=>el.width),864,'Preserve high resolution frame pixels');
   const inputs=posted.filter(b=>b.action==='input'&&b.input.type!=='login').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
   assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
-  await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
+  await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});assert(await input.evaluate(el=>document.activeElement!==el),'Tapping verification dismisses an already-open keyboard');await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
   attempt={...attempt,phase:'ready',handle:'fixture_creator'};
   await page.getByRole('heading',{name:'Connect @fixture_creator?'}).waitFor();
   assert.equal(await page.locator('[data-state="connected"]').count(),0,'Capture alone must not claim connected');

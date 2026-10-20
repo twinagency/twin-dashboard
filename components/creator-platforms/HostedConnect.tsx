@@ -66,12 +66,13 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   function type(event:KeyboardEvent<HTMLInputElement>){
     if(['Enter','Tab','Backspace','Delete','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();send({type:'key',key:event.key});}
   }
-  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const box=event.currentTarget.getBoundingClientRect();pointer.current={x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.focus({preventScroll:true});}
-  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();keyboard.current?.focus({preventScroll:true});const p=pointer.current;pointer.current=null;if(!p)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height))});else send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});}
+  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const box=event.currentTarget.getBoundingClientRect();pointer.current={x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.blur();}
+  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const p=pointer.current;pointer.current=null;if(!p)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height))});else send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});}
   async function login(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy||disabled||current.current?.phase!=='waiting')return;
     const form=event.currentTarget,values=new FormData(form);
     const input={type:'login',email:String(values.get('email')??'').trim(),password:String(values.get('password')??'')};
+    if(document.activeElement instanceof HTMLElement)document.activeElement.blur();
     setBusy(true);setNotice('');
     try{save(await command('input',{attempt:current.current.id,input}));form.reset();setShowScreen(true);}
     catch{setNotice('OnlyFans sign-in could not be submitted. Please try again.');}
@@ -96,7 +97,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
         <canvas ref={canvas} width={432} height={720} className={styles.screen} aria-label="OnlyFans sign-in screen" onPointerDown={press} onPointerUp={release} onPointerCancel={()=>{pointer.current=null;}} onWheel={event=>{event.preventDefault();send({type:'scroll',delta:Math.max(-1000,Math.min(1000,event.deltaY))});}}/>
         <input ref={keyboard} className={styles.keyboard} aria-label="Type in the selected OnlyFans field" type={attempt.keyboard==='password'?'password':attempt.keyboard==='email'?'email':'text'} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} onKeyDown={type} onBeforeInput={event=>{if((event.nativeEvent as InputEvent).inputType==='deleteContentBackward'){event.preventDefault();send({type:'key',key:'Backspace'});}}} onChange={event=>{if((event.nativeEvent as InputEvent).isComposing)return;const value=event.currentTarget.value;event.currentTarget.value='';if(value)send({type:'text',text:value});}} onCompositionEnd={event=>{const value=event.currentTarget.value;event.currentTarget.value='';if(value)send({type:'text',text:value});}}/>
       </div>
-      <div className={styles.tools}><button type="button" onClick={()=>{send({type:'key',key:'Tab'});keyboard.current?.focus({preventScroll:true});}}>Next field</button><button type="button" onClick={()=>send({type:'key',key:'Backspace'})}>⌫</button><button type="button" onClick={()=>send({type:'key',key:'Enter'})}>Enter ↵</button></div>
+      <div className={styles.tools}><button type="button" onClick={()=>keyboard.current?.focus({preventScroll:true})}>Show keyboard</button><button type="button" onClick={()=>{send({type:'key',key:'Tab'});keyboard.current?.focus({preventScroll:true});}}>Next field</button><button type="button" onClick={()=>send({type:'key',key:'Backspace'})}>⌫</button><button type="button" onClick={()=>send({type:'key',key:'Enter'})}>Enter ↵</button></div>
       <button type="button" className={styles.otherOptions} onClick={()=>setShowScreen(false)}>Back to sign-in</button>
       </>}
     </>}
