@@ -397,7 +397,7 @@ const TETHER_SIDEBAR_THEME = `
 export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false, channelSwitch }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean; channelSwitch?: ReactNode }) {
   const {readOnly,isAgency,isCreator,canManage,agencyName,audience}=useDashboardAccess();
   const isAdmin = audience === "admin";
-  const moxyNavigation = isAgency && isMoxy(agencyName);
+  const moxyNavigation = isAgency && (isMoxy(agencyName) || agencyName === TOP_ONLYFANS_AGENCY.name);
   const twinAgencyNavigation = isAgency && agencyName === TOP_ONLYFANS_AGENCY.name;
   const expandedMoxyNavigation = isAgency && readOnly && isMoxy(agencyName);
   const isJessKate = isAgency && agencyName === JESS_KATE_PORTAL.name;
@@ -509,7 +509,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     <style dangerouslySetInnerHTML={{ __html: MOXY_SIDEBAR_THEME }} />
     <div className="moxy-sidebar-brand">
       <div className="min-w-0">
-        <Link href="/revenue" aria-label={agencyName} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName} /></Link>
+        <Link href="/revenue" aria-label={agencyName} onClick={onNavigate}><TwinWordmark inverse agencyName={twinAgencyNavigation ? undefined : agencyName} /></Link>
         <p className="moxy-sidebar-access">{agencyName} · {readOnly ? "Read only" : canManage ? "Owner" : "Creator management"}</p>
       </div>
       {headerAction}

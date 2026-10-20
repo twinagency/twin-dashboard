@@ -26,7 +26,7 @@ import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/l
 import { getViewerTerms } from "@/lib/platform-cut";
 import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
-import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
+import { isLynq, isMoxy, isTopOnlyfansAgency, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
 import { isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
@@ -114,7 +114,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);
   // Path-dependent navigation stays in client components, not frozen here.
-  return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : !agency || agency.name === "Twin" ? "twin-light" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
+  return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : isTopOnlyfansAgency(agency?.name) ? "top-onlyfans-agency" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : !agency || agency.name === "Twin" ? "twin-light" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
@@ -123,7 +123,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Sidebar clones={clones} activeCloneId={activeCloneId} channels={channelScope.allowed} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-              <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
+              <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>

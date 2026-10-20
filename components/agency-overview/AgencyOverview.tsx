@@ -116,6 +116,10 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
   const amount = data ? money(stars) : '…';
   const connection = scoped.length && scoped.every(c => c.telegramConnected) ? 'Connected' : scoped.some(c => c.telegramConnected) ? 'Partially connected' : 'Not connected';
   async function choose(id: string) {
+    if (creators.find(creator => creator.id === id)?.onboarding) {
+      router.push('/agency/creators');
+      return;
+    }
     if (id === (cloneId ?? "")) return;
     setChanging(true); setError('');
     try { const r = await fetch('/agency/clone-scope', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clone: id }) }); if (!r.ok) throw new Error('Could not switch creator'); router.refresh(); }
@@ -156,7 +160,7 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
         {!selected.library?.length && <p className={styles.empty}>No preview photos selected.</p>}
       </section>
       </> : <>
-    <section className={styles.panel}><div className={styles.panelHeading}><h2>Creator performance</h2><Link className={styles.textButton} href="/clones">View creators<ArrowRight size={14} /></Link></div><div className={styles.creatorGrid}>{scoped.map(c => <article key={c.id} className={styles.creatorCard}><Photo creator={c} className={styles.creatorPortrait} /><div><h3>{c.name}</h3><span className={styles.creatorStatus}><PlatformMark platform="telegram" size={18} />Telegram · {c.telegramConnected ? 'Connected' : 'Not connected'}</span><dl><div><dt>Total earnings</dt><dd>{data ? money(data.perClone[c.id]?.stars ?? 0) : '…'}</dd></div><div><dt>Total fans</dt><dd>{c.fans.toLocaleString()}</dd></div></dl><button className={styles.primary} disabled={changing} onClick={() => selected ? router.push(`/clones/${c.id}?tab=identity`) : void choose(c.id)}>{selected ? 'View profile' : 'Open overview'}<ArrowRight size={17} /></button></div></article>)}</div></section>
+    <section className={styles.panel}><div className={styles.panelHeading}><h2>Creator performance</h2><Link className={styles.textButton} href="/clones">View creators<ArrowRight size={14} /></Link></div><div className={styles.creatorGrid}>{scoped.map(c => <article key={c.id} className={styles.creatorCard}><Photo creator={c} className={styles.creatorPortrait} /><div><h3>{c.name}</h3><span className={styles.creatorStatus}><PlatformMark platform="telegram" size={18} />{c.onboarding ? 'Setup pending' : `Telegram · ${c.telegramConnected ? 'Connected' : 'Not connected'}`}</span><dl><div><dt>Total earnings</dt><dd>{data ? money(data.perClone[c.id]?.stars ?? 0) : '…'}</dd></div><div><dt>Total fans</dt><dd>{c.fans.toLocaleString()}</dd></div></dl><button className={styles.primary} disabled={changing} onClick={() => selected ? router.push(`/clones/${c.id}?tab=identity`) : void choose(c.id)}>{c.onboarding ? 'View onboarding' : selected ? 'View profile' : 'Open overview'}<ArrowRight size={17} /></button></div></article>)}</div></section>
       </>}
       <RankingPanel kind="content" rankings={data?.rankings} cloneIds={[...ids]} agency={!selected} money={money} error={data?.rankingsError} loading={!data} />
     </div>

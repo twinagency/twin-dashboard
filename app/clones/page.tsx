@@ -7,6 +7,7 @@ import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
 import { getDashboardAccess } from "@/lib/dashboard-access";
+import { getAgencyOnboardingCreators } from "@/lib/agency-overview";
 import { isMoxy } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
@@ -91,6 +92,14 @@ export default async function ClonesPage() {
     ].filter(Boolean) as string[],
   }));
 
+  const onboarding = await getAgencyOnboardingCreators();
+  for (const creator of onboarding) cards.push({
+    id: creator.id, name: creator.name, slug: "", status: "Setup pending",
+    active: false, cohort: "control", cohortEnrolledAt: null,
+    color: "#0b2b4b", photoUrl: creator.photoUrl ?? undefined,
+    features: ["Setup pending"], onboarding: true,
+  });
+
   return (
     <div className="dashboard-page">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -110,7 +119,7 @@ export default async function ClonesPage() {
         </nav>
       </AdminOnly>
 
-      {clones.length === 0 ? (
+      {cards.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center">
           <p className="mb-4 text-muted">No creators yet.</p>
           <AdminOnly><Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first creator</Button></AdminOnly>

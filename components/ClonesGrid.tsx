@@ -20,6 +20,7 @@ import {
 
 export type CloneCard = {
   id: string;
+  onboarding?: boolean;
   name: string;
   slug: string;
   status: string;
@@ -61,7 +62,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
     const q = query.trim().toLowerCase();
     return clones.filter((c) => {
       const matchesSearch = !q || c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q);
-      return matchesSearch && cloneMatchesCohort(c.cohort, cohortFilter);
+      return matchesSearch && (c.onboarding ? cohortFilter === "all" : cloneMatchesCohort(c.cohort, cohortFilter));
     });
   }, [query, cohortFilter, clones]);
 
@@ -109,7 +110,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           {filtered.map((c) => (
             <Link
               key={c.id}
-              href={preview ? "/revenue" : `/clones/${c.id}`}
+              href={preview ? "/revenue" : c.onboarding ? "/agency/creators" : `/clones/${c.id}`}
               className="group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
             >
               {/* Header: avatar (ringed in the clone color) + name + status + features */}
@@ -125,8 +126,8 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                     <button
                       type="button"
                       onClick={(e) => togglePause(e, c)}
-                      disabled={readOnly}
-                      title={readOnly ? "Read only" : c.active ? "Click to pause this bot" : "Click to resume this bot"}
+                      disabled={readOnly || c.onboarding}
+                      title={c.onboarding ? "Twin setup pending" : readOnly ? "Read only" : c.active ? "Click to pause this bot" : "Click to resume this bot"}
                       className="shrink-0"
                     >
                       <Badge
@@ -136,11 +137,11 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                         }
                       >
                         <span className={"h-2 w-2 rounded-full " + (c.active ? "bg-good" : "bg-muted")} />
-                        {readOnly ? (c.active ? "active" : "paused") : c.active ? "active · pause" : "paused · resume"}
+                        {c.onboarding ? "Setup pending" : readOnly ? (c.active ? "active" : "paused") : c.active ? "active · pause" : "paused · resume"}
                       </Badge>
                     </button>
                   </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {!c.onboarding && <><div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Badge
                       title={
                         c.cohort === "new-system-v3"
@@ -175,7 +176,8 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                   </div>
                   <div className="mt-1 text-[11px] font-medium text-muted">
                     {cloneCohortEnrollmentLabel(c.cohort, c.cohortEnrolledAt)}
-                  </div>
+                  </div></>}
+                  {c.onboarding && <div className="mt-2 text-sm text-muted">View onboarding →</div>}
                 </div>
               </div>
 

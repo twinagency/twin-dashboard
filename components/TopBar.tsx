@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { mergeChannelCreators, type ChannelRoster } from "@/lib/channel-workspace/model";
+import { usesAgencyOverview } from "@/lib/agency-brand";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { usePathname, useSearchParams } from "next/navigation";
@@ -102,9 +103,9 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
-  if (isAgency && agencyName?.trim().toLowerCase() === "moxy" && pathname === "/revenue") {
+  if (isAgency && usesAgencyOverview(agencyName) && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
-      <div className="moxy-overview-breadcrumb"><span>Moxy</span> / Earnings</div>
+      <div className="moxy-overview-breadcrumb"><span>{agencyName}</span> / Earnings</div>
       <div className="moxy-overview-account-controls">
         <div className="moxy-overview-creator"><CloneSwitcher clones={clones} activeCloneId={activeCloneId} /></div>
         <div className="moxy-overview-lifetime">
