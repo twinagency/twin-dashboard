@@ -49,8 +49,11 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   },[refresh]);
   useEffect(()=>{
     const element=dialog.current;
+    const overflow=document.documentElement.style.overflow;
+    if(connecting)document.documentElement.style.overflow="hidden";
     if(connecting&&element&&!element.open){opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;element.showModal();}
     else if(!connecting&&element?.open)element.close();
+    return()=>{document.documentElement.style.overflow=overflow;};
   },[connecting]);
 
   async function choose(channel:PlatformChannel){
@@ -134,8 +137,8 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     </div>
     <footer className={styles.footer}><p><Sparkles size={19} aria-hidden="true"/>Your profile, content and agency stay together.</p><div><button className={styles.textLink} disabled={!!busy} onClick={()=>void refresh()}><RefreshCw size={14}/>Refresh status</button><Link className={styles.textLink} href="/creator">Back to my space<ArrowRight size={14}/></Link></div></footer>
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="connect-heading" onCancel={closeConnection} onClose={()=>{if(connecting)closeConnection();}}>
-      {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect your OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
-        {data.onlyfans.signIn==="hosted"?<HostedConnect key={data.profileId||"none"} profileId={data.profileId||""} accountId={connectingAccount} disabled={data.readOnly||!data.profileId} onChanged={refresh}/>:<BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>}
+      {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
+        <div className={styles.connectionContent}>{data.onlyfans.signIn==="hosted"?<HostedConnect key={data.profileId||"none"} profileId={data.profileId||""} accountId={connectingAccount} disabled={data.readOnly||!data.profileId} onChanged={refresh}/>:<BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>}</div>
         <details className={styles.assisted}><summary>Agency-assisted connection</summary><SessionConnect disabled={data.readOnly||!data.profileId} onChanged={refresh}/></details>
       </div>}
     </dialog>

@@ -52,9 +52,9 @@
 .footer p { display:flex; align-items:center; gap:10px; margin:0; font-size:12px; line-height:1.6; }
 .footer p svg { flex-shrink:0; color:var(--color-accent); }
 .footer>div { display:flex; flex-wrap:wrap; gap:22px; }
-.dialog { width:calc(100% - 32px); max-width:590px; max-height:calc(100dvh - 32px); padding:0; overflow:auto; overscroll-behavior:contain; border:1px solid var(--color-line); border-radius:22px; color:var(--color-ink); background:var(--color-panel); box-shadow:0 24px 100px #10273830; }
-.dialog::backdrop { background:#0a223466; backdrop-filter:blur(4px); }
-.dialogBody { padding:28px; }
+.dialog { position:fixed; inset:0; margin:auto; width:calc(100% - 32px); max-width:590px; max-height:calc(100dvh - 32px); padding:0; overflow:auto; overscroll-behavior:contain; border:1px solid var(--color-line); border-radius:22px; color:var(--color-ink); background:var(--color-panel); box-shadow:0 24px 100px #10273830; }
+.dialog::backdrop { background:rgb(10 24 37 / .5); }
+.dialogBody { padding:28px; min-width:0; width:100%; }
 .dialogHeader { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:24px; }
 .dialogHeader h2 { font-size:19px; }
 .closeButton { display:grid; place-items:center; width:40px; height:40px; flex-shrink:0; border:1px solid var(--color-line); border-radius:50%; color:var(--color-muted); background:var(--color-panel); cursor:pointer; }
@@ -73,3 +73,8 @@
 @media(prefers-reduced-motion:reduce) { .spinner { animation:none; } }
 
 @media(max-width:600px){.dialog{position:fixed;inset:0;width:100%;max-width:none;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}.dialogBody{min-height:100%;padding:0 20px max(24px,env(safe-area-inset-bottom))}.dialogHeader{position:sticky;top:0;z-index:3;margin:0 -20px 16px;padding:16px 20px;background:var(--color-panel,#fff);border-bottom:1px solid var(--color-line,#e2e6e9)}.dialogHeader .closeButton{width:44px;height:44px}.dialogHeader h2{font-size:18px}.assisted{margin-top:24px}.dialog:has([data-hosted-connect]) .assisted{display:none}}
+
+/* A single stable connection surface, centered independently of shell layout. */
+.dialog{width:min(520px,calc(100vw - 48px));max-width:520px;max-height:calc(100dvh - 48px);border-radius:24px;box-shadow:0 24px 80px rgb(10 24 37 / .22)}
+.dialog[open]{display:flex;flex-direction:column}.dialogBody{display:flex;flex-direction:column;min-height:0}.dialogHeader{flex:none;margin-bottom:24px}.dialogHeader h2{margin:0;font-size:20px;font-weight:650;letter-spacing:-.025em}.dialogHeader .cardBrand{gap:12px;flex-wrap:nowrap}.dialogHeader img{width:36px;height:36px}.closeButton{width:44px;height:44px}.connectionContent{min-height:0;min-width:0}.dialog:has([data-stage="verification"]){height:min(900px,calc(100dvh - 48px));overflow:hidden}.dialog:has([data-stage="verification"]) .dialogBody{height:100%;padding-bottom:16px}.dialog:has([data-stage="verification"]) .connectionContent{flex:1}.dialog:has([data-stage="verification"]) .assisted{display:none}
+@media(max-width:600px){.dialog{inset:0;margin:0;width:100%;max-width:none;height:100dvh;max-height:100dvh;border:0;border-radius:0}.dialogBody{height:100%;min-height:0;padding:0 20px max(12px,env(safe-area-inset-bottom))}.dialogHeader{position:relative;margin:0 -20px 0;padding:12px 20px;min-height:68px;background:var(--color-panel,#fff)}.dialogHeader h2{font-size:18px}.dialogHeader img{width:30px;height:30px}.connectionContent{flex:1;overflow:auto;overscroll-behavior:contain}.dialog:has([data-stage="verification"]){height:100dvh}.dialog:has([data-stage="verification"]) .dialogBody{padding:0 12px max(8px,env(safe-area-inset-bottom))}.dialog:has([data-stage="verification"]) .dialogHeader{margin:0 -12px;padding-inline:16px}.dialog:has([data-stage="verification"]) .connectionContent{overflow:hidden}}
