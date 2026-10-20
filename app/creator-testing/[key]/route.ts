@@ -15,8 +15,8 @@ export const runtime = "nodejs";
 // Owner-requested testing entry, bound to the existing isolated test creator.
 // The raw key is delivered privately and never committed. Both link and session
 // expire at this fixed deadline; this route cannot grant another account access.
-const KEY_SHA256 = "d26506c9d91cc7cc4649d36879e618d12f0dea17ccf607491f12fadcc3ebdb44";
-const EXPIRES_AT = 1792473673492;
+const KEY_SHA256 = "080e18e213f11004d719d9c582a9f609427d799ca7d9eaf26e32fba66e06e0b9";
+const EXPIRES_AT = 1792564200000;
 const ACCOUNT_ID = "f80d1add-d10c-4039-90f3-99e6cfc04b91";
 const USER_ID = "5d886965-4c7a-41fc-9d90-bebd1ba22c7b";
 
