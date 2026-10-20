@@ -1,5 +1,6 @@
 name: Build mobile sign-in and verification fix
 on:
+  workflow_dispatch:
   push:
     branches: [codex/creator-seamless-connect-20261020]
     paths: ['.github/workflows/creator-sign-in-input-fix.yml']
