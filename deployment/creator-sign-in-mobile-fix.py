@@ -1,11 +1,11 @@
-"""Deploy the tested sign-in temporary creator access update; private settings stay on host."""
+"""Deploy the tested sign-in mobile verification keyboard update; private settings stay on host."""
 import json, os, pathlib, subprocess, sys, time, shutil
 BASE=pathlib.Path('/etc/twin-onlyfans')
 OVERLAY=BASE/'creator-sign-in-release-compose.json'
 COMPOSE=pathlib.Path('/opt/twin-onlyfans/releases/0525e51aa690b44d1c9f1dc0bc2b9aed6baa627a/deploy/onlyfans-compose.yml')
-BACKUP=pathlib.Path('/var/backups/twin-creator-testing-92f3e10')
-EXPECTED='69dffdf7ba14482f651b918adc29312cc0949e8d'
-FIX='92f3e10bef86ade67a71405ae2cfc0ec820a69f2'
+BACKUP=pathlib.Path('/var/backups/twin-keyboard-9fea6a3')
+EXPECTED='92f3e10bef86ade67a71405ae2cfc0ec820a69f2'
+FIX='9fea6a344abbac1cd952d041c5add9534d99266c'
 NAMES=['next-app','twin-onlyfans-api-1','twin-onlyfans-worker-1','twin-onlyfans-database-1','flirt-bot','flirt-dashboard']
 manifest=json.loads(sys.argv[2])
 assert manifest.get('dashboardCommit')==FIX
