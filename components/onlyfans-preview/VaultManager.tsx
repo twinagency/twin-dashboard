@@ -13,6 +13,7 @@ import VaultOrganization from "./VaultOrganization";
 import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
 import { MediaLibraryFilters } from "@/components/CreatorMediaLibrary";
+import VaultUploader from "./VaultUploader";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -124,6 +125,7 @@ export default function VaultManager({ accountId }: { accountId: string }) {
       {data?.connectionRevision == null ? <Link className="self-center text-xs font-semibold text-accent" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
     </div> : null}
     {data && !denied ? <>
+      <VaultUploader key={accountId} accountId={accountId} connectionRevision={data.connectionRevision} onChanged={organizationChanged}/>
       <div className="mt-4 rounded-lg border border-line p-3 text-xs" data-of-vault-sync-status>
         {data.sync ? <><p>Last sync: <strong>{SYNC_STATUS[data.sync.status]}</strong> · {data.sync.pagesRead} pages · {data.sync.itemsSeen} assets observed</p><p className="mt-1 text-muted">Updated {new Date(data.sync.updatedAt).toLocaleString()}{data.sync.completedAt ? ` · Completed ${new Date(data.sync.completedAt).toLocaleString()}` : ""}</p>{data.sync.lastError ? <p className="mt-1 text-muted">Sync needs review. Check the account connection and request a new sync when ready.</p> : null}</> : <p>No vault synchronization has been recorded.</p>}
       </div>
