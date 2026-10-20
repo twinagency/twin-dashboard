@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { mergeChannelCreators, type ChannelRoster } from "@/lib/channel-workspace/model";
-import { usesAgencyOverview } from "@/lib/agency-brand";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { usePathname, useSearchParams } from "next/navigation";
@@ -103,7 +102,7 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
-  if (isAgency && usesAgencyOverview(agencyName) && pathname === "/revenue") {
+  if (isAgency && ["moxy", "top onlyfans agency"].includes(agencyName?.trim().toLowerCase() ?? "") && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
       <div className="moxy-overview-breadcrumb"><span>{agencyName}</span> / Earnings</div>
       <div className="moxy-overview-account-controls">
