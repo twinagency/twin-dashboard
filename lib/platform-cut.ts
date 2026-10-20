@@ -287,7 +287,7 @@ export async function getViewerTerms(): Promise<ViewerTerms> {
 // none.
 
 export const CLONE_RATE_MIN = 0.001;
-export const CLONE_RATE_MAX = 0.2;
+export const CLONE_RATE_MAX = 0.5;
 
 export type CloneRates = Record<string, number>;
 
