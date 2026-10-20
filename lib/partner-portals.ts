@@ -1,4 +1,6 @@
 /** Public portal branding. Access still comes from verified database membership. */
+// Uses the shared Twin-branded /agency/login portal.
+export const TOP_ONLYFANS_AGENCY = { id: "a8e39c45-917d-468e-9b7a-a5aecb0c6a20", name: "Top Onlyfans Agency", slug: "top-onlyfans-agency" } as const;
 export const JESS_KATE_PORTAL = {
   id: "40563447-698f-4ec2-b175-c816f877a1f6",
   name: "Jess and Kate AI",
