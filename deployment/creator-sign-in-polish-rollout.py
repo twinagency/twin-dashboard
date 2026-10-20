@@ -23,7 +23,7 @@ def private(p,s):
     fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_TRUNC,0o600)
     with os.fdopen(fd,'w') as f:f.write(s)
 def idle():
-    names=run(['docker','top',browser()['Id'],'-eo','comm']).decode().lower().splitlines()[1:]
+    names=run(['docker','top',browser()['Id'],'-eo','pid,comm']).decode().lower().splitlines()[1:]
     assert not any('chrome' in x or 'chromium' in x for x in names),'A creator is still signing in; retry after that browser closes'
 def preflight():
     print('Running container names: '+run(['docker','ps','--format','{{.Names}}']).decode().strip().replace('\n',', '),flush=True)
