@@ -21,5 +21,20 @@ jobs:
       - run: npx tsc --noEmit
       - name: Moxy direct CRM access and retained owner permissions
         run: node --import tsx scripts/check-moxy-owner-access.ts
+      - name: Assigned onboarding creator and private photo isolation
+        run: node scripts/check-agency-overview-accounts.cjs
       - name: Shared mobile and desktop navigation
         run: node --import tsx scripts/check-sidebar-layout.tsx
+
+      - name: Shared overview desktop and mobile layout
+        run: |
+          npx playwright install chromium
+          node scripts/check-moxy-overview-ui.mjs
+        env:
+          MOXY_REVIEW_OUT: test-results/moxy-overview
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: top-agency-layout
+          path: test-results/moxy-overview
+          if-no-files-found: ignore
