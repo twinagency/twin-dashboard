@@ -4,7 +4,7 @@ on:
     branches: [codex/creator-seamless-connect-20261020]
     paths: ['.github/workflows/creator-sign-in-input-deploy.yml']
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: twin-sign-in-input-deploy
   cancel-in-progress: false
