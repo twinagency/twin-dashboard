@@ -20,6 +20,7 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium webkit
       - run: npx tsc --noEmit
+      - run: node scripts/check-creator-testing.cjs
       - run: node scripts/check-creator-platforms.cjs
       - run: node scripts/check-creator-sign-in-ui.mjs
       - run: node scripts/check-creator-platforms-ui.mjs

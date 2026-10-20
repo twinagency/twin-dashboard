@@ -60,8 +60,10 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export async function signCreatorSession(accountId: string, userId: string): Promise<string> {
-  const payload = encodeJson({ accountId, userId, exp: Date.now() + CREATOR_SESSION_TTL_MS });
+export async function signCreatorSession(accountId: string, userId: string, expiresAt = Date.now() + CREATOR_SESSION_TTL_MS): Promise<string> {
+  const now = Date.now();
+  if (!Number.isFinite(expiresAt) || expiresAt <= now || expiresAt > now + CREATOR_SESSION_TTL_MS) throw new Error("Invalid creator session expiry");
+  const payload = encodeJson({ accountId, userId, exp: expiresAt });
   return `${payload}.${await hmac(payload)}`;
 }
 
