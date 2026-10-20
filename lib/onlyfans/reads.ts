@@ -46,6 +46,8 @@ export type ReadAuth = {
   operatorSession: boolean;
   agency: boolean;
   viewAs: boolean;
+  /** Only supplied by the verified route boundary, never a request value. */
+  agencyGrant?: import("./agency-scope").AgencyGrant;
 };
 
 export type ReadDenial = {
@@ -91,7 +93,7 @@ export type ConversationReadBody = {
  * is refused before the backend is consulted at all.
  */
 export function authorizeRead(auth: ReadAuth): ReadDenial | null {
-  if (!auth.operatorSession) {
+  if (!auth.operatorSession && !auth.agencyGrant) {
     return {
       ok: false,
       status: 401,
@@ -109,7 +111,7 @@ export function authorizeRead(auth: ReadAuth): ReadDenial | null {
       error: "OnlyFans data is not available while viewing as another account.",
     };
   }
-  if (auth.agency) {
+  if (auth.agency && !auth.agencyGrant) {
     return {
       ok: false,
       status: 403,

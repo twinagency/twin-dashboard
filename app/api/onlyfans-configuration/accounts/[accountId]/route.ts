@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredConfigurationBackend } from "@/lib/onlyfans/configuration-backend";
 import { CONFIGURATION_SCHEMA, canonicalConfiguration, validConfigurationRequest } from "@/lib/onlyfans/configuration";
@@ -14,17 +12,16 @@ const refuse = (status: number, error: string) => answer({ schemaVersion: CONFIG
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 
 export async function GET(_request: NextRequest, context: Context) {
-  const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
+  const ctx = await requireOnlyFansRead({ agency: true }); if (ctx instanceof NextResponse) return ctx;
   const accountId = requestId((await context.params).accountId);
   if (!accountId) return refuse(400, "That account reference is invalid.");
-  const backend = configuredConfigurationBackend(); if (!backend) return refuse(503, "Configuration editing is not configured.");
+  const backend = configuredConfigurationBackend(ctx.fetch); if (!backend) return refuse(503, "Configuration editing is not configured.");
   const result = await backend.get(accountId);
   return result.ok ? answer({ schemaVersion: CONFIGURATION_SCHEMA, ok: true, accountId, configuration: result.data }) : refuse(result.status, result.error);
 }
 export async function POST(request: NextRequest, context: Context) {
-  const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
-  const session = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!await verifySessionToken(session)) return refuse(401, "Sign in again before editing this creator.");
+  const ctx = await requireOnlyFansRead({ agency: true, write: true }); if (ctx instanceof NextResponse) return ctx;
+  if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
   const expectedOrigin = `${request.nextUrl.protocol}//${request.headers.get("host")}`;
   if (request.headers.get("origin") !== expectedOrigin || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
     request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return refuse(403, "Save changes from this dashboard.");
@@ -43,8 +40,8 @@ export async function POST(request: NextRequest, context: Context) {
     body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
   } catch { return refuse(400, "That save request is invalid."); }
   if (!validConfigurationRequest(body)) return refuse(400, "That configuration change is invalid.");
-  const backend = configuredConfigurationBackend(); if (!backend) return refuse(503, "Configuration editing is not configured.");
-  const actor = `op-session:${digest(session!)}`;
+  const backend = configuredConfigurationBackend(ctx.fetch); if (!backend) return refuse(503, "Configuration editing is not configured.");
+  const actor = ctx.actor;
   const commandKey = digest(canonicalConfiguration([actor, accountId, body]));
   const result = await backend.save(accountId, { ...body, actor, commandKey });
   return result.ok ? answer(result.ack) : answer({ schemaVersion: CONFIGURATION_SCHEMA, ...result }, result.status);

@@ -68,4 +68,4 @@ export function createVaultMediaBackend(options:{baseUrl:string;token:string;fet
     }
   };
 }
-export function configuredVaultMediaBackend(){const options=configuredBackendPurpose("CONTENT");return options?createVaultMediaBackend(options):null;}
+export function configuredVaultMediaBackend(fetchImpl?: typeof fetch){const options=configuredBackendPurpose("CONTENT");return options?createVaultMediaBackend({ ...options, fetchImpl }):null;}

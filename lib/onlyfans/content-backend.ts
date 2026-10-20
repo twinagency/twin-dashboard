@@ -30,7 +30,7 @@ export function createContentBackend(options: { baseUrl: string; token: string; 
     },
   };
 }
-export function configuredContentBackend() {
+export function configuredContentBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CONTENT");
-  return options ? createContentBackend(options) : null;
+  return options ? createContentBackend({ ...options, fetchImpl }) : null;
 }

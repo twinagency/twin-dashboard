@@ -14,7 +14,7 @@ export async function GET(
   request: Request,
   { params }: { params: Promise<{ accountId: string }> },
 ) {
-  const context = await requireOnlyFansRead();
+  const context = await requireOnlyFansRead({ agency: true });
   if (context instanceof NextResponse) return context;
 
   const { accountId } = await params;

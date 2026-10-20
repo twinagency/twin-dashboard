@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
-import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredControlBackend } from "@/lib/onlyfans/controls-backend";
 import { CONTROL_SCHEMA, isControlAction } from "@/lib/onlyfans/controls";
@@ -17,10 +15,9 @@ const digest = (value: string) => createHash("sha256").update(value).digest("hex
 export async function POST(request: NextRequest, context: {
   params: Promise<{ accountId: string; conversationId: string }>;
 }) {
-  const ctx = await requireOnlyFansRead();
+  const ctx = await requireOnlyFansRead({ agency: true, write: true });
   if (ctx instanceof NextResponse) return ctx;
-  const session = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!await verifySessionToken(session)) return refuse(401, "Sign in again before changing this conversation.");
+  if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
   // Next may canonicalize nextUrl's hostname to localhost. The HTTP Host is
   // the browser-facing authority; do not trust a forwarded-host override.
   const expectedOrigin = `${request.nextUrl.protocol}//${request.headers.get("host")}`;
@@ -46,14 +43,14 @@ export async function POST(request: NextRequest, context: {
     if (manual && Object.hasOwn(body, "catalogItemId") && body.catalogItemId !== null &&
         (!Number.isInteger(body.catalogItemId) || (body.catalogItemId as number) <= 0 || (body.catalogItemId as number) >= 2 ** 31)) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That conversation control request is invalid."); }
-  const backend = configuredControlBackend();
+  const backend = configuredControlBackend(ctx.fetch);
   if (!backend) return refuse(503, "Conversation controls are not configured.");
   const action = body.action;
   if (!isControlAction(action)) return refuse(400, "That conversation control is unavailable.");
   const expectedRevision = body.expectedRevision as number;
   // This shared-password dashboard has sessions, not individually named staff.
   // Audit the verified session without storing its reusable credential.
-  const actor = `op-session:${digest(session!)}`;
+  const actor = ctx.actor;
   const commandKey = digest(JSON.stringify([actor, accountId, conversationId, action, expectedRevision,
     ...(action === "manual_message" ? [body.body, body.requestKey, ...(Object.hasOwn(body, "catalogItemId") ? [body.catalogItemId] : [])] : [])]));
   const result = await backend({ accountId, conversationId, action, expectedRevision, actor, commandKey,
