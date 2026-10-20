@@ -316,6 +316,19 @@ console.log("Sidebar: grouped admin navigation, collapsed More, destination cove
 
 
 
+
+// Top Onlyfans Agency shares Moxy destinations while retaining Twin branding.
+pathname = "/revenue"; query = new URLSearchParams();
+for (const mobile of [false, true]) {
+  const html = render(portals.TOP_ONLYFANS_AGENCY.name, true, clone, mobile);
+  const links = renderedLinks(html);
+  for (const [label, href] of moxyDestinations) assert.ok(links.some(link => link.label === label && link.href === href), label);
+  assert.equal(links.filter(link => link.href === "/agency/creator-invites").length, 1);
+  assert.match(html, /Top Onlyfans Agency · Owner/);
+  assert.match(html, />Twin<\/span>/);
+  assert.doesNotMatch(html, /moxy-ai-|moxy-sidebar-brand|>CRM<|href="\/agency-admin"|href="\/settings"|href="\/api-access"/);
+}
+
 async function checkAdminInteractions() {
   const { JSDOM } = nativeRequire("jsdom");
   const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "https://dashboard.example.test" });
