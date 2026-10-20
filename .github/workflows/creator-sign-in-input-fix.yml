@@ -1,4 +1,4 @@
-name: Build sign-in input and clarity fix
+name: Build mobile sign-in and verification fix
 on:
   push:
     branches: [codex/creator-seamless-connect-20261020]
@@ -13,7 +13,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Reuse the approved private source archive with the reviewed two-line fix
+      - name: Reuse the approved private source archive with the reviewed sign-in-only patch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -21,18 +21,12 @@ jobs:
           gh release download creator-sign-in-0525e51-20261020 --repo "$GITHUB_REPOSITORY" --pattern twin-native-0525e51-release.tar --dir release
           echo '5eead8614969a6833e3f9dfb48c9870c3e8eaeccf9299af139ae930e8fd3fb7f  release/twin-native-0525e51-release.tar' | sha256sum --check
           tar -xf release/twin-native-0525e51-release.tar -C native
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('native/creator-sign-in/service.mjs')
-          s=p.read_text()
-          assert s.count('viewport:{width:WIDTH,height:HEIGHT},acceptDownloads:false') == 1
-          assert s.count("type:'jpeg',quality:60") == 1
-          s=s.replace('viewport:{width:WIDTH,height:HEIGHT},acceptDownloads:false','viewport:{width:WIDTH,height:HEIGHT},deviceScaleFactor:2,acceptDownloads:false').replace("type:'jpeg',quality:60","type:'jpeg',quality:95")
-          p.write_text(s)
-          PY
+          git apply --check --directory=native deployment/creator-sign-in-mobile-native.patch
+          git apply --directory=native deployment/creator-sign-in-mobile-native.patch
+
       - name: Build and verify private browser
         run: |
-          docker build --label org.opencontainers.image.revision=a82acc3ae9d439f38e430319b7ec2eeb9e020c0d -f native/Dockerfile.sign-in -t "$ECR_REPO:signin-input-$GITHUB_SHA" native
+          docker build --label org.opencontainers.image.revision=f76f37f7daba18bed1951aa55832127b5a988994 -f native/Dockerfile.sign-in -t "$ECR_REPO:signin-input-$GITHUB_SHA" native
           docker run --rm --init --user pwuser --read-only --cap-drop ALL --security-opt no-new-privileges --security-opt seccomp=native/deploy/creator-sign-in-seccomp.json --tmpfs /tmp:rw,nosuid,nodev,size=256m,mode=1777 --shm-size=256m --memory=1536m --cpus=1 --pids-limit=256 -e TWIN_SIGNIN_TEST_HEADED=1 -e TWIN_SIGNIN_TEST_SANDBOX=1 "$ECR_REPO:signin-input-$GITHUB_SHA" xvfb-run -a node creator-sign-in/check.mjs
       - name: Build dashboard
         run: docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$ECR_REPO:$GITHUB_SHA" .
