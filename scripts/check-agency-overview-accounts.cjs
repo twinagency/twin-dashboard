@@ -36,6 +36,7 @@ new Function('require','module','exports',js)((name)=>{
  if(name==='./dashboard-access')return {getDashboardAccess:async()=>access,withDashboardAccess:async(_access,fn)=>fn()};
  if(name==='./agency-brand')return {isTopOnlyfansAgency:name=>name==='Top Onlyfans Agency',usesAgencyOverview:name=>['Top Onlyfans Agency','Moxy'].includes(name)};
  if(name==='./supabase-service')return {serviceClient:()=>db};
+ if(name==='./media-signing-cache')return {signDashboardMedia:paths=>db.storage.from('media').createSignedUrls(paths,3600)};
  if(name==='./supabase')return {supabaseAdmin:db};
  throw Error(name);
 },result,result.exports);
