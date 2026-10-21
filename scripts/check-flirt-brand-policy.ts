@@ -18,7 +18,7 @@ assert.deepEqual(flirtForeignBrandDecision("/creator/tether/forgot-password", "H
 assert.deepEqual(flirtForeignBrandDecision("/creator/moxy/login", "GET", flirt), { action: "redirect", path: "/creator/login" });
 assert.deepEqual(flirtForeignBrandDecision("/creator/moxy/whatever", "GET", flirt), { action: "redirect", path: "/creator/login" });
 assert.deepEqual(flirtForeignBrandDecision("/creator/link/signup", "POST", flirt), { action: "notfound" });
-assert.deepEqual(flirtForeignBrandDecision("/agency/login", "GET", flirt), { action: "redirect", path: "/login" });
+assert.equal(flirtForeignBrandDecision("/agency/login", "GET", flirt), null);
 for (const path of ["/creator/login", "/creator/signup", "/creator/forgot-password", "/creator/reset-password", "/creator/onboarding", "/creator-auth/signup", "/creator-auth/login", "/login", "/agency/creators", "/agency/creator-invites", "/linkedin", "/avatar", "/api/health"]) {
   assert.equal(flirtForeignBrandDecision(path, "GET", flirt), null, `${path} is FLIRT's own and must stay`);
 }
@@ -30,6 +30,9 @@ async function main() {
   configureFlirtOfflineEnv();
   Object.assign(process.env, flirt);
   const origin = process.env.DASHBOARD_PUBLIC_ORIGIN!;
+  const entry = await middleware(new NextRequest(origin + "/agency/login"));
+  assert.equal(entry.status, 200);
+  assert.equal(entry.headers.get("location"), null);
   const moved = await middleware(new NextRequest(origin + "/creator/link/signup?code=ABC234DEFG"));
   assert.equal(moved.status, 308);
   assert.equal(moved.headers.get("location"), origin + "/creator/signup?code=ABC234DEFG");

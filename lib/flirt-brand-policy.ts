@@ -15,7 +15,7 @@ export type FlirtBrandDecision = { action: "redirect"; path: string } | { action
 export function flirtForeignBrandDecision(pathname: string, method: string, env: Record<string, string | undefined> = process.env): FlirtBrandDecision {
   if (!flirtOnboardingOptional(env)) return null;
   const safe = method === "GET" || method === "HEAD";
-  if (safe && pathname === "/agency/login") return { action: "redirect", path: "/login" };
+  // Independent Flirt agencies use their own authenticated login form.
   if (CREATOR_BRAND_ANY.test(pathname)) {
     if (!safe) return { action: "notfound" };
     const page = CREATOR_BRAND_PAGE.exec(pathname)?.[1];
