@@ -61,7 +61,8 @@ const render = props => React.act(() => root.render(React.createElement(Link, {
   const loading = renderToStaticMarkup(React.createElement(Loading));
   assert.match(loading, /role="status"/); assert.match(loading, /aria-busy="true"/);
   assert.match(loading, /Loading page/);
-  assert.match(fs.readFileSync('app/loading.tsx', 'utf8'), /PageLoading/);
+  assert.equal(fs.existsSync('app/loading.tsx'), false, 'Auth and redirect-only routes must keep unstreamed redirect responses');
+  for (const folder of ['dashboard','revenue','clones','users']) assert.match(fs.readFileSync('app/' + folder + '/loading.tsx', 'utf8'), /PageLoading/);
   assert.match(fs.readFileSync('app/navigation-feedback.css', 'utf8'), /prefers-reduced-motion/);
   await React.act(() => root.unmount()); dom.window.close();
   console.log('Navigation feedback: intent prefetch, pending lifecycle, keyboard, cancelled clicks, refs, pagination options and streaming fallback passed');
