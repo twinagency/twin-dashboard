@@ -2,6 +2,10 @@
 import hashlib,json,pathlib,subprocess,time,urllib.request
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
 payload=json.loads(pathlib.Path('/tmp/messages-monitor-patch.json').read_text())
+limits_only=payload.get('kind')=='fleet-limits'
+if limits_only:
+ assert payload['patches']==[{'old':'MAX_SUMMARIES = 6','new':'MAX_SUMMARIES = 32'}]
+ assert payload['history']['old']=='MAX_INDEXES = 6' and payload['history']['new']=='MAX_INDEXES = 32'
 revision=hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()[:20]
 release=pathlib.Path('/home/ubuntu/twin-v2-backups/messages-load-20261022')/revision
 release.mkdir(parents=True,exist_ok=True)
@@ -80,22 +84,28 @@ if settings.get('MONITOR_LOAD_REVISION')==revision:
  recorded=json.loads((release/'result.json').read_text())
  actual=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
  print(json.dumps({'currentSource':sha(actual),'recordedSource':recorded['serverSha256'],'patchPresence':[{'old':actual.decode().count(patch['old']),'new':actual.decode().count(patch['new'])} for patch in payload['patches']],'monitorImage':before_dash['image']}),flush=True)
- if payload['patches']:assert sha(actual)==recorded['serverSha256'],'Edited monitor source changed after this release'
- if payload.get('history'):assert sha(old_history)==recorded['historySha256'],'History source changed after this release'
+ if payload['patches']:
+  if limits_only:assert actual.decode().count('MAX_SUMMARIES = 32')==1,'Fleet summary setting changed after this release'
+  else:assert sha(actual)==recorded['serverSha256'],'Edited monitor source changed after this release'
+ if payload.get('history'):
+  if limits_only:assert old_history.decode().count('MAX_INDEXES = 32')==1,'Fleet history setting changed after this release'
+  else:assert sha(old_history)==recorded['historySha256'],'History source changed after this release'
  verified=verify();assert runtime('twin-v2-bot-1')==before_bot,'Concurrent bot release'
  print(json.dumps({'alreadyDeployed':revision,'verified':verified,'botUnchanged':True}));raise SystemExit(0)
 old_server=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
-if payload['patches']:assert sha(old_server)==payload['expectedServerSha256'],'Edited monitor source changed since inspection'
+if payload['patches'] and not limits_only:assert sha(old_server)==payload['expectedServerSha256'],'Edited monitor source changed since inspection'
 source=old_server.decode()
 for patch in payload['patches']:
- assert source.count(patch['old'])==1,'Fan reader changed since inspection'
- source=source.replace(patch['old'],patch['new'],1)
+ if source.count(patch['old'])==1:source=source.replace(patch['old'],patch['new'],1)
+ else:assert limits_only and source.count(patch['new'])==1,'Edited monitor setting changed since inspection'
 new_server=source.encode();old_override=override.read_bytes()
 new_history=old_history
 if payload.get('history'):
- h=payload['history'];assert sha(old_history)==h['expectedSha256'],'History source changed since inspection'
- text=old_history.decode();assert text.count(h['old'])==1,'History cache setting changed'
- new_history=text.replace(h['old'],h['new'],1).encode()
+ h=payload['history']
+ if not limits_only:assert sha(old_history)==h['expectedSha256'],'History source changed since inspection'
+ text=old_history.decode()
+ if text.count(h['old'])==1:new_history=text.replace(h['old'],h['new'],1).encode()
+ else:assert limits_only and text.count(h['new'])==1,'Edited history setting changed since inspection'
 host_server=ROOT/'dashboard/server.ts';old_host=host_server.read_bytes()
 # Preserve a separate host checkout; the running image is the deployment base.
 new_host=old_host
