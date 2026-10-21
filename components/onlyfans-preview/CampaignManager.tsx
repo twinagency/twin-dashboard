@@ -1,6 +1,8 @@
 "use client";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useDashboardAccess } from "@/components/DashboardAccessProvider";
+import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 import { Card } from "@/components/ui/card";
 import { Info, inputCls } from "@/components/clone/fields";
 import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, parseCampaignAck, parseCampaignDetail, parseCampaignList,
@@ -32,6 +34,8 @@ const when = (value: string) => new Date(value).toLocaleString();
 
 export default function CampaignManager({ accountId, readOnly = false }: { accountId: string; readOnly?: boolean }) {
   const router = useRouter();
+  const { audience, agencyName } = useDashboardAccess();
+  const twinRefresh = usesTwinAgencyRefresh(audience, agencyName, usePathname());
   const endpoint = `/api/onlyfans-campaigns/accounts/${encodeURIComponent(accountId)}/campaigns`;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]), [truncated, setTruncated] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
@@ -125,7 +129,7 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
   const campaign = detail?.campaign;
   const actionAllowed = (action: CampaignAction) => !!campaign && (action === "pause" ? ["scheduled", "running"].includes(campaign.status) : action === "resume" ? campaign.status === "paused" : !["cancelled", "completed"].includes(campaign.status));
   return <div className="space-y-5" data-of-campaign-manager>
-    <Card className="p-4"><h2 className="font-semibold">New campaign</h2>
+    <Card className={twinRefresh ? "twin-campaign-compose" : "p-4"}><h2 className="font-semibold">New campaign</h2>
       <p className="mt-1 text-xs leading-5 text-muted">Each recipient receives an individual message through the shared delivery queue. Pausing stops further recipients; an attempt already in progress may finish.</p>
       <form className="mt-4 space-y-4" onSubmit={submit}><fieldset disabled={locked} className="space-y-4">
         <label className="block text-sm font-medium">Campaign name<input className={`${inputClass} mt-1`} value={name} maxLength={128} onChange={event => setName(event.target.value)} required /></label>
@@ -140,6 +144,7 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
         </div>
         <button data-of-create-campaign type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={locked || !name.trim() || !body.trim() || (audienceKind === "explicit" && !fanIds.size)}>{busy ? "Saving…" : scheduled ? "Schedule campaign" : "Queue campaign"}</button>
       </fieldset></form>
+      {twinRefresh && <aside className="twin-campaign-preview" aria-label="Campaign preview"><h3>Message preview</h3><p className="twin-help">OnlyFans · {name || "Untitled campaign"}</p><div className="twin-preview-bubble">{body || "Your message will appear here as you type."}</div><dl><div><dt>Saved content</dt><dd>{catalogue.find(item => item.itemId === catalogItemId)?.label || "Text only"}</dd></div><div><dt>Audience</dt><dd>{audienceKind === "explicit" ? `${fanIds.size} selected conversations` : "All saved conversations, up to 1,000"}</dd></div><div><dt>Send time</dt><dd>{scheduled ? "Scheduled for your selected time" : "Queues when you submit"}</dd></div></dl><p className="twin-help">This preview does not send a message. Review the audience and send time before submitting.</p></aside>}
     </Card>
     {notice ? <div role="status" className="rounded-xl border border-line bg-elev p-4 text-sm" data-of-campaign-notice>{notice}{retry ? <button type="button" className={`${buttonClass} ml-3 bg-white`} disabled={busy} onClick={() => void write(retry)}>Retry same request</button> : null}</div> : null}
     <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved campaigns</h2><button className={buttonClass} disabled={busy || denied || loading} onClick={() => { void read(); if (selected) void read(selected); }}>Refresh</button></div>
@@ -161,3 +166,4 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
     </Card> : null}
   </div>;
 }
+

@@ -59,6 +59,7 @@ jobs:
 
       - name: Shared operator workspace desktop and mobile checks
         run: |
+          node scripts/check-twin-agency-refresh.cjs
           node --import tsx scripts/check-channel-roster.ts
           node scripts/check-operator-workspace-ui.mjs
 
@@ -194,3 +195,4 @@ jobs:
         env:
           PGPASSWORD: synthetic-platform-test
         run: psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
+

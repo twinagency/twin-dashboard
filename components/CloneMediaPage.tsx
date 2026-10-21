@@ -39,11 +39,12 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false }: {
       )}
       {creatorMode ? (
         <DashboardAccessProvider audience="admin">
-          <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+          <MediaManager creatorName={clone.name} cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
         </DashboardAccessProvider>
       ) : (
-        <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+        <MediaManager creatorName={clone.name} cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
       )}
     </div>
   );
 }
+

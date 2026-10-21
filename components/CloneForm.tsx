@@ -1,6 +1,9 @@
 "use client";
 import { AdminOnly, ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "./DashboardAccessProvider";
 import { isMoxy } from "@/lib/agency-brand";
+import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
+import Link from "@/components/NavigationLink";
+import CreatorAvatar from "./CreatorAvatar";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -159,7 +162,8 @@ export default function CloneForm({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const {agencyName, readOnly} = useDashboardAccess();
+  const {agencyName, readOnly, audience} = useDashboardAccess();
+  const twinRefresh = usesTwinAgencyRefresh(audience, agencyName, pathname);
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
   const baselineRef = useRef<FormSnapshot>({});
@@ -301,7 +305,7 @@ export default function CloneForm({
 
   return (
     <div data-creator-studio={tab} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${advancedStyles.page} ${studioStyles.page}`}>
-      <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{isStudioTab(tab) ? STUDIO_PAGES[tab].title : tab === "ppvs" ? "PPV library" : tab === "view" ? "System view" : "Advanced"}</h1><small>{isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : tab === "ppvs" ? "Manage this creator’s photos, videos and bundles." : tab === "view" ? "Flow map and compiled prompts for this creator." : "Runtime, delivery and advanced creator settings."}</small></div><BlurToggle /></header>
+      {twinRefresh ? <header className="twin-creator-heading"><div><CreatorAvatar name={clone.name} photoUrl={appearanceImageUrl} className="h-20 w-20" /><div><small>Creators / Creator workspace</small><h1 className="creator-name">{clone.stage_name || clone.name}</h1><small>/{clone.slug} · Profile, replies and content</small></div></div><nav aria-label="Creator workspace links"><Link className="twin-outline-link" href="/clones">All creators</Link><button type="button" className="twin-outline-link" onClick={() => changeTab("ppvs")}>Content library</button><BlurToggle /></nav></header> : <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{isStudioTab(tab) ? STUDIO_PAGES[tab].title : tab === "ppvs" ? "PPV library" : tab === "view" ? "System view" : "Advanced"}</h1><small>{isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : tab === "ppvs" ? "Manage this creator’s photos, videos and bundles." : tab === "view" ? "Flow map and compiled prompts for this creator." : "Runtime, delivery and advanced creator settings."}</small></div><BlurToggle /></header>}
       <CreatorStudioStatus clone={clone} cfg={cfg} />
 
       <ControlPlaneNavigation tab={tab} onTabChange={changeTab} />
@@ -411,6 +415,7 @@ export default function CloneForm({
 
           <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
             <MediaManager
+              creatorName={clone.name}
               cloneId={clone.id}
               photos={photos}
               videos={videos}
@@ -511,6 +516,7 @@ export default function CloneForm({
     </div>
   );
 }
+
 
 
 
