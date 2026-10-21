@@ -1,3 +1,4 @@
+import { portalLoginPath } from "../lib/agency-brand";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { configureFlirtOfflineEnv } from "./flirt-offline-env";
@@ -5,6 +6,8 @@ import { flirtForeignBrandDecision } from "../lib/flirt-brand-policy";
 import { middleware } from "../middleware";
 
 const flirt = { FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "lkmfwpqegjluirfusnaw" };
+assert.equal(portalLoginPath("flirt"), "/agency/login");
+assert.equal(portalLoginPath(), "/link");
 const twin = {} as Record<string, string>;
 
 // Policy: other brands vanish on the FLIRT host only.
