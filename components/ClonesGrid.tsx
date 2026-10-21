@@ -1,9 +1,11 @@
 "use client";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { isPartnerPreview } from "@/lib/agency-policy";
+import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
+import TwinCreatorRoster from "./TwinCreatorRoster";
 
 import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "@/components/NavigationLink";
 import CreatorAvatar from "@/components/CreatorAvatar";
 import { toggleClonePause } from "@/app/clones/actions";
@@ -41,7 +43,8 @@ const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
 ];
 
 export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
-  const {readOnly,isAgency,agencyName}=useDashboardAccess();
+  const {readOnly,isAgency,agencyName,audience}=useDashboardAccess();
+  const pathname = usePathname();
   // Prospect preview login may not open creator config; cards go to Earnings.
   const preview = isAgency && isPartnerPreview(agencyName);
   const [query, setQuery] = useState("");
@@ -66,6 +69,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
     });
   }, [query, cohortFilter, clones]);
 
+  if (usesTwinAgencyRefresh(audience, agencyName, pathname)) return <TwinCreatorRoster clones={clones} preview={preview} readOnly={readOnly} onTogglePause={togglePause} />;
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -189,4 +193,5 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
     </div>
   );
 }
+
 

@@ -1,8 +1,9 @@
 "use client";
 import { ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/DashboardAccessProvider";
+import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
 import StarAmount from "@/components/StarAmount";
 import MediaVisualDescription from "@/components/MediaVisualDescription";
@@ -1457,6 +1458,7 @@ type Tab = "photos" | "videos" | "bundles" | "pricing";
 
 export default function MediaManager({
   cloneId,
+  creatorName,
   photos,
   videos,
   bundles,
@@ -1464,6 +1466,7 @@ export default function MediaManager({
   categoryPricing,
 }: {
   cloneId: string;
+  creatorName?: string;
   photos: Photo[];
   videos: Video[];
   bundles: Bundle[];
@@ -1471,6 +1474,13 @@ export default function MediaManager({
   categoryPricing: Record<string, number> | null;
 }) {
   const [tab, setTab] = useState<Tab>("photos");
+  const { audience, agencyName } = useDashboardAccess();
+  const pathname = usePathname();
+  const twinRefresh = usesTwinAgencyRefresh(audience, agencyName, pathname);
+  const [search, setSearch] = useState("");
+  const term = search.trim().toLowerCase();
+  const visiblePhotos = twinRefresh && term ? photos.filter(p => (p.caption ?? "").toLowerCase().includes(term)) : photos;
+  const visibleVideos = twinRefresh && term ? videos.filter(v => (v.caption ?? "").toLowerCase().includes(term)) : videos;
   const [editingPhotos, setEditingPhotos] = useState(false);
   const [editingVideos, setEditingVideos] = useState(false);
   const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(() => new Set());
@@ -1494,15 +1504,17 @@ export default function MediaManager({
   ];
 
   return (
-    <div>
+    <div className={twinRefresh ? "twin-media-library" : undefined}>
+      {twinRefresh && <header className="twin-media-heading"><div><h1>Content library</h1><p>{creatorName ? `${creatorName}’s` : "Creator"} photos, videos, bundles and pricing.</p></div><span className="twin-status">Telegram library</span></header>}
       {/* Tab bar — same shape as the Edit page's strip so the two pages read
           as one system (this IS the page's top bar; there is no title above). */}
-      <div className="mb-4 flex gap-1 rounded-xl bg-muted/10 p-1">
+      <div className="twin-media-tabs mb-4 flex gap-1 rounded-xl bg-muted/10 p-1" aria-label="Content categories">
         {tabs.map((t) => (
           <button
             key={t.key}
             type="button"
             onClick={() => setTab(t.key)}
+            aria-pressed={tab === t.key}
             className={
               "flex-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold transition " +
               (tab === t.key ? "bg-panel text-ink shadow-sm" : "text-[#06172f]/75 hover:bg-white/25 hover:text-[#06172f]")
@@ -1516,21 +1528,23 @@ export default function MediaManager({
         ))}
       </div>
 
+      {twinRefresh && (tab === "photos" || tab === "videos") && <div className="twin-toolbar"><input aria-label="Search content descriptions" placeholder="Search content descriptions…" value={search} onChange={e => { setSearch(e.target.value); setSelectedPhotoIds(new Set()); setSelectedVideoIds(new Set()); }} /><span className="text-sm text-muted">{tab === "photos" ? visiblePhotos.length : visibleVideos.length} items</span></div>}
+
       <div className={tab === "photos" ? "grid gap-6" : "hidden"}>
-        <ManagerOnly><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></ManagerOnly>
+        <ManagerOnly>{twinRefresh ? <details className="twin-upload"><summary>+ Add photos</summary><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></details> : <PhotoUploadQueue cloneId={cloneId} onDone={() => {}} />}</ManagerOnly>
         {photos.length > 0 ? (
           <>
             <ManagerOnly><BulkMediaEditor
               cloneId={cloneId}
               type="photos"
-              total={photos.length}
+              total={visiblePhotos.length}
               selectedIds={selectedPhotoIds}
-              onSelectAll={() => setSelectedPhotoIds(new Set(photos.map((photo) => photo.id)))}
+              onSelectAll={() => setSelectedPhotoIds(new Set(visiblePhotos.map((photo) => photo.id)))}
               onClear={() => setSelectedPhotoIds(new Set())}
               onEditingChange={setEditingPhotos}
             /></ManagerOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {photos.map((p) => (
+              {visiblePhotos.map((p) => (
                 <PhotoCard
                   key={p.id}
                   photo={p}
@@ -1541,6 +1555,7 @@ export default function MediaManager({
                 />
               ))}
             </div>
+            {!visiblePhotos.length && <p role="status" className="twin-empty">No photos match this description.</p>}
           </>
         ) : (
           <div className="rounded-lg border border-line bg-panel p-10 text-center text-sm text-muted">
@@ -1550,20 +1565,20 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "videos" ? "grid gap-6" : "hidden"}>
-        <ManagerOnly><VideoUploadQueue cloneId={cloneId} onDone={() => {}} /></ManagerOnly>
+        <ManagerOnly>{twinRefresh ? <details className="twin-upload"><summary>+ Add videos</summary><VideoUploadQueue cloneId={cloneId} onDone={() => {}} /></details> : <VideoUploadQueue cloneId={cloneId} onDone={() => {}} />}</ManagerOnly>
         {videos.length > 0 ? (
           <>
             <ManagerOnly><BulkMediaEditor
               cloneId={cloneId}
               type="videos"
-              total={videos.length}
+              total={visibleVideos.length}
               selectedIds={selectedVideoIds}
-              onSelectAll={() => setSelectedVideoIds(new Set(videos.map((video) => video.id)))}
+              onSelectAll={() => setSelectedVideoIds(new Set(visibleVideos.map((video) => video.id)))}
               onClear={() => setSelectedVideoIds(new Set())}
               onEditingChange={setEditingVideos}
             /></ManagerOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {videos.map((v) => (
+              {visibleVideos.map((v) => (
                 <VideoCard
                   key={v.id}
                   video={v}
@@ -1574,6 +1589,7 @@ export default function MediaManager({
                 />
               ))}
             </div>
+            {!visibleVideos.length && <p role="status" className="twin-empty">No videos match this description.</p>}
           </>
         ) : (
           <div className="rounded-lg border border-line bg-panel p-10 text-center text-sm text-muted">
@@ -1856,3 +1872,4 @@ function PricingTab({
     </div>
   );
 }
+

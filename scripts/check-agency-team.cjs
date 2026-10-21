@@ -23,6 +23,7 @@ async function main(){
   "@/lib/internal-admin":"export async function hasInternalAdminAccess(){return globalThis.__agencyTeamTest.allowed}",
   "@/lib/supabase-service":"export function serviceClient(){return globalThis.__agencyTeamTest.db}",
   "next/navigation":"export function redirect(){throw new Error('denied-before-query')}",
+  "@/components/NavigationLink":"import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}",
   "next/link":"import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}",
  };
  try{
@@ -49,7 +50,7 @@ async function main(){
   const html=renderToStaticMarkup(await m.Page({searchParams:Promise.resolve({agency:A})}));
   assert.match(html,/Fixture agency team/);assert.match(html,/member@example.invalid/);assert(!html.includes("foreign@example.invalid"));assert.match(html,/Creator access is shared across the agency/);assert.match(html,/Restore access|Revoke access/);
   const {JSDOM}=require("jsdom"),dom=new JSDOM(html);
-  const memberForm=[...dom.window.document.querySelectorAll("[data-agency-member] form")].find(form=>form.querySelector('[name="email"]').value==="member@example.invalid");
+  const memberForm=[...dom.window.document.querySelectorAll("[data-agency-member-form]")].find(form=>form.querySelector('[name="email"]').value==="member@example.invalid");
   const renderedForm=new dom.window.FormData(memberForm);
   renderedForm.set("operation","revoke");
   const submitted=new FormData();for(const [key,value]of renderedForm)submitted.set(key,value);
@@ -59,3 +60,4 @@ async function main(){
  }finally{delete globalThis.__agencyTeamTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
+
