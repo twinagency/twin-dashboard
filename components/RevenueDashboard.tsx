@@ -656,8 +656,8 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
 
         {/* One compact command surface for time window, aggregation and mark. */}
         <div className="revenue-toolbar flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
-          {moxyOverview && <select
-            className="moxy-mobile-window"
+          {(moxyOverview || overview) && <select
+            className={overview ? "compact-reporting-window" : "moxy-mobile-window"}
             aria-label="Reporting window"
             value={customRange ? "CUSTOM" : period}
             onChange={(event) => {
@@ -720,7 +720,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
           </button>
         </div>
           </div>
-          {!moxyOverview && chartControls}
+          {!moxyOverview && (overview ? <details className="compact-chart-options"><summary>Chart options</summary><div>{chartControls}</div></details> : chartControls)}
         </div>
       </div>
 

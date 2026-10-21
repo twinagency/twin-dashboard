@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
-import { telegramWorkspaceHref } from "@/lib/channel-nav";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { ArrowRight, Coins, MessageCircle, Plus, UserRound, Users } from "lucide-react";
+import { ArrowRight, Coins, UserRound, Users } from "lucide-react";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import FanAvatar from "@/components/FanAvatar";
 import RankingPanel from "@/components/overview-rankings/RankingPanel";
@@ -55,10 +53,9 @@ function CreatorShortcuts({ clones }: { clones: OverviewClone[] }) {
       </button>)}
       <Link className={`${styles.creatorShortcut} ${styles.viewMore}`} href="/clones">
         <span className={styles.morePhoto}>
-          <Image src="/brand/creator-more-collage.png" alt="" width={76} height={76} sizes="76px" priority aria-hidden="true" />
-          <span className={styles.moreBadge} aria-hidden="true"><Plus size={14} /></span>
+          <Users size={24} aria-hidden="true" />
         </span>
-        <span className={styles.shortcutName}>View More</span>
+        <span className={styles.shortcutName}>View all</span>
       </Link>
     </nav>
     <span><Users size={16} />{clones.length.toLocaleString()} creators</span>
@@ -69,16 +66,12 @@ function CreatorShortcuts({ clones }: { clones: OverviewClone[] }) {
 export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
   clones: OverviewClone[]; cloneId?: string | null; windowLabel: string;
 }) {
-  const telegram = useSearchParams().get("workspace") === "telegram";
-  const destination = (path: string) => telegram ? telegramWorkspaceHref(path) : path;
   const creator = clones.find(c => c.id === cloneId);
   return <>
     <section className={`${styles.hero} ${creator ? styles.creatorHero : ""}`} aria-label="Dashboard overview">
       <div className={styles.heroCopy}>
-        <p>{creator ? "CREATOR OVERVIEW" : "DASHBOARD OVERVIEW"}</p>
-        <h1 className={creator ? "creator-name" : ""}>{creator?.name ?? "Your creators, at a glance."}</h1>
-        <span>{windowLabel} · Live Telegram earnings, fans and activity.</span>
-        <div className={styles.heroLinks}><Link href={destination(creator ? `/clones/${creator.id}?tab=identity` : "/telegram")}>{creator ? "View creator" : "View creators"}<ArrowRight size={16} /></Link><Link className={styles.secondaryLink} href={destination("/users")}>Live Telegram Chat<MessageCircle size={16} /></Link></div>
+        <h1 className={creator ? "creator-name" : ""}>{creator?.name ?? "Overview"}</h1>
+        <span>{windowLabel} · Your creators, earnings and activity.</span>
       </div>
       {creator ? <div className={styles.heroPortrait}><CreatorPhoto key={creator.id} creator={creator} /></div> : <CreatorShortcuts clones={clones} />}
     </section>

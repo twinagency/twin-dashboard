@@ -9,6 +9,7 @@ import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./studio-workspace.css";
 import "./twin-theme.css";
+import "./compact-workspace.css";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -19,6 +20,7 @@ import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
 import MainShell from "@/components/MainShell";
+import WorkspaceMobileNav from "@/components/WorkspaceMobileNav";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
@@ -130,12 +132,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar} cloneRates={cloneRates} fleetUsdPerStar={headerUsdPerStar}><BlurProvider>
         <WorkspaceShell activeCloneId={activeCloneId}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} channels={channelScope.allowed} />
-          <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="workspace-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
               <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} allTimeUsdPerStar={headerUsdPerStar} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
+            <WorkspaceMobileNav activeCloneId={activeCloneId} channels={channelScope.allowed} />
           </div>
         </WorkspaceShell>
         {!agency && <TwinUpdatePopup activeCloneId={activeCloneId} version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
