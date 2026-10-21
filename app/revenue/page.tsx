@@ -4,7 +4,7 @@ import { getCloneScope } from "@/lib/clone-scope";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getCreatorOverview, getOverviewAudience } from "@/lib/creator-overview";
 import { getFleetClones } from "@/lib/query-cache";
-import FlirtSharedOverview from "@/components/overview/FlirtSharedOverview";
+import FlirtSharedOverview, { FlirtFleetOverview } from "@/components/overview/FlirtSharedOverview";
 import CreatorOverview from "@/components/overview/CreatorOverview";
 import { getAgencyOverview } from "@/lib/agency-overview";
 
@@ -24,11 +24,11 @@ export default async function RevenuePage() {
       return <CreatorOverview key={cloneId} initialPresentation={presentation} initialAudience={audience} creators={creators.map(({id,name})=>({id,name}))} />;
     }
   }
-  const creators = !access ? await getFleetClones() : [];
+  if (!access) return <FlirtFleetOverview cloneId={cloneId} creators={await getFleetClones()} />;
   return (
     <>
       <RevenueTooltipFix />
-      <RevenueDashboard cloneId={cloneId} sharedOverview={!access ? { creators, creatorsHref: "/clones", chatHref: "/users", brand: "flirt" } : undefined} />
+      <RevenueDashboard cloneId={cloneId} />
     </>
   );
 }

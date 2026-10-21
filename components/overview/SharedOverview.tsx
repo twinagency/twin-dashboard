@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ComponentType } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, MessageCircle, Plus, RefreshCw, UserRound, Users } from "lucide-react";
@@ -8,7 +8,6 @@ import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Too
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
 import RankingPanel from "@/components/overview-rankings/RankingPanel";
-import { setCloneScope } from "@/app/actions/clone-scope";
 import type { FullData } from "@/components/RevenueDashboard";
 import type { Period } from "@/lib/dashboard-data";
 import { REPORT_TZ, reportTzLabel } from "@/lib/report-time";
@@ -24,6 +23,7 @@ export type SharedOverviewConfig = {
   chatHref?: string;
   brand?: "twin" | "moxy" | "flirt";
   creatorOverviewPath?: string;
+  onSelectCreator?: (id: string | null) => Promise<void>;
 };
 type Range = { start: string; end: string };
 type Props = SharedOverviewConfig & {
@@ -33,6 +33,7 @@ type Props = SharedOverviewConfig & {
   onPeriod: (period: Period) => void; onRange: (range: Range) => void;
   onRefresh: () => void; onDetails: () => void;
 };
+export type SharedOverviewRenderer = SharedOverviewConfig & { component: ComponentType<Props> };
 const periods: [Period, string][] = [["1D", "Last 24 hours"], ["1W", "Last 7 days"], ["2W", "Last 2 weeks"], ["1M", "Last month"], ["3M", "Last 3 months"], ["6M", "Last 6 months"], ["1Y", "Last year"], ["ALL", "All time"]];
 const count = (value: number) => value.toLocaleString("en-AU");
 const kindLabel: Record<string, string> = { photo: "Photo", video: "Video", bundle: "Bundle", credits: "Paid messages", tip: "Tip", subscription: "Subscription", refund: "Adjustment" };
@@ -47,7 +48,7 @@ function Portrait({ creator }: { creator: SharedOverviewCreator }) {
 
 /** Shared presentation only. RevenueDashboard retains each deployment's reader,
  * revenue projection, currency rates, refresh lifecycle and report state. */
-export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, cloneId, data, loading, error, period, range, currency, money, onPeriod, onRange, onRefresh, onDetails }: Props) {
+export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, onSelectCreator, cloneId, data, loading, error, period, range, currency, money, onPeriod, onRange, onRefresh, onDetails }: Props) {
   const router = useRouter();
   const { isAgency, agencyName } = useDashboardAccess();
   const brand = configuredBrand ?? (agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin");
@@ -84,7 +85,8 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
       if (isAgency) {
         const response = await fetch("/agency/clone-scope", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clone: id }) });
         if (!response.ok) throw new Error("Creator selection could not be changed. Please try again.");
-      } else await setCloneScope(id || null);
+      } else if (onSelectCreator) await onSelectCreator(id || null);
+      else throw new Error("Creator selection is unavailable. Please refresh and try again.");
       if (creatorOverviewPath) router.push(id ? `${creatorOverviewPath}?clone=${encodeURIComponent(id)}` : creatorOverviewPath);
       router.refresh();
     } catch (e) { setSwitchError(e instanceof Error ? e.message : "Could not open this creator."); }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import SharedOverview, { type SharedOverviewConfig } from "@/components/overview/SharedOverview";
+import type { SharedOverviewRenderer } from "@/components/overview/SharedOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
@@ -207,7 +207,7 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, sharedOverview }: { cloneId?: string | null; dayDetailAvailable?: boolean; sharedOverview?: SharedOverviewConfig } = {}) {
+export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, sharedOverview }: { cloneId?: string | null; dayDetailAvailable?: boolean; sharedOverview?: SharedOverviewRenderer } = {}) {
   const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   const [showDetailed, setShowDetailed] = useState(false);
@@ -474,7 +474,8 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       ? txSort.direction === "desc" ? "Highest amount first" : "Lowest amount first"
       : `${txSort.key === "fan" ? "Fan" : txSort.key === "creator" ? "Creator" : "Type"} ${txSort.direction === "asc" ? "A–Z" : "Z–A"}`;
 
-  if (sharedOverview && !showDetailed) return <SharedOverview {...sharedOverview}
+  const OverviewComponent = sharedOverview?.component;
+  if (sharedOverview && OverviewComponent && !showDetailed) return <OverviewComponent {...sharedOverview}
     cloneId={cloneId} data={data} loading={loading} error={loadError}
     period={period} range={customRange} currency={currency} money={money}
     onPeriod={value => { setCustomRange(null); setPeriod(value); }}
