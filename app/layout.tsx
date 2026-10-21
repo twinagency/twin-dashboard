@@ -8,6 +8,8 @@ import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./flirt-theme.css";
 import "./studio-workspace.css";
+import "./compact-workspace.css";
+import WorkspaceMobileNav from "@/components/WorkspaceMobileNav";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
@@ -99,12 +101,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider>
         <WorkspaceShell activeCloneId={activeCloneId}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
-          <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="workspace-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
               <Link href="/revenue" aria-label={agency?.name || "FLIRT"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
+            <WorkspaceMobileNav activeCloneId={activeCloneId} />
           </div>
         </WorkspaceShell>
         {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}

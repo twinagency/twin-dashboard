@@ -16,3 +16,40 @@
 @media(max-width:360px){.page{padding:14px}.hero{padding:22px 16px}.heroCopy h1{font-size:26px}.heroActions{gap:8px}.primary,.secondary{font-size:10px;gap:5px;padding:8px 10px}.metric{padding:15px 11px}.metric strong{font-size:24px}.metric:first-child strong{font-size:19px}.portraits{gap:13px}.creatorShortcut{width:68px}.portrait,.morePortrait{width:65px;height:65px}.legend strong{margin-left:0}}
 
 .rankings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:18px}@media(max-width:800px){.rankings{grid-template-columns:minmax(0,1fr);gap:16px}}
+
+
+/* Compact layout retains the existing FLIRT palette and live reporting data. */
+.hero.hero { display:flex; flex-direction:column; align-items:stretch; gap:18px; min-height:0; padding:0; border:0; border-radius:0; background:none; overflow:visible; }
+.heroCopy { width:100%; max-width:none; }
+.heroCopy h1 { font-size:clamp(28px,2.8vw,36px); line-height:1.2; font-weight:700; }
+.heroCopy>span { display:block; margin-top:7px; font-size:14px; }
+.creatorDisplay { container-type:normal; width:100%; max-width:none; padding:14px 18px; border-radius:16px; background:var(--overview-tint); }
+.portraits { justify-content:flex-start; align-items:center; gap:20px; width:100%; overflow-x:auto; padding:3px; }
+.creatorShortcut { display:flex; flex:0 0 auto; flex-direction:row; width:auto; max-width:160px; gap:10px; }
+.portrait,.morePortrait { width:52px; height:52px; border-width:2px; box-shadow:none; flex-shrink:0; }
+.morePortrait { background:var(--overview-panel); color:var(--overview-accent); }
+.creatorShortcut>span:last-child { width:auto; font-size:13px; }
+.portraits>a { margin-left:auto; }
+.creatorCount { display:none; }
+.hero:has(.selectedPortrait) { flex-direction:row; align-items:center; }
+.selectedPortrait { width:64px; height:64px; border-radius:50%; transform:none; box-shadow:none; }
+.metric,.panel { border-radius:16px; }
+.metric:first-child strong { font-size:clamp(30px,3vw,38px); }
+@media(max-width:650px) {
+ .page { padding:16px 14px 24px; }
+ .hero.hero { gap:14px; }
+ .heroCopy h1 { font-size:28px; }
+ .heroCopy>span { font-size:13px; }
+ .creatorDisplay { padding:12px; }
+ .portraits { gap:16px; }
+ .creatorShortcut { flex-direction:column; max-width:72px; gap:6px; }
+ .creatorShortcut>span:last-child { max-width:72px; font-size:11px; }
+ .creatorShortcut:nth-child(n+4):not(:last-child) { display:none; }
+ .metrics>.metric:first-child { grid-column:1/-1; padding:20px; }
+ .metric:first-child strong { font-size:36px; }
+ .selectedPortrait { position:static; opacity:1; width:56px; height:56px; }
+}
+.hero.hero { flex-wrap:nowrap; }
+.heroCopy,.creatorDisplay { flex:0 0 auto; min-width:0; }
+.hero:has(.selectedPortrait) .heroCopy { flex:1; width:auto; }
+.portraits { flex-wrap:nowrap; }
