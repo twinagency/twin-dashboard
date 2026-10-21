@@ -107,7 +107,7 @@ jobs:
         run: npx tsx scripts/check-marketing-access.ts
 
       - name: Moxy overview responsive and interaction checks
-        run: node scripts/check-moxy-overview-ui.mjs
+        run: node --import tsx scripts/check-moxy-overview-ui.mjs
         env:
           MOXY_REVIEW_OUT: test-results/moxy-overview
 
