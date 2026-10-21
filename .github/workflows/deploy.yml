@@ -89,7 +89,10 @@ jobs:
           node --import tsx scripts/check-agency-session.ts
           node --import tsx scripts/check-dashboard-performance.cjs
       - name: Owner authentication and existing master access
-        run: node --import tsx scripts/check-owner-auth.ts
+        run: |
+          node --import tsx scripts/check-owner-auth.ts
+          node scripts/check-agency-team.cjs
+          node --import tsx scripts/check-onlyfans-connection-status.ts
       - name: Moxy owner scope and retained partner permissions
         run: |
           node --import tsx scripts/check-moxy-owner-access.ts

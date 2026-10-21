@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { connectionState, CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
+import ConnectionSyncStatus from "./ConnectionSyncStatus";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
@@ -11,8 +13,6 @@ import { connectionCapture, connectionOwner, object, parseConnection, parseConne
 
 const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
-const STATUS = { unconfigured: "Credentials not saved", pending: "Awaiting worker verification", verified: "Identity verified",
-  failed: "Verification failed", expired: "Credentials expired", paused: "Connection paused" } as const;
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
 export default function ConnectionEditor({ accountId }: { accountId: string }) {
@@ -36,7 +36,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
   }, []);
   const dropRetry = useCallback(() => { retry.current = null; setHasRetry(false); }, []);
   useEffect(() => { active.current = true; return () => { active.current = false; capture.current = null; retry.current = null; }; }, []);
-  const read = useCallback(async () => {
+  const read = useCallback(async (updateForm = true) => {
     try {
       const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error" });
       if (!active.current) return false;
@@ -47,10 +47,15 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
       const next = response.ok ? parseConnection(await response.json(), accountId) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
-      setData(next); setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations);
+      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations); }
       return true;
     } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
+  useEffect(() => {
+    if (!open || denied) return;
+    const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitting.current) void read(false); }, 15000);
+    return () => window.clearInterval(timer);
+  }, [open, denied, read]);
   async function refresh() { setBusy(true); const ok = await read(); if (active.current) { setBusy(false); if (ok) setNotice(""); } }
 
   async function chooseCapture(file: File | undefined) {
@@ -116,6 +121,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
     void send(command);
   }
 
+  const state = connectionState(data);
   return <div className="mt-4 min-w-0 border-t border-line pt-4" data-of-connection-editor={accountId} onClick={event => event.stopPropagation()}>
     <button type="button" className={buttonClass} aria-expanded={open} disabled={busy || denied} data-of-connection-open
       onClick={() => { setOpen(!open); if (!open && !hasRetry) void refresh(); }}>Manage connection</button>
@@ -123,14 +129,16 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
       {notice ? <p role="status" className="mb-3 text-sm" data-of-connection-notice>{notice}</p> : null}
       {data && !denied ? <>
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs" data-of-connection-status>
-          <dt className="text-muted">Connection</dt><dd>{STATUS[data.status]}</dd><dt className="text-muted">Outgoing messages</dt><dd>{data.outgoingEnabled ? "Enabled" : "Disabled"}</dd>
-          <dt className="text-muted">Verified at</dt><dd className="break-words">{recordedTime(data.verifiedAt)}</dd><dt className="text-muted">Credential expiry</dt><dd className="break-words">{recordedTime(data.expiresAt)}</dd>
+          <dt className="text-muted">Connection</dt><dd>{data.status === "unconfigured" ? "Not connected" : CONNECTION_LABELS[state]}</dd><dt className="text-muted">Outgoing messages</dt><dd>{data.outgoingEnabled ? state === "connected" ? "Enabled" : "Waiting for verification" : "Disabled"}</dd>
+          <dt className="text-muted">Verified at</dt><dd className="break-words">{recordedTime(data.verifiedAt)}</dd><dt className="text-muted">Next verification deadline</dt><dd className="break-words">{recordedTime(data.expiresAt)}</dd>
           <dt className="text-muted">Used allowance</dt><dd>{data.usedUnits} / {data.limitUnits}</dd>
         </dl>
-        {data.lastError ? <p className="mt-2 text-xs text-muted">Provider verification failed. Replace the capture or request verification again.</p> : null}
+        <p className="mt-2 text-xs text-muted" data-of-connection-detail>{CONNECTION_DETAILS[state]}</p>
+        {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
+        <ConnectionSyncStatus connection={data} state={state} />
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>
-          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
+          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry || state === "retrying" || state === "checking" && data.verifiedAt !== null} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
         </div>
         <form className="mt-5" autoComplete="off" onSubmit={event => { event.preventDefault(); saveCapture(); }}>
@@ -140,7 +148,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
             <label className="block text-xs">Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>
             <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} onChange={event => setXHash(event.target.value)} required /></label>
             <label className="block text-xs">Fixed proxy URL (optional)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" value={proxy} onChange={event => setProxy(event.target.value)} /></label>
-            <label className="block text-xs">Credentials expire after<select data-of-connection-expiry className={inputClass} value={hours} onChange={event => setHours(event.target.value)}>{[1, 6, 12, 24].map(value => <option key={value} value={value}>{value} {value === 1 ? "hour" : "hours"}</option>)}</select></label>
+            <label className="block text-xs">Initial verification window<select data-of-connection-expiry className={inputClass} value={hours} onChange={event => setHours(event.target.value)}>{[1, 6, 12, 24].map(value => <option key={value} value={value}>{value} {value === 1 ? "hour" : "hours"}</option>)}</select></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-model-enabled type="checkbox" checked={modelEnabled} onChange={event => setModelEnabled(event.target.checked)} /><span>Attach a model credential for automated replies</span></label>
             {modelEnabled ? <>
               <label className="block text-xs">Saved reply model ID<input data-of-connection-model-id className={inputClass} value={modelId} onChange={event => setModelId(event.target.value)} required /></label>
@@ -152,7 +160,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
           </fieldset>
         </form>
         <form className="mt-5" onSubmit={event => { event.preventDefault(); activate(); }}>
-          <fieldset disabled={busy || hasRetry || data.status !== "verified"} className="min-w-0 space-y-3">
+          <fieldset disabled={busy || hasRetry || state !== "connected"} className="min-w-0 space-y-3">
             <legend className="mb-2 text-sm font-semibold">2. Enable verified account</legend>
             <label className="block text-xs">Total send allowance, including {data.usedUnits} already used<input data-of-connection-limit className={inputClass} type="number" min={Math.max(1, data.usedUnits)} max={10000} step={1} value={limit} onChange={event => setLimit(event.target.value)} required /></label>
             <label className="block text-xs">Minimum seconds between sends<input data-of-connection-throttle className={inputClass} type="number" min={1} max={86400} step={1} value={throttle} onChange={event => setThrottle(event.target.value)} required /></label>
@@ -160,7 +168,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-automate-new type="checkbox" checked={automateNew} onChange={event => setAutomateNew(event.target.checked)} /><span>Automatically reply to new conversations</span></label>
             <p className="text-xs text-muted">Automatic replies require a saved matching model credential and creator settings. This option applies to new conversations received after activation; existing paused, takeover and no-contact conversations keep their saved state.</p>
             <p className="text-xs text-muted">Enabling outgoing permits this account’s worker to send messages within these limits. Used allowance is retained.</p>
-            <button type="submit" className={buttonClass} data-of-connection-activate disabled={data.status !== "verified"}>Enable outgoing messages</button>
+            <button type="submit" className={buttonClass} data-of-connection-activate disabled={state !== "connected"}>Enable outgoing messages</button>
           </fieldset>
         </form>
       </> : null}

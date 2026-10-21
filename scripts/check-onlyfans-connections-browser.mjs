@@ -30,14 +30,14 @@ export async function checkConnections(page, context, origin) {
   await page.unroute("**/api/onlyfans/accounts?*",delayedAccounts);
   const editor = card.locator(`[data-of-connection-editor="${accountId}"]`);
   await editor.locator("[data-of-connection-open]").click();
-  await editor.locator("[data-of-connection-status]").getByText("Credentials not saved", { exact: true }).waitFor();
+  await editor.locator("[data-of-connection-status]").getByText("Not connected", { exact: true }).waitFor();
   await editor.locator("[data-of-connection-capture]").setInputFiles(captureFile);
   await editor.locator("[data-of-connection-hash]").fill("synthetic-browser-only-hash");
   assert.equal(await editor.locator("[data-of-connection-hash]").getAttribute("type"), "password");
   await editor.locator("[data-of-connection-save]").click();
   const notice = editor.locator("[data-of-connection-notice]");
   await notice.filter({ hasText: "Credential save recorded." }).waitFor();
-  await editor.locator("[data-of-connection-status]").getByText("Awaiting worker verification", { exact: true }).waitFor();
+  await editor.locator("[data-of-connection-status]").getByText("Checking saved login", { exact: true }).waitFor();
   assert.equal(await editor.locator("[data-of-connection-hash]").inputValue(), "");
   assert.equal(await editor.locator("[data-of-connection-capture]").inputValue(), "");
   assert(await editor.locator("[data-of-connection-activate]").isDisabled(), "unverified account offered outgoing activation");
@@ -62,7 +62,7 @@ export async function checkConnections(page, context, origin) {
   await notice.filter({ hasText: "Verification requested." }).waitFor(); page.off("request", captureRequest);
   assert.equal(retried, requests[0], "connection retry changed the exact original command");
   await editor.locator("[data-of-connection-pause]").click(); await notice.filter({ hasText: "Pause recorded." }).waitFor();
-  await editor.locator("[data-of-connection-status]").getByText("Connection paused", { exact: true }).waitFor();
+  await editor.locator("[data-of-connection-status]").getByText("Paused", { exact: true }).waitFor();
   const refused = await page.evaluate(async endpoint => {
     const connection = (await (await fetch(endpoint)).json()).connection;
     return (await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" },

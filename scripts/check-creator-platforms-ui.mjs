@@ -75,6 +75,16 @@ try {
  assert.match(await page.locator('[data-platform-account]').innerText(),/Outgoing messages disabled/);
  assert.equal(await page.getByRole('link',{name:'View conversations'}).getAttribute('href'),'/creator/onlyfans/inbox?account=of-123');
  await page.screenshot({path:out+'/connected.png',fullPage:true});
+ snapshot.onlyfans.accounts[0].connection={...snapshot.onlyfans.accounts[0].connection,verifiedAt:new Date(Date.now()-3600000).toISOString(),lastError:'provider_connection_check_retry',expiresAt:new Date(Date.now()-1000).toISOString(),
+   sync:{discoveryStatus:'running',pages:0,conversationsComplete:0,conversationsRemaining:0,pendingMessages:0,quarantinedMessages:0,recoveryRequired:true,lastCompleteSyncAt:null}};
+ await page.getByRole('button',{name:'Refresh status',exact:true}).click();
+ await page.getByText('Temporarily unavailable',{exact:true}).waitFor();
+ await page.getByText('Waiting for connection',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Reconnect OnlyFans',exact:true}).count(),0,'A renewable verification timeout does not force another login');
+ assert.match(await page.locator('[data-of-sync-progress]').innerText(),/Not completed yet/);
+ assert.equal(await page.locator('[data-connection-state=connected]').count(),0,'A failed verification is not displayed as healthy');
+ for(const width of [390,1440]){await page.setViewportSize({width,height:1000});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Retry/progress view must fit mobile');await page.screenshot({path:out+'/retrying-'+width+'.png',fullPage:true});}
+ snapshot.onlyfans.accounts[0].connection.verifiedAt=null;snapshot.onlyfans.accounts[0].connection.lastError=null;
  snapshot.onlyfans.accounts[0].connection.expiresAt=new Date(Date.now()-1000).toISOString();
  await page.getByRole('button',{name:'Refresh status'}).click();
  await page.getByRole('button',{name:'Reconnect OnlyFans',exact:true}).waitFor();

@@ -1,29 +1,40 @@
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
-import { isAuthed } from "@/lib/auth";
-import { supabaseAdmin } from "@/lib/supabase";
+import { hasInternalAdminAccess } from "@/lib/internal-admin";
+import { serviceClient } from "@/lib/supabase-service";
+import { parseAgencyMemberCommand } from "@/lib/agency-member-management";
+
 export async function POST(req: NextRequest) {
-  if (!await isAuthed()) return new NextResponse("Unauthorized", { status: 401 });
-  if (!trustedFormOrigin(req)) return new NextResponse("Forbidden",{status:403});
-  const fd = await req.formData();
-  const agencyId = String(fd.get("agency") ?? "");
-  const email = String(fd.get("email") ?? "").trim().toLowerCase();
-  const password = String(fd.get("password") ?? "");
-  const operation = String(fd.get("operation") ?? "");
-  const done = (result:string) => NextResponse.redirect(new URL(`/agency-admin?result=${result}`,dashboardOrigin(req)),303);
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length>254 || !/^[0-9a-f-]{36}$/i.test(agencyId)) return done("error");
-  const agency = await supabaseAdmin.from("partner_agencies").select("id").eq("id",agencyId).eq("active",true).maybeSingle();
+  if (!await hasInternalAdminAccess()) return new NextResponse("Unauthorized", { status: 401 });
+  if (!trustedFormOrigin(req) || ![null,"same-origin"].includes(req.headers.get("sec-fetch-site"))) return new NextResponse("Forbidden", {status:403});
+  let command: ReturnType<typeof parseAgencyMemberCommand>;
+  try { command = parseAgencyMemberCommand(await req.formData()); } catch { command = null; }
+  const done = (result:string) => {
+    const target = new URL("/agency-admin", dashboardOrigin(req));
+    target.searchParams.set("result",result);
+    if (command) target.searchParams.set("agency",command.agencyId);
+    return NextResponse.redirect(target,303);
+  };
+  if (!command) return done("error");
+  const db = serviceClient();
+  const agency = await db.from("partner_agencies").select("id").eq("id",command.agencyId).eq("active",true).maybeSingle();
   if (agency.error || !agency.data) return done("error");
-  if (operation === "revoke") {
-    const result = await supabaseAdmin.from("agency_memberships").update({active:false}).eq("agency_id",agencyId).eq("email",email).select("user_id");
-    return done(!result.error && result.data?.length ? "revoked":"error");
+  if (command.operation !== "create") {
+    let query = db.from("agency_memberships").update(command.operation === "revoke" ? {active:false}
+      : {active:true,can_manage:command.canManage}).eq("agency_id",command.agencyId).eq("email",command.email);
+    if (command.userId) query = query.eq("user_id",command.userId);
+    if (command.expectedActive !== undefined) query = query.eq("active",command.expectedActive);
+    if (command.expectedCanManage !== undefined) query = query.eq("can_manage",command.expectedCanManage);
+    const result = await query.select("user_id");
+    return done(!result.error && result.data?.length === 1 ? command.operation === "revoke" ? "revoked" : "updated" : "conflict");
   }
-  if (operation!=="create" || password.length<16 || password.length>256) return done("error");
-  const created = await supabaseAdmin.auth.admin.createUser({email,password,email_confirm:true});
+  // Preserve the existing password-based provisioning flow. This sends no invitation email.
+  const created = await db.auth.admin.createUser({email:command.email,password:command.password,email_confirm:true});
   if (created.error || !created.data.user) return done("error");
-  const membership = await supabaseAdmin.from("agency_memberships").insert({agency_id:agencyId,user_id:created.data.user.id,email,active:true});
+  const membership = await db.from("agency_memberships").insert({agency_id:command.agencyId,user_id:created.data.user.id,
+    email:command.email,active:true,can_manage:command.canManage});
   if (membership.error) {
-    await supabaseAdmin.auth.admin.deleteUser(created.data.user.id);
+    await db.auth.admin.deleteUser(created.data.user.id);
     return done("error");
   }
   return done("created");

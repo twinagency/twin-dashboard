@@ -6,6 +6,8 @@ import BrowserConnect from "./BrowserConnect";
 import HostedConnect from "./HostedConnect";
 import SessionConnect from "./SessionConnect";
 import styles from "./CreatorPlatforms.module.css";
+import { CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
+import ConnectionSyncStatus from "@/components/onlyfans-preview/ConnectionSyncStatus";
 import { activePlatformEnrollment, parseCreatorPlatforms, platformConnectionState, type CreatorPlatforms as Snapshot, type PlatformChannel } from "@/lib/creator-platforms/model";
 
 export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
@@ -46,10 +48,10 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     if(completed){setConnecting(false);setNotice("Your OnlyFans is connected.");opener.current?.focus();}
   },[connecting,data.onlyfans.enrollments,data.onlyfans.accounts,statusFresh,now]);
   useEffect(()=>{
-    if(!pending&&!connecting)return;
-    const timer=window.setInterval(()=>{if(document.visibilityState==='visible'&&!submitting.current)void refresh();},10000);
+    if(!pending&&!connecting&&!data.onlyfans.accounts.length)return;
+    const timer=window.setInterval(()=>{if(document.visibilityState==='visible'&&!submitting.current)void refresh();},pending||connecting?10000:30000);
     return()=>window.clearInterval(timer);
-  },[pending,connecting,refresh]);
+  },[pending,connecting,refresh,data.onlyfans.accounts.length]);
   useEffect(()=>{
     const check=()=>{if(document.visibilityState==="visible"&&!submitting.current)void refresh();};
     window.addEventListener("focus",check);document.addEventListener("visibilitychange",check);return()=>{window.removeEventListener("focus",check);document.removeEventListener("visibilitychange",check);};
@@ -85,7 +87,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
       if(!active.current)return;
       if(channel==="onlyfans"){
         existingAttempts.current=new Set(current.onlyfans.enrollments.map(row=>row.id));
-        const reconnect=accountId?current.onlyfans.accounts.find(account=>account.id===accountId):current.onlyfans.accounts.find(account=>["reconnect","unavailable"].includes(platformConnectionState(account)));
+        const reconnect=accountId?current.onlyfans.accounts.find(account=>account.id===accountId):current.onlyfans.accounts.find(account=>["reconnect","attention"].includes(platformConnectionState(account)));
         setConnectingAccount(reconnect?.id??null);setConnecting(true);
       }
       else setNotice("Your Telegram setup is saved. Continue with your existing profile and content below.");
@@ -96,7 +98,8 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   const telegramSelected=data.requested.includes("telegram")||data.telegram.configured;
   const isConnected=(account:Snapshot["onlyfans"]["accounts"][number])=>platformConnectionState(account,now)==="connected";
   const verified=data.onlyfans.accounts.filter(isConnected);
-  const needsReconnect=data.onlyfans.accounts.some(account=>["reconnect","unavailable"].includes(platformConnectionState(account,now)));
+  const needsReconnect=data.onlyfans.accounts.some(account=>["reconnect","attention"].includes(platformConnectionState(account,now)));
+  const retrying=data.onlyfans.accounts.some(account=>["checking","retrying"].includes(platformConnectionState(account,now)));
   const paused=data.onlyfans.accounts.length>0&&data.onlyfans.accounts.every(account=>platformConnectionState(account,now)==="paused");
   const telegramHref=data.telegram.configured?"/creator/edit":"/creator/onboarding?step=questionnaire";
   const initials=data.creatorName.trim().split(/\s+/).slice(0,2).map(part=>part[0]).join("").toUpperCase();
@@ -111,25 +114,27 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     <div className={styles.cards}>
       <section className={styles.card} data-platform-onlyfans>
         <div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={48} height={48} alt="" aria-hidden="true"/><h2>OnlyFans</h2>
-          {statusFresh&&verified.length>0&&!needsReconnect&&<span className={styles.badge} data-state="connected"><Check size={13}/>Connected</span>}
+          {statusFresh&&verified.length>0&&!needsReconnect&&!retrying&&<span className={styles.badge} data-state="connected"><Check size={13}/>Connected</span>}
+          {statusFresh&&retrying&&<span className={styles.badge} data-state="attention">Retrying connection</span>}
           {statusFresh&&paused&&<span className={styles.badge} data-state="attention">Paused</span>}
         </div>
-        <div className={styles.cardCopy}><h3>{!statusFresh?"Let’s check your connection.":paused?"Your OnlyFans is paused.":verified.length>0&&!needsReconnect?"Your OnlyFans is connected.":needsReconnect?"Let’s reconnect your account.":"Your OnlyFans, in your space."}</h3><p>{paused?"Your account is linked. Your agency controls when replies resume.":verified.length>0&&!needsReconnect?"Your account is linked to your existing Twin profile.":"Bring your account into your Twin space."}</p></div>
+        <div className={styles.cardCopy}><h3>{!statusFresh?"Let’s check your connection.":retrying?"Your connection is being checked.":paused?"Your OnlyFans is paused.":verified.length>0&&!needsReconnect?"Your OnlyFans is connected.":needsReconnect?"Let’s reconnect your account.":"Your OnlyFans, in your space."}</h3><p>{retrying?"Twin is checking the saved login automatically.":paused?"Your account is linked. Your agency controls when replies resume.":verified.length>0&&!needsReconnect?"Your account is linked to your existing Twin profile.":"Bring your account into your Twin space."}</p></div>
         {data.onlyfans.status==="unavailable"&&<p role="status" className={styles.inlineNotice}>{data.onlyfans.error}</p>}
         {data.onlyfans.enrollments.slice(0,1).filter(row=>row.status!=="accepted").map(row=><p key={row.id} role="status" className={styles.inlineNotice} data-connection-request={row.status}>
           {activePlatformEnrollment(row,now)?<><LoaderCircle size={16} className={styles.spinner}/>Checking your account…</>:["expired","pending","checking"].includes(row.status)?"Your connection attempt expired. Try connecting again.":"We couldn’t verify your account. Please try again."}
         </p>)}
         <button className={styles.primaryButton} disabled={!!busy||data.readOnly||pending||!statusFresh||data.onlyfans.status==="unavailable"} onClick={()=>void choose("onlyfans")}>
-          {busy==="onlyfans"?<><LoaderCircle size={17} className={styles.spinner}/>Getting ready…</>:pending?"Checking your account…":needsReconnect?<>Reconnect OnlyFans<ArrowRight size={17}/></>:verified.length||paused?<>Connect another account<ArrowRight size={17}/></>:<>Connect OnlyFans<ArrowRight size={17}/></>}
+          {busy==="onlyfans"?<><LoaderCircle size={17} className={styles.spinner}/>Getting ready…</>:pending?"Checking your account…":needsReconnect?<>Reconnect OnlyFans<ArrowRight size={17}/></>:data.onlyfans.accounts.length?<>Connect another account<ArrowRight size={17}/></>:<>Connect OnlyFans<ArrowRight size={17}/></>}
         </button>
-        <p className={styles.helper}>{verified.length?"Your saved profile and content stay with you.":"Sign in to continue."}</p>
+        <p className={styles.helper}>{data.onlyfans.accounts.length?"Your saved profile and content stay with you.":"Sign in to continue."}</p>
         {data.onlyfans.accounts.map(account=>{
           const state=platformConnectionState(account,now),connected=statusFresh&&isConnected(account);
-          const status=!statusFresh?"Status needs refresh":({connected:"Connected",paused:"Paused",checking:"Checking account",reconnect:"Reconnect needed",unavailable:"Status unavailable"} as const)[state];
+          const status=!statusFresh?"Status needs refresh":CONNECTION_LABELS[state];
           return <div key={account.id} className={styles.account} data-platform-account={account.id}>
             <div className={styles.accountTitle}><strong>@{account.handle.replace(/^@/,"")}</strong><span data-connection-state={connected?"connected":"attention"}>{status}</span></div>
-            <p>{!statusFresh?"Refresh status to confirm this account’s latest connection.":state==="paused"?"Your account is linked. Sending is paused.":connected?"Conversation history appears as it syncs.":"Refresh the connection to continue."}</p>
-            {statusFresh&&["reconnect","unavailable"].includes(state)&&<button type="button" className={styles.textLink} disabled={!!busy||data.readOnly||pending} onClick={()=>void choose("onlyfans",account.id)} aria-label={`Reconnect @${account.handle.replace(/^@/,"")}`}>Reconnect this account<RefreshCw size={14}/></button>}
+            <p>{!statusFresh?"Refresh status to confirm this account’s latest connection.":CONNECTION_DETAILS[state]}</p>
+            {statusFresh&&account.connection?<ConnectionSyncStatus connection={account.connection} state={state}/>:null}
+            {statusFresh&&["reconnect","attention"].includes(state)&&<button type="button" className={styles.textLink} disabled={!!busy||data.readOnly||pending} onClick={()=>void choose("onlyfans",account.id)} aria-label={`Reconnect @${account.handle.replace(/^@/,"")}`}>Reconnect this account<RefreshCw size={14}/></button>}
             <Link className={styles.textLink} href={`/creator/onlyfans/inbox?account=${encodeURIComponent(account.id)}`}>View conversations<ChevronRight size={15}/></Link>
             <p className={styles.helper}>{!statusFresh?"Sending status needs refresh":connected&&account.connection?.outgoingEnabled?"Outgoing messages enabled":"Outgoing messages disabled"}</p>
           </div>;
