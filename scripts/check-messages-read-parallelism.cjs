@@ -23,6 +23,7 @@ const deps={
 function load(file){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;const mod={exports:{}};
  new Function('require','module','exports',js)(name=>{
   if(deps[name])return deps[name];
+  if(name==='@/components/users/ChatThread')return {__esModule:true,default:props=>React.createElement('div',{'data-thread':JSON.stringify({messages:props.messages,fanId:props.fanId,spentStars:props.spentStars,purchasedCount:props.purchasedCount})},props.historyNavigation)};
   if(name.startsWith('@/components/'))return new Proxy({__esModule:true,default:tag},{get:(o,k)=>k in o?o[k]:tag});
   if(name.startsWith('@/lib/'))return require(path.join(root,name.slice(2)));
   return require(name);
@@ -33,7 +34,7 @@ function load(file){const js=ts.transpileModule(fs.readFileSync(file,'utf8'),{co
  assert(overlap,'History, routing and unlock queries must start before any of those reads finish');
  assert.equal(started.has('fan_profiles'),true,'Selected fan profile still fetched');
  const html=renderToStaticMarkup(tree);
- assert(html.includes('Fixture Fan'));assert(html.includes('Fixture Creator'));
+ assert(html.includes('Fixture Fan'));assert(html.includes('Fixture Creator'));assert(html.includes('Fixture history'),'Selected conversation content retained');
  if(process.env.BASELINE_PAGE_PATH){const baseline=await load(process.env.BASELINE_PAGE_PATH)({searchParams:Promise.resolve({})});assert.equal(renderToStaticMarkup(baseline),html,'Rendered fan list, history, controls and totals remain identical')}
  console.log('Messages reads: conversation, routing and paged unlocks overlap; existing fan, creator and profile rendering retained');
 })().catch(e=>{console.error(e);process.exitCode=1});
