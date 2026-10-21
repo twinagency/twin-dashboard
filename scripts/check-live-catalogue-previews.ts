@@ -12,7 +12,7 @@ async function main(){
  // This smoke check only prepares/reads private preview derivatives. It never sends media or charges a fan.
  const db=serviceClient();
  const inventory=await readCatalogueInventory(db),inventoryOnly=process.argv.includes('--inventory-only');
- const maxRunMs=Number(process.env.CATALOGUE_PREVIEW_MAX_MS||360000);
+ const maxRunMs=Number(process.env.CATALOGUE_PREVIEW_MAX_MS||1800000);
  if(!Number.isFinite(maxRunMs)||maxRunMs<1000||maxRunMs>1800000)throw new Error('Invalid audit duration');
  async function check(item:AuditVideo,blur:number){
    const dir=await mkdtemp(join(tmpdir(),'preview-check-'));

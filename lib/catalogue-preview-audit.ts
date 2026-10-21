@@ -42,7 +42,7 @@ export async function readCatalogueInventory(db: Pick<SupabaseClient, 'from'>): 
 export async function auditCataloguePreviews(inventory: CatalogueInventory,
   check: (video: AuditVideo, blur: number) => Promise<void>,
   options: { inventoryOnly?: boolean; maxRunMs?: number; now?: () => number; onProgress?: (value: unknown) => void } = {}) {
-  const now = options.now ?? Date.now, started = now(), maxRunMs = options.maxRunMs ?? 360_000;
+  const now = options.now ?? Date.now, started = now(), maxRunMs = options.maxRunMs ?? 1_800_000;
   if (!Number.isFinite(maxRunMs) || maxRunMs <= 0) throw new Error('Audit duration must be positive.');
   const results = inventory.creators.map(creator => ({ creatorId: creator.id, slug: creator.slug,
     videos: 0, checked: 0, passed: 0, failed: 0, status: 'no_videos' as 'no_videos' | 'not_checked' | 'passed' | 'failed' | 'incomplete' }));
@@ -54,6 +54,15 @@ export async function auditCataloguePreviews(inventory: CatalogueInventory,
     const owner = owners.get(video.clone_id);
     if (!owner) { failures.push({ creatorId: video.clone_id, videoId: video.id, stage: 'inventory', reason: 'unknown_creator' }); continue; }
     owner.videos++; owner.status = 'not_checked'; queue.push(video);
+  }
+  // Visit each creator before a large library can consume the entire run.
+  const grouped = new Map(results.map(row => [row.creatorId, [] as AuditVideo[]]));
+  for (const video of queue) grouped.get(video.clone_id)!.push(video);
+  queue.length = 0;
+  let active = [...grouped.values()].filter(videos => videos.length);
+  for (let index = 0; active.length; index++) {
+    for (const videos of active) queue.push(videos[index]);
+    active = active.filter(videos => videos.length > index + 1);
   }
   let next = 0;
   async function worker() {

@@ -52,6 +52,9 @@ async function main() {
     let clock = 0;
     const bounded = await auditCataloguePreviews(inventory, async () => { clock += 10; }, { now: () => clock, maxRunMs: 15 });
     assert.equal(bounded.verificationComplete, false); assert(bounded.unchecked > 0); assert(bounded.results.some(c => c.status === 'incomplete'));
+    clock = 0; const firstVisit = [];
+    await auditCataloguePreviews(inventory, async video => { firstVisit.push(video.clone_id); clock++; }, { now: () => clock, maxRunMs: 3 });
+    assert.deepEqual(new Set(firstVisit), new Set(['a', 'b', 'd']), 'Every non-empty creator is visited before another pass through a large library');
     const orphan = await auditCataloguePreviews({ ...inventory, videos: [{ id: 'orphan', clone_id: 'missing', storage_path: 'hidden' }] }, async () => {});
     assert.equal(orphan.failed, 1); assert.equal(orphan.failures[0].reason, 'unknown_creator');
     outage = true; await assert.rejects(() => readCatalogueInventory(db), /inventory unavailable/); outage = false;
