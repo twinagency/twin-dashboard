@@ -1,5 +1,5 @@
 {
-  "reason": "Immediate navigation and pagination feedback, streaming page loading, intent prefetch and reuse of scoped Creators thumbnails; preserve existing FLIRT layout, data routing and authentication.",
-  "source_commit": "c76db0dcee3746c04c337636d19a1fedc50a1431",
-  "requested_at": "2026-10-21T14:49:41.820Z"
+  "reason": "Add Johnny Coco (@johnnycocox) to the FLIRT operator creator scope, using his existing live Twin record and profile portrait.",
+  "source_commit": "9d0a05b142f53098ef7d7f56077fe0d7b9bfd39a",
+  "requested_at": "2026-10-21T17:47:04.849Z"
 }
