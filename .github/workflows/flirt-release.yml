@@ -39,6 +39,10 @@ jobs:
       - run: npm ci
       - name: Default agency homepage and creator navigation
         run: node --import tsx scripts/check-flirt-overview-navigation.tsx
+      - name: Shared overview desktop and mobile interactions
+        run: |
+          npx playwright install --with-deps chromium
+          node --import tsx scripts/check-shared-overview-ui.mjs
       - name: Private creator onboarding review link
         run: node scripts/check-onboarding-review.cjs
       - run: npx tsc --noEmit
@@ -125,4 +129,3 @@ jobs:
 
       - name: Verify live Overview rankings and selected creator images
         run: python3 -c "import runpy; runpy.run_path('deployment/flirt-optional-live-check.py')['main']('flirt-overview-live-check.cjs')"
-

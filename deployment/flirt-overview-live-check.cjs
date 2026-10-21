@@ -32,13 +32,12 @@ async function request(path,options={}){return fetch(origin+path,{redirect:'manu
  const response=await read('/revenue?clone='+id);const html=await response.text();
  assert(response.ok&&html.includes('data-creator-overview="'+id+'"'),'Live Overview page failed');
  assert(html.includes('All creators overview'),'Individual Overview must expose its return to All creators');
- assert((html.match(/data-photo-id="/g)||[]).length===5,'Live page must render the portrait, banner and three library photos');
- assert(html.includes('Top fans')&&html.includes('Best-selling content'),'Live ranking panels missing');
+ assert(html.includes('data-shared-overview="flirt"')&&html.includes('Dashboard overview'),'Shared layout must render the selected creator');
+ assert(html.includes('Earnings overview')&&html.includes('Revenue performance')&&html.includes('Recent purchases')&&html.includes('Detailed reporting'),'Shared reporting sections missing');
  assert(!monthly.rankingsError&&monthly.rankings?.fans.length&&monthly.rankings?.content.length,'Live payment rankings unavailable');
  assert(monthly.rankings.fans.some(f=>f.cloneId===id),'Selected creator top fans unavailable');
  assert(monthly.rankings.content.some(c=>c.cloneId===id&&c.purchases>0),'Selected creator content ranking unavailable');
- assert(html.includes('Total fans')&&html.includes('OnlyFans')&&html.includes('WhatsApp')&&html.includes('Not connected'),'Expected summary and connection states');
- checks.push('Live Overview renders distinct photographs, live rankings and summary cards');
+ assert(html.includes('Total fans')&&html.includes('Reporting period')&&html.includes('Custom dates'),'Expected summary and date controls');
+ checks.push('Live Overview renders shared profile, reporting controls, charts and summary cards');
  console.log(JSON.stringify({passed:true,creator:overview.presentation.name,all_time_fans:overview.audience.total,period:'1M',net_stars:stats.stars,purchases:stats.sales,chart_matches_total:true,checks,credentials_logged:false}));
 })().catch(e=>{console.log(JSON.stringify({passed:false,error:e.message,checks,credentials_logged:false}));process.exitCode=1});
-
