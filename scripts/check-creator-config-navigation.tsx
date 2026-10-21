@@ -114,6 +114,9 @@ async function main() {
   const studio = compile("components/clone/CreatorStudio.tsx", { "./CreatorStudio.module.css": { __esModule: true, default: css } });
   const Component = compile("components/CloneForm.tsx", {
     "./DashboardAccessProvider": access,
+    "@/lib/twin-agency-refresh": compile("lib/twin-agency-refresh.ts", {}),
+    "@/components/NavigationLink": { __esModule: true, default: ({ children, ...props }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => <a {...props}>{children}</a> },
+    "./CreatorAvatar": { __esModule: true, default: ({ name }: { name: string }) => <span>{name}</span> },
     "./clone/CreatorStudio": studio,
     "./clone/CreatorStudio.module.css": { __esModule: true, default: css },
     "./clone/intelligence/model": intelligenceModel,
