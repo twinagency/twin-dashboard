@@ -79,6 +79,8 @@
     "test:creator-flow": "node scripts/check-creator-flow-ui.cjs && node scripts/check-creator-onboarding-failures.cjs && node scripts/check-creator-flow-presentation.cjs && node scripts/check-moxy-optional-progress.cjs && node scripts/check-creator-questionnaire-compact.cjs && node scripts/check-creator-inline-consent.cjs && node scripts/check-creator-setup-ui.cjs && node scripts/check-creator-combined-content.cjs && node scripts/check-creator-content-folders.cjs",
     "test:creator-storage-transport": "node scripts/check-creator-storage-transport.cjs",
     "test:creator-gallery": "node --import tsx scripts/check-creator-gallery.ts && node scripts/check-creator-gallery-ui.cjs",
+    "test:creator-preparation": "node scripts/check-creator-preparation.cjs",
+    "test:core-workspace": "node scripts/check-core-workspace-ui.mjs",
     "test:creator-upload-receipts": "node --import tsx scripts/check-creator-upload-receipts.ts",
     "test:agency-sequences": "node --import tsx scripts/check-agency-sequences.ts",
     "test:fan-workspace": "tsx scripts/check-fan-workspace.tsx && npm run test:creator-dashboard && npm run test:content-library && npm run test:inbox && npm run test:campaigns && npm run test:intelligence-controls",

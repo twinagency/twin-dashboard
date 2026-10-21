@@ -12,16 +12,18 @@ const labels:Record<string,string>={receiving:"Transferring files",pending:"Queu
 export default function VaultUploader({accountId,connectionRevision,onChanged}:{accountId:string;connectionRevision:number|null;onChanged:()=>void}){
   const router=useRouter(),base=`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/vault/uploads`;
   const [data,setData]=useState<UploadRead|null>(null),[files,setFiles]=useState<File[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(""),[denied,setDenied]=useState(false);
-  const [progress,setProgress]=useState<{fileId:string;bytes:number}|null>(null);
+  const [progress,setProgress]=useState<{fileId:string;bytes:number}|null>(null),[statusNotice,setStatusNotice]=useState("");
   const live=useRef(false),controller=useRef<AbortController|null>(null),inFlight=useRef(false),known=useRef<Map<string,string>|null>(null);
   const createRequest=useRef<{requestId:string;expectedConnectionRevision:number;files:Array<{fileId:string;name:string;size:number}>}|null>(null);
+  const reading=useRef(false),authLost=useRef(false);
   const actions=useRef(new Map<string,string>()),changed=useRef(onChanged);changed.current=onChanged;
   const request=useCallback(async(url:string,options:RequestInit={})=>{
+    if(authLost.current)throw Error("Sign in again before uploading media.");
     let response:Response;
-    try{response=await fetch(url,{...options,credentials:"same-origin",cache:"no-store",redirect:"error",signal:controller.current?.signal});}
+    try{response=await fetch(url,{...options,credentials:"same-origin",cache:"no-store",redirect:"error",signal:AbortSignal.any([...(controller.current?[controller.current.signal]:[]),AbortSignal.timeout(options.method==="POST"?60000:12000)])});}
     catch{throw Error("The transfer was not confirmed. Refresh its progress and resume the same upload.");}
     if([401,403].includes(response.status)){
-      if(live.current){setDenied(true);setFiles([]);setData(null);setNotice("Sign in again before uploading media.");controller.current?.abort();router.refresh();}
+      authLost.current=true;if(live.current){setDenied(true);setFiles([]);setData(null);setNotice("Sign in again before uploading media.");setStatusNotice("");controller.current?.abort();router.refresh();}
       throw Error("Sign in again before uploading media.");
     }
     let body:unknown;try{body=await response.json();}catch{throw Error("Upload status could not be verified. Refresh this upload before resuming.");}
@@ -29,14 +31,16 @@ export default function VaultUploader({accountId,connectionRevision,onChanged}:{
     return body;
   },[router]);
   const read=useCallback(async()=>{
+    if(reading.current||authLost.current)return null;reading.current=true;
     try{
       const value=parseUploads(await request(base),accountId);if(!value)throw Error("Upload status could not be verified.");
       if(!live.current)return null;
-      if(known.current){for(const job of value.jobs){const previous=known.current.get(job.jobId);if(previous&&active.has(previous)&&!active.has(job.status))changed.current();}}
-      known.current=new Map(value.jobs.map(job=>[job.jobId,job.status]));setData(value);return value;
-    }catch(error){if(live.current)setNotice(error instanceof Error?error.message:"Upload status is unavailable.");return null;}
+      if(known.current){for(const job of value.jobs){const previous=known.current.get(job.jobId);if(previous&&active.has(previous)&&!active.has(job.status)){changed.current();setNotice(job.status==='complete'?'Your files are uploaded. Check each file below for any remaining OnlyFans processing.':job.status==='failed'?'This batch finished with files needing review. Check each file below.':labels[job.status]??'This batch needs review.');}}}
+      known.current=new Map(value.jobs.map(job=>[job.jobId,job.status]));setData(value);setStatusNotice("");return value;
+    }catch(error){if(live.current&&!authLost.current)setStatusNotice(error instanceof Error?error.message:"Upload status is unavailable.");return null;}
+    finally{reading.current=false;}
   },[base,accountId,request]);
-  useEffect(()=>{live.current=true;controller.current=new AbortController();void read();const timer=setInterval(()=>void read(),3000);
+  useEffect(()=>{live.current=true;controller.current=new AbortController();void read();const timer=setInterval(()=>{if(document.visibilityState==='visible'&&!inFlight.current)void read();},3000);
     return()=>{live.current=false;controller.current?.abort();clearInterval(timer);};},[read]);
   async function command(job:string,action:"finish"|"cancel"){
     const key=job+":"+action;if(!actions.current.has(key))actions.current.set(key,crypto.randomUUID());
@@ -72,7 +76,7 @@ export default function VaultUploader({accountId,connectionRevision,onChanged}:{
           if(!live.current)throw Error("Upload closed");
           const bytes=await file.slice(offset,offset+MAX_CHUNK_BYTES).arrayBuffer(),digest=await hash(bytes);
           const result=await request(base+`/${job.jobId}/files/${entry.fileId}?offset=${offset}`,{method:"POST",headers:{"Content-Type":"application/octet-stream","X-Upload-SHA256":digest},body:bytes});
-          if(!result||typeof result!=="object"||!("receivedBytes" in result)||typeof result.receivedBytes!=="number"||result.receivedBytes<offset+bytes.byteLength)throw Error("Chunk progress was not confirmed. Refresh this upload before resuming.");
+          if(!result||typeof result!=="object"||!("receivedBytes" in result)||!("accountId" in result)||!("jobId" in result)||!("fileId" in result)||result.accountId!==accountId||result.jobId!==job.jobId||result.fileId!==entry.fileId||result.receivedBytes!==offset+bytes.byteLength)throw Error("Chunk progress was not confirmed. Refresh this upload before resuming.");
           if(live.current)setProgress({fileId:entry.fileId,bytes:result.receivedBytes});
         }
       }
@@ -89,6 +93,7 @@ export default function VaultUploader({accountId,connectionRevision,onChanged}:{
   return <section className="mt-4 min-w-0 rounded-xl border border-line p-4" aria-label="Upload to OnlyFans" data-of-vault-uploader>
     <div className="flex flex-wrap items-center justify-between gap-3"><h3 className="text-sm font-semibold">Upload photos and videos</h3><button className={button} type="button" disabled={busy||denied} onClick={()=>void read()}>Refresh uploads</button></div>
     {notice?<p className="mt-3 break-words text-sm" role="status">{notice}</p>:null}
+    {statusNotice&&!notice?<p className="mt-3 break-words text-sm" role="status">{statusNotice}</p>:null}
     {data&&!denied?<>
       {!data.enabled?<p className="mt-3 text-sm text-muted">Uploads are not enabled on this workspace yet.</p>:<>
         <label className="mt-4 block text-sm font-medium">Choose photos or videos<input className="mt-2 block w-full min-w-0 text-sm" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.gif,.mp4,.m4v,.mov,.webm,.mkv" disabled={busy||!!current&&current.status!=="receiving"}

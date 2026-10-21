@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';import {build} from 'esbuild';import {createServer} from 'node:http';import {mkdirSync,readFileSync} from 'node:fs';import {resolve} from 'node:path';import postcss from 'postcss';import tailwind from '@tailwindcss/postcss';import {chromium} from 'playwright';
 const root=process.cwd(),out=resolve('test-results/creator-platforms');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:null,requested:[],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',error:null,accounts:[],enrollments:[]}};
-let snapshot=structuredClone(initial),denied=false,lost=false;const posted=[];
+let snapshot=structuredClone(initial),denied=false,lost=false,statusUnavailable=false;const posted=[];
 const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';import Shell from './components/CreatorStudioShell';import {creatorStudioStatus} from './lib/creator-studio-model';createRoot(document.getElementById('root')).render(<Shell brand="moxy" creatorName="Fixture creator" status={creatorStudioStatus(false,"Draft / unfinished",null)} contentHref="/creator/onboarding?step=content"><Platforms initial={${JSON.stringify(initial)}}/></Shell>);`;
 const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'link',setup(b){b.onResolve({filter:/^next\/(link|navigation)$|\/CurrencyProvider$/},a=>({path:a.path,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({resolveDir:root,loader:'jsx',contents:a.path==='next/link'?`import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`:a.path==='next/navigation'?`export const usePathname=()=>'/creator/platforms';export const useRouter=()=>({refresh(){}});`:`export const useCurrency=()=>({currency:'AUD',setCurrency(){}});`}))}}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith('.js')).text;
@@ -11,6 +11,7 @@ const server=createServer(async(req,res)=>{try{
  if(path==='/bundle.js'){res.setHeader('Content-Type','text/javascript');return res.end(js)}if(path==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css)}
  if(path.startsWith('/creator-auth/')){
   res.setHeader('Content-Type','application/json');if(denied){res.statusCode=401;return res.end(JSON.stringify({error:'Sign in to your creator account again.'}))}
+  if(statusUnavailable&&req.method==='GET'){res.statusCode=503;return res.end('{}')}
   if(req.method==='POST'){let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);posted.push({path,raw,body});if(path==='/creator-auth/platforms'){snapshot={...snapshot,profileId:'canonical-creator',requested:body.channels};return res.end(JSON.stringify(snapshot))}
    if(lost){res.statusCode=500;return res.end('{}')}
    const enrollment={id:'request-1',status:'pending',accountId:null,error:null,expiresAt:new Date(Date.now()+3600000).toISOString()};snapshot.onlyfans.enrollments=[enrollment];return res.end(JSON.stringify({ok:true,enrollment}));
@@ -79,6 +80,12 @@ try {
  await page.getByRole('button',{name:'Reconnect OnlyFans',exact:true}).waitFor();
  assert.equal(await page.locator('[data-connection-state=connected]').count(),0,'An expired session never displays Connected');
  await page.screenshot({path:out+'/reconnect.png',fullPage:true});
+ snapshot.onlyfans.accounts[0].connection={status:'paused',expiresAt:new Date(Date.now()+3600000).toISOString(),outgoingEnabled:false};
+ await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByRole('heading',{name:'Your OnlyFans is paused.',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Reconnect OnlyFans',exact:true}).count(),0,'A paused account does not require another login');
+ snapshot.onlyfans.enrollments=[{id:'stale-attempt',status:'pending',accountId:null,error:null,expiresAt:new Date(Date.now()-1000).toISOString()}];
+ await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByText('Your connection attempt expired. Try connecting again.',{exact:true}).waitFor();assert(await page.getByRole('button',{name:'Connect another account',exact:true}).isEnabled(),'An expired pending attempt cannot lock connection setup');
+ statusUnavailable=true;await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByText('Your latest connection status could not be loaded. Please try again.',{exact:true}).waitFor();await page.getByText('Status needs refresh',{exact:true}).waitFor();
+ statusUnavailable=false;await page.getByRole('button',{name:'Refresh status',exact:true}).click();await page.getByText('Your latest connection status could not be loaded. Please try again.',{exact:true}).waitFor({state:'hidden'});await page.getByRole('heading',{name:'Your OnlyFans is paused.',exact:true}).waitFor();
  snapshot=structuredClone(initial);
  const phoneContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,userAgent:'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1'});
  const phone=await phoneContext.newPage();await routePage(phone);
