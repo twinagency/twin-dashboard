@@ -11,6 +11,8 @@ import tailwind from '@tailwindcss/postcss';
 const root=process.cwd(),out=resolve('test-results/creator-sign-in');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:'canonical-creator',requested:['onlyfans'],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',signIn:'hosted',error:null,accounts:[],enrollments:[]}};
 let snapshot,attempt,posted,expired,denied,lostConfirm,unavailableFrame,unavailableStatus;
+let inputGate=null,frameGate=null,framesStarted=0,framesCompleted=0,inputsCompleted=0;
+const gate=()=>{let release;const promise=new Promise(resolve=>{release=resolve});return {promise,release}};
 const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;unavailableFrame=false;unavailableStatus=false;};reset();
 async function until(check){for(let n=0;n<100;n++){if(check())return;await new Promise(r=>setTimeout(r,50));}assert(check(),'Expected fixture request was not received');}
 const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';import Shell from './components/CreatorStudioShell';import {creatorStudioStatus} from './lib/creator-studio-model';createRoot(document.getElementById('root')).render(<React.StrictMode><Shell brand="moxy" creatorName="Fixture creator" status={creatorStudioStatus(false,"Draft / unfinished",null)} contentHref="/creator/onboarding?step=content"><Platforms initial={${JSON.stringify(initial)}}/></Shell></React.StrictMode>);`;
@@ -31,16 +33,18 @@ const server=createServer(async(req,res)=>{try{
   if(path==='/creator-auth/platforms')return res.end(JSON.stringify(snapshot));
   if(expired&&req.method==='GET'){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
   if(unavailableStatus&&req.method==='GET'&&!url.searchParams.has('frame')){res.statusCode=503;return res.end(JSON.stringify({error:'Your sign-in status could not be loaded.'}))}
-  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/png');return res.end(png)}
+  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){framesStarted++;const held=frameGate;if(held)await held.promise;if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/png');framesCompleted++;return res.end(png)}
   if(req.method==='POST'){
    let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);posted.push(body);
    if(body.action==='cancel'&&expired){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
    if(body.action==='start'){expired=false;attempt={...attempt,id:randomUUID(),phase:'waiting',handle:null,keyboard:null,enrollmentId:null};}
    if(body.action==='input'){
+    if(inputGate)await inputGate.promise;
     if(body.input.type==='click')attempt.keyboard='email';
     if(body.input.key==='Tab')attempt.keyboard='password';
     // Deliberate variable response delay exposes out-of-order client dispatch.
     await new Promise(r=>setTimeout(r,body.input.type==='text'?80:15));
+    inputsCompleted++;
    }
    if(body.action==='confirm'){
     if(lostConfirm){lostConfirm=false;res.statusCode=503;return res.end(JSON.stringify({error:'Your connection could not be confirmed. Retry the same confirmation.'}))}
@@ -68,6 +72,7 @@ try{
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No horizontal overflow');
   await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.dataset.ready==='true');const bounds=await screen.boundingBox();assert(bounds.width>200&&bounds.height<=720,'Whole remote viewport is scaled without clipping');
   await screen.click({position:{x:bounds.width*.4,y:bounds.height*.2}});
+  await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
   const input=page.getByLabel('Type in the selected OnlyFans field');assert(await input.evaluate(el=>document.activeElement!==el),'Verification taps must not open the phone keyboard');await page.getByRole('button',{name:'Show keyboard',exact:true}).click();assert(await input.evaluate(el=>document.activeElement===el),'Typing remains available explicitly');await page.keyboard.type('fixture@example.test');
   await page.getByRole('button',{name:'Next field',exact:true}).click();
   await page.keyboard.type('fixture-password');await input.press('Backspace');
@@ -76,6 +81,27 @@ try{
   const inputs=posted.filter(b=>b.action==='input'&&b.input.type!=='login').map(b=>b.input);assert.equal(inputs[0].type,'click');assert(Math.abs(inputs[0].x-.4)<.01&&Math.abs(inputs[0].y-.2)<.01,'Click maps to the provider viewport');
   assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
   await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});assert(await input.evaluate(el=>document.activeElement!==el),'Tapping verification dismisses an already-open keyboard');const refreshedBounds=await screen.boundingBox();assert(Math.abs(refreshedBounds.width-bounds.width)<1&&Math.abs(refreshedBounds.x-bounds.x)<1,'High-resolution refresh does not resize or move the verification frame');const closeBounds=await page.getByRole('button',{name:'Close connection setup'}).boundingBox(),backBounds=await page.getByRole('button',{name:'Back to sign-in',exact:true}).boundingBox();assert(closeBounds.y>=0&&backBounds.y+backBounds.height<=844,'Close and verification controls remain in the viewport');await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
+  await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+  // Hold an old frame across an input ACK, then hold the replacement frame.
+  // No tap/scroll may queue against either screen until the replacement is painted.
+  const oldFrame=gate(),newFrame=gate(),action=gate();frameGate=oldFrame;inputGate=action;
+  const beforeFrames=framesStarted,beforeInputs=posted.filter(b=>b.action==='input').length,beforeCompleted=inputsCompleted;
+  await until(()=>framesStarted>beforeFrames);
+  const tap=()=>page.mouse.click(refreshedBounds.x+refreshedBounds.width*.5,refreshedBounds.y+refreshedBounds.height*.3);
+  await tap();await page.getByText('Updating…',{exact:true}).waitFor();await until(()=>posted.filter(b=>b.action==='input').length===beforeInputs+1);
+  await tap();await tap();await screen.dispatchEvent('wheel',{deltaY:100,clientX:refreshedBounds.x+20,clientY:refreshedBounds.y+20});
+  assert.equal(posted.filter(b=>b.action==='input').length,beforeInputs+1,'Rapid taps and scrolls are discarded while the action is pending');
+  action.release();inputGate=null;await until(()=>inputsCompleted>beforeCompleted);
+  assert.equal(await screen.getAttribute('aria-disabled'),'true','An input ACK alone must not unlock the stale screen');
+  const oldCompleted=framesCompleted;frameGate=newFrame;oldFrame.release();await until(()=>framesCompleted>oldCompleted);
+  await page.waitForTimeout(50);assert.equal(await screen.getAttribute('aria-disabled'),'true','An old in-flight frame must not unlock taps');
+  const replacementRequested=framesStarted;await until(()=>framesStarted>beforeFrames+1);
+  await tap();assert.equal(posted.filter(b=>b.action==='input').length,beforeInputs+1,'Taps remain blocked while the fresh frame is downloading');
+  await page.screenshot({path:out+'/'+name+'-updating.png',fullPage:true});
+  frameGate=null;newFrame.release();await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+  await page.getByText('Updating…',{exact:true}).waitFor({state:'hidden'});await tap();await until(()=>posted.filter(b=>b.action==='input').length===beforeInputs+2);
+  await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+  assert.equal(posted.filter(b=>b.action==='input').length,beforeInputs+2,'Discarded taps are never replayed after recovery');
   attempt={...attempt,phase:'ready',handle:'fixture_creator'};
   await page.getByRole('heading',{name:'Connect @fixture_creator?'}).waitFor();
   assert.equal(await page.locator('[data-state="connected"]').count(),0,'Capture alone must not claim connected');
@@ -111,5 +137,5 @@ try{
  reset();const multi=await chrome.newPage({viewport:{width:390,height:844}});await multi.goto(url);
  snapshot.onlyfans.accounts=['one','two'].map((handle,i)=>({id:'of-'+(i+1),handle,connection:{status:'expired',expiresAt:new Date(Date.now()-1000).toISOString(),outgoingEnabled:false}}));
  await multi.getByRole('button',{name:'Refresh status',exact:true}).click();await multi.getByRole('button',{name:'Reconnect @two',exact:true}).click();await multi.getByLabel('Email address',{exact:true}).waitFor();assert.equal(posted.find(body=>body.action==='start').accountId,'of-2');await multi.close();
- console.log('PASS creator sign-in UI: Chromium/mobile WebKit, serialized input, account confirmation, exact retry, frame recovery, credential-form removal on expiry/auth loss, transient status recovery, clean restart and selected-account reconnect. Physical phone and live provider pilot remain release checks.');
-}finally{await Promise.allSettled([chrome.close(),safari.close()]);await new Promise(r=>server.close(r));}
+ console.log('PASS creator sign-in UI: Chromium/mobile WebKit, delayed input/frame click guard, stale-frame refusal, no replayed taps/scrolls, serialized typing, account confirmation, exact retry, frame recovery, expiry/auth loss, clean restart and selected-account reconnect. Physical phone and live provider pilot remain release checks.');
+}finally{inputGate?.release();frameGate?.release();await Promise.allSettled([chrome.close(),safari.close()]);await new Promise(r=>server.close(r));}

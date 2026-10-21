@@ -33,9 +33,13 @@ export async function platformCommand(request:NextRequest) {
 }
 export async function platformProfile(creator:{accountId:string;userId:string}) {
   const db=serviceClient();
-  const {data,error}=await db.from("creator_accounts").select("id,auth_user_id,platform_creator_id,requested_channels").eq("id",creator.accountId).eq("auth_user_id",creator.userId).maybeSingle();
+  // Both lookups use the authenticated account and are independent. Keep each
+  // screen/input request fresh without paying for two serial database trips.
+  const [{data,error},link]=await Promise.all([
+    db.from("creator_accounts").select("id,auth_user_id,platform_creator_id,requested_channels").eq("id",creator.accountId).eq("auth_user_id",creator.userId).maybeSingle(),
+    db.from("creator_clone_links").select("clone_id").eq("creator_account_id",creator.accountId).maybeSingle(),
+  ]);
   if(error||!data)throw new Error("Platform setup could not be loaded. Please refresh.");
-  const link=await db.from("creator_clone_links").select("clone_id").eq("creator_account_id",creator.accountId).maybeSingle();
   if(link.error || data.platform_creator_id && link.data?.clone_id && data.platform_creator_id!==link.data.clone_id)throw new Error("Your platform identity needs your agency’s attention.");
   const id=(data.platform_creator_id||link.data?.clone_id||null) as string|null;
   return {id,requested:data.requested_channels as ("telegram"|"onlyfans")[],telegramLinked:!!id&&link.data?.clone_id===id};
