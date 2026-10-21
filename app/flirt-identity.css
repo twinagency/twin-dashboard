@@ -1,0 +1,32 @@
+/* Flirt identity: supplied wordmark/icon and T Social guide typography.
+   Presentation only; financial/status colours and access rules are unchanged. */
+html[data-app-brand="flirt"]:not([data-agency]):not([data-brand-theme]){
+ --font-sans:var(--font-flirt),sans-serif;--font-heading:var(--font-flirt),sans-serif;--font-display:var(--font-flirt),sans-serif;
+ --color-bg:#f7f2fb;--color-ink:#24102f;--color-accent:#842bdd;--color-accent-2:#842bdd;--color-brand:#842bdd;--color-accent-tint:#f1e6fc;
+ font-family:var(--font-flirt),sans-serif;
+}
+html[data-app-brand="flirt"]:not([data-agency]) .dashboard-sidebar,
+html[data-app-brand="flirt"]:not([data-agency]) .dashboard-mobile-header{background:#111014}
+html[data-app-brand="flirt"]:not([data-agency]) .dashboard-sidebar img[src="/brand/flirt-wordmark-master.png"]{filter:invert(1)}
+.flirt-agency-login{display:grid;grid-template-columns:1.1fr 1fr;min-height:100svh;background:#f7f2fb;color:#24102f;font-family:var(--font-flirt),sans-serif}
+.flirt-agency-story{display:flex;flex-direction:column;justify-content:space-between;padding:48px 64px;color:#fff;background:radial-gradient(ellipse at 5% 95%,#7a2560 0,transparent 50%),radial-gradient(ellipse at 100% 0,#842bdd80,transparent 60%),#111014}
+.flirt-agency-logo{width:176px;height:88px;object-fit:contain}
+.flirt-agency-logo.inverse{filter:invert(1)}
+.flirt-eyebrow{color:#ef8fd4;font-size:14px;margin-bottom:24px}
+.flirt-agency-story h1{font-size:clamp(40px,4.5vw,64px);line-height:1.05;letter-spacing:-.045em;font-weight:600;margin:0 0 24px}
+.flirt-agency-story p:not(.flirt-eyebrow){max-width:340px;color:#ddd3e2;font-size:18px;line-height:1.5}
+.flirt-agency-story>span{font-size:11px;letter-spacing:.16em;color:#b4a6bc}
+.flirt-agency-signin{display:grid;place-items:center;padding:32px 24px}
+.flirt-agency-card{width:100%;max-width:420px;padding:40px;border-radius:24px;background:white;box-shadow:0 24px 70px #24102f08}
+.flirt-agency-icon{width:56px;height:56px;object-fit:cover;margin-bottom:24px;border-radius:16px}
+.flirt-agency-card h2{font-size:32px;line-height:1.2;font-weight:600;letter-spacing:-.03em;margin-bottom:8px}
+.flirt-agency-card>p{color:#706176;font-size:16px;margin-bottom:32px}
+.flirt-agency-card label{display:block;font-size:14px;font-weight:500;margin:20px 0 8px}
+.flirt-agency-card input{width:100%;border:1px solid #ded3e6;border-radius:12px;padding:13px 14px;background:#fff;font-size:16px}
+.flirt-agency-card input:focus-visible{outline:2px solid #842bdd;outline-offset:2px}
+.flirt-agency-card button{width:100%;margin-top:28px;padding:14px;border-radius:12px;background:#842bdd;color:white;font-size:16px;font-weight:500;transition:background .16s,transform .16s}
+.flirt-agency-card button:hover{background:#6b20b8}.flirt-agency-card button:active{transform:scale(.985)}
+.flirt-agency-card button:disabled{opacity:.7;cursor:wait}
+.flirt-agency-card [role="alert"]{background:#fff0f3;color:#9b1743;padding:12px;border-radius:12px}
+@media(max-width:760px){.flirt-agency-login{grid-template-columns:1fr}.flirt-agency-story{min-height:220px;padding:20px 28px;gap:20px}.flirt-agency-story h1{font-size:34px;margin-bottom:8px}.flirt-agency-story .flirt-eyebrow,.flirt-agency-story>span,.flirt-agency-story p:not(.flirt-eyebrow){display:none}.flirt-agency-logo{width:120px;height:60px}.flirt-agency-signin{padding:24px 18px 40px}.flirt-agency-card{padding:28px}}
+@media(prefers-reduced-motion:reduce){.flirt-agency-card button{transition:none}}
