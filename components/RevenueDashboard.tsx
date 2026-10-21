@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SharedOverview, { type SharedOverviewConfig } from "@/components/overview/SharedOverview";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bar,
@@ -214,7 +215,7 @@ type OverviewPresentation = {
   rankings: (data: FullData | null, money: (stars: number) => string, loading: boolean) => ReactNode;
 };
 
-export default function RevenueDashboard({ cloneId, initialData = null, overviewPresentation }: { cloneId?: string | null; initialData?: FullData | null; overviewPresentation?: OverviewPresentation }) {
+export default function RevenueDashboard({ cloneId, initialData = null, overviewPresentation, sharedOverview }: { cloneId?: string | null; initialData?: FullData | null; overviewPresentation?: OverviewPresentation; sharedOverview?: SharedOverviewConfig }) {
   const { isCreator, isAgency, agencyName } = useDashboardAccess();
   const overview = Boolean(overviewPresentation) && !isCreator && !isAgency;
   const moxyOverview = isAgency && agencyName?.trim().toLowerCase() === "moxy";
@@ -226,6 +227,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
   // misleading "$0.00 AI margin" row to an audience that was never meant to
   // see the figure at all.
   const showCost = !isCreator && !isAgency;
+  const [showDetailed, setShowDetailed] = useState(false);
   const [period, setPeriod] = useState<Period>("1M");
   // Custom calendar range (yyyy-mm-dd strings, straight from <input type="date">).
   // When set, it overrides every preset period — the "Custom" pill lights up
@@ -592,8 +594,15 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
           </div>
   );
 
+  if (sharedOverview && !showDetailed) return <SharedOverview {...sharedOverview}
+    cloneId={cloneId} data={data} loading={loading} error={loadError}
+    period={period} range={customRange} currency={currency} money={money}
+    onPeriod={value => { setCustomRange(null); setPeriod(value); }}
+    onRange={setCustomRange} onRefresh={refreshNow} onDetails={() => setShowDetailed(true)} />;
+
   return (
     <div className={`revenue-dashboard pb-6${moxyOverview ? " revenue-dashboard--moxy" : ""}${overview ? ` ${overviewPresentation!.className}` : ""}`} data-live-overview={overview ? "true" : undefined}>
+      {sharedOverview && <button type="button" className="mb-4 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-ink" onClick={() => setShowDetailed(false)}>Back to overview</button>}
       {overview && overviewPresentation!.header(windowLabel)}
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
@@ -2754,5 +2763,3 @@ function AiCostDrillIn({
     </Card>
   );
 }
-
-

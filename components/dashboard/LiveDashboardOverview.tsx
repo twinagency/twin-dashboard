@@ -8,7 +8,7 @@ import styles from "./LiveOverview.module.css";
 export default function LiveDashboardOverview({ cloneId, clones, initialData }: {
   cloneId?: string | null; clones: OverviewClone[]; initialData?: FullData | null;
 }) {
-  return <RevenueDashboard cloneId={cloneId} initialData={initialData} overviewPresentation={{
+  return <RevenueDashboard cloneId={cloneId} initialData={initialData} sharedOverview={{ creators: clones, creatorsHref: "/clones", chatHref: "/users?workspace=telegram", brand: "twin" }} overviewPresentation={{
     className: styles.page,
     header: windowLabel => <LiveOverviewHero clones={clones} cloneId={cloneId} windowLabel={windowLabel} />,
     activity: (data, money) => <LiveOverviewActivity data={data} cloneId={cloneId} money={money} />,
