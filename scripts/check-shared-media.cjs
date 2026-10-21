@@ -42,6 +42,8 @@ async function main(){
   let response=await send();assert.equal(response.status,200);assert.equal((await response.json()).transfer.receivedBytes,bytes.length);
   response=await send();assert.equal((await response.json()).transfer.status,'pending','Queued backend jobs omit their receiving prefix proof');
   f.jobs[0].status='complete';Object.assign(f.jobs[0].files[0],{status:'done',mediaId:'12345'});
+  f.jobs[0].cleanupRequired=true;response=await send();const held=await response.json();assert.equal(held.transfer.status,'failed');assert.match(held.transfer.error,/scheduled-post cleanup/);
+  f.jobs[0].cleanupRequired=false;
   response=await send();const complete=await response.json();assert.equal(complete.transfer.status,'complete');assert.equal(complete.transfer.mediaId,'12345');assert.equal(f.finished,1);
   await send();assert.equal(f.created,1);assert.equal(f.finished,1);assert.equal(f.rows[0].id,firstReceipt,'Repeated user clicks never create a duplicate upload');
   const before=[f.created,f.chunks,f.finished];const read=await m.GET(req('GET'),context);assert.equal(read.headers.get('cache-control'),'private, no-store');const publicData=await read.text();for(const secret of ['storage_path','source_sha256','chunk_sha256','op-session','agency-user'])assert(!publicData.includes(secret));assert.deepEqual([f.created,f.chunks,f.finished],before,'GET does not advance provider uploads');

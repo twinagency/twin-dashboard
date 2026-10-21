@@ -91,7 +91,7 @@ export async function POST(request: NextRequest, context: Context) {
     // Agency actors must match the backend's freshly verified grant. Owner
     // sessions may resume their server-recorded receipt after signing in again.
     if (ctx.auth.auth.agencyGrant && row.actor !== ctx.auth.actor) return refuse("This upload was started by another team member. Ask them to finish it.");
-    if (!active.has(row.status)) return answer({ ok: true, transfer: publicSharedTransfer(row) });
+    if (!active.has(row.status) && row.error_code !== "provider_cleanup_required") return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
       const result = await db.from("shared_media_transfers").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", row!.id).eq("clone_id", cloneId).select("*").maybeSingle();

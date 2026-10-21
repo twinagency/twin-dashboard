@@ -41,9 +41,10 @@ export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
   // queued it reports the full byte count and a null prefix, retaining the job.
   if (job.status === "receiving" && file.receivedBytes > 0 && (file.receivedBytes !== row.size_bytes && file.receivedBytes % MAX_CHUNK_BYTES !== 0
     || file.prefixDigest !== sharedDigest(row.chunk_sha256.slice(0, Math.ceil(file.receivedBytes / MAX_CHUNK_BYTES)).join("")))) throw Error("upload_prefix_mismatch");
-  const status = job.status === "complete" && (file.status !== "done" || !file.mediaId) ? "failed" : job.status;
-  return { job_id: job.jobId, status, media_id: file.mediaId, processing: file.processing, received_bytes: file.receivedBytes, error_code: file.error || status === "failed" ? "provider_review_required" : job.lastError };
+  const cleanup = job.cleanupRequired && !["receiving", "pending", "running"].includes(job.status);
+  const status = job.status === "complete" && (cleanup || file.status !== "done" || !file.mediaId) ? "failed" : job.status;
+  return { job_id: job.jobId, status, media_id: file.mediaId, processing: file.processing, received_bytes: file.receivedBytes, error_code: cleanup ? "provider_cleanup_required" : file.error || status === "failed" ? "provider_review_required" : job.lastError };
 }
 export function publicSharedTransfer(row: SharedTransfer) {
-  return { id: row.id, sourceId: row.source_id, kind: row.source_kind, status: row.status, mediaId: row.media_id, processing: row.processing, receivedBytes: row.received_bytes, sizeBytes: row.size_bytes, error: row.error_code ? "This transfer needs review. Refresh its status before retrying." : null };
+  return { id: row.id, sourceId: row.source_id, kind: row.source_kind, status: row.status, mediaId: row.media_id, processing: row.processing, receivedBytes: row.received_bytes, sizeBytes: row.size_bytes, error: row.error_code === "provider_cleanup_required" ? "OnlyFans scheduled-post cleanup needs review. Check the account's upload history before continuing." : row.error_code ? "This transfer needs review. Refresh its status before retrying." : null };
 }
