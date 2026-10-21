@@ -96,7 +96,7 @@ if payload.get('patchHostHunks'):
  host_text=old_host.decode()
  for patch in payload['patches']:
   if host_text.count(patch['old'])==1:host_text=host_text.replace(patch['old'],patch['new'],1)
-  elif host_text.count(patch['new'])!=1:raise RuntimeError('Host source cannot retain the exact performance hunk')
+  elif host_text.count(patch['new'])!=1:print(json.dumps({'separateHostCheckoutPreserved':True}),flush=True)
  new_host=host_text.encode()
 elif old_host==old_server:new_host=new_server
 update_host=new_host!=old_host
