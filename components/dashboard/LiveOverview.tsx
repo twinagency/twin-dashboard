@@ -39,7 +39,7 @@ function CreatorShortcuts({ clones }: { clones: OverviewClone[] }) {
 
   return <div className={styles.fleetArt}>
     <nav className={styles.portraits} aria-label="Creator dashboards" aria-busy={pending}>
-      {clones.slice(0, 5).map(c => <button
+      {clones.map(c => <button
         key={c.id}
         type="button"
         className={`${styles.creatorShortcut} creator-name`}

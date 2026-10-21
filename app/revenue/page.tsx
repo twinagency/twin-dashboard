@@ -6,21 +6,24 @@ import { usesAgencyOverview } from "@/lib/agency-brand";
 import { getAgencyOverview } from "@/lib/agency-overview";
 import AgencyOverview from "@/components/agency-overview/AgencyOverview";
 import { redirect } from "next/navigation";
+import { hasInternalAdminAccess } from "@/lib/internal-admin";
+import CombinedEarnings from "@/components/CombinedEarnings";
 
 export const dynamic = "force-dynamic";
 
 export default async function RevenuePage({ searchParams }: { searchParams?: Promise<Record<string, string | string[] | undefined>> }) {
   const cloneId = await getCloneScope();
   const access = await getDashboardAccess();
-  // Internal earnings now lives in the Dashboard overview. Partner and creator
-  // reporting keeps its existing access rules, revenue shares and presentation.
+  // Overview is the compact summary. Earnings opens the full ledger in the
+  // same operator shell instead of redirecting into another channel's menu.
   if (!access) {
-    const query = new URLSearchParams();
-    for (const [key, value] of Object.entries(await searchParams ?? {})) {
-      if (typeof value === "string") query.set(key, value);
-    }
-    query.set("workspace", "telegram");
-    redirect(`/dashboard?${query}`);
+    if (!await hasInternalAdminAccess()) redirect("/twin");
+    return <div className="min-w-0 space-y-6" data-detailed-earnings>
+      <header><h1>Earnings</h1><p className="mt-2 text-sm text-muted">Channel breakdowns, transactions and detailed reporting.</p></header>
+      <CombinedEarnings embedded />
+      <RevenueTooltipFix />
+      <RevenueDashboard cloneId={cloneId} />
+    </div>;
   }
   if (access && usesAgencyOverview(access.name)) return <AgencyOverview key={cloneId ?? 'agency'} cloneId={cloneId} initialCreators={await getAgencyOverview()} />;
   return (

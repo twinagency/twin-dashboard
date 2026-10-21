@@ -42,7 +42,7 @@ function Portrait({ creator }: { creator: SharedOverviewCreator }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [creator.photoUrl]);
   return creator.photoUrl && !failed
-    ? <img src={creator.photoUrl} alt={creator.name} onError={() => setFailed(true)} style={{ objectPosition: creator.position ?? "50% 35%", transform: `scale(${creator.zoom ?? 1})`, transformOrigin: creator.position ?? "50% 35%" }} />
+    ? <img loading="lazy" decoding="async" src={creator.photoUrl} alt={creator.name} onError={() => setFailed(true)} style={{ objectPosition: creator.position ?? "50% 35%", transform: `scale(${creator.zoom ?? 1})`, transformOrigin: creator.position ?? "50% 35%" }} />
     : <UserRound aria-label={`${creator.name}, profile photo unavailable`} />;
 }
 
@@ -66,7 +66,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
   const chartCreators = (data?.clones ?? []).filter(c => !cloneId || c.id === cloneId);
   const chartRows = (data?.series ?? []).map(row => ({ ...row, __total: chartCreators.reduce((sum, creator) => sum + (Number(row[creator.id]) || 0), 0) }));
   const recent = (data?.recent ?? []).filter(row => !cloneId || row.cloneId === cloneId).slice(0, 5);
-  const profileCreators = creators.slice(0, 5);
+  const profileCreators = creators;
   const loadingValue = loading ? "…" : "Unavailable";
   const metrics = [
     ["Net revenue", stats ? money(stats.stars) : loadingValue, "After refunds and adjustments", true],
@@ -104,10 +104,11 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     {cloneId && <button type="button" className={styles.textButton} disabled={switching} onClick={() => void chooseCreator("")}>All creators overview</button>}
     <section className={styles.hero} aria-label="Dashboard overview">
       <div className={styles.heroCopy}><h1 className={selected ? "creator-name" : undefined}>{selected?.name ?? "Overview"}</h1><span>{reportingWindow} · Your creators, earnings and activity.</span></div>
-      {selected ? <div className={styles.selectedPortrait}><Portrait key={selected.id} creator={selected} /></div> : <div className={styles.creatorDisplay}><nav className={styles.portraits} aria-label="Creator dashboards">
+      {selected ? <div className={styles.selectedPortrait}><Portrait key={selected.id} creator={selected} /></div> : <div className={styles.creatorDisplay}>
+      <div className={styles.creatorHeading}><span className={styles.creatorCount}><Users size={16} />{count(creators.length)} creators</span><Link href={creatorsHref} className={styles.viewAll}>View all<ArrowRight size={14} /></Link></div>
+      <nav className={styles.portraits} aria-label="Creator dashboards" tabIndex={0}>
         {profileCreators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span></button>)}
-        <Link href={creatorsHref} className={styles.creatorShortcut}><span className={styles.morePortrait}><Users size={24} /></span><span>View all</span></Link>
-      </nav><span className={styles.creatorCount}><Users size={16} />{count(creators.length)} creators</span></div>}
+      </nav></div>}
     </section>
     {switchError && <div className={styles.error} role="alert">{switchError}</div>}
     {error && <div className={styles.error} role="alert"><span>Earnings could not be refreshed.{data ? " Showing the last successfully loaded figures." : " Please try again."}</span><button type="button" onClick={onRefresh} disabled={loading}>Retry</button></div>}

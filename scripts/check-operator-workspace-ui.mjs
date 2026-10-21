@@ -133,7 +133,7 @@ for (const width of [390, 900, 1440]) {
       brandTop:brand.top,brandHeight:brand.height,switchTop:switcher.top,switchHeight:switcher.height,
       navTop:nav.top,headerTop:topbar.top,headerHeight:topbar.height};
     });
-    assert.equal(metrics.background,"rgb(8, 8, 8)",`${width} ${route}: shared dark sidebar`);
+    assert.equal(metrics.background,"rgb(230, 246, 255)",`${width} ${route}: shared light-blue Twin sidebar`);
     if(!baseline)baseline=metrics;
     assert.deepEqual(metrics,baseline,`${width} ${route}: sidebar and header must stay in place`);
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
