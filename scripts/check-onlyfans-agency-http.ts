@@ -24,7 +24,7 @@ async function main() {
     }
     if (url.pathname.startsWith("/rest/v1/")) {
       const table = url.pathname.split("/").at(-1);
-      if (table === "agency_memberships") return json(memberActive ? [{ agency_id: agency, can_manage: url.searchParams.get("user_id") === `eq.${manager}` }] : []);
+      if (table === "agency_memberships") return json(memberActive ? [{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id: agency, can_manage: url.searchParams.get("user_id") === `eq.${manager}` }] : []);
       if (table === "partner_agencies") return json([{ id: agency, name: "Moxy" }]);
       if (table === "agency_creators") return json([{ clone_id: creator }]);
       return json([]);
@@ -131,3 +131,4 @@ async function main() {
   } finally { await browser?.close(); child.kill(); fixture.closeAllConnections(); await new Promise<void>(resolve => fixture.close(() => resolve())); closeSync(log); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

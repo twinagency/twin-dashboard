@@ -33,6 +33,7 @@ type Clone = { id: string; name: string };
 export default async function AgencyCreatorsPage() {
   const access = await getDashboardAccess();
   if (!access) redirect("/creator-management");
+  if (access.creatorScope === "selected") redirect("/clones");
 
   const { data: assignmentRows } = await serviceClient()
     .from("creator_agency_assignments")
@@ -119,3 +120,4 @@ export default async function AgencyCreatorsPage() {
     </div>
   );
 }
+

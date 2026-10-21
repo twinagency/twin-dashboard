@@ -27,7 +27,7 @@ async function main() {
       if (failure) return Response.json({ message: 'offline failure', code: 'refresh_token_not_found' }, { status: failure });
       data = { ...session(), expires_in: 3600, token_type: 'bearer', user: { id: wrongUser ? clone : user } };
     } else if (url.pathname === '/auth/v1/user') data = { id: user };
-    else if (url.pathname === '/rest/v1/agency_memberships') data = memberActive ? { agency_id: agency } : null;
+    else if (url.pathname === '/rest/v1/agency_memberships') data = memberActive ? { creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id: agency } : null;
     else if (url.pathname === '/rest/v1/partner_agencies') data = { id: agency, name: 'Twin' };
     else if (url.pathname === '/rest/v1/agency_creators') data = [{ clone_id: clone }];
     else if (url.pathname === '/auth/v1/logout') data = {};
@@ -80,3 +80,4 @@ async function main() {
   } finally { Date.now = realNow; globalThis.fetch = realFetch; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

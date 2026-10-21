@@ -3,12 +3,14 @@
 import { useState } from "react";
 import Link from "@/components/NavigationLink";
 import { PARTNER_PORTALS } from "@/lib/partner-portals";
+import type { StaffCreatorScope } from "@/lib/staff-creator-scope";
 
-type Member = { user_id: string; email: string; active: boolean; can_manage: boolean };
+type Member = { user_id: string; email: string; active: boolean; can_manage: boolean } & Partial<StaffCreatorScope>;
 type Agency = { id: string; name: string; slug: string };
-export default function TwinTeamAccess({ agencies, agency, members, error, status, fixedManagement, managementAvailable, truncated }: {
+export default function TwinTeamAccess({ agencies, agency, members, error, status, fixedManagement, managementAvailable, truncated, creators = [], creatorsUnavailable = false }: {
   agencies: Agency[]; agency: Agency; members: Member[]; error: boolean; status: string | null;
   fixedManagement: boolean; managementAvailable: boolean; truncated: boolean;
+  creators?: { id: string; name: string }[]; creatorsUnavailable?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(members[0]?.user_id ?? "");
   const [adding, setAdding] = useState(false);
@@ -26,7 +28,7 @@ export default function TwinTeamAccess({ agencies, agency, members, error, statu
           <td>{role(m)}</td><td><span className="twin-status" data-tone={m.active ? "good" : "neutral"}>{m.active ? "Active" : "Revoked"}</span></td>
         </tr>)}</tbody></table>{!members.length && <p className="twin-empty">No team logins yet. Add your first team member.</p>}</div>}
         {truncated && <p role="status" className="p-4 text-sm text-muted">Showing the first 100 members. The team list is incomplete.</p>}
-        <div className="border-t border-line p-5"><h2 className="font-semibold">Creator access</h2><p className="twin-help">Creator access is shared across the agency. Individual creator assignments and custom permission toggles are not available yet.</p><Link className="mt-3 inline-block text-sm font-semibold text-accent" href="/creator-management">Review creator assignments →</Link></div>
+        <div className="border-t border-line p-5"><h2 className="font-semibold">Creator access</h2><p className="twin-help">Choose all agency creators or a selected list for each member. The same creator access applies across Telegram, OnlyFans, content and earnings. Custom permission toggles are not available.</p><Link className="mt-3 inline-block text-sm font-semibold text-accent" href="/creator-management">Review creator assignments →</Link></div>
       </section>
       <aside className="twin-surface twin-team-form">
         {adding || !selected ? <><h2>Add a team member</h2><form action="/agency-admin/provision" method="post">
@@ -35,7 +37,7 @@ export default function TwinTeamAccess({ agencies, agency, members, error, statu
           <label>Initial password<input name="password" type="password" required minLength={16} maxLength={256} autoComplete="new-password" /></label>
           <label>Access<select name="access" defaultValue="read">{options}</select></label>
           <button className="twin-primary-link" name="operation" value="create">Create team login</button>
-          <p className="twin-help">Use at least 16 characters. This creates a login without sending an email. Creator assignments stay with the agency.</p>
+          <p className="twin-help">Use at least 16 characters. This creates a read-only login without sending an email. New members initially see the agency's creators; select the member after creation to narrow their creator access.</p>
         </form></> : <><h2>Member access</h2><p className="break-all text-sm">{selected.email}</p>
           <form data-agency-member-form key={selected.user_id} action="/agency-admin/provision" method="post">
             <input type="hidden" name="agency" value={agency.id} /><input type="hidden" name="email" value={selected.email} /><input type="hidden" name="user_id" value={selected.user_id} />
@@ -45,9 +47,23 @@ export default function TwinTeamAccess({ agencies, agency, members, error, statu
             <button className="twin-primary-link" name="operation" value={selected.active ? "set-access" : "restore"}>{selected.active ? "Save access" : "Restore access"}</button>
             {selected.active && <button className="twin-outline-link" name="operation" value="revoke">Revoke access</button>}
           </form>
+          {selected.creator_access_revision && !creatorsUnavailable ? <StaffCreatorForm key={selected.user_id + selected.creator_access_revision} agencyId={agency.id} member={selected} creators={creators} /> : <p className="twin-help">Creator access settings are unavailable. Refresh before changing assignments.</p>}
         </>}
       </aside>
     </div>
     <footer className="space-y-2 text-sm">{agencies.filter(a => PARTNER_PORTALS.some(p => p.slug === a.slug)).map(a => <p key={a.id}>{a.name} sign-in: <Link className="text-accent underline" href={PARTNER_PORTALS.find(p => p.slug === a.slug)!.loginPath}>{PARTNER_PORTALS.find(p => p.slug === a.slug)!.loginPath}</Link></p>)}<Link href="/agency-admin/jess-kate-password" className="text-accent underline">Change Jess and Kate AI password</Link></footer>
   </main>;
 }
+
+function StaffCreatorForm({ agencyId, member, creators }: { agencyId: string; member: Member; creators: {id:string;name:string}[] }) {
+  const [mode, setMode] = useState(member.creator_scope ?? "selected");
+  return <form action="/agency-admin/creator-access" method="post" className="mt-6 border-t border-line pt-5" data-staff-creator-form>
+    <h2>Assigned creators</h2>
+    <input type="hidden" name="agency" value={agencyId} /><input type="hidden" name="user_id" value={member.user_id} /><input type="hidden" name="expected_revision" value={member.creator_access_revision} />
+    <label>Creator access<select name="creator_scope" value={mode} onChange={event => setMode(event.target.value as "all" | "selected")}><option value="all">All agency creators, including future additions</option><option value="selected">Selected creators only</option></select></label>
+    {mode === "selected" && <fieldset className="mt-3 max-h-64 overflow-y-auto rounded-lg border border-line p-3"><legend className="text-sm">Choose creators</legend>{creators.map(creator => <label key={creator.id} className="!flex items-center gap-2"><input className="!m-0 !w-auto" type="checkbox" name="creator_ids" value={creator.id} defaultChecked={member.creator_ids?.includes(creator.id)} />{creator.name}</label>)}{!creators.length && <p className="text-sm text-muted">No creators are currently assigned to this agency.</p>}</fieldset>}
+    <p className="twin-help">Selected creators with none checked grants no creator access. Changes take effect on the next request. Removing a creator from the agency removes access for its members too.</p>
+    <button className="twin-primary-link" type="submit">Save creator access</button>
+  </form>;
+}
+

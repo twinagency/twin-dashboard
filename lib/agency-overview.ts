@@ -62,7 +62,7 @@ export async function getAgencyOverview(): Promise<OverviewCreator[]> {
 export async function getAgencyOnboardingCreators(): Promise<OverviewCreator[]> {
   const access = await getDashboardAccess();
   // Moxy keeps its current live roster and imagery exactly as configured.
-  if (!access || !isTopOnlyfansAgency(access.name)) return [];
+  if (!access || access.creatorScope === "selected" || !isTopOnlyfansAgency(access.name)) return [];
   const db = serviceClient();
   const assigned = await db.from('creator_agency_assignments')
     .select('creator_account_id').eq('agency_id', access.id);
@@ -106,3 +106,4 @@ export async function getAgencyOnboardingCreators(): Promise<OverviewCreator[]> 
     position: '50% 20%', zoom: 1, fans: 0, telegramConnected: false,
   }));
 }
+
