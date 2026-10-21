@@ -24,7 +24,7 @@ const entry=`import React from 'react';import{createRoot}from'react-dom/client';
 const result=await build({stdin:{contents:entry,resolveDir:root,loader:'tsx'},outdir:out,bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':JSON.stringify(process.env.OVERVIEW_DEBUG?'development':'production')},banner:{js:'var process={env:{NODE_ENV:"production"},browser:true};'},plugins:[{name:'isolated',setup(b){
  b.onResolve({filter:/^next\/(link|navigation)$|app\/actions\/clone-scope$|app\/login\/actions$/},a=>({path:a.path,namespace:'stub'}));
  b.onLoad({filter:/.*/,namespace:'stub'},({path})=>({loader:'jsx',resolveDir:root,contents:path==='next/link'?`import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`:path.endsWith('login/actions')?`export const logout=()=>{};`:path.endsWith('clone-scope')?`export async function setCloneScope(id){window.chosenCreator=id}`:`export const usePathname=()=>'/dashboard';export const useSearchParams=()=>new URLSearchParams('workspace=telegram');export const useRouter=()=>({refresh:()=>window.changeCreator(window.chosenCreator||null),push:path=>{window.lastNavigation=path;window.changeCreator(new URL(path,location.origin).searchParams.get('clone'))}});`}))}}]});
-const global=await postcss([tailwind()]).process('@import "./app/globals.css";',{from:resolve(root,'live-overview-review.css')});
+const global=await postcss([tailwind()]).process('@import "./app/globals.css";@import "./app/flirt-theme.css";@import "./app/studio-workspace.css";@import "./app/compact-workspace.css";',{from:resolve(root,'live-overview-review.css')});
 const css=global.css+ (brand==='moxy'?'\n'+readFileSync(resolve(root,'app/moxy-overview.css'),'utf8'):'')+'\n'+result.outputFiles.find(f=>f.path.endsWith('.css')).text+'\nbody{margin:0}html{--font-body:Arial,sans-serif;--font-sans:Arial,sans-serif;--font-heading:Arial,sans-serif}';
 const js=result.outputFiles.find(f=>f.path.endsWith('.js')).text;
 let fail=false,zero=false;const requests=[];
@@ -37,7 +37,7 @@ const server=createServer(async(req,res)=>{const u=new URL(req.url,'http://local
  if(u.pathname==='/api/dashboard'){requests.push(u.search);res.setHeader('Content-Type','application/json');if(fail){res.statusCode=503;return res.end(JSON.stringify({error:'Fixture refresh unavailable'}))}return res.end(JSON.stringify(fixture(u.searchParams.get('period')||'1M',u.searchParams.get('clone'),zero)))}
  if(u.pathname==='/api/dashboard/day-insight'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(creatorDemoInsight(u.searchParams.get('date')||'2026-10-13')))}
  if(u.pathname.startsWith('/api/')){res.statusCode=404;return res.end('{}')}
- res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="root"></div><script src="/bundle.js"></script></html>');
+ res.setHeader('Content-Type','text/html');res.end('<!doctype html><html data-app-brand="flirt"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><div id="root"></div><script src="/bundle.js"></script></html>');
 });
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:["--no-sandbox"]});
 try{

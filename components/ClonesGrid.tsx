@@ -80,6 +80,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           type="text"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
+          aria-label="Search creators"
           placeholder="Search creators…"
           className="h-9 max-w-xs"
         />
@@ -121,13 +122,13 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
             <Link
               key={c.id}
               href={`/clones/${c.id}`}
-              className="group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
+              className="compact-creator-card group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
             >
               {/* Header: avatar (ringed in the clone color) + name + status + features */}
               <div className="flex items-start gap-3">
                 <div className="shrink-0 rounded-full p-[2px]" style={{ backgroundColor: c.color }}>
                   <div className="rounded-full bg-panel p-[2px]">
-                    <CreatorAvatar name={c.name} photoUrl={c.photoUrl} className="h-11 w-11" />
+                    <CreatorAvatar name={c.name} photoUrl={c.photoUrl} className="h-14 w-14" />
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">

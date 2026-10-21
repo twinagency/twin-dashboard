@@ -1,3 +1,4 @@
+import MessagesWorkspace from "@/components/MessagesWorkspace";
 import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -928,7 +929,7 @@ export default async function FansPage({
       {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
           gets the extra room for data/filters, right takes whatever's left. */}
-      <div className="grid gap-3 lg:h-full lg:grid-cols-3">
+      <MessagesWorkspace key={selected?.id ?? "none"} selected={!!selected}>
         {/* ── Left: fan list (data above, bigger search, filters) ───────── */}
         <Card size="sm" className={`users-panel users-panel-list flex h-[34rem] ${colHeight} flex-col overflow-hidden p-0`}>
           <div className="border-b border-line p-3">
@@ -1679,7 +1680,7 @@ export default async function FansPage({
             </div>
           )}
         </Card>
-      </div>
+      </MessagesWorkspace>
     </div>
   );
 }
