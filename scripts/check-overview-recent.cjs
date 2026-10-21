@@ -26,7 +26,7 @@ const {getDashboard}=require('../lib/dashboard-data.ts');Module._load=originalLo
  const full=await getDashboard('CUSTOM',range,start+86400000);
  assert.equal(full.recent.length,300);assert.equal(recentBuyers,300);
  for(const cloneId of [null,'one','two']){
-  const summary=await getDashboard('CUSTOM',range,start+86400000,undefined,{overviewCloneId:cloneId});
+  const summary=await getDashboard('CUSTOM',range,start+86400000,{overviewCloneId:cloneId});
   assert.deepEqual(summary.totals,full.totals);assert.deepEqual(summary.perClone,full.perClone);assert.deepEqual(summary.series,full.series);assert.deepEqual(summary.rankings,full.rankings);
   assert.deepEqual(summary.recent,full.recent.filter(r=>!cloneId||r.cloneId===cloneId).slice(0,5));
   assert.equal(recentBuyers,5,'only visible buyers need enrichment');
