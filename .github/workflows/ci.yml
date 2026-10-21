@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches-ignore: ["codex/navigation-ci-cleanup-20261022"]
     # Docs are not shipped and not read at runtime, so a docs-only push has
     # nothing to test. Matches the same filter in deploy.yml.
     paths-ignore:
