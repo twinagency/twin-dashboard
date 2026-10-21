@@ -15,7 +15,7 @@ export default function VaultVideoPlayer({accountId,mediaId,poster,readOnly=fals
         const value=response.ok?parseVideo(await response.json(),accountId,mediaId):null;
         if([401,403].includes(response.status)){if(live){setState(null);setPlaybackError("");setDenied(true);setNotice("Sign in again to play this video.");}live=false;controller.abort();return;}
         if(!value)throw Error([401,403].includes(response.status)?"Sign in again to play this video.":"This video could not be prepared. Sync the vault, then try again.");
-        if(live){setState(value);if(value.ready||["pending","running"].includes(value.status))timer=setTimeout(()=>void read(),value.ready?15000:2000);setNotice(value.ready?"":value.status==="pending"||value.status==="running"?"Preparing your video…":readOnly?"This video is not ready. Ask a team manager to prepare it.":"This video is unavailable. Sync the vault, then try again.");}
+        if(live){setState(value);if(value.ready||["pending","running"].includes(value.status))timer=setTimeout(()=>void read(),value.ready?15000:2000);setNotice(value.ready?"":value.lastError==="protected_playback_not_supported"?"OnlyFans protects this video. Playback is not supported in this dashboard yet. You can still select it for an eligible offer.":value.status==="pending"||value.status==="running"?"Preparing your video…":readOnly?"This video is not ready. Ask a team manager to prepare it.":"This video is unavailable. Sync the vault, then try again.");}
       }catch(error){if(live)setNotice(error instanceof Error?error.message:"Video unavailable.");}finally{running=false;}}
     void read(!readOnly);
     return()=>{live=false;controller.abort();clearTimeout(timer);};
@@ -24,6 +24,6 @@ export default function VaultVideoPlayer({accountId,mediaId,poster,readOnly=fals
     {state?.ready?<video key={base+":"+retry} className="mx-auto max-h-[70vh] w-full rounded-lg bg-black object-contain" controls playsInline preload="metadata" poster={poster} src={base+"/stream"}
       onError={()=>setPlaybackError("This video could not play in this browser. Sync the vault or retry playback.")} aria-label={`Video asset ${mediaId}`} />:null}
     {playbackError||notice?<p className="mt-3 text-sm text-muted" role="status">{playbackError||notice}</p>:null}
-    {!denied&&(playbackError||notice&&!notice.startsWith("Preparing"))?<button type="button" className="mt-3 min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent" onClick={()=>{if(state&&!['pending','running'].includes(state.status))nonce.current=crypto.randomUUID();setState(null);setNotice("Preparing your video…");setPlaybackError("");setRetry(value=>value+1);}}>Retry video</button>:null}
+    {!denied&&state?.lastError!=="protected_playback_not_supported"&&(playbackError||notice&&!notice.startsWith("Preparing"))?<button type="button" className="mt-3 min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent" onClick={()=>{if(state&&!['pending','running'].includes(state.status))nonce.current=crypto.randomUUID();setState(null);setNotice("Preparing your video…");setPlaybackError("");setRetry(value=>value+1);}}>Retry video</button>:null}
   </div>;
 }
