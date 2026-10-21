@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase-service";
@@ -111,6 +112,7 @@ export async function POST(req: Request) {
   response.cookies.set(CREATOR_SESSION_COOKIE, creatorToken!, creatorCookieOptions());
   // Creator and operator sessions remain mutually exclusive in one browser.
   response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_REFRESH_COOKIE);
   response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);

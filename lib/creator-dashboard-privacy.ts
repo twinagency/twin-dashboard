@@ -3,7 +3,7 @@ type RevenuePayload = {
   analytics: {
     whaleFans: unknown[];
     topWeeklySpenders: unknown[];
-  };
+  } | null;
 };
 
 /**
@@ -21,11 +21,11 @@ export function withoutCreatorPurchaseHistory<T extends RevenuePayload>(payload:
     ...payload,
     recent: [],
     rankings: undefined,
-    analytics: {
+    analytics: payload.analytics ? {
       ...payload.analytics,
       whaleFans: [],
       topWeeklySpenders: [],
-    },
+    } : null,
   };
 }
 

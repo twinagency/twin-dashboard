@@ -49,7 +49,8 @@ const route = load('app/onboarding-review/[key]/route.ts', {
   '@/lib/creator-session': { CREATOR_SESSION_COOKIE: 'creator', creatorCookieOptions: () => ({ httpOnly: true, secure: true, path: '/', sameSite: 'lax' }), signCreatorSession: async (id,user) => { assert.equal(id,accountId); assert.equal(user,'review-auth'); signed++; return 'signed-review-session'; } },
   '@/lib/creator-routing': { CREATOR_PORTAL_COOKIE: 'portal', creatorPortalCookieOptions: () => ({ httpOnly: true, path: '/' }) },
   '@/lib/form-origin': { dashboardOrigin: () => 'https://dashboard.flirtaiagency.com' },
-  '@/lib/agency-policy': { AGENCY_COOKIE: 'agency' }, '@/lib/agency-brand': { AGENCY_PORTAL_COOKIE: 'agency_portal' },
+  '@/lib/agency-session': { AGENCY_REFRESH_COOKIE: 'agency_refresh' },
+ '@/lib/agency-policy': { AGENCY_COOKIE: 'agency' }, '@/lib/agency-brand': { AGENCY_PORTAL_COOKIE: 'agency_portal' },
   '@/lib/session': { SESSION_COOKIE: 'admin' }, '@/lib/clone-scope': { CLONE_SCOPE_COOKIE: 'clone' }
 });
 function get(key=fixtureKey, query='', headers={}) { return route.GET(new NextRequest(`https://dashboard.flirtaiagency.com/onboarding-review/${key}${query}`,{headers}), { params: Promise.resolve({key}) }); }

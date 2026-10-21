@@ -1,3 +1,4 @@
+import { signDashboardMedia, clearMediaSigningCache } from "./media-signing-cache";
 import { getDashboardAccess, withDashboardAccess, accessCacheKey } from "./dashboard-access";
 import { cache } from "react";
 import { unstable_cache, revalidateTag } from "next/cache";
@@ -125,13 +126,8 @@ function fleetCloneRows(): Promise<FleetCloneRow[]> {
 /**
  * The fleet clone list with SIGNED avatar URLs, for the sidebar and TopBar.
  *
- * Signing is deliberately OUTSIDE the cross-request cache and only memoized
- * per-request. A signed URL expires an hour after it is minted; an
- * unstable_cache entry has no such bound — Next serves a stale entry until the
- * next request comes in to trigger revalidation, so an idle dashboard reopened
- * hours later would render an entry full of expired URLs and every avatar would
- * 403. Caching the paths (which never expire) and re-signing per request keeps
- * that impossible while still removing the two DB round trips.
+ * Paths use the tagged config cache. URLs use a separate five-minute hard
+ * expiry, so navigation reuses images and an idle return cannot get expired URLs.
  *
  * Never throws: the app shell renders with an empty clone list if the DB or
  * storage is unreachable, exactly as it did before this cache existed.
@@ -142,9 +138,7 @@ export const getFleetClones = cache(async (): Promise<FleetClone[]> => {
     const entries = rows.filter((r) => r.photoPath).map((r) => [r.id, r.photoPath!] as const);
     const photoByClone = new Map<string, string>();
     if (entries.length) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from("media")
-        .createSignedUrls(entries.map((e) => e[1]), 3600);
+      const { data: signed } = await signDashboardMedia(entries.map((e) => e[1]));
       (signed ?? []).forEach((s, i) => {
         if (s.signedUrl) photoByClone.set(entries[i][0], s.signedUrl);
       });
@@ -238,6 +232,7 @@ export function getHeaderAllTimeStars(cloneId: string | null): Promise<number> {
  * SERVER ACTIONS / ROUTE HANDLERS ONLY — revalidateTag throws during render.
  */
 export async function invalidateCloneCaches() {
+  clearMediaSigningCache();
   revalidateTag(CACHE_TAGS.clones);
   revalidateTag(CACHE_TAGS.revenue);
   // Dynamic so the heavy rollup modules behind revenue-cache (analytics-data,

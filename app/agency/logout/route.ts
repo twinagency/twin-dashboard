@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { SESSION_COOKIE } from "@/lib/session";
 import { enabled as liveTwinEnabled } from "@/deployment/flirt-live-twin.cjs";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
@@ -13,6 +14,7 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.redirect(new URL(!token && liveTwinEnabled() ? "/login" : portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value), dashboardOrigin(req)), 303);
   if (!token && liveTwinEnabled()) response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_REFRESH_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   return response;
 }
