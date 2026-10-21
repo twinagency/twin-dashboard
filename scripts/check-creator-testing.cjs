@@ -17,6 +17,7 @@ const route=load(file,{
  '@/lib/creator-session':{...sessions,signCreatorSession:async(...args)=>{signed++;return sessions.signCreatorSession(...args)}},
  '@/lib/creator-routing':{CREATOR_PORTAL_COOKIE:'portal',creatorPortalCookieOptions:()=>({httpOnly:true,path:'/'})},
  '@/lib/form-origin':{dashboardOrigin:()=> 'https://dashboard.tgaiclone.xyz'},
+ '@/lib/agency-session': { AGENCY_REFRESH_COOKIE: 'agency_refresh' },
  '@/lib/agency-policy':{AGENCY_COOKIE:'agency'},'@/lib/agency-brand':{AGENCY_PORTAL_COOKIE:'agency_portal'},
  '@/lib/session':{SESSION_COOKIE:'admin'},'@/lib/clone-scope':{CLONE_SCOPE_COOKIE:'clone'}
 });

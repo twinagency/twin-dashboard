@@ -49,13 +49,14 @@ const route = load('app/onboarding-review/[key]/route.ts', {
   '@/lib/creator-session': { CREATOR_SESSION_COOKIE: 'creator', creatorCookieOptions: () => ({ httpOnly: true, secure: true, path: '/', sameSite: 'lax' }), signCreatorSession: async (id,user) => { assert.equal(id,accountId); assert.equal(user,'review-auth'); signed++; return 'signed-review-session'; } },
   '@/lib/creator-routing': { CREATOR_PORTAL_COOKIE: 'portal', creatorPortalCookieOptions: () => ({ httpOnly: true, path: '/' }) },
   '@/lib/form-origin': { dashboardOrigin: () => 'https://dashboard.lynqai.co' },
-  '@/lib/agency-policy': { AGENCY_COOKIE: 'agency' }, '@/lib/agency-brand': { AGENCY_PORTAL_COOKIE: 'agency_portal' },
+  '@/lib/agency-session': { AGENCY_REFRESH_COOKIE: 'agency_refresh' },
+ '@/lib/agency-policy': { AGENCY_COOKIE: 'agency' }, '@/lib/agency-brand': { AGENCY_PORTAL_COOKIE: 'agency_portal' },
   '@/lib/session': { SESSION_COOKIE: 'admin' }, '@/lib/clone-scope': { CLONE_SCOPE_COOKIE: 'clone' }
 });
 function get(key=fixtureKey, query='', headers={}) { return route.GET(new NextRequest(`https://dashboard.lynqai.co/onboarding-review/${key}${query}`,{headers}), { params: Promise.resolve({key}) }); }
 (async () => {
   reset(); assert.equal((await get('b'.repeat(64))).status,404); assert.equal((await get('bad')).status,404); assert.equal((await get(fixtureKey,'',{'next-action':'forged'})).status,404); assert.equal((await route.HEAD()).status,404); assert.equal(calls.length,0); assert.equal(creates,0); assert.equal(signed,0);
-  reset(); let r=await get(); assert.equal(r.status,303); assert.equal(r.headers.get('location'),'https://dashboard.lynqai.co/creator/onboarding'); assert.match(r.headers.get('set-cookie'),/HttpOnly/); assert.equal(r.headers.get('cache-control'),'private, no-store'); assert.equal(r.headers.get('referrer-policy'),'no-referrer'); assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow'); assert.equal(creates,0);
+  reset(); let r=await get(); assert.equal(r.status,303); assert.equal(r.headers.get('location'),'https://dashboard.lynqai.co/creator/onboarding'); assert.equal(r.cookies.get('agency_refresh')?.value, ''); assert.match(r.headers.get('set-cookie'),/HttpOnly/); assert.equal(r.headers.get('cache-control'),'private, no-store'); assert.equal(r.headers.get('referrer-policy'),'no-referrer'); assert.equal(r.headers.get('x-robots-tag'),'noindex, nofollow'); assert.equal(creates,0);
   r=await get(fixtureKey,'?step=content&next=https://evil.invalid'); assert.equal(r.headers.get('location'),'https://dashboard.lynqai.co/creator/onboarding?step=content'); assert.equal(creates,0); assert.equal(deletes,0);
   reset(); r=await get(reissuedFixtureKey,'?step=content'); assert.equal(r.status,303); assert.equal(r.headers.get('location'),'https://dashboard.lynqai.co/creator/onboarding?step=content'); assert.equal(creates,0); assert.equal(signed,1);
   reset(); account.account_status='archived'; assert.equal((await get(reissuedFixtureKey)).status,404); assert.equal(signed,0);
