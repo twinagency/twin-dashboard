@@ -10,11 +10,14 @@ begin;
 create role anon;
 create role authenticated;
 create role service_role bypassrls;
+-- Match Supabase default table privileges, rather than plain PostgreSQL defaults.
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 create table public.clones(id uuid primary key);
 create table public.agency_memberships(user_id uuid primary key, agency_id uuid not null);
 insert into public.clones values ('10000000-0000-4000-8000-000000000001');
 insert into public.agency_memberships values ('20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001');
 \ir ../supabase/migrations/20261021200512_staff_creator_scope_and_shared_media.sql
+\ir ../supabase/migrations/20261021201045_restrict_shared_media_receipt_grants.sql
 do $$ begin
  assert (select creator_scope='all' and creator_ids='{}'::uuid[] and creator_access_revision is not null from public.agency_memberships);
  update public.agency_memberships set creator_scope='selected';
