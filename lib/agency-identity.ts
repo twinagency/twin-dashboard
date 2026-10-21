@@ -33,4 +33,3 @@ export async function agencyIdentityById(agencyId: string): Promise<AgencyIdenti
   if (cloneIds.some(id => !/^[0-9a-f-]{36}$/i.test(id))) return null;
   return { id: agency.data.id, name: agency.data.name, cloneIds };
 }
-

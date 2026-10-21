@@ -70,4 +70,3 @@ export async function POST(req: NextRequest) {
 
   return back(`created=${encodeURIComponent(code)}`);
 }
-

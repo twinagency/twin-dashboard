@@ -129,4 +129,3 @@ async function main(){
   console.log(`Lynq management: live controls, ${guarded} guarded actions, clone/fan/media isolation, immutable ledger/credentials, CSRF, revocation, storage, business routes and read-only-agency regression checks passed`);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
-

@@ -26,4 +26,3 @@ export default async function AgencyAdmin({ searchParams }: { searchParams: Prom
   if (selected) return <TwinTeamAccess key={selected.id} agencies={agencies.data} agency={selected} members={members.error ? [] : (members.data as Member[]).slice(0,100)} creators={creators.data ?? []} creatorsUnavailable={!!assignments.error || !!creators.error || ids.length > 1000} error={!!members.error} status={status} fixedManagement={fixedManagement} managementAvailable={managementAvailable} truncated={(members.data?.length ?? 0)>100} />;
   return <main className="dashboard-page"><h1>Team & access</h1><p>No active agencies are configured.</p></main>;
 }
-

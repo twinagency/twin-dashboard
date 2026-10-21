@@ -145,5 +145,3 @@ async function main() {
   console.log("Moxy: tenant-bound login, revocation, read-only methods, disabled routes, two-creator scoping, private settings, branding and admin isolation passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
-
-

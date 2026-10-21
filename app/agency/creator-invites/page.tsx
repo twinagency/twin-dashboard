@@ -121,4 +121,3 @@ export default async function AgencyCreatorInvites({ searchParams }: { searchPar
     </main>
   );
 }
-

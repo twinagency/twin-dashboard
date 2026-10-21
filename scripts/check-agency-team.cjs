@@ -61,4 +61,3 @@ async function main(){
  }finally{delete globalThis.__agencyTeamTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
-

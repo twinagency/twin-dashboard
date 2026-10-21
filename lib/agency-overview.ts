@@ -106,4 +106,3 @@ export async function getAgencyOnboardingCreators(): Promise<OverviewCreator[]> 
     position: '50% 20%', zoom: 1, fans: 0, telegramConnected: false,
   }));
 }
-

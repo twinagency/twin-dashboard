@@ -35,4 +35,3 @@ export async function POST(req: NextRequest) {
   await serviceClient().rpc("link_creator_platform_profile",{p_account_id:creatorAccountId,p_clone_id:cloneId||null});
   return back();
 }
-

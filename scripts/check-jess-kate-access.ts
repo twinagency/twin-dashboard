@@ -91,4 +91,3 @@ async function main(){
   console.log("Jess and Kate AI: fixed-account login, one-creator scope, editing, cross-tenant denial, independent branding, revocation, admin password management and logout passed");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
-

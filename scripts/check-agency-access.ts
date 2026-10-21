@@ -69,4 +69,3 @@ async function main() {
   console.log("Agency access: scope, direct-route protection, server-action blocking, revocation and forged-token checks passed");
 }
 main().catch(e=>{console.error(e);process.exit(1)});
-

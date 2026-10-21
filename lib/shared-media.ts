@@ -37,7 +37,9 @@ export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
   if (row.job_id && row.job_id !== job.jobId || job.files.length !== 1) throw Error("upload_mismatch");
   const file = job.files[0];
   if (file.fileId !== row.file_id || file.name !== row.file_name || file.size !== row.size_bytes) throw Error("upload_mismatch");
-  if (file.receivedBytes > 0 && (file.receivedBytes !== row.size_bytes && file.receivedBytes % MAX_CHUNK_BYTES !== 0
+  // The backend publishes the chunk-prefix proof only while receiving. Once
+  // queued it reports the full byte count and a null prefix, retaining the job.
+  if (job.status === "receiving" && file.receivedBytes > 0 && (file.receivedBytes !== row.size_bytes && file.receivedBytes % MAX_CHUNK_BYTES !== 0
     || file.prefixDigest !== sharedDigest(row.chunk_sha256.slice(0, Math.ceil(file.receivedBytes / MAX_CHUNK_BYTES)).join("")))) throw Error("upload_prefix_mismatch");
   const status = job.status === "complete" && (file.status !== "done" || !file.mediaId) ? "failed" : job.status;
   return { job_id: job.jobId, status, media_id: file.mediaId, processing: file.processing, received_bytes: file.receivedBytes, error_code: file.error || status === "failed" ? "provider_review_required" : job.lastError };

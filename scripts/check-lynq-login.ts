@@ -148,4 +148,3 @@ async function main() {
   console.log("LYNQ login: original and additional member authentication, revocation, read-only scope, sign-out and admin switching passed");
 }
 main().catch(error=>{console.error(error);process.exit(1)});
-

@@ -142,4 +142,3 @@ async function main() {
   console.log("Tether: member-only login, one/two-creator scope, management, cross-agency denial, cache separation, revocation and logout passed");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-

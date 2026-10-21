@@ -66,4 +66,3 @@ function StaffCreatorForm({ agencyId, member, creators }: { agencyId: string; me
     <button className="twin-primary-link" type="submit">Save creator access</button>
   </form>;
 }
-

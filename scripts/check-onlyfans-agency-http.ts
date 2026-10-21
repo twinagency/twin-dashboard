@@ -131,4 +131,3 @@ async function main() {
   } finally { await browser?.close(); child.kill(); fixture.closeAllConnections(); await new Promise<void>(resolve => fixture.close(() => resolve())); closeSync(log); }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-

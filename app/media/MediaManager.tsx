@@ -1875,4 +1875,3 @@ function PricingTab({
     </div>
   );
 }
-

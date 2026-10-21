@@ -146,4 +146,3 @@ async function main() {
   console.log("MOXY OWNER ACCESS PASSED: server-owned permission, scoped mutations, unchanged readers, spoofing/CSRF/revocation defenses, private settings and separate cache keys");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-
