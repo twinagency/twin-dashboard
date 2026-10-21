@@ -46,7 +46,7 @@
 
  .metrics>.metric:first-child { grid-column:1/-1; padding:20px; }
  .metric:first-child strong { font-size:36px; }
- .selectedPortrait { position:static; opacity:1; width:56px; height:56px; }
+ .selectedPortrait { position:relative; opacity:1; width:56px; height:56px; }
 }
 .hero.hero { flex-wrap:nowrap; }
 .heroCopy,.creatorDisplay { flex:0 0 auto; min-width:0; }
