@@ -43,7 +43,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
 export type FullData = DashboardData & {
-  analytics: AnalyticsData;
+  analytics: AnalyticsData | null;
   balance: StarBalance | null;
   /** Server snapshot metadata. The API deliberately never serves browser-cached revenue. */
   cachedAt: number;
@@ -262,6 +262,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   // Keep its clone colour, but lower the opacity so "Live" is distinguishable
   // without introducing an off-theme grey bar.
 
+  const summaryOnly = !!sharedOverview && !showDetailed;
   const fetchData = useCallback(
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null, force = false) => {
       const request = ++newestRequest.current;
@@ -276,6 +277,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
         params.set("period", p);
       }
       if (cid) params.set("clone", cid);
+      if (summaryOnly) params.set("summary", "1");
       // A normal dashboard request waits if its one-minute snapshot has just
       // expired. An explicit refresh asks for a new snapshot even if it is
       // still warm, so the operator can verify the live ledger immediately.
@@ -300,7 +302,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       setData(json);
       setLoading(false);
     },
-    [],
+    [summaryOnly],
   );
 
   // Opening the report scrolls it into view (it renders below the fold).
@@ -423,6 +425,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   const summaryStats = focusStats ?? data?.totals ?? null;
   const summaryRevenuePerBuyer = summaryStats && summaryStats.buyers > 0 ? displayStars / summaryStats.buyers : null;
   const summaryAverageOrder = summaryStats && summaryStats.sales > 0 ? summaryStats.grossPaymentStars / summaryStats.sales : null;
+  const overviewConversion = data?.overviewConversion ?? data?.analytics?.buyerConversion;
   const primaryKpis = data && summaryStats
     ? [
         {
@@ -440,10 +443,10 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
         },
         {
           label: "Messaged → buyer",
-          value: data.analytics.buyerConversion.activeChatBuyerRate === null
+          value: overviewConversion?.activeChatBuyerRate == null
             ? "-"
-            : pct(data.analytics.buyerConversion.activeChatBuyerRate),
-          meta: `${fmtNum(data.analytics.buyerConversion.activeChatBuyers)} of ${fmtNum(data.analytics.buyerConversion.activeChatters)}`,
+            : pct(overviewConversion.activeChatBuyerRate),
+          meta: overviewConversion ? `${fmtNum(overviewConversion.activeChatBuyers)} of ${fmtNum(overviewConversion.activeChatters)}` : "Selected period",
           hint: "Of the people who sent a message during the selected dates, the share who also bought during those same dates. This does not prove the message caused the purchase.",
         },
         {
@@ -1000,7 +1003,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
           stays above the broad report so it is not buried behind a toggle. */}
       <div className="space-y-3">
         {dayDetailAvailable && <RevenueDayDrivers cloneId={cloneId} />}
-        {data && (
+        {data?.analytics && (
           <CreatorPerformanceRail
             creators={data.analytics.clones}
             totalStars={data.analytics.totals.revenueStars}
@@ -1014,7 +1017,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       {/* ── Secondary operating metrics: one structured matrix, not a wall of
           detached dashboard cards. Every measure still follows its original
           scope/window semantics. ───────────────────────────────────────── */}
-      {data && (
+      {data?.analytics && (
         <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
@@ -1043,7 +1046,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
             // earner" fact below so the two cannot print different answers on
             // the same screen — they did, "Photos 21%" here against "Media 61%"
             // there, because this one dropped the catch-all buckets first.
-            const topKind = topFeatureRow(data.analytics.byFeature);
+            const topKind = data.analytics ? topFeatureRow(data.analytics.byFeature) : null;
             const periodScope = customRange ? "the selected calendar range" : "the selected reporting period";
             const creatorScope = cloneId ? "this creator" : "all creators";
             const profileScopeNote = cloneId
@@ -1166,7 +1169,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       {/* One analysis workspace replaces three oversized disclosure cards. The
           selected tab changes presentation only; all panels still use the same
           fetched analytics payload, period and creator scope. */}
-      {data && (
+      {data?.analytics && (
         <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
             <div className="pb-2">

@@ -42,6 +42,7 @@ export const GET = withAdmin(async (req) => {
     window.range,
   );
 
+  if (!analytics) return jsonError("Performance analysis temporarily unavailable", 503);
   return ok({
     period,
     range: window.range ?? null,

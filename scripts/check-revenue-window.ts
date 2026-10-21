@@ -74,7 +74,7 @@ check("W5 dashboard, analytics, and cache all use the shared resolver", () => {
   assert(/resolveRevenueWindow\(/.test(dashboard), "dashboard must resolve the shared window");
   assert(/resolveRevenueWindow\(/.test(analytics), "analytics must resolve the shared window");
   assert(/const sharedRange = await resolveRevenueWindow\(/.test(cache), "cache must resolve once for both halves");
-  assert(/getDashboard\(period, sharedRange, nowMs\)/.test(cache), "dashboard must receive the shared range");
+  assert(/getDashboard\(period, sharedRange, nowMs(?:,|\))/.test(cache), "dashboard must receive the shared range");
   assert(/getAnalytics\(period, cloneId, sharedRange, undefined, nowMs\)/.test(cache), "analytics must receive the shared range");
 });
 

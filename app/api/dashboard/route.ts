@@ -44,9 +44,12 @@ async function read(req: NextRequest) {
       return NextResponse.json(withoutCreatorPurchaseHistory(creatorDemoData(period, range), access), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "synthetic-demo" } });
     }
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
-    const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
+    const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force", summary: req.nextUrl.searchParams.get("summary") === "1" }), getScopedBalance(clone)]);
     const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
-    return NextResponse.json(withoutCreatorPurchaseHistory(applyCreatorShare({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale }, creatorShare(access)), access), { headers: { "Cache-Control": "private, no-store" } });
+    const outDashboard = req.nextUrl.searchParams.get("summary") === "1"
+      ? { ...dashboard, recent: dashboard.recent.filter(row => !clone || row.cloneId === clone).slice(0, 5) }
+      : dashboard;
+    return NextResponse.json(withoutCreatorPurchaseHistory(applyCreatorShare({ ...outDashboard, analytics, balance, cachedAt, ageSeconds, stale }, creatorShare(access)), access), { headers: { "Cache-Control": "private, no-store" } });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 500 }); }
 }
 export const GET = dashboardReader(read);

@@ -1,7 +1,9 @@
+import { getOverviewConversion, type OverviewConversion } from "./analytics-data";
+import { signDashboardMedia } from "./media-signing-cache";
 import { getOverviewRankings } from "./overview-rankings";
 import type { OverviewRankings } from "./overview-rankings-model";
 import { supabaseAdmin } from "./supabase";
-import { selectAllRows } from "./select-all";
+import { selectAllRows, selectAllRowsParallel } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
 import { cloneUserStats, cloneUserStatsWindow, usageRollup } from "./rollup";
 import { REPORT_TZ, reportInstant } from "./report-time";
@@ -111,6 +113,7 @@ export type RecentTransaction = {
 };
 
 export type DashboardData = {
+  overviewConversion?: OverviewConversion | null;
   rankings?: OverviewRankings;
   rankingsError?: string;
   period: Period;
@@ -202,7 +205,7 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   return { keys, labels, keyFor };
 }
 
-export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now()): Promise<DashboardData> {
+export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now(), options?: { overviewCloneId: string | null }): Promise<DashboardData> {
   const spec = SPEC[period];
   const now = nowMs;
   const window = await resolveRevenueWindow(period, range, now);
@@ -246,29 +249,14 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     // moved ahead of the read that has to succeed.
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
-    const paged = await selectAllRows(
-      supabaseAdmin
-        .from("star_transactions")
+    const paged = await selectAllRowsParallel<PurchaseRow>(() =>
+      supabaseAdmin.from("star_transactions")
         .select(hasFeature ? COLS : COLS_LEGACY)
         .gte("paid_at", new Date(startMs).toISOString())
         .lte("paid_at", new Date(windowEnd).toISOString())
-        // ORDER BY id is correctness, not tidiness, and this read is the
-        // headline revenue figure itself. selectAllRows walks the table 1,000
-        // rows at a time with .range() while star_transactions is being
-        // inserted into; without a stable sort, rows shift between pages and
-        // the same row is counted twice or missed. Measured on usage_events by
-        // check-revenue-rollups.ts: 30,290 rows read, 22,285 distinct, 26%
-        // double-counted, a cost total of 37.38 against a true 33.94.
-        //
-        // The 2026-08-21 audit filed this against BOTH paged star_transactions
-        // reads and the fix landed on only one of them (lib/analytics-data.ts,
-        // commit 0743c99). This is the other one, and it is the more expensive
-        // of the two to have wrong: analytics feeds the report panels, this
-        // feeds the headline, every stat tile, the chart and now revenue per
-        // conversation.
         .order("id", { ascending: true }),
-      { label: "dashboard revenue ledger" },
-    );
+      { label: "dashboard revenue ledger" });
+    if (paged.truncated) throw new Error("Could not read the complete revenue ledger. Please retry.");
     return hasFeature
       ? (paged.rows as PurchaseRow[])
       : (paged.rows as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
@@ -321,6 +309,14 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     cloneUserStatsWindow(now - MS_DAY, now),
   ]);
   const clones = (cloneRows ?? []) as { id: string; slug: string; name: string; intake: unknown }[];
+  const ledger = rollupRevenueLedger(purchases);
+  const conversionRead = options ? getOverviewConversion(startMs, windowEnd, options.overviewCloneId,
+    new Set([...(options.overviewCloneId ? ledger.clonePaidOrdersPerFan.get(options.overviewCloneId)?.keys() ?? [] : ledger.fleetPaidOrdersPerFan.keys())].map(Number)))
+    .catch(() => null) : Promise.resolve(undefined);
+  const rankingsRead = getOverviewRankings(purchases, clones).then(
+    rankings => ({ rankings, rankingsError: undefined }),
+    () => ({ rankings: undefined, rankingsError: "Rankings could not be refreshed. Please try again." }),
+  );
   const colorById = new Map<string, string>();
   clones.forEach((c, i) => colorById.set(c.id, chartColorForClone(c.intake, i)));
 
@@ -344,9 +340,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     }
     const entries = [...firstPath.entries()];
     if (entries.length) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from("media")
-        .createSignedUrls(entries.map((e) => e[1]), 3600);
+      const { data: signed } = await signDashboardMedia(entries.map((e) => e[1]));
       (signed ?? []).forEach((s, i) => {
         if (s.signedUrl) photoById.set(entries[i][0], s.signedUrl);
       });
@@ -357,7 +351,6 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // The rollup deliberately keeps its paid-order subset separate: a refund or
   // adjustment lowers net proceeds, but never becomes an order, buyer, or
   // repeat purchase.
-  const ledger = rollupRevenueLedger(purchases);
   const ledgerPurchases = ledger.rows;
 
   // bucketKey -> cloneId -> stars
@@ -568,7 +561,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     ...new Set([...mediaAssetByKey.values()].map((asset) => asset.path).filter((path): path is string => !!path)),
   ];
   const { data: signedMedia } = mediaPaths.length
-    ? await supabaseAdmin.storage.from("media").createSignedUrls(mediaPaths, 3600)
+    ? await signDashboardMedia(mediaPaths)
     : { data: [] as { signedUrl: string | null }[] };
   const signedUrlByPath = new Map(mediaPaths.map((path, i) => [path, signedMedia?.[i]?.signedUrl ?? null]));
 
@@ -674,11 +667,9 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   const totalBuyers = fleetTxPerFan.size;
   const fleetRepeatBuyers = repeatBuyerCount(fleetTxPerFan);
 
-  let rankings: OverviewRankings | undefined;
-  let rankingsError: string | undefined;
-  try { rankings = await getOverviewRankings(purchases, clones); } catch { rankingsError = "Rankings could not be refreshed. Please try again."; }
+  const [{ rankings, rankingsError }, overviewConversion] = await Promise.all([rankingsRead, conversionRead]);
   return {
-    rankings, rankingsError,
+    rankings, rankingsError, overviewConversion,
     period,
     clones: summaries,
     bucketLabels: labels,

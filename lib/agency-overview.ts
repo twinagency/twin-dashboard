@@ -1,3 +1,4 @@
+import { signDashboardMedia } from "./media-signing-cache";
 import { supabaseAdmin } from './supabase';
 import { getDashboardAccess } from './dashboard-access';
 import { chartColorForClone, profileImagePathForClone } from './colors';
@@ -36,7 +37,7 @@ export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
   }));
   const paths = rows.flatMap(r => [r.portraitPath, r.cardPath, r.heroPath]).filter((p): p is string => !!p);
   const { data: signed, error: signingError } = paths.length
-    ? await supabaseAdmin.storage.from('media').createSignedUrls(paths, 3600)
+    ? await signDashboardMedia(paths)
     : { data: [], error: null };
   if (signingError) throw new Error('Creator portraits could not be refreshed.');
   const image = (path?: string, id?: string, zoom = 1, crop?: AgencyOverviewCrop) => {
