@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import SharedOverview from "@/components/overview/SharedOverview";
 import RevenueDashboard from "@/components/RevenueDashboard";
 import type { OverviewCreator } from "@/lib/agency-overview";
 
@@ -21,5 +22,5 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
     }, 300000);
     return () => { clearInterval(interval); controller.abort(); };
   }, []);
-  return <RevenueDashboard cloneId={cloneId} sharedOverview={{ creators, creatorsHref: "/clones", chatHref: "/users" }} />;
+  return <RevenueDashboard cloneId={cloneId} sharedOverview={{ component: SharedOverview, creators, creatorsHref: "/clones", chatHref: "/users" }} />;
 }

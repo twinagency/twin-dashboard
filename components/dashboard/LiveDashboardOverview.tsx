@@ -1,5 +1,7 @@
 "use client";
 
+import { setCloneScope } from "@/app/actions/clone-scope";
+import SharedOverview from "@/components/overview/SharedOverview";
 import RevenueDashboard, { type FullData } from "@/components/RevenueDashboard";
 import { LiveOverviewHero, LiveOverviewActivity, LiveOverviewRankings, type OverviewClone } from "./LiveOverview";
 import styles from "./LiveOverview.module.css";
@@ -8,7 +10,7 @@ import styles from "./LiveOverview.module.css";
 export default function LiveDashboardOverview({ cloneId, clones, initialData }: {
   cloneId?: string | null; clones: OverviewClone[]; initialData?: FullData | null;
 }) {
-  return <RevenueDashboard cloneId={cloneId} initialData={initialData} sharedOverview={{ creators: clones, creatorsHref: "/clones", chatHref: "/users?workspace=telegram", brand: "twin" }} overviewPresentation={{
+  return <RevenueDashboard cloneId={cloneId} initialData={initialData} sharedOverview={{ component: SharedOverview, creators: clones, creatorsHref: "/clones", chatHref: "/users?workspace=telegram", brand: "twin", onSelectCreator: setCloneScope }} overviewPresentation={{
     className: styles.page,
     header: windowLabel => <LiveOverviewHero clones={clones} cloneId={cloneId} windowLabel={windowLabel} />,
     activity: (data, money) => <LiveOverviewActivity data={data} cloneId={cloneId} money={money} />,
