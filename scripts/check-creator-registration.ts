@@ -50,6 +50,7 @@ const dependencies: Record<string, any> = {
   "@/lib/supabase-service": { serviceClient: () => db },
   "@/lib/creator-session": { CREATOR_SESSION_COOKIE: "creator", creatorCookieOptions: () => ({}), signCreatorSession: async () => "synthetic-session" },
   "@/lib/creator-origin": { creatorRequestUrl: (r: Request, path: string) => new URL(path, r.url) },
+  "@/lib/agency-session": { AGENCY_REFRESH_COOKIE: "agency-refresh" },
   "@/lib/agency-policy": { AGENCY_COOKIE: "agency" }, "@/lib/agency-brand": { AGENCY_PORTAL_COOKIE: "agency-brand" },
   "@/lib/session": { SESSION_COOKIE: "admin" }, "@/lib/clone-scope": { CLONE_SCOPE_COOKIE: "clone" },
   "@/lib/partner-portals": { TETHER_PORTAL: { id: "tether-agency" } },
