@@ -80,12 +80,12 @@ if settings.get('MONITOR_LOAD_REVISION')==revision:
  recorded=json.loads((release/'result.json').read_text())
  actual=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
  print(json.dumps({'currentSource':sha(actual),'recordedSource':recorded['serverSha256'],'patchPresence':[{'old':actual.decode().count(patch['old']),'new':actual.decode().count(patch['new'])} for patch in payload['patches']],'monitorImage':before_dash['image']}),flush=True)
- assert sha(actual)==recorded['serverSha256'],'Monitor source changed after this release'
+ if payload['patches']:assert sha(actual)==recorded['serverSha256'],'Edited monitor source changed after this release'
  if payload.get('history'):assert sha(old_history)==recorded['historySha256'],'History source changed after this release'
  verified=verify();assert runtime('twin-v2-bot-1')==before_bot,'Concurrent bot release'
  print(json.dumps({'alreadyDeployed':revision,'verified':verified,'botUnchanged':True}));raise SystemExit(0)
 old_server=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
-assert sha(old_server)==payload['expectedServerSha256'],'Monitor source changed since inspection'
+if payload['patches']:assert sha(old_server)==payload['expectedServerSha256'],'Edited monitor source changed since inspection'
 source=old_server.decode()
 for patch in payload['patches']:
  assert source.count(patch['old'])==1,'Fan reader changed since inspection'
