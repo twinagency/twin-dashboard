@@ -22,21 +22,39 @@ def verify():
   except (OSError,AssertionError):
    if attempt==19:raise
    time.sleep(0.5)
- report=[]
- for slug in ['briana-redd','fit-sid']:
-  start=time.monotonic()
-  with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+slug,timeout=12) as r:rows=json.load(r)
-  elapsed=round((time.monotonic()-start)*1000)
-  print(json.dumps({'creator':slug,'initialFanReadMs':elapsed,'fans':len(rows)}),flush=True)
-  assert isinstance(rows,list) and rows,'Existing monitor fans available'
-  fan=next(row for row in rows if str(row.get('chatId','')).isdigit())
-  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=60) as r:history=json.load(r)
+ # Populate the fleet once after restart. Later calls keep the incremental
+ # offsets and validate changed chat files and receipts on every read.
+ with urllib.request.urlopen('http://127.0.0.1:4300/api/girls',timeout=90) as r:creators=json.load(r)
+ selected={};report=[]
+ for creator in creators:
+  slug=creator.get('slug','')
+  if creator.get('engine')!='v2':continue
+  assert slug and all(c.isalnum() or c=='-' for c in slug)
+  started=time.monotonic()
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+slug,timeout=60) as r:rows=json.load(r)
+  assert isinstance(rows,list)
+  elapsed=round((time.monotonic()-started)*1000)
+  print(json.dumps({'preparedCreator':slug,'fans':len(rows),'ms':elapsed}),flush=True)
+  if slug in ['briana-redd','fit-sid']:
+   assert rows,'Existing selected creator fans available'
+   fan=next(row for row in rows if str(row.get('chatId','')).isdigit())
+   selected[slug]=(str(fan['chatId']),elapsed,len(rows))
+ for slug,(fan_id,elapsed,count) in selected.items():
+  url='http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+fan_id
+  with urllib.request.urlopen(url,timeout=60) as r:history=json.load(r)
   assert history.get('scope')=='all-stored' and history.get('days') is None
-  warm=time.monotonic()
-  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=8) as r:again=json.load(r)
-  warm_ms=round((time.monotonic()-warm)*1000)
+  start=time.monotonic()
+  with urllib.request.urlopen(url,timeout=8) as r:again=json.load(r)
   assert again.get('scope')=='all-stored' and again.get('days') is None
-  report.append({'creator':slug,'fans':len(rows),'fanReadMs':elapsed,'warmHistoryMs':warm_ms,'history':'all-stored'})
+  report.append({'creator':slug,'fans':count,'initialFanReadMs':elapsed,'warmHistoryMs':round((time.monotonic()-start)*1000),'history':'all-stored'})
+ assert len(selected)==2,'Both existing creator histories verified'
+ # A second whole-fleet pass must remain responsive after more than six
+ # creators were read; this is the production regression that was failing.
+ start=time.monotonic()
+ for creator in creators:
+  if creator.get('engine')!='v2':continue
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+creator['slug'],timeout=8) as r:assert isinstance(json.load(r),list)
+ print(json.dumps({'repeatFleetReadMs':round((time.monotonic()-start)*1000),'creatorSummariesRetained':True}),flush=True)
  return report
 # Recover only the exact failed rollback state from this rollout. A different
 # current configuration, image or bot is a concurrent release, so refuse it.
@@ -72,10 +90,12 @@ assert inspect('twin-v2-dash-1')['Config']['Labels']['com.docker.compose.project
 for file,data in [('server-before.ts',old_server),('override-before.json',old_override),('before.json',json.dumps({'bot':before_bot,'dash':before_dash}).encode())]:atomic(release/file,data)
 atomic(release/'server.ts',new_server)
 atomic(release/'parity.cjs',pathlib.Path('/tmp/messages-monitor-parity.cjs').read_bytes())
-atomic(release/'Dockerfile',b'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nCOPY server.ts /app/dashboard/server.ts\nCOPY server-before.ts /app/deployment/messages-monitor-original.source\nCOPY parity.cjs /app/deployment/messages-monitor-parity.cjs\n')
+atomic(release/'fleet-cache.cjs',pathlib.Path('/tmp/messages-monitor-fleet-cache.cjs').read_bytes())
+atomic(release/'Dockerfile',b'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nCOPY server.ts /app/dashboard/server.ts\nCOPY server-before.ts /app/deployment/messages-monitor-original.source\nCOPY parity.cjs /app/deployment/messages-monitor-parity.cjs\nCOPY fleet-cache.cjs /app/deployment/messages-monitor-fleet-cache.cjs\n')
 tag='twin-monitor-messages:'+revision
 subprocess.run(['docker','build','--network=none','--build-arg','BASE_IMAGE='+before_dash['image'],'-t',tag,str(release)],check=True,timeout=120)
 subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_INCREMENTAL=1','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-parity.cjs'],check=True,timeout=45)
+subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-fleet-cache.cjs'],check=True,timeout=45)
 subprocess.run(['docker','run','--rm','--network=none','--entrypoint','node',tag,'--import','tsx','scripts/check-dashboard-history.ts'],check=True,timeout=45)
 image=subprocess.check_output(['docker','image','inspect','-f','{{.Id}}',tag],text=True).strip()
 assert runtime('twin-v2-bot-1')==before_bot and runtime('twin-v2-dash-1')==before_dash,'Concurrent runtime change'

@@ -21,7 +21,7 @@ def ssm(command, timeout=120):
         time.sleep(3)
     raise RuntimeError('History update timed out')
 
-for name in ['messages-monitor-patch.json', 'messages-monitor-parity.cjs', 'messages-monitor-release-host.py']:
+for name in ['messages-monitor-patch.json', 'messages-monitor-parity.cjs', 'messages-monitor-fleet-cache.cjs', 'messages-monitor-release-host.py']:
     encoded = base64.b64encode(zlib.compress(pathlib.Path('deployment', name).read_bytes())).decode()
     assert len(encoded) < 16000
     code = 'import pathlib,base64,zlib; pathlib.Path(' + repr('/tmp/' + name) + ').write_bytes(zlib.decompress(base64.b64decode(' + repr(encoded) + ')))'
