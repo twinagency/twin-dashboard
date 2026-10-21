@@ -62,6 +62,8 @@ jobs:
       - name: Creator platform ownership and connection journey
         run: |
           node scripts/check-creator-preparation.cjs
+          node --import tsx scripts/check-onlyfans-connection-status.ts
+          node scripts/check-agency-team.cjs
           node scripts/check-creator-platforms.cjs
           node scripts/check-creator-platforms-ui.mjs
           node scripts/check-creator-sign-in-ui.mjs

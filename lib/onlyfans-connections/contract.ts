@@ -3,9 +3,12 @@ export const CONNECTION_SCHEMA = "of-connections.v1";
 export const CONNECTION_HEADER = "X-OnlyFans-Connection-Version";
 export type ConnectionCreator = { id: string; name: string };
 export type ConnectionStatus = "unconfigured" | "pending" | "verified" | "failed" | "expired" | "paused";
+export type ConnectionSync = { discoveryStatus: "not_started" | "needed" | "running" | "complete"; pages: number;
+  conversationsComplete: number; conversationsRemaining: number; pendingMessages: number; quarantinedMessages: number;
+  recoveryRequired: boolean; lastCompleteSyncAt: string | null };
 export type Connection = { accountId: string; revision: number; status: ConnectionStatus; ownerId: string | null;
   expiresAt: string | null; verifiedAt: string | null; lastError: string | null; outgoingEnabled: boolean;
-  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean };
+  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync };
 export type ConnectionSave = { ownerId: number; capture: Record<string, unknown>; xHash: string; proxyUrl: string | null;
   expiresAt: string; model: { modelId: string; apiKey: string } | null };
 export type ConnectionRequest = { expectedRevision: number } & (
@@ -73,10 +76,18 @@ export function validConnectionRequest(value: unknown): value is ConnectionReque
 export function validConnectionRegistration(value: unknown): value is ConnectionRegistration {
   return object(value) && exact(value, ["creatorId", "ownerId", "handle"]) && id(value.creatorId) && integer(value.ownerId, 1) && bytes(value.handle, 160);
 }
+export function parseConnectionSync(value: unknown): ConnectionSync | null {
+  if (!object(value) || !exact(value, ["discoveryStatus", "pages", "conversationsComplete", "conversationsRemaining", "pendingMessages", "quarantinedMessages", "recoveryRequired", "lastCompleteSyncAt"])
+    || !["not_started", "needed", "running", "complete"].includes(String(value.discoveryStatus))
+    || ![value.pages, value.conversationsComplete, value.conversationsRemaining, value.pendingMessages, value.quarantinedMessages].every(v => integer(v))
+    || typeof value.recoveryRequired !== "boolean" || !(value.lastCompleteSyncAt === null || stamp(value.lastCompleteSyncAt))) return null;
+  return value as ConnectionSync;
+}
 export function parseConnection(value: unknown, accountId: string): Connection | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "connection"]) || value.schemaVersion !== CONNECTION_SCHEMA || value.ok !== true || !object(value.connection)) return null;
   const c = value.connection;
-  if (!exact(c, ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"]) ||
+  if (!(exact(c, ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"]) || exact(c, [...["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"], "sync"])) ||
+    ("sync" in c && !parseConnectionSync(c.sync)) ||
     c.accountId !== accountId || !id(c.accountId) || !integer(c.revision, 0, 2 ** 31 - 1) ||
     !["unconfigured", "pending", "verified", "failed", "expired", "paused"].includes(c.status as string) ||
     !(c.ownerId === null || ownerString(c.ownerId)) || !(c.expiresAt === null || stamp(c.expiresAt)) || !(c.verifiedAt === null || stamp(c.verifiedAt)) ||
