@@ -16,6 +16,7 @@ export default async function AgencyAdmin({ searchParams }: { searchParams: Prom
   const assignments = selected ? await db.from("agency_creators").select("clone_id").eq("agency_id",selected.id).limit(1001) : {data:[],error:null};
   const ids = (assignments.data ?? []).map(row => row.clone_id);
   const creators = ids.length && !assignments.error && ids.length <= 1000 ? await db.from("clones").select("id,name").in("id",ids).order("name") : {data:[],error:null};
+  const owners = selected ? await db.from("agency_team_owners").select("user_id").eq("agency_id", selected.id) : {data:[],error:null};
   const fixedManagement = selected ? agencyCanManage({id:selected.id,canManage:false}) : false;
   const managementAvailable = selected ? agencyCanManage({id:selected.id,canManage:true}) : false;
   const status = result === "created" ? "Team login created. Share the login URL and chosen password securely."
@@ -23,6 +24,7 @@ export default async function AgencyAdmin({ searchParams }: { searchParams: Prom
     : result === "updated" ? "Team access updated."
     : result === "conflict" ? "This membership changed or is unavailable. Review its current details before retrying."
     : result ? "Unable to complete that request. Check the account details." : null;
-  if (selected) return <TwinTeamAccess key={selected.id} agencies={agencies.data} agency={selected} members={members.error ? [] : (members.data as Member[]).slice(0,100)} creators={creators.data ?? []} creatorsUnavailable={!!assignments.error || !!creators.error || ids.length > 1000} error={!!members.error} status={status} fixedManagement={fixedManagement} managementAvailable={managementAvailable} truncated={(members.data?.length ?? 0)>100} />;
+  if (selected) return <TwinTeamAccess key={selected.id} agencies={agencies.data} agency={selected} members={members.error ? [] : (members.data as Member[]).slice(0,100)} ownerIds={(owners.data ?? []).map(row => row.user_id)} ownersUnavailable={!!owners.error} creators={creators.data ?? []} creatorsUnavailable={!!assignments.error || !!creators.error || ids.length > 1000} error={!!members.error} status={status} fixedManagement={fixedManagement} managementAvailable={managementAvailable} truncated={(members.data?.length ?? 0)>100} />;
   return <main className="dashboard-page"><h1>Team & access</h1><p>No active agencies are configured.</p></main>;
 }
+

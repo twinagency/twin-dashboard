@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
 import { hasInternalAdminAccess } from "@/lib/internal-admin";
@@ -20,8 +21,8 @@ export async function POST(req: NextRequest) {
   const agency = await db.from("partner_agencies").select("id").eq("id",command.agencyId).eq("active",true).maybeSingle();
   if (agency.error || !agency.data) return done("error");
   if (command.operation !== "create") {
-    let query = db.from("agency_memberships").update(command.operation === "revoke" ? {active:false}
-      : {active:true,can_manage:command.canManage}).eq("agency_id",command.agencyId).eq("email",command.email);
+    let query = db.from("agency_memberships").update(command.operation === "revoke" ? {active:false,creator_access_revision:randomUUID()}
+      : {active:true,can_manage:command.canManage,creator_access_revision:randomUUID()}).eq("agency_id",command.agencyId).eq("email",command.email);
     if (command.userId) query = query.eq("user_id",command.userId);
     if (command.expectedActive !== undefined) query = query.eq("active",command.expectedActive);
     if (command.expectedCanManage !== undefined) query = query.eq("can_manage",command.expectedCanManage);
@@ -39,3 +40,4 @@ export async function POST(req: NextRequest) {
   }
   return done("created");
 }
+
