@@ -15,6 +15,7 @@ jobs:
         with:
           script: |
             const superseded = new Set([
+              "d5424c70aa1174f9dbb9ba7ce7904b0cffd5035a",
               "9cd30998a674ff80b0cf216a5828364e972a0cfa",
               "54615bf811fdcd17d965a75575c975c454a2140d",
               "7d18790943ef96073f6a4a9dd09a781d05d31689",
