@@ -51,7 +51,8 @@ try {
     assert.equal(await page.getByRole('link', { name: 'Next page', exact: true }).innerText(), 'Next page', 'Pagination label stays in place');
     await page.getByRole('heading', { name: 'Page 2 ready' }).waitFor();
     assert.equal(await page.locator('[data-navigation-pending]').count(), 0, 'Completed navigation clears spinner');
-    const prefetch = page.waitForResponse(response => response.url().includes('/slow?page=3') && response.request().headers()['next-router-prefetch'] === '1');
+    // FULL prefetch uses a normal RSC request; only AUTO sets next-router-prefetch.
+    const prefetch = page.waitForResponse(response => response.url().includes('/slow?page=3') && response.request().headers()['rsc'] === '1' && response.request().headers()['next-router-prefetch'] !== '1');
     await page.getByRole('link', { name: 'Prepared page' }).hover(); const response = await prefetch; await response.finished();
     const prepared = Date.now(); await page.getByRole('link', { name: 'Prepared page' }).click(); await page.getByRole('heading', { name: 'Page 3 ready' }).waitFor(); const preparedMs = Date.now() - prepared;
     assert.ok(preparedMs < 1000, `Intent-prefetched page must avoid another 1.4s server read: ${preparedMs}ms`);
