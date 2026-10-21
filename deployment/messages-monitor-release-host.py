@@ -75,7 +75,11 @@ if (release/'before.json').exists():
 before_bot=runtime('twin-v2-bot-1');before_dash=runtime('twin-v2-dash-1')
 settings=dict(e.split('=',1) for e in inspect('twin-v2-dash-1')['Config']['Env'])
 if settings.get('MONITOR_LOAD_REVISION')==revision:
- print(json.dumps({'alreadyDeployed':revision,'verified':verify(),'botUnchanged':True}));raise SystemExit(0)
+ recorded=json.loads((release/'result.json').read_text())
+ actual=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
+ assert sha(actual)==recorded['serverSha256'],'Monitor source changed after this release'
+ verified=verify();assert runtime('twin-v2-bot-1')==before_bot,'Concurrent bot release'
+ print(json.dumps({'alreadyDeployed':revision,'verified':verified,'botUnchanged':True}));raise SystemExit(0)
 old_server=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
 assert sha(old_server)==payload['expectedServerSha256'],'Monitor source changed since inspection'
 source=old_server.decode()

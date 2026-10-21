@@ -41,6 +41,8 @@ const crypto = require('node:crypto');
     assert(html.includes('Fixture Fan')===false,'No synthetic fan page');
     assert(/Conversations|Messages|Fans/.test(html),'Messages workspace rendered');
     assert(!html.includes('NEXT_HTTP_ERROR_FALLBACK'),'No streamed route error');
+    assert(!html.includes('Could not refresh '),'Every live fan source is available');
+    assert(!html.includes('Some stored messages could not refresh'),'Selected stored history is available');
     timings.push({scope,headersMs,completeMs:Date.now()-start,bytes:Buffer.byteLength(html)});
   }
   console.log(JSON.stringify({runningCommit:process.env.GIT_SHA,messages:timings,method:'server HTTP through real page data; excludes phone network and browser rendering',readOnly:true}));
