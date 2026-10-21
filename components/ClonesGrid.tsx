@@ -3,7 +3,7 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import CreatorAvatar from "@/components/CreatorAvatar";
 import { toggleClonePause } from "@/app/clones/actions";
 import { Input } from "@/components/ui/input";

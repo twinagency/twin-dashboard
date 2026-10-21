@@ -1,6 +1,6 @@
 import MessagesWorkspace from "@/components/MessagesWorkspace";
 import { MutationForm } from "@/components/DashboardAccessProvider";
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
 import { getCloneScope } from "@/lib/clone-scope";

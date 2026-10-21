@@ -36,7 +36,7 @@ const bundle=await build({
     b.onResolve({filter:/^(next\/link|next\/navigation)$|(?:^|\/)TwinAssistant(?:\.tsx)?$/},args=>({path:args.path,namespace:'ui-fixture'}));
     b.onLoad({filter:/.*/,namespace:'ui-fixture'},args=>({loader:'jsx',resolveDir:root,contents:
       args.path.includes('TwinAssistant') ? 'export default function Assistant(){return null}' :
-      args.path==='next/link' ? 'import React from "react";export default function Link({children,...p}){return React.createElement("a",p,children)}' :
+      args.path==='next/link' ? 'import React from "react";export const useLinkStatus=()=>({pending:false});export default function Link({children,...p}){return React.createElement("a",p,children)}' :
       'export const usePathname=()=>"/revenue";export const useSearchParams=()=>new URLSearchParams();'
     }));
   }}],

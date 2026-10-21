@@ -39,6 +39,7 @@ jobs:
       - run: npm ci
       - name: Default agency homepage, summary loading and creator navigation
         run: |
+          node scripts/check-navigation-feedback.cjs
           node --import tsx scripts/check-overview-loading.cjs
           node --import tsx scripts/check-overview-recent.cjs
           node --import tsx scripts/check-overview-wallet.cjs
@@ -46,6 +47,7 @@ jobs:
       - name: Shared overview desktop and mobile interactions
         run: |
           npx playwright install --with-deps chromium
+          node scripts/check-navigation-ui.mjs
           node --import tsx scripts/check-shared-overview-ui.mjs
       - name: Private creator onboarding review link
         run: node scripts/check-onboarding-review.cjs

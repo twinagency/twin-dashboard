@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type ComponentType } from "react";
-import Link from "next/link";
+import { useEffect, useState, useTransition, type FormEvent, type ComponentType } from "react";
+import Link from "@/components/NavigationLink";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, MessageCircle, Plus, RefreshCw, UserRound, Users } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -52,7 +52,10 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
   const router = useRouter();
   const { isAgency, agencyName } = useDashboardAccess();
   const brand = configuredBrand ?? (agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin");
-  const [switching, setSwitching] = useState(false);
+  const [selecting, setSwitching] = useState(false);
+  const [navigating, startNavigation] = useTransition();
+  const [openingCreator, setOpeningCreator] = useState<string | null>(null);
+  const switching = selecting || navigating;
   const [switchError, setSwitchError] = useState("");
   const [chartType, setChartType] = useState<"line" | "bar">("line");
   const [byCreator, setByCreator] = useState(false);
@@ -79,7 +82,8 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
 
   async function chooseCreator(id: string) {
     if (switching) return;
-    if (creators.find(c => c.id === id)?.onboarding) { router.push("/agency/creators"); return; }
+    setOpeningCreator(id);
+    if (creators.find(c => c.id === id)?.onboarding) { startNavigation(() => router.push("/agency/creators")); return; }
     setSwitching(true); setSwitchError("");
     try {
       if (isAgency) {
@@ -87,8 +91,10 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
         if (!response.ok) throw new Error("Creator selection could not be changed. Please try again.");
       } else if (onSelectCreator) await onSelectCreator(id || null);
       else throw new Error("Creator selection is unavailable. Please refresh and try again.");
-      if (creatorOverviewPath) router.push(id ? `${creatorOverviewPath}?clone=${encodeURIComponent(id)}` : creatorOverviewPath);
-      router.refresh();
+      startNavigation(() => {
+        if (creatorOverviewPath) router.push(id ? `${creatorOverviewPath}?clone=${encodeURIComponent(id)}` : creatorOverviewPath);
+        router.refresh();
+      });
     } catch (e) { setSwitchError(e instanceof Error ? e.message : "Could not open this creator."); }
     finally { setSwitching(false); }
   }
@@ -101,11 +107,11 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
   const chartAxes = [<CartesianGrid key="grid" stroke="var(--overview-line)" strokeDasharray="3 4" vertical={false} />, <XAxis key="x" dataKey="bucket" axisLine={false} tickLine={false} minTickGap={45} tick={{ fill: "var(--overview-muted)", fontSize: 12 }} />, <YAxis key="y" width={78} axisLine={false} tickLine={false} tick={{ fill: "var(--overview-muted)", fontSize: 12 }} tickFormatter={value => money(Number(value)).replace(/\.00$/, "")} />, <Tooltip key="tooltip" formatter={(value, name) => [money(Number(value), name === "__total" ? cloneId : String(name)), name === "__total" ? "Total" : chartCreators.find(c => c.id === name)?.name ?? String(name)]} contentStyle={{ borderRadius: 10, borderColor: "var(--overview-line)", color: "var(--overview-ink)", background: "var(--overview-panel)" }} />];
 
   return <div className={styles.page} data-shared-overview={brand} data-live-overview="true" aria-busy={switching}>
-    {cloneId && <button type="button" className={styles.textButton} disabled={switching} onClick={() => void chooseCreator("")}>All creators overview</button>}
+    {cloneId && <button type="button" className={styles.textButton} disabled={switching} onClick={() => void chooseCreator("")}>All creators overview{switching && openingCreator === "" && <span data-navigation-pending role="status" aria-label="Opening overview" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>}
     <section className={styles.hero} aria-label="Dashboard overview">
       <div className={styles.heroCopy}><h1 className={selected ? "creator-name" : undefined}>{selected?.name ?? "Overview"}</h1><span>{reportingWindow} · Your creators, earnings and activity.</span></div>
       {selected ? <div className={styles.selectedPortrait}><Portrait key={selected.id} creator={selected} /></div> : <div className={styles.creatorDisplay}><nav className={styles.portraits} aria-label="Creator dashboards">
-        {profileCreators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span></button>)}
+        {profileCreators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-busy={switching && openingCreator === creator.id} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span>{switching && openingCreator === creator.id && <span data-navigation-pending role="status" aria-label="Opening creator" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>)}
         <Link href={creatorsHref} className={styles.creatorShortcut}><span className={styles.morePortrait}><Users size={24} /></span><span>View all</span></Link>
       </nav><span className={styles.creatorCount}><Users size={16} />{count(creators.length)} creators</span></div>}
     </section>

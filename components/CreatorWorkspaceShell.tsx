@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import CreatorStudioShell from "./CreatorStudioShell";
 import type { CreatorStudioBrand, CreatorStudioStatus } from "@/lib/creator-studio-model";
 import type { ReactNode } from "react";
