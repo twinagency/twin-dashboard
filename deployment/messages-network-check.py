@@ -4,7 +4,7 @@ instances = ['i-09a9dd3bd749643a5', 'i-0584d283506f3f6be']
 print(subprocess.check_output(['aws','ec2','describe-instances','--instance-ids',*instances,'--query','Reservations[].Instances[].{id:InstanceId,state:State.Name,privateIp:PrivateIpAddress}','--output','json'],text=True))
 commands = [
     ["sudo docker inspect --format '{{json .NetworkSettings.Networks}}' next-app", "sudo docker network inspect twin-onlyfans_default --format '{{json .IPAM.Config}}'", "ip route get 172.31.6.134", "curl --max-time 5 -s -o /dev/null -w 'host monitor HTTP %{http_code}, %{time_total}s\\n' http://172.31.6.134:4300/api/girls || true"],
-    ["curl --max-time 5 -s -o /dev/null -w 'monitor local HTTP %{http_code}, %{time_total}s\\n' http://127.0.0.1:4300/api/girls || true", "sudo docker inspect --format '{{.State.Status}} {{json .NetworkSettings.Ports}}' twin-v2-dash-1"]
+    ["curl --max-time 5 -s -o /dev/null -w 'monitor local HTTP %{http_code}, %{time_total}s\\n' http://127.0.0.1:4300/api/girls || true", "sudo docker inspect --format '{{.State.Status}} {{json .NetworkSettings.Ports}}' twin-v2-dash-1", "sudo docker stats --no-stream --format '{{.Name}} CPU={{.CPUPerc}} MEM={{.MemUsage}}' twin-v2-dash-1 twin-v2-bot-1", "sudo docker exec twin-v2-dash-1 sha256sum /app/dashboard/server.ts /app/dashboard/history.ts", "sudo docker inspect --format '{{.Id}} {{.Image}} {{.State.StartedAt}} OOM={{.State.OOMKilled}} restarts={{.RestartCount}}' twin-v2-dash-1 twin-v2-bot-1"]
 ]
 for instance, cmds in zip(instances,commands):
     f=pathlib.Path('/tmp/messages-network-check.json');f.write_text(json.dumps({'commands':cmds,'executionTimeout':['30']}))
