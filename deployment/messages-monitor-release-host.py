@@ -27,12 +27,33 @@ def verify():
   start=time.monotonic()
   with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+slug,timeout=12) as r:rows=json.load(r)
   elapsed=round((time.monotonic()-start)*1000)
+  print(json.dumps({'creator':slug,'initialFanReadMs':elapsed,'fans':len(rows)}),flush=True)
   assert isinstance(rows,list) and rows,'Existing monitor fans available'
   fan=next(row for row in rows if str(row.get('chatId','')).isdigit())
-  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=12) as r:history=json.load(r)
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=60) as r:history=json.load(r)
   assert history.get('scope')=='all-stored' and history.get('days') is None
-  report.append({'creator':slug,'fans':len(rows),'fanReadMs':elapsed,'history':'all-stored'})
+  warm=time.monotonic()
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=8) as r:again=json.load(r)
+  warm_ms=round((time.monotonic()-warm)*1000)
+  assert again.get('scope')=='all-stored' and again.get('days') is None
+  report.append({'creator':slug,'fans':len(rows),'fanReadMs':elapsed,'warmHistoryMs':warm_ms,'history':'all-stored'})
  return report
+# Recover only the exact failed rollback state from this rollout. A different
+# current configuration, image or bot is a concurrent release, so refuse it.
+if (release/'before.json').exists():
+ previous=json.loads((release/'before.json').read_text())
+ saved=(release/'override-before.json').read_bytes()
+ current_dash=runtime('twin-v2-dash-1')
+ if current_dash['image']!=previous['dash']['image'] and override.read_bytes()==saved:
+  saved_settings=json.loads(saved)
+  saved_image=saved_settings['services']['dash']['image']
+  saved_id=subprocess.check_output(['docker','image','inspect','-f','{{.Id}}',saved_image],text=True).strip()
+  if current_dash['image']==saved_id:
+   assert runtime('twin-v2-bot-1')==previous['bot'],'Concurrent bot release'
+   saved_settings['services']['dash']['image']=previous['dash']['image']
+   atomic(override,json.dumps(saved_settings,indent=2).encode());compose()
+   assert runtime('twin-v2-dash-1')['image']==previous['dash']['image']
+   print(json.dumps({'exactPreviousMonitorRestored':True,'botUnchanged':True}),flush=True)
 before_bot=runtime('twin-v2-bot-1');before_dash=runtime('twin-v2-dash-1')
 settings=dict(e.split('=',1) for e in inspect('twin-v2-dash-1')['Config']['Env'])
 if settings.get('MONITOR_LOAD_REVISION')==revision:
@@ -69,7 +90,8 @@ try:
  atomic(release/'result.json',json.dumps(result).encode());print(json.dumps(result))
 except Exception:
  if update_host:atomic(host_server,old_host)
- atomic(override,old_override);compose()
+ rollback=json.loads(old_override);rollback.setdefault('services',{}).setdefault('dash',{})['image']=before_dash['image']
+ atomic(override,json.dumps(rollback,indent=2).encode());compose()
  assert runtime('twin-v2-dash-1')['image']==before_dash['image']
  assert runtime('twin-v2-bot-1')==before_bot
  print(json.dumps({'monitorRolledBack':True,'botUnchanged':True}));raise
