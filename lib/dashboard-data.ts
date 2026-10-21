@@ -472,7 +472,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     value === "photo" || value === "video" || value === "bundle";
   const latestPurchases = [...ledgerPurchases]
     .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
-    .slice(0, 300);
+    .slice(0, 300)
+    // Summary shows five rows. Resolve names, offers and private media only
+    // for those rows; all totals and rankings still use the complete ledger.
+    .filter(p => !options?.overviewCloneId || p.clone_id === options.overviewCloneId)
+    .slice(0, options ? 5 : 300);
 
   // The Telegram ledger has the sale and the rich chat-history row has the
   // catalogue id. Match a sale to the latest unused same-price locked offer
