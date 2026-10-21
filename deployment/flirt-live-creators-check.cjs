@@ -88,7 +88,7 @@ async function main() {
   assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
-  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('data-shared-overview="flirt"') && agencyHtml.includes('data-creator-overview="all"') && agencyHtml.includes('Your creators, at a glance.') && agencyHtml.includes('Creator dashboards') && agencyHtml.includes('View more') && agencyHtml.includes('Reporting period') && agencyHtml.includes('Revenue performance') && agency.creators.slice(0,5).every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('data-shared-overview="flirt"') && agencyHtml.includes('data-creator-overview="all"') && /<h1(?:\s[^>]*)?>Overview<\/h1>/.test(agencyHtml) && agencyHtml.includes('Your creators, earnings and activity.') && agencyHtml.includes('Creator dashboards') && agencyHtml.includes('View all') && agencyHtml.includes('Reporting period') && agencyHtml.includes('Revenue performance') && agency.creators.slice(0,5).every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
   const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
   assert(monthResponse.ok,'Default 30-day agency earnings must load');
   const month=await monthResponse.json();
