@@ -14,7 +14,7 @@ import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
-import VaultUploader from "./VaultUploader";
+import VaultMediaPicker from "./VaultMediaPicker";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -28,6 +28,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const [selected, setSelected] = useState<Map<string, VaultItem>>(new Map()), [previews, setPreviews] = useState<Set<string>>(new Set());
   const [label, setLabel] = useState(""), [description, setDescription] = useState(""), [price, setPrice] = useState(""), [enabled, setEnabled] = useState(false);
   const [pageTrail, setPageTrail] = useState<(string | null)[]>([]);
+  const [picker, setPicker] = useState<"vault" | "upload" | null>(null);
   const libraryTop = useRef<HTMLDivElement>(null);
   const [retry, setRetry] = useState<Pending | null>(null), [created, setCreated] = useState<string | null>(null);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
@@ -70,14 +71,14 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   },[read,clearSelection]);
   const organizationChanged = useCallback(()=>{void read(cursor);router.refresh();},[read,router,cursor]);
   useEffect(() => {
-    if (busy || denied || organizationBusy || assetId || retry || !["pending", "running"].includes(data?.sync?.status ?? "")) return;
+    if (busy || denied || organizationBusy || assetId || picker || retry || !["pending", "running"].includes(data?.sync?.status ?? "")) return;
     let reading = false;
     const timer = setInterval(() => {
       if (reading || document.visibilityState !== "visible" || submitting.current) return;
       reading = true; void read(cursor, appliedFilters.current, true).finally(() => { reading = false; });
     }, 8000);
     return () => clearInterval(timer);
-  }, [busy, denied, organizationBusy, assetId, retry, data?.sync?.status, cursor, read]);
+  }, [busy, denied, organizationBusy, assetId, picker, retry, data?.sync?.status, cursor, read]);
   function changeType(kind: string) {
     if (busy || retry) return;
     setMediaKind(kind); setBusy(true); setPageTrail([]); clearSelection();
@@ -134,7 +135,21 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const videoCount = [...selected.values()].filter(row => row.kind === "video").length;
   const mediaValid = videoCount <= 1 && (!videoCount || [...selected.values()].filter(row => row.kind === "photo").every(row => previews.has(row.mediaId)));
   const readySelection = [...selected.values()].every(row=>row.ready&&["photo","video"].includes(row.kind));
-  const productValid = readySelection && mediaValid && validVaultProduct(product);
+  const productIssues = [
+    ...(!selected.size ? ["Add at least one photo or video."] : []),
+    ...(!readySelection ? ["Remove files with unconfirmed full access before creating a paid item."] : []),
+    ...(!mediaValid ? ["Choose photos, or one video with every attached photo marked as a free preview."] : []),
+    ...(selected.size > 0 && previews.size >= selected.size ? ["Keep at least one file behind the paid unlock."] : []),
+    ...(!product.label ? ["Enter an item label."] : new TextEncoder().encode(product.label).length > 160 ? ["Shorten the item label to 160 bytes."] : []),
+    ...(!product.description ? ["Describe what the fan receives."] : new TextEncoder().encode(product.description).length > 2000 ? ["Shorten the description to 2,000 bytes."] : []),
+    ...(cents === null || cents < 300 || cents > 20000 ? ["Set a price between USD 3.00 and 200.00."] : []),
+    ...(data?.connectionRevision == null ? ["Connect this OnlyFans account before creating an item."] : []),
+  ];
+  const productValid = !productIssues.length && validVaultProduct(product);
+  function denyPicker() {
+    sessionDenied.current = true; setPicker(null); setData(null); clearSelection(); setCreated(null); setLabel(""); setDescription(""); setPrice(""); setRetry(null); setDenied(true);
+    setNotice("Your session cannot manage this vault. Sign in again."); router.refresh();
+  }
 
   return <Card className="mb-6 min-w-0 p-4" data-of-vault-manager>
     <h2 className="text-lg font-semibold">Your media library</h2>
@@ -172,7 +187,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
         <label className="block text-sm">Search descriptions and tags<input type="search" aria-label="Search your media" className={`${inputClass} w-full`} placeholder="Search this library" maxLength={120} value={search} onChange={event => setSearch(event.target.value)} disabled={busy || !!retry}/></label>
         <button type="submit" data-of-vault-search className={buttonClass} disabled={busy || !!retry}>Search vault</button>
       </form>
-      {!readOnly ? <VaultOrganization accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId}
+      {!readOnly && !picker ? <VaultOrganization accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId}
         onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/> : null}
       <fieldset disabled={busy || !!retry || organizationBusy} className="mt-4 min-w-0">
         <legend className="text-sm font-semibold">{data.summary ? `${data.summary.matching.toLocaleString()} matching files` : "Imported media"} · Page {pageTrail.length + 1}</legend>
@@ -195,22 +210,26 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
       {!readOnly ? <details className="mt-6 rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>
+          <div className="flex flex-wrap gap-2"><button type="button" className={`${buttonClass} min-h-11 bg-accent text-white`} data-of-add-media onClick={() => setPicker("vault")}>Add media</button><button type="button" className={`${buttonClass} min-h-11`} data-of-upload-new onClick={() => setPicker("upload")}>Upload new files</button></div>
           {selected.size ? <ul className="space-y-2">{[...selected.values()].map(row => <li key={row.mediaId} className="flex flex-wrap items-center gap-3 rounded-lg border border-line p-2 text-xs">
-            <span className="font-mono">#{row.mediaId} · {row.kind}</span>{row.kind === "photo" ? <label className="flex items-center gap-2"><input data-of-vault-preview={row.mediaId} type="checkbox" checked={previews.has(row.mediaId)} onChange={event => { const next = new Set(previews); if (event.target.checked) next.add(row.mediaId); else next.delete(row.mediaId); setPreviews(next); }} />Free preview</label> : null}
+            <span className="min-w-0 break-words">{row.description || `Asset #${row.mediaId}`} · {row.kind}<span className="mt-1 block text-muted">{vaultAvailability(row).label}</span></span>{row.kind === "photo" ? <label className="flex items-center gap-2"><input data-of-vault-preview={row.mediaId} type="checkbox" checked={previews.has(row.mediaId)} onChange={event => { const next = new Set(previews); if (event.target.checked) next.add(row.mediaId); else next.delete(row.mediaId); setPreviews(next); }} />Free preview</label> : null}
             <button type="button" className="ml-auto text-accent" onClick={() => toggle(row)}>Remove</button>
-          </li>)}</ul> : <p className="text-xs text-muted">Select available assets from the vault above. Choose photos, or one video with optional photo previews.</p>}
+          </li>)}</ul> : <p className="text-sm text-muted">No media attached yet. Use Add media to choose files from your vault, or Upload new files to add files from your device.</p>}
           {!mediaValid ? <p role="status" className="text-xs text-muted">Use one video with photo previews, or a set of photos. Every photo attached to a video must be marked as a free preview.</p> : null}
           {selected.size > 0 && previews.size >= selected.size ? <p role="status" className="text-xs text-muted">Keep at least one selected asset behind the paid unlock.</p> : null}
           <div className="grid min-w-0 gap-3 md:grid-cols-2"><label className="min-w-0 text-sm">Item label<input data-of-vault-product-label className={inputClass} maxLength={160} value={label} onChange={event => setLabel(event.target.value)} required /></label><label className="min-w-0 text-sm">Price (USD)<input data-of-vault-product-price className={inputClass} inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} required /><span className="mt-1 block text-xs text-muted">USD 3.00–200.00</span></label></div>
           <label className="block text-sm">What the fan receives<textarea data-of-vault-product-description className={`${inputClass} min-h-24`} maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} required /></label>
           <label className="flex items-start gap-2 text-sm"><input data-of-vault-product-enabled type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /><span>Enable this item for eligible offers</span></label>
-          <button type="submit" data-of-vault-create className={buttonClass} disabled={!productValid}>Create catalogue item</button>
+          <p className="text-xs text-muted">{enabled ? "Once saved, this item is available for eligible offers. Saving does not send it to fans or publish a post." : "This item will be saved with offers disabled. You can enable it later."} Media is required either way.</p>
+          {productIssues.length ? <ul id="vault-product-issues" className="list-inside list-disc space-y-1 text-sm" aria-live="polite" data-of-product-issues>{productIssues.map(issue => <li key={issue}>{issue}</li>)}</ul> : null}
+          <button type="submit" data-of-vault-create className={`${buttonClass} min-h-11`} aria-describedby={productIssues.length ? "vault-product-issues" : undefined} disabled={!productValid}>{enabled ? "Create catalogue item" : "Save item with offers disabled"}</button>
         </fieldset>
       </form></details> : null}
-      {!readOnly ? <details className="mt-4 rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Upload photos and videos</summary><VaultUploader key={accountId} accountId={accountId} connectionRevision={data.connectionRevision} onChanged={organizationChanged}/></details> : null}
+      {!readOnly ? <div className="mt-4 rounded-xl border border-line p-4"><button type="button" className={`${buttonClass} min-h-11`} disabled={busy || !!retry} onClick={() => setPicker("upload")}>Upload photos and videos</button><p className="mt-2 text-xs text-muted">Add new files to the connected OnlyFans vault. You can also upload while preparing an item above.</p></div> : null}
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
     {assetId && !readOnly && !denied ? <VaultMetadataEditor key={`${accountId}:${assetId}`} accountId={accountId} mediaId={assetId} onClose={() => setAssetId(null)} onChanged={organizationChanged}/> : null}
+    {picker && !readOnly && !denied ? <VaultMediaPicker key={accountId} accountId={accountId} connectionRevision={data?.connectionRevision ?? null} selected={selected} initialMode={picker} onToggle={toggle} onClose={() => setPicker(null)} onChanged={organizationChanged} onDenied={denyPicker}/> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" data-of-vault-retry className={buttonClass} disabled={busy} onClick={() => void execute(retry)}>Retry same request</button><button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { setRetry(null); clearSelection(); setNotice("Review the recorded catalogue and sync status before starting another request. The previous command may already have committed."); }}>Use refreshed vault</button></div> : null}
   </Card>;
 }
