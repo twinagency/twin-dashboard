@@ -23,6 +23,7 @@ jobs:
         if: github.event_name == 'push'
         run: python3 deployment/messages-network-check.py
       - name: Read actual selected and all-creator Messages pages without writes
+        if: github.event_name != 'push'
         run: python3 deployment/messages-load-check.py
         env:
           EXPECTED_DASHBOARD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
