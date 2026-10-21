@@ -39,12 +39,17 @@ async function read(req: NextRequest) {
     const access = await getDashboardAccess();
     if (isZaneDemo(access)) return NextResponse.json({ error: "Creator profile is not connected" }, { status: 403 });
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
-    const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
+    const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force", summary: req.nextUrl.searchParams.get("summary") === "1" }), getScopedBalance(clone)]);
     // Non-admin data arrives NET already: lib/agency-fetch.ts scales every
     // earned-star field at the source (and revenue-cache keys by the viewer's
     // terms), so nothing is scaled again here. Scaling here would double-cut.
     const { dashboard, analytics, analyticsError, cachedAt, ageSeconds, stale } = rollup;
-    const outDashboard: DashboardData = dashboard;
+    // The overview displays five recent payments. Keep the full history for
+    // the detailed report, while avoiding hundreds of unused signed URLs on
+    // the initial mobile download. All totals, charts and rankings are retained.
+    const outDashboard: DashboardData = req.nextUrl.searchParams.get("summary") === "1"
+      ? { ...dashboard, recent: dashboard.recent.filter(row => !clone || row.cloneId === clone).slice(0, 5) }
+      : dashboard;
     const outAnalytics: AnalyticsData | null = analytics;
     const outBalance: StarBalance | null = balance;
     let cutMeta: Record<string, unknown> | undefined;

@@ -280,6 +280,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
   // Keep its clone colour, but lower the opacity so "Live" is distinguishable
   // without introducing an off-theme grey bar.
 
+  const summaryOnly = !!sharedOverview && !showDetailed;
   const fetchData = useCallback(
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null, force = false) => {
       const request = ++newestRequest.current;
@@ -298,6 +299,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
         params.set("period", p);
       }
       if (cid) params.set("clone", cid);
+      if (summaryOnly) params.set("summary", "1");
       // A normal dashboard request waits if its one-minute snapshot has just
       // expired. An explicit refresh asks for a new snapshot even if it is
       // still warm, so the operator can verify the live ledger immediately.
@@ -325,7 +327,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
       setData(json);
       setLoading(false);
     },
-    [],
+    [summaryOnly],
   );
 
   // Opening the report scrolls it into view (it renders below the fold).

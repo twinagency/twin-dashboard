@@ -61,7 +61,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
   const [dateError, setDateError] = useState("");
   const selected = creators.find(c => c.id === cloneId);
   const stats = cloneId ? data?.perClone[cloneId] : data?.totals;
-  const conversion = data?.analytics?.buyerConversion;
+  const conversion = data?.overviewConversion ?? data?.analytics?.buyerConversion;
   const reportingWindow = range ? `${range.start} to ${range.end}` : periods.find(([key]) => key === period)?.[1] ?? "Selected period";
   const chartCreators = (data?.clones ?? []).filter(c => !cloneId || c.id === cloneId);
   const chartRows = (data?.series ?? []).map(row => ({ ...row, __total: chartCreators.reduce((sum, creator) => sum + (Number(row[creator.id]) || 0), 0) }));

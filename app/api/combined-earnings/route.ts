@@ -15,7 +15,7 @@ export async function GET(request:NextRequest){
  let telegram:CombinedEarnings["telegram"]={status:"unavailable",netStars:null,sales:null,usdPayoutEstimate:null,usdPerStar:STAR_USD,asOf:null,stale:false};
  try{
   // The existing cache remains the sole Twin rollup/single-flight owner.
-  const rollup=await getRevenueRollup(period,null,undefined,{awaitFresh:true});
+  const rollup=await getRevenueRollup(period,null,undefined,{awaitFresh:true,summary:true});
   const window=rollup.reportWindow,totals=rollup.dashboard.totals;
   if(!window||!Number.isFinite(window.startMs)||!Number.isFinite(window.endMs)||window.endMs<=window.startMs||!Number.isSafeInteger(totals.stars)||!Number.isSafeInteger(totals.sales)||totals.sales<0||!Number.isFinite(rollup.cachedAt))throw new Error("Revenue metadata unavailable");
   range=window;telegram={status:"current",netStars:totals.stars,sales:totals.sales,usdPayoutEstimate:starsToMoney(totals.stars,"USD"),usdPerStar:STAR_USD,asOf:new Date(rollup.cachedAt).toISOString(),stale:rollup.stale};

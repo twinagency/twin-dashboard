@@ -93,7 +93,11 @@ function scanDir(dir: string, exts: string[]) {
         // whole function, not the assignment - so widen once before condemning it.
         const widened = stmt + "\n" + lines.slice(end, Math.min(lines.length, end + 12)).join("\n");
 
-        if (!BOUNDED_BY.some((b) => stmt.includes(b) || widened.includes(b))) {
+        // Parallel paging receives a fresh-builder callback, so its invocation
+        // appears immediately BEFORE the query assignment, rather than after it.
+        const factory = lines.slice(Math.max(0, start - 3), start).join("\n");
+        const parallelFactory = /await selectAllRowsParallel(?:<[^>]+>)?\(\(\) => \{\s*$/.test(factory);
+        if (!parallelFactory && !BOUNDED_BY.some((b) => stmt.includes(b) || widened.includes(b))) {
           offences.push({ file: name, line: i + 1, table, text: line.trim() });
         }
       });

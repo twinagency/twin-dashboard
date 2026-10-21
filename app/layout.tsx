@@ -101,26 +101,23 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || await isAuthed();
   if (!authed) return <html lang="en" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
-  const [twinVersion, clones, activeCloneId, viewAsInfo] = await Promise.all([
+  const [twinVersion, clones, activeCloneId, viewAsInfo, { usdPerStar }, cloneRates] = await Promise.all([
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
+    getViewerTerms(), getCloneRates().catch(() => ({} as Record<string, number>)),
   ]);
-  const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
-  const [{ usdPerStar }, cloneRates] = await Promise.all([getViewerTerms(), getCloneRates().catch(() => ({} as Record<string, number>))]);
+  const [allTimeStars, overrideTotals, channelScope] = await Promise.all([
+    getHeaderAllTimeStars(activeCloneId),
+    activeCloneId ? Promise.resolve([]) : Promise.all(Object.keys(cloneRates).map(async id => [id, await getHeaderAllTimeStars(id)] as const)),
+    resolveChannelScope(channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo, onlyFansAgency: !!agency?.userId && agency.name !== "Twin Technologies" })),
+  ]);
   // Header rate: a picked girl's own rate, else the exact all-time blend of the
   // login rate and any girls with their own rate.
   const overrideIds = Object.keys(cloneRates);
   const headerUsdPerStar = activeCloneId
     ? cloneRates[activeCloneId] ?? usdPerStar
     : overrideIds.length && allTimeStars > 0
-      ? blendUsd(allTimeStars, usdPerStar, cloneRates, Object.fromEntries(await Promise.all(overrideIds.map(async (id) => [id, await getHeaderAllTimeStars(id)] as const)))) / allTimeStars
+      ? blendUsd(allTimeStars, usdPerStar, cloneRates, Object.fromEntries(overrideTotals)) / allTimeStars
       : usdPerStar;
-  // The server's channel scope: which channel workspaces this session may open.
-  // The layout already holds both facts it needs, so resolving it here costs no
-  // extra identity lookup, and the shell below can only offer channels that
-  // will actually render.
-  const channelScope = await resolveChannelScope(
-    channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo, onlyFansAgency: !!agency?.userId && agency.name !== "Twin Technologies" }),
-  );
   // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);

@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { safeAdminNext } from "@/lib/login-routing";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
@@ -31,6 +32,7 @@ export async function POST(req: NextRequest) {
   response.cookies.delete(CREATOR_SESSION_COOKIE);
   response.cookies.delete(VIEW_AS_COOKIE);
   response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_REFRESH_COOKIE);
   response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   response.headers.set("Cache-Control", "private, no-store");

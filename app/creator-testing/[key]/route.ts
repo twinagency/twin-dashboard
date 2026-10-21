@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ key: st
     response.cookies.set(CREATOR_SESSION_COOKIE, token, { ...creatorCookieOptions(), maxAge: Math.max(0, Math.floor((EXPIRES_AT - Date.now()) / 1000)) });
     response.cookies.set(CREATOR_PORTAL_COOKIE, "twin", creatorPortalCookieOptions());
     response.cookies.delete(AGENCY_COOKIE);
+    response.cookies.delete(AGENCY_REFRESH_COOKIE);
     response.cookies.delete(AGENCY_PORTAL_COOKIE);
     response.cookies.delete(SESSION_COOKIE);
     response.cookies.delete(CLONE_SCOPE_COOKIE);

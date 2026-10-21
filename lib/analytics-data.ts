@@ -254,6 +254,15 @@ const ACTIVE_BUYER_RPC_CHUNK = 10_000;
 // Only the pre-migration fallback below needs the small URL-bound batches.
 const ACTIVE_BUYER_ID_BATCH = 300;
 
+export type OverviewConversion = Pick<AnalyticsData["buyerConversion"], "activeChatters" | "activeChatBuyers" | "activeChatBuyerRate">;
+export async function getOverviewConversion(startMs: number, endMs: number, cloneId: string | null, paidBuyerIds: ReadonlySet<number>): Promise<OverviewConversion> {
+  const [activeChatters, activeChatBuyers] = await Promise.all([
+    messagedFanCount(startMs, endMs, cloneId),
+    activeChatBuyerCount(startMs, endMs, cloneId, paidBuyerIds),
+  ]);
+  return { activeChatters, activeChatBuyers, activeChatBuyerRate: activeChatters > 0 ? activeChatBuyers / activeChatters : null };
+}
+
 async function activeChatBuyerCount(
   startMs: number,
   endMs: number,

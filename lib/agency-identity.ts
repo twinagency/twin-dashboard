@@ -22,11 +22,11 @@ export async function agencyIdentity(token: string | undefined): Promise<AgencyI
 // header or cookie value from an untrusted caller directly.
 export async function agencyIdentityById(agencyId: string): Promise<AgencyIdentity | null> {
   const db = serviceClient();
-  const agency = await db.from("partner_agencies").select("id,name")
-    .eq("id", agencyId).eq("active", true).maybeSingle();
-  if (agency.error || !agency.data) return null;
-  const assigned = await db.from("agency_creators").select("clone_id").eq("agency_id", agency.data.id);
-  if (assigned.error) return null;
+  const [agency, assigned] = await Promise.all([
+    db.from("partner_agencies").select("id,name").eq("id", agencyId).eq("active", true).maybeSingle(),
+    db.from("agency_creators").select("clone_id").eq("agency_id", agencyId),
+  ]);
+  if (agency.error || !agency.data || assigned.error) return null;
   const cloneIds = (assigned.data ?? []).map(row => String(row.clone_id)).sort();
   if (cloneIds.some(id => !/^[0-9a-f-]{36}$/i.test(id))) return null;
   return { id: agency.data.id, name: agency.data.name, cloneIds };

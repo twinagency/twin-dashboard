@@ -79,6 +79,10 @@ jobs:
           node deployment/creator-flow-live-check.test.cjs
           node deployment/creator-flow-upload-memory.test.cjs
           python3 -m py_compile deployment/creator-flow-live-check.py
+      - name: Dashboard loading and day-long session regressions
+        run: |
+          node --import tsx scripts/check-agency-session.ts
+          node --import tsx scripts/check-dashboard-performance.cjs
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
       - name: Moxy owner scope and retained partner permissions

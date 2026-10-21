@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest) {
   if (token) await serviceClient().auth.admin.signOut(token, "local").catch(() => undefined);
   const response = NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value), dashboardOrigin(req)), 303);
   response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_REFRESH_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   return response;
 }
