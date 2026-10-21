@@ -136,8 +136,7 @@ subprocess.run(['docker','build','--network=none','--build-arg','BASE_IMAGE='+be
 if payload.get('kind')=='fan-metadata':
  subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_INCREMENTAL=1','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-parity.cjs'],check=True,timeout=45)
 subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-fleet-cache.cjs'],check=True,timeout=45)
-if payload.get('history'):
- subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_CANDIDATE=/app/dashboard/history.ts','--entrypoint','node',tag,'deployment/messages-history-cache.cjs'],check=True,timeout=45)
+subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_CANDIDATE=/app/dashboard/history.ts','--entrypoint','node',tag,'deployment/messages-history-cache.cjs'],check=True,timeout=45)
 subprocess.run(['docker','run','--rm','--network=none','--entrypoint','node',tag,'--import','tsx','scripts/check-dashboard-history.ts'],check=True,timeout=45)
 image=subprocess.check_output(['docker','image','inspect','-f','{{.Id}}',tag],text=True).strip()
 assert runtime('twin-v2-bot-1')==before_bot and runtime('twin-v2-dash-1')==before_dash,'Concurrent runtime change'
