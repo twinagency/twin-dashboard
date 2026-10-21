@@ -12,7 +12,9 @@ import { chromium } from 'playwright';
 
 const require = createRequire(import.meta.url), root = process.cwd();
 const fixture = await mkdtemp(join(tmpdir(), 'dashboard-navigation-'));
-let server, browser, output = '';
+let server, browser, output = '', stage = 'fixture build';
+const watchdog = setTimeout(() => { console.error('Navigation test timed out at ' + stage); server?.kill('SIGKILL'); process.exit(1); }, 180000);
+watchdog.unref();
 async function source(path) { return ts.transpileModule(await readFile(resolve(root, path), 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext, jsx: ts.JsxEmit.ReactJSX } }).outputText; }
 async function file(path, content) { await mkdir(join(fixture, path, '..'), { recursive: true }); await writeFile(join(fixture, path), content); }
 const run = args => new Promise((done, reject) => {
@@ -36,6 +38,7 @@ try {
     const listener = createServer(); await new Promise(r => listener.listen(0, '127.0.0.1', r)); const port = listener.address().port; await new Promise(r => listener.close(r));
     server = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-p', String(port), '-H', '127.0.0.1'], { cwd: fixture, env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     await new Promise((done, reject) => { const timer = setTimeout(() => reject(new Error(output)), 20000); const collect = d => { output += d; if (output.includes('Ready in')) { clearTimeout(timer); done(); } }; server.stdout.on('data', collect); server.stderr.on('data', collect); server.once('error', reject); });
+    stage = 'browser navigation';
     browser = await chromium.launch({ args: ['--no-sandbox'] });
     const page = await browser.newPage({ viewport: { width: 1100, height: 800 } }), errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -53,7 +56,12 @@ try {
     assert.equal(await page.locator('[data-navigation-pending]').count(), 0, 'Completed navigation clears spinner');
     // FULL prefetch uses a normal RSC request; only AUTO sets next-router-prefetch.
     const prefetch = page.waitForResponse(response => response.url().includes('/slow?page=3') && response.request().headers()['rsc'] === '1' && response.request().headers()['next-router-prefetch'] !== '1');
-    await page.getByRole('link', { name: 'Prepared page' }).hover(); const response = await prefetch; await response.finished();
+    stage = 'intent prefetch';
+    await page.getByRole('link', { name: 'Prepared page' }).hover(); await prefetch;
+    // The streamed RSC response can remain open after its page is ready. Allow
+    // the fixture's 1.4s read to finish, then verify actual visible navigation.
+    await page.waitForTimeout(1800);
+    stage = 'prepared page visibility';
     const prepared = Date.now(); await page.getByRole('link', { name: 'Prepared page' }).click(); await page.getByRole('heading', { name: 'Page 3 ready' }).waitFor(); const preparedMs = Date.now() - prepared;
     assert.ok(preparedMs < 1000, `Intent-prefetched page must avoid another 1.4s server read: ${preparedMs}ms`);
     await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -63,4 +71,4 @@ try {
     console.log(JSON.stringify({ test: 'real Next navigation', loadingShellMs: shellMs, prefetchedPageMs: preparedMs, paginationFeedback: 'passed', sidebarGeometry: 'unchanged', browserErrors: 0 }));
   }
 } catch (error) { console.error(output.slice(-8000)); throw error; }
-finally { if (browser) await browser.close(); if (server) { server.kill('SIGTERM'); await new Promise(done => server.once('exit', done)); } await rm(fixture, { recursive: true, force: true }); }
+finally { stage = 'cleanup'; if (browser) await browser.close(); if (server) { server.kill('SIGTERM'); await Promise.race([new Promise(done => server.once('exit', done)), new Promise(done => setTimeout(() => { server.kill('SIGKILL'); done(); }, 3000))]); } await rm(fixture, { recursive: true, force: true }); clearTimeout(watchdog); }
