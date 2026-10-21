@@ -60,29 +60,9 @@ export default function TwinWordmark({
       </span>
     );
   }
-  if (!agencyName || agencyName === "Twin" || agencyName.trim().toLowerCase() === "flirt") return (
-    <img
-      src="/brand/flirt-logo.webp"
-      alt="FLIRT"
-      width={720}
-      height={360}
-      className={`block h-10 w-auto max-w-full object-contain ${className}`}
-    />
-  );
-  return (
-    <span
-      className={`inline-flex items-baseline gap-2 ${agencyName ? "whitespace-normal" : "whitespace-nowrap"} leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
-    >
-      <span
-        className="text-[20px] font-bold tracking-[-0.025em]"
-        style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
-      >
-        {agencyName}
-      </span>
-      {!agencyName && <span className={`text-[13px] font-bold uppercase tracking-[0.28em] ${inverse ? "text-white/72" : "text-black/70"}`}>
-        {descriptor}
-      </span>}
-    </span>
-  );
+  return <span className={`inline-flex flex-col items-start ${className}`}>
+    <img src="/brand/flirt-wordmark-master.png" alt="Flirt" width={1774} height={887}
+      className={`block h-14 w-28 object-contain ${inverse ? "invert" : ""}`} />
+    {agencyName && !["flirt","twin"].includes(agencyName.toLowerCase()) && <span className="text-xs opacity-70">{agencyName}</span>}
+  </span>;
 }
-

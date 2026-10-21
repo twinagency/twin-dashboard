@@ -10,6 +10,7 @@ import "./creator-workspace.css";
 import "./flirt-theme.css";
 import "./studio-workspace.css";
 import "./compact-workspace.css";
+import "./flirt-identity.css";
 import WorkspaceMobileNav from "@/components/WorkspaceMobileNav";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
@@ -29,7 +30,7 @@ import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
 import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
-import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
+import { Inter, Inter_Tight, Space_Grotesk, Outfit } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
@@ -39,7 +40,8 @@ const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
 const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
-const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable);
+const outfit = Outfit({subsets:['latin'],variable:'--font-flirt'});
+const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable, outfit.variable);
 
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
