@@ -24,6 +24,7 @@ export async function GET(request:NextRequest){
 }
 
 export async function POST(request:NextRequest){
+  const startedAt=performance.now();
   const ctx=await platformCommand(request);if(ctx instanceof NextResponse)return ctx;
   const b=ctx.body as Record<string,unknown>;
   if(!b||typeof b!=='object'||Array.isArray(b)||typeof b.action!=='string'||typeof b.profileId!=='string')return platformFailure(400,'That sign-in request could not be read.');
@@ -42,7 +43,27 @@ export async function POST(request:NextRequest){
       return platformResponse({ok:true,attempt:await backend.start(scope,b.startKey as string,context.data)});
     }
     const identity=b.attempt as string;
-    if(b.action==='input')return platformResponse({ok:true,attempt:await backend.input(scope,identity,b.input)});
+    if(b.action==='input'){
+      const inputStarted=performance.now(),attempt=await backend.input(scope,identity,b.input),inputFinished=performance.now();
+      // Return the post-input pixels in the same authenticated request. The
+      // normal JSON response remains compatible with older clients and typing.
+      if(request.headers.get('accept')==='image/png'&&attempt.phase==='waiting'){
+        try{
+          const image=await backend.frame(scope,identity);
+          return new NextResponse(image,{headers:{
+            'Content-Type':new Uint8Array(image)[0]===137?'image/png':'image/jpeg',
+            'X-Twin-Sign-In-Attempt':encodeURIComponent(JSON.stringify(attempt)),
+            'Server-Timing':`auth;dur=${(inputStarted-startedAt).toFixed(1)},input;dur=${(inputFinished-inputStarted).toFixed(1)},frame;dur=${(performance.now()-inputFinished).toFixed(1)}`,
+            'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin',
+          }});
+        }catch(error){
+          // The input already succeeded. A rate-limited or failed screenshot
+          // must fall back to a frame GET, never replay the input.
+          if(error instanceof SignInBackendError&&[401,403,404,410].includes(error.status))throw error;
+        }
+      }
+      return platformResponse({ok:true,attempt});
+    }
     if(b.action==='cancel')return platformResponse({ok:true,attempt:await backend.cancel(scope,identity)});
     const status=await backend.status(scope,identity);
     if(status.phase==='submitted'&&status.enrollmentId)return platformResponse({ok:true,attempt:status});

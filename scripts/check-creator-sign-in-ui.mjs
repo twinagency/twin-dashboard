@@ -11,7 +11,7 @@ import tailwind from '@tailwindcss/postcss';
 const root=process.cwd(),out=resolve('test-results/creator-sign-in');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:'canonical-creator',requested:['onlyfans'],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',signIn:'hosted',error:null,accounts:[],enrollments:[]}};
 let snapshot,attempt,posted,expired,denied,lostConfirm,unavailableFrame,unavailableStatus;
-let inputGate=null,frameGate=null,framesStarted=0,framesCompleted=0,inputsCompleted=0;
+let inputGate=null,frameGate=null,combinedGate=null,combinedFrames=true,combinedStarted=0,requestDelay=0,framesStarted=0,framesCompleted=0,inputsCompleted=0;
 const gate=()=>{let release;const promise=new Promise(resolve=>{release=resolve});return {promise,release}};
 const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;unavailableFrame=false;unavailableStatus=false;};reset();
 async function until(check){for(let n=0;n<100;n++){if(check())return;await new Promise(r=>setTimeout(r,50));}assert(check(),'Expected fixture request was not received');}
@@ -22,12 +22,13 @@ const css=(await postcss([tailwind()]).process('@import "./app/globals.css";',{f
 const chrome=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:process.platform==='win32'?[]:['--no-sandbox']});
 const framePage=await chrome.newPage({viewport:{width:432,height:720},deviceScaleFactor:2});
 await framePage.setContent('<html><body style="font:18px Arial;margin:40px"><h1>OnlyFans fixture</h1><p>Local test account</p><label>Email<input type="email" style="display:block;width:100%;height:48px"></label><p><label>Password<input type="password" style="display:block;width:100%;height:48px"></label></p><button style="padding:12px">Sign in</button></body></html>');
-const png=await framePage.screenshot({type:'png'});const jpeg=await framePage.screenshot({type:'jpeg'});await framePage.close();
+const png=await framePage.screenshot({type:'png'});const jpeg=await framePage.screenshot({type:'jpeg'});await framePage.evaluate(()=>document.body.style.background='#dff3ff');const updatedPng=await framePage.screenshot({type:'png'});await framePage.close();
 const server=createServer(async(req,res)=>{try{
  const url=new URL(req.url,'http://localhost'),path=url.pathname;res.setHeader('Cache-Control','no-store');
  if(path==='/bundle.js'){res.setHeader('Content-Type','text/javascript');return res.end(js)}
  if(path==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css)}
  if(path.startsWith('/creator-auth/')){
+  if(requestDelay)await new Promise(r=>setTimeout(r,requestDelay));
   res.setHeader('Content-Type','application/json');
   if(denied){res.statusCode=401;return res.end(JSON.stringify({error:'Sign in to your creator account again.'}))}
   if(path==='/creator-auth/platforms')return res.end(JSON.stringify(snapshot));
@@ -45,6 +46,10 @@ const server=createServer(async(req,res)=>{try{
     // Deliberate variable response delay exposes out-of-order client dispatch.
     await new Promise(r=>setTimeout(r,body.input.type==='text'?80:15));
     inputsCompleted++;
+    if(combinedFrames&&req.headers.accept==='image/png'&&attempt.phase==='waiting'){
+      combinedStarted++;const result={...attempt};if(combinedGate)await combinedGate.promise;
+      res.setHeader('Content-Type','image/png');res.setHeader('X-Twin-Sign-In-Attempt',encodeURIComponent(JSON.stringify(result)));return res.end(updatedPng);
+    }
    }
    if(body.action==='confirm'){
     if(lostConfirm){lostConfirm=false;res.statusCode=503;return res.end(JSON.stringify({error:'Your connection could not be confirmed. Retry the same confirmation.'}))}
@@ -82,6 +87,33 @@ try{
   assert.deepEqual(inputs.slice(1).reduce((a,v)=>{if(v.type==='text'&&a.at(-1)?.type==='text')a.at(-1).text+=v.text;else a.push({...v});return a;},[]),[{type:'text',text:'fixture@example.test'},{type:'key',key:'Tab'},{type:'text',text:'fixture-password'},{type:'key',key:'Backspace'}]);
   await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});assert(await input.evaluate(el=>document.activeElement!==el),'Tapping verification dismisses an already-open keyboard');const refreshedBounds=await screen.boundingBox();assert(Math.abs(refreshedBounds.width-bounds.width)<1&&Math.abs(refreshedBounds.x-bounds.x)<1,'High-resolution refresh does not resize or move the verification frame');const closeBounds=await page.getByRole('button',{name:'Close connection setup'}).boundingBox(),backBounds=await page.getByRole('button',{name:'Back to sign-in',exact:true}).boundingBox();assert(closeBounds.y>=0&&backBounds.y+backBounds.height<=844,'Close and verification controls remain in the viewport');await page.screenshot({path:out+'/'+name+'-sign-in.png',fullPage:true});
   await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+  // A paired response paints immediately even while an older GET is stalled.
+  const stale=gate(),pairedFrame=gate();frameGate=stale;combinedGate=pairedFrame;combinedFrames=true;
+  const beforeStale=framesStarted,beforePaired=combinedStarted,beforeTap=posted.filter(b=>b.action==='input').length;
+  await until(()=>framesStarted>beforeStale);
+  await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});await until(()=>combinedStarted>beforePaired);
+  assert.equal(await screen.getAttribute('aria-disabled'),'true','Paired response must wait for actual image bytes');
+  await screen.dispatchEvent('wheel',{deltaY:100,clientX:bounds.x+20,clientY:bounds.y+20});
+  assert.equal(posted.filter(b=>b.action==='input').length,beforeTap+1);
+  combinedGate=null;pairedFrame.release();await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+  assert.equal(framesStarted,beforeStale+1,'Tap paints its response without requesting a second frame');
+  const pixel=()=>screen.evaluate(el=>Array.from(el.getContext('2d').getImageData(0,0,1,1).data));
+  assert.deepEqual(await pixel(),[223,243,255,255],'The input response contains the new screen');
+  const completedBefore=framesCompleted;frameGate=null;stale.release();await until(()=>framesCompleted>completedBefore);await page.waitForTimeout(40);
+  assert.deepEqual(await pixel(),[223,243,255,255],'An older GET cannot overwrite the paired response');
+  // Benchmark both paths with the same simulated phone/request delay.
+  requestDelay=180;const timings={};
+  for(const [mode,paired]of [['separate',false],['paired',true]]){
+    combinedFrames=paired;const samples=[];
+    for(let i=0;i<3;i++){
+      await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
+      const started=performance.now();await screen.click({position:{x:bounds.width*.5,y:bounds.height*.3}});
+      await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');samples.push(Math.round(performance.now()-started));
+    }
+    timings[mode]=samples.sort((a,b)=>a-b)[1];
+  }
+  console.log(name+' simulated 180ms/request tap-to-paint median (ms): '+JSON.stringify(timings));requestDelay=0;
+  combinedFrames=false;
   // Hold an old frame across an input ACK, then hold the replacement frame.
   // No tap/scroll may queue against either screen until the replacement is painted.
   const oldFrame=gate(),newFrame=gate(),action=gate();frameGate=oldFrame;inputGate=action;
@@ -95,14 +127,14 @@ try{
   assert.equal(await screen.getAttribute('aria-disabled'),'true','An input ACK alone must not unlock the stale screen');
   const oldCompleted=framesCompleted;frameGate=newFrame;oldFrame.release();await until(()=>framesCompleted>oldCompleted);
   await page.waitForTimeout(50);assert.equal(await screen.getAttribute('aria-disabled'),'true','An old in-flight frame must not unlock taps');
-  const replacementRequested=framesStarted;await until(()=>framesStarted>beforeFrames+1);
+  await until(()=>framesStarted>beforeFrames+1);
   await tap();assert.equal(posted.filter(b=>b.action==='input').length,beforeInputs+1,'Taps remain blocked while the fresh frame is downloading');
   await page.screenshot({path:out+'/'+name+'-updating.png',fullPage:true});
   frameGate=null;newFrame.release();await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
   await page.getByText('Updating…',{exact:true}).waitFor({state:'hidden'});await tap();await until(()=>posted.filter(b=>b.action==='input').length===beforeInputs+2);
   await page.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.getAttribute('aria-disabled')==='false');
   assert.equal(posted.filter(b=>b.action==='input').length,beforeInputs+2,'Discarded taps are never replayed after recovery');
-  attempt={...attempt,phase:'ready',handle:'fixture_creator'};
+  combinedFrames=true;attempt={...attempt,phase:'ready',handle:'fixture_creator'};
   await page.getByRole('heading',{name:'Connect @fixture_creator?'}).waitFor();
   assert.equal(await page.locator('[data-state="connected"]').count(),0,'Capture alone must not claim connected');
   lostConfirm=true;await page.getByRole('button',{name:'Connect this account',exact:true}).click();
@@ -138,4 +170,4 @@ try{
  snapshot.onlyfans.accounts=['one','two'].map((handle,i)=>({id:'of-'+(i+1),handle,connection:{status:'expired',expiresAt:new Date(Date.now()-1000).toISOString(),outgoingEnabled:false}}));
  await multi.getByRole('button',{name:'Refresh status',exact:true}).click();await multi.getByRole('button',{name:'Reconnect @two',exact:true}).click();await multi.getByLabel('Email address',{exact:true}).waitFor();assert.equal(posted.find(body=>body.action==='start').accountId,'of-2');await multi.close();
  console.log('PASS creator sign-in UI: Chromium/mobile WebKit, delayed input/frame click guard, stale-frame refusal, no replayed taps/scrolls, serialized typing, account confirmation, exact retry, frame recovery, expiry/auth loss, clean restart and selected-account reconnect. Physical phone and live provider pilot remain release checks.');
-}finally{inputGate?.release();frameGate?.release();await Promise.allSettled([chrome.close(),safari.close()]);await new Promise(r=>server.close(r));}
+}finally{inputGate?.release();frameGate?.release();combinedGate?.release();await Promise.allSettled([chrome.close(),safari.close()]);await new Promise(r=>server.close(r));}
