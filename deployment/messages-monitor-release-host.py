@@ -35,10 +35,9 @@ def verify():
   assert isinstance(rows,list)
   elapsed=round((time.monotonic()-started)*1000)
   print(json.dumps({'preparedCreator':slug,'fans':len(rows),'ms':elapsed}),flush=True)
-  if slug in ['briana-redd','fit-sid']:
-   assert rows,'Existing selected creator fans available'
-   fan=next(row for row in rows if str(row.get('chatId','')).isdigit())
-   selected[slug]=(str(fan['chatId']),elapsed,len(rows))
+  if rows:
+   fan=next((row for row in rows if str(row.get('chatId','')).isdigit()),None)
+   if fan:selected[slug]=(str(fan['chatId']),elapsed,len(rows))
  for slug,(fan_id,elapsed,count) in selected.items():
   url='http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+fan_id
   with urllib.request.urlopen(url,timeout=60) as r:history=json.load(r)
@@ -47,7 +46,8 @@ def verify():
   with urllib.request.urlopen(url,timeout=8) as r:again=json.load(r)
   assert again.get('scope')=='all-stored' and again.get('days') is None
   report.append({'creator':slug,'fans':count,'initialFanReadMs':elapsed,'warmHistoryMs':round((time.monotonic()-start)*1000),'history':'all-stored'})
- assert len(selected)==2,'Both existing creator histories verified'
+ assert 'briana-redd' in selected and 'fit-sid' in selected,'Existing creator histories verified'
+ print(json.dumps({'historyIndexesPrepared':len(selected)}),flush=True)
  # A second whole-fleet pass must remain responsive after more than six
  # creators were read; this is the production regression that was failing.
  start=time.monotonic()
@@ -55,6 +55,7 @@ def verify():
   if creator.get('engine')!='v2':continue
   with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+creator['slug'],timeout=8) as r:assert isinstance(json.load(r),list)
  print(json.dumps({'repeatFleetReadMs':round((time.monotonic()-start)*1000),'creatorSummariesRetained':True}),flush=True)
+ print(subprocess.check_output(['docker','stats','--no-stream','--format','{{.Name}} CPU={{.CPUPerc}} MEM={{.MemUsage}}','twin-v2-dash-1','twin-v2-bot-1'],text=True),flush=True)
  return report
 # Recover only the exact failed rollback state from this rollout. A different
 # current configuration, image or bot is a concurrent release, so refuse it.
