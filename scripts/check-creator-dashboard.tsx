@@ -26,6 +26,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const js = ts.transpileModule(readFileSync(path, "utf8"), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const result = { exports: {} as Record<string, any> };
   new Function("require", "module", "exports", js)((name: string) => {
+    if (name === "@/components/NavigationLink") name = "next/link";
     if (Object.hasOwn(imports, name)) return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };
     if (["react", "react/jsx-runtime", "lucide-react"].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected Dashboard dependency: ${name}`);
@@ -403,3 +404,4 @@ async function main() {
   console.log("Creator Dashboard passed: isolated admin route; Brianna default; Brisbane date boundaries; deduplicated fans; reconciled charts, platforms and content; independent currency; period/platform/creator/search filters; chart-day inspection; purchase ownership and source links; dialogs; returning filter state; no production calls or changes to profile data.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

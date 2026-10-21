@@ -27,7 +27,7 @@ global.__setupDatabase = { from(table) {
       });
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => {
         let contents;
-        if (args.path === 'next/link') contents = 'import React from "react";export default ({children,...p})=>React.createElement("a",p,children);';
+        if (args.path === 'next/link') contents = 'import React from "react";export const useLinkStatus=()=>({pending:false});export default ({children,...p})=>React.createElement("a",p,children);';
         else if (args.path.endsWith('/CreatorQuestionnaireWizard')) contents = 'import React from "react";export default ({page,initialAnswers,initialRevision,locked,optional})=>React.createElement("div",{"data-fixture-questionnaire":page.slug,"data-locked":locked,"data-optional":optional,"data-revision":initialRevision},Object.entries(initialAnswers).map(([name,value])=>React.createElement("input",{key:name,name,defaultValue:value,disabled:locked})));';
         else if (args.path.endsWith('/CreatorOnboardingActionForm')) contents = 'import React from "react";export default ({children,consentBeforeSubmit,successStatuses})=>React.createElement("form",{"data-fixture-consent-submit":!!consentBeforeSubmit,"data-success-statuses":successStatuses.join(",")},children);';
         else if (args.path.endsWith('/CreatorContentIntake')) contents = 'import React from "react";export default ({locked})=>React.createElement("div",{"data-fixture-combined":true,"data-locked":locked});';

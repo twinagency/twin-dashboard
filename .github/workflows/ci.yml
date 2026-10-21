@@ -42,6 +42,11 @@ jobs:
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
           npx playwright install --with-deps chromium webkit
 
+      - name: Immediate navigation feedback and page prefetch
+        run: |
+          node scripts/check-navigation-feedback.cjs
+          node scripts/check-navigation-ui.mjs
+
       - name: Live dashboard overview data and interaction checks
         run: |
           node --import tsx scripts/check-overview-loading.cjs

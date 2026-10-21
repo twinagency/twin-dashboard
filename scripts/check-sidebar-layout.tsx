@@ -26,6 +26,7 @@ function compile(path: string, imports: Record<string, unknown> = {}) {
   }).outputText;
   const result = { exports: {} as Record<string, any> };
   const requireFixture = (name: string) => {
+    if (name === "@/components/NavigationLink") name = "next/link";
     if (Object.hasOwn(imports, name)) return imports[name];
     if (["react", "react/jsx-runtime"].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected sidebar dependency ${name}`);
@@ -392,3 +393,4 @@ for (const name of ["LYNQ", "Twin Technologies", "Unassigned"]) {
   assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", name), false);
 }
 assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", portals.TOP_ONLYFANS_AGENCY.name), true);
+

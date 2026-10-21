@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { usePathname } from "next/navigation";
 import { House, Users, MessageCircle, ChartNoAxesCombined } from "lucide-react";
 import { useDashboardAccess } from "./DashboardAccessProvider";
@@ -26,3 +26,4 @@ export default function WorkspaceMobileNav({ activeCloneId, channels }: { active
     <MobileMenu activeCloneId={activeCloneId} channels={channels} variant="bottom" />
   </nav>;
 }
+

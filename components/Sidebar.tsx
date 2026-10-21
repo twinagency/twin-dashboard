@@ -21,7 +21,7 @@ import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard
 // Mobile keeps the existing hamburger (MobileMenu), this component only
 // renders at lg+ (see layout.tsx).
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
@@ -555,3 +555,4 @@ export default function Sidebar({ clones: _clones, activeCloneId, channels }: { 
   const studio = audience === "admin" || !isCreator && isDashboardWorkspaceRoute(pathname);
   return <aside data-workspace-theme={audience === "admin" ? "dark" : undefined} data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
 }
+

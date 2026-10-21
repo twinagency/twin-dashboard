@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { CreatorPlatformHeading, CreatorPlatformEmpty } from "./CreatorPlatformPage";
 import { NextResponse } from "next/server";
 import { Card } from "@/components/ui/card";
@@ -104,3 +104,4 @@ function WorkspaceBody({ data, contentEditable = false }: { data: WorkspaceRead;
     </> : <Card className="p-4 text-sm text-muted">No creator configuration is saved.</Card>}
   </div>;
 }
+

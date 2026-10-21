@@ -1,6 +1,6 @@
 import MessagesWorkspace from "@/components/MessagesWorkspace";
 import { MutationForm } from "@/components/DashboardAccessProvider";
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
@@ -1763,3 +1763,4 @@ export default async function FansPage({
     </div>
   );
 }
+

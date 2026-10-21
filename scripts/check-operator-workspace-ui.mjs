@@ -63,7 +63,7 @@ export const usePathname=()=>useLocation().split("?")[0];
 export const useSearchParams=()=>new URLSearchParams(useLocation().split("?")[1]||"");
 export const useRouter=()=>({refresh(){},push(p){history.pushState({},"",p)},replace(p){history.replaceState({},"",p);dispatchEvent(new PopStateEvent("popstate"))}});
 `;
-const link=`import React from "react";export default function Link({href,children,onClick,...props}){return <a {...props} href={href} onClick={e=>{onClick?.(e);if(!e.defaultPrevented){e.preventDefault();history.pushState({},"",href)}}}>{children}</a>}`;
+const link=`import React from "react";export const useLinkStatus=()=>({pending:false});export default function Link({href,children,onClick,...props}){return <a {...props} href={href} onClick={e=>{onClick?.(e);if(!e.defaultPrevented){e.preventDefault();history.pushState({},"",href)}}}>{children}</a>}`;
 const actions=`export async function updateClone(){throw Error("Unexpected save")}export async function deleteClone(){throw Error("Unexpected delete")}export async function logout(){throw Error("Unexpected logout")}export async function setCloneScope(id){window.__pickedClone=id}`;
 const modules=new Map([["next/navigation",navigation],["next/link",link],["@/app/clones/actions",actions],["@/app/login/actions",actions],["@/app/actions/clone-scope",actions]]);
 const bundle=await build({
@@ -243,3 +243,4 @@ console.log("PASS: six brands; desktop and phone; all configuration tabs; payloa
 console.log(JSON.stringify(snapshots));
 }
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
+
