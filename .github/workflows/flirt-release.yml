@@ -48,8 +48,10 @@ jobs:
       - run: npx tsc --noEmit
       - name: Personalised Overview photos and access boundaries
         run: node scripts/check-flirt-creator-overview.cjs
-      - name: Day-long agency session renewal
-        run: node --import tsx scripts/check-agency-session.ts
+      - name: Day-long agency sessions and creator identity switching
+        run: |
+          node --import tsx scripts/check-agency-session.ts
+          node --import tsx scripts/check-creator-registration.ts
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
       - name: Creator flow and recoverable form regressions
