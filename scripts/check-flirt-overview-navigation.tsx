@@ -39,7 +39,7 @@ function compile(path: string): any {
     if (name.endsWith('creator-overview')) return { getCreatorOverview: async (id: string) => presentation(id), getOverviewAudience: async () => ({ total: 10 }) };
     if (name.endsWith('agency-overview')) return { getAgencyOverview: async () => agency };
     if (name === 'next/navigation') return { usePathname: () => url.pathname, useSearchParams: () => url.searchParams, useRouter: () => router };
-    if (name === 'next/link') return { __esModule: true, default: ({ children, ...props }: any) => <a {...props}>{children}</a> };
+    if (name === 'next/link') return { __esModule: true, useLinkStatus: () => ({pending:false}), default: ({ children, ...props }: any) => <a {...props}>{children}</a> };
     if (name.endsWith('DashboardAccessProvider')) return { useDashboardAccess: () => audience };
     if (name.endsWith('CurrencyProvider')) return { useCurrency: () => ({ currency: 'AUD', rate: 1, setCurrency: () => undefined }) };
     if (name.endsWith('BlurToggle')) return { __esModule: true, default: () => <button>Blur</button> };

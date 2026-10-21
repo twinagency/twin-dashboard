@@ -20,7 +20,7 @@ const {chromium,webkit}=require('playwright');
   plugins:[{name:'unrelated-dashboard-widgets',setup(b){
    b.onResolve({filter:/^(next\/link|\.\/(?:BlurProvider|CurrencyProvider|DashboardAccessProvider|MainShell|MobileMenu|Sidebar|TopBar|TwinWordmark))$/},a=>({path:a.path,namespace:'fixture'}));
    b.onLoad({filter:/.*/,namespace:'fixture'},a=>({loader:'jsx',resolveDir:root,contents:a.path==='next/link'
-    ?'import React from "react";export default function Link({children,href,...p}){return <a href={href} {...p}>{children}</a>;}'
+    ?'import React from "react";export const useLinkStatus=()=>({pending:false});export default function Link({children,href,...p}){return <a href={href} {...p}>{children}</a>;}'
     :a.path==='./MainShell'?'import React from "react";export default function Main({children}){return <main className="overflow-y-auto p-4">{children}</main>;}'
     :/Provider/.test(a.path)?'export default function Provider({children}){return children;}'
     :'export default function Widget(){return null;}'}));

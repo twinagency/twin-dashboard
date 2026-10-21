@@ -51,7 +51,7 @@ export const useRouter = () => ({
 const linkFixture = `
 import React from "react";
 const hrefText = (href) => typeof href === "string" ? href : (href?.pathname || "#");
-export default function Link({ children, href, onClick, ...props }) {
+export const useLinkStatus=()=>({pending:false});export default function Link({ children, href, onClick, ...props }) {
   return <a href={hrefText(href)} {...props} onClick={(event) => {
     onClick?.(event);
     event.preventDefault();

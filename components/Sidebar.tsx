@@ -19,7 +19,7 @@ import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 // Mobile keeps the existing hamburger (MobileMenu), this component only
 // renders at lg+ (see layout.tsx).
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";

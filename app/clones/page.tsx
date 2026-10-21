@@ -1,11 +1,12 @@
 import { AdminOnly } from "@/components/DashboardAccessProvider";
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
 import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
+import { signDashboardMedia } from "@/lib/media-signing-cache";
 import AgencyApplicantList from "@/components/AgencyApplicantList";
 
 export const dynamic = "force-dynamic";
@@ -50,9 +51,7 @@ export default async function ClonesPage() {
     // each, adding up to 1-1.5s of pure round trip latency for ten clones.
     const pathEntries = [...firstPath.entries()];
     if (pathEntries.length > 0) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from("media")
-        .createSignedUrls(pathEntries.map(([, path]) => path), 3600);
+      const { data: signed } = await signDashboardMedia(pathEntries.map(([, path]) => path));
       pathEntries.forEach(([cloneId], i) => {
         const url = signed?.[i]?.signedUrl;
         if (url) avatarUrlByCloneId.set(cloneId, url);

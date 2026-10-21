@@ -4,6 +4,7 @@ import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
+import "./navigation-feedback.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./flirt-theme.css";

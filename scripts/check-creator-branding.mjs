@@ -177,7 +177,7 @@ createRoot(document.getElementById('root')).render(<App/>);
 
 const linkMock = `
 import React from 'react';
-export default function Link({children,href,...props}){return <a {...props} href={String(href)}>{children}</a>}
+export const useLinkStatus=()=>({pending:false});export default function Link({children,href,...props}){return <a {...props} href={String(href)}>{children}</a>}
 `;
 const headersMock = `export async function cookies(){return {get(){return {value:'local-creator-session'}}}}`;
 const navigationMock = `export function redirect(path){throw new Error('Unexpected redirect to '+path)}`;

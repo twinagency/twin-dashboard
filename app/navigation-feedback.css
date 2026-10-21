@@ -1,0 +1,21 @@
+/* Feedback changes no resting dimensions or positions. */
+:where([data-navigation-link]):not([class~="absolute"]):not([class~="fixed"]):not([class~="sticky"]), :where(button:has(> [data-navigation-pending])) { position: relative; }
+.navigation-link-pending { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; box-shadow: inset 0 0 0 2px var(--accent, #3189ff); background: color-mix(in srgb, var(--accent, #3189ff) 12%, transparent); }
+.navigation-link-pending > span { position: absolute; right: 8px; top: 50%; width: 14px; height: 14px; margin-top: -7px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: navigation-spin .65s linear infinite; }
+body:has([data-navigation-pending], [data-page-loading])::after { content: ""; position: fixed; z-index: 10000; inset: 0 0 auto; height: 3px; pointer-events: none; background: linear-gradient(90deg, transparent, var(--accent, #3189ff), transparent); background-size: 45% 100%; background-repeat: no-repeat; animation: navigation-progress 1s ease-in-out infinite; }
+:where(.workspace-content, aside, [data-creator-workspace]) :where(button, [role="button"], a[href]):not(:disabled):not([aria-disabled="true"]):active { filter: brightness(.86); scale: .985; }
+.page-loading { padding: 24px; color: var(--muted, #8090a5); }
+.page-loading p { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.page-loading-spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: navigation-spin .65s linear infinite; }
+.page-loading-heading, .page-loading-cards > div, .page-loading-panel { background: color-mix(in srgb, currentColor 10%, transparent); border-radius: 12px; }
+.page-loading-heading { margin-top: 24px; height: 28px; max-width: 220px; }
+.page-loading-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 24px; }
+.page-loading-cards > div { height: 96px; }
+.page-loading-panel { height: 240px; margin-top: 24px; }
+@keyframes navigation-spin { to { rotate: 360deg; } }
+@keyframes navigation-progress { from { background-position: -80% 0; } to { background-position: 180% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .navigation-link-pending > span, .page-loading-spinner, body:has([data-navigation-pending], [data-page-loading])::after { animation: none; }
+  body:has([data-navigation-pending], [data-page-loading])::after { background: var(--accent, #3189ff); }
+  :where(.workspace-content, aside, [data-creator-workspace]) :where(button, [role="button"], a[href]):active { scale: 1; }
+}
