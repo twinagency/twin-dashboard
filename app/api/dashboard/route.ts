@@ -53,7 +53,9 @@ async function read(req: NextRequest) {
     const outAnalytics: AnalyticsData | null = analytics;
     const outBalance: StarBalance | null = balance;
     let cutMeta: Record<string, unknown> | undefined;
-    if (!access) {
+    if (!access && req.nextUrl.searchParams.get("summary") !== "1") {
+      // The compact overview does not show cuts; detailed reporting retains
+      // these per-creator calculations and metadata.
       // Master admin: stays gross. Add cutPct/net next to the gross figures
       // for the clones already in this payload — cheap, since the fleet is a
       // handful of clones and the cuts are 60s-cached.
