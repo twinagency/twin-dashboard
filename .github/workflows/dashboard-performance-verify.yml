@@ -1,3 +1,4 @@
+# Read-only: logs contain timings and hashes, never credentials or fan records.
 name: Dashboard performance live verification
 on:
   push:
