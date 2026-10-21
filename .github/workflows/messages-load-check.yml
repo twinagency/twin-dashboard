@@ -24,9 +24,8 @@ jobs:
           aws-region: ap-southeast-2
       - name: Release the tested monitor reader on its exact running image
         if: github.event_name == 'push'
-        run: python3 deployment/messages-current-source.py
+        run: python3 deployment/messages-monitor-release.py
       - name: Read actual selected and all-creator Messages pages without writes
-        if: github.event_name != 'push'
         run: python3 deployment/messages-load-check.py
         env:
           EXPECTED_DASHBOARD_SHA: ${{ github.event.workflow_run.head_sha || '' }}
