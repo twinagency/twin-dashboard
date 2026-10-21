@@ -25,4 +25,4 @@ jobs:
       - name: Read actual selected and all-creator Messages pages without writes
         run: python3 deployment/messages-load-check.py
         env:
-          EXPECTED_DASHBOARD_SHA: ${{ github.event.workflow_run.head_sha || 'cd0815ce12ac489229d1929da89e948672166585' }}
+          EXPECTED_DASHBOARD_SHA: ${{ github.event.workflow_run.head_sha || '' }}

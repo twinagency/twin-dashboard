@@ -45,8 +45,8 @@ for patch in payload['patches']:
  source=source.replace(patch['old'],patch['new'],1)
 new_server=source.encode();old_override=override.read_bytes()
 host_server=ROOT/'dashboard/server.ts';old_host=host_server.read_bytes()
-# Another release may have a different host checkout. Never overwrite it.
-assert old_host==old_server,'Host checkout differs from inspected runtime'
+# Preserve a separate host checkout; the running image is the deployment base.
+update_host = old_host == old_server
 assert inspect('twin-v2-dash-1')['Config']['Labels']['com.docker.compose.project.config_files']==str(ROOT/'docker-compose.yml')+','+str(override)
 for file,data in [('server-before.ts',old_server),('override-before.json',old_override),('before.json',json.dumps({'bot':before_bot,'dash':before_dash}).encode())]:atomic(release/file,data)
 atomic(release/'server.ts',new_server)
@@ -61,13 +61,15 @@ assert runtime('twin-v2-bot-1')==before_bot and runtime('twin-v2-dash-1')==befor
 assert override.read_bytes()==old_override and host_server.read_bytes()==old_host,'Concurrent deployment edit'
 try:
  updated=json.loads(old_override);dash=updated.setdefault('services',{}).setdefault('dash',{});dash['image']=image;dash.setdefault('environment',{})['MONITOR_LOAD_REVISION']=revision
- atomic(host_server,new_server);atomic(override,json.dumps(updated,indent=2).encode());compose()
+ if update_host:atomic(host_server,new_server)
+ atomic(override,json.dumps(updated,indent=2).encode());compose()
  assert runtime('twin-v2-dash-1')['image']==image
  report=verify();assert runtime('twin-v2-bot-1')==before_bot,'Bot runtime changed'
- result={'monitorLoadRevision':revision,'serverSha256':sha(new_server),'verified':report,'botUnchanged':True,'backup':str(release)}
+ result={'monitorLoadRevision':revision,'serverSha256':sha(new_server),'verified':report,'botUnchanged':True,'hostSourcePreserved':not update_host,'backup':str(release)}
  atomic(release/'result.json',json.dumps(result).encode());print(json.dumps(result))
 except Exception:
- atomic(host_server,old_host);atomic(override,old_override);compose()
+ if update_host:atomic(host_server,old_host)
+ atomic(override,old_override);compose()
  assert runtime('twin-v2-dash-1')['image']==before_dash['image']
  assert runtime('twin-v2-bot-1')==before_bot
  print(json.dumps({'monitorRolledBack':True,'botUnchanged':True}));raise
