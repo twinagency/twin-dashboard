@@ -69,7 +69,6 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
   const chartCreators = (data?.clones ?? []).filter(c => !cloneId || c.id === cloneId);
   const chartRows = (data?.series ?? []).map(row => ({ ...row, __total: chartCreators.reduce((sum, creator) => sum + (Number(row[creator.id]) || 0), 0) }));
   const recent = (data?.recent ?? []).filter(row => !cloneId || row.cloneId === cloneId).slice(0, 5);
-  const profileCreators = creators.slice(0, 5);
   const loadingValue = loading ? "…" : "Unavailable";
   const metrics = [
     ["Net revenue", stats ? money(stats.stars) : loadingValue, "After refunds and adjustments", true],
@@ -111,7 +110,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     <section className={styles.hero} aria-label="Dashboard overview">
       <div className={styles.heroCopy}><h1 className={selected ? "creator-name" : undefined}>{selected?.name ?? "Overview"}</h1><span>{reportingWindow} · Your creators, earnings and activity.</span></div>
       {selected ? <div className={styles.selectedPortrait}><Portrait key={selected.id} creator={selected} /></div> : <div className={styles.creatorDisplay}><nav className={styles.portraits} aria-label="Creator dashboards">
-        {profileCreators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-busy={switching && openingCreator === creator.id} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span>{switching && openingCreator === creator.id && <span data-navigation-pending role="status" aria-label="Opening creator" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>)}
+        {creators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-busy={switching && openingCreator === creator.id} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span>{switching && openingCreator === creator.id && <span data-navigation-pending role="status" aria-label="Opening creator" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>)}
         <Link href={creatorsHref} className={styles.creatorShortcut}><span className={styles.morePortrait}><Users size={24} /></span><span>View all</span></Link>
       </nav><span className={styles.creatorCount}><Users size={16} />{count(creators.length)} creators</span></div>}
     </section>
@@ -134,3 +133,4 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     <Dialog open={dateOpen} onOpenChange={setDateOpen}><DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Custom date range</DialogTitle></DialogHeader><form className={styles.dateForm} onSubmit={applyDates}><label>From<input aria-label="Start date" type="date" required value={draft.start} max={draft.end || undefined} onChange={e => setDraft(value => ({ ...value, start: e.target.value }))} /></label><label>To<input aria-label="End date" type="date" required value={draft.end} min={draft.start || undefined} onChange={e => setDraft(value => ({ ...value, end: e.target.value }))} /></label>{dateError && <p role="alert">{dateError}</p>}<button type="submit">Apply dates</button></form></DialogContent></Dialog>
   </div>;
 }
+

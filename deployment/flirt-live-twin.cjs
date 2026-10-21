@@ -10,6 +10,8 @@ const CLONES = Object.freeze([
   "e0464c19-d5b7-4154-ba46-a60a2ed2a8a3", // Allison Parker
   "4fff7866-c7e9-4af2-926a-36e727c0a77f", // Zoey Foxx
   "64d9532d-aac9-4e60-a48c-a3e5c53bb00a", // Johnny Coco (@johnnycocox)
+  "3484f7d9-0cda-4f52-84de-e104c238ce5e", // Trashy (@trashybagqueen)
+  "7c2e9452-1d4e-475c-86ef-07a797f52ce5", // Olivia Jade
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }
@@ -26,8 +28,8 @@ const SCOPED_CREATORS = Object.freeze({
   "eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a": Object.freeze({ cloneId: "0328e7b3-a1e5-465a-9a30-c9cf6519cba1", name: "Briana Redd" }), // Briana Redd
   "f003afbf-d57a-4a24-8376-234e2abfb4fb": Object.freeze({ cloneId: "3484f7d9-0cda-4f52-84de-e104c238ce5e", name: "trashy", source: "twin" }), // trashy, her own signup login (trashybagqueen)
 });
-// Clones only a scoped creator login may read. Kept out of CLONES so the FLIRT agency view does not widen.
-const SCOPED_ONLY_CLONES = Object.freeze(["3484f7d9-0cda-4f52-84de-e104c238ce5e", "7c2e9452-1d4e-475c-86ef-07a797f52ce5"]); // trashy and Olivia Jade
+// Additional creator-only records; all current scoped creators are also agency-assigned.
+const SCOPED_ONLY_CLONES = Object.freeze([]);
 function scopedCreator(accountId) { return Object.prototype.hasOwnProperty.call(SCOPED_CREATORS, accountId) ? SCOPED_CREATORS[accountId] : null; }
 // Data routing only. Management and onboarding gates keep using isLiveAccess.
 function isScopedLiveCreator(access) {
@@ -49,4 +51,5 @@ function configuration(env = process.env) {
   return { url: env.FLIRT_LIVE_TWIN_URL, key };
 }
 module.exports = { PROJECT, ID, CLONES, enabled, identity, isLiveAccess, scopedCreator, isScopedLiveCreator, isLiveData, configuration };
+
 

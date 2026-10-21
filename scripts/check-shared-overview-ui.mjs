@@ -11,6 +11,7 @@ import { creatorDemoData, creatorDemoInsight } from '../lib/creator-demo-data.ts
 const brand='flirt';
 const root=process.cwd(), out=process.env.MOXY_REVIEW_OUT||process.env.OVERVIEW_TEST_OUT||'/tmp/live-overview-ui';mkdirSync(out,{recursive:true});
 const clones=[{id:'11111111-1111-4111-8111-111111111111',name:'Fixture Creator A',color:'#0878ff'},{id:'22222222-2222-4222-8222-222222222222',name:'Fixture Creator B',color:'#8050ab'}];
+for (const [index, letter] of [...'CDEFGHI'].entries()) clones.push({id:`${index + 3}3333333-3333-4333-8333-333333333333`,name:`Fixture Creator ${letter}`,color:'#8050ab'});
 function fixture(period, cloneId, zero=false) {
  const base=creatorDemoData(period), old=base.clones[0].id;
  const stars=zero?0:cloneId===clones[1].id?20000:period==='1W'?50000:100000;
@@ -45,6 +46,19 @@ try{
  await page.goto('http://127.0.0.1:'+server.address().port);const kpi=page.locator('[data-overview-metric]').first();await page.waitForFunction(()=>document.querySelector('[data-overview-metric]')?.textContent.includes('1,300'));
  assert.equal(await page.locator('[data-live-overview=true]').count(),1);assert.equal(await page.getByRole('heading',{name:'Top fans',exact:true}).count(),1);assert.equal(await page.getByRole('heading',{name:'Best-selling content',exact:true}).count(),1);assert.equal(await page.locator('[data-overview-metric]').count(),6);assert.match(await page.locator('[data-overview-metric]').last().innerText(),/1,234/);assert.equal(await page.getByRole('heading',{name:'Recent purchases',exact:true}).count(),1);assert.equal(await page.locator('[data-shared-overview]').getAttribute('data-shared-overview'),brand);await page.getByRole('button',{name:'Detailed reporting',exact:true}).click();await page.getByRole('button',{name:'Back to overview',exact:true}).waitFor();await page.getByRole('button',{name:'Back to overview',exact:true}).click();
  assert.ok(await page.locator('.recharts-xAxis .recharts-cartesian-axis-tick').count(),'Date axis visible');assert.ok(await page.locator('.recharts-yAxis .recharts-cartesian-axis-tick').count(),'Money axis visible');await page.screenshot({path:out+'/desktop.png',fullPage:true});
+ for (const width of [1440, 768, 390, 320]) {
+  await page.setViewportSize({width,height:1000});
+  const roster=page.getByRole('navigation',{name:'Creator dashboards'});
+  assert.equal(await roster.getByRole('button').count(),clones.length,'Every creator has a dashboard icon');
+  for (const creator of clones) assert.equal(await roster.getByRole('button',{name:`Open ${creator.name} dashboard`,exact:true}).isVisible(),true,`${creator.name} visible at ${width}`);
+  assert.ok(await roster.evaluate(node=>node.scrollWidth<=node.clientWidth),'Creator icons wrap without horizontal clipping');
+  if(width===390)await page.screenshot({path:out+'/all-creators-mobile.png',fullPage:true});
+ }
+ await page.getByRole('button',{name:'Open Fixture Creator I dashboard',exact:true}).click();
+ await page.getByRole('heading',{name:'Fixture Creator I',exact:true}).waitFor();
+ await page.getByRole('button',{name:'All creators overview',exact:true}).click();
+ await page.getByRole('navigation',{name:'Creator dashboards'}).waitFor();
+ await page.setViewportSize({width:1440,height:1000});
  await page.getByLabel('Reporting period',{exact:true}).selectOption('1W');await page.waitForFunction(()=>document.querySelector('[data-overview-metric]')?.textContent.includes('650'));
  await page.getByRole('button',{name:'$USD',exact:true}).click();await page.waitForFunction(()=>document.querySelector('[data-overview-metric]')?.textContent.includes('975'));
  await page.getByRole('button',{name:'Switch creator',exact:true}).click();await page.getByRole('button',{name:/Fixture Creator B/}).click();await page.getByRole('heading',{name:clones[1].name,exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('[data-overview-metric]')?.textContent.includes('390'));
@@ -59,3 +73,4 @@ try{
  await page.getByRole('button',{name:'All creators overview',exact:true}).click();await page.getByRole('button',{name:'Open Fixture Creator B dashboard',exact:true}).click();await page.getByRole('heading',{name:clones[1].name,exact:true}).waitFor();assert.deepEqual(errors,[]);
  console.log(brand+' shared overview passed: API totals, six KPIs, dates, currency, shared-header currency and scope picker, detailed reporting, mobile widths, failed refresh and empty ledger.');
 }finally{await browser.close();server.close()}
+

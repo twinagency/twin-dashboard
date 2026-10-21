@@ -61,8 +61,8 @@ async function main() {
     const ownPhotos = await rows(live.url, live.key, 'photos?select=id&clone_id=eq.' + overviewId);
     assert(slots.every(p => p.id === 'profile-' + overviewId || ownPhotos.some(own => own.id === p.id)), 'Overview photos must belong to this creator');
     if (overviewId === 'e0464c19-d5b7-4154-ba46-a60a2ed2a8a3' && !ownPhotos.length) assert(!overview.presentation.hero && !overview.presentation.library.length, 'A creator without photos must use the honest empty state');
-    // Johnny uses his existing profile portrait until showcase photos have been reviewed.
-    else if (overviewId === '64d9532d-aac9-4e60-a48c-a3e5c53bb00a') assert(!overview.presentation.hero && !overview.presentation.library.length, 'New creator must not display unreviewed showcase photos');
+    // Newly assigned creators use their existing portraits until showcase photos are reviewed.
+    else if (['64d9532d-aac9-4e60-a48c-a3e5c53bb00a', '3484f7d9-0cda-4f52-84de-e104c238ce5e', '7c2e9452-1d4e-475c-86ef-07a797f52ce5'].includes(overviewId)) assert(!overview.presentation.hero && !overview.presentation.library.length, 'New creator must not display unreviewed showcase photos');
     else assert(overview.presentation.hero && overview.presentation.library.length === 3, 'Reviewed creator photos must be available');
     const fanCountResponse = await request(live.url + '/rest/v1/users?select=id&clone_id=eq.' + overviewId + '&or=(is_test.is.null,is_test.eq.false)', {method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
     assert(fanCountResponse.ok && Number(fanCountResponse.headers.get('content-range')?.split('/')[1]) === overview.audience.total, 'Overview must show all recorded fans excluding test records');
@@ -77,7 +77,7 @@ async function main() {
   assert((await page('/api/creator-overview?clone='+outside)).status === 403, 'Overview must reject an unassigned creator');
   assert((await page('/api/creator-overview/photo?clone='+outside+'&slot=hero')).status === 403, 'Portrait endpoint must reject an unassigned creator');
   assert((await page('/api/creator-overview/photo?clone='+CLONES[0]+'&slot=unreviewed')).status === 404, 'Portrait endpoint must reject arbitrary media slots');
-  checks.push('All seven creator Overviews, unique owned photos, all-time fans and portrait isolation verified live');
+  checks.push('All nine creator Overviews, unique owned photos, all-time fans and portrait isolation verified live');
   const agencyResponse = await page('/api/creator-overview');
   assert(agencyResponse.ok, 'Agency overview data must load');
   const agency = await agencyResponse.json();
@@ -90,7 +90,7 @@ async function main() {
   assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
-  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('data-shared-overview="flirt"') && agencyHtml.includes('data-creator-overview="all"') && /<h1(?:\s[^>]*)?>Overview<\/h1>/.test(agencyHtml) && agencyHtml.includes('Your creators, earnings and activity.') && agencyHtml.includes('Creator dashboards') && agencyHtml.includes('View all') && agencyHtml.includes('Reporting period') && agencyHtml.includes('Revenue performance') && agency.creators.slice(0,5).every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('data-shared-overview="flirt"') && agencyHtml.includes('data-creator-overview="all"') && /<h1(?:\s[^>]*)?>Overview<\/h1>/.test(agencyHtml) && agencyHtml.includes('Your creators, earnings and activity.') && agencyHtml.includes('Creator dashboards') && agencyHtml.includes('View all') && agencyHtml.includes('Reporting period') && agencyHtml.includes('Revenue performance') && agency.creators.every(c=>agencyHtml.includes('Open '+c.name+' dashboard')), 'Live All creators Overview must render its agency layout');
   const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
   assert(monthResponse.ok,'Default 30-day agency earnings must load');
   const month=await monthResponse.json();
@@ -111,3 +111,4 @@ async function main() {
   console.log(JSON.stringify({ passed: true, creators: expected.map(row => row.name).sort(), checks, credentials_logged: false, database_records_copied: false }));
 }
 main().catch(error => { console.log(JSON.stringify({ passed: false, error: error.message, checks, credentials_logged: false })); process.exitCode = 1; });
+

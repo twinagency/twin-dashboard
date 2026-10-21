@@ -1,5 +1,5 @@
 {
-  "reason": "Restore the familiar centred FLIRT sign-in card and pink textured background. Remove the agency marketing hero and add the existing owner sign-in link. Agency authentication and access remain unchanged.",
-  "source_commit": "595be9c6604e4d1c7acdc99d6e4800d660349310",
-  "requested_at": "2026-10-21T20:25:20.898Z"
+  "reason": "Add Trashy and Olivia Jade to the FLIRT agency dashboard using their existing live creator records. Display every assigned creator as a clickable Overview icon on desktop and mobile.",
+  "source_commit": "2d32097dff60fb9fca852b271df6df14d0ddc518",
+  "requested_at": "2026-10-21T23:12:43.969871+00:00"
 }
