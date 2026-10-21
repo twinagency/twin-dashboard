@@ -1,0 +1,28 @@
+name: Clear superseded navigation verification
+on:
+  push:
+    branches: ["codex/navigation-ci-cleanup-20261022"]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Cancel only this task's superseded verification runs
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const targets = [
+              [39620585494, "54615bf811fdcd17d965a75575c975c454a2140d"],
+              [39620965322, "7d18790943ef96073f6a4a9dd09a781d05d31689"],
+              [39621251564, "50f442281ecac0c958c1f402dfffe1c1505deba2"]
+            ];
+            for (const [run_id, expected] of targets) {
+              const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id});
+              if (run.head_sha !== expected) throw Error("Unexpected source for run " + run_id);
+              if (run.status === "completed") { core.info("Already complete: " + run_id); continue; }
+              await github.rest.actions.cancelWorkflowRun({...context.repo, run_id});
+              core.info("Cancelled superseded verification: " + run_id);
+            }
