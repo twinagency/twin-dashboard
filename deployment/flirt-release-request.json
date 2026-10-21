@@ -1,5 +1,5 @@
 {
-  "reason": "Celia empty agency workspace: working Flirt agency sign-in and logout routing, supplied Flirt wordmark/icon, Outfit typography and brand-guide colours. Preserve the independent agency entry page through host brand routing. Preserve legacy partner fallback; Flirt sessions use an explicit portal.",
-  "source_commit": "ac977bb41810e16fdc2e466c7c7fb650ee9af7cc",
-  "requested_at": "2026-10-21T18:06:03.566Z"
+  "reason": "Restore the familiar centred FLIRT sign-in card and pink textured background. Remove the agency marketing hero and add the existing owner sign-in link. Agency authentication and access remain unchanged.",
+  "source_commit": "595be9c6604e4d1c7acdc99d6e4800d660349310",
+  "requested_at": "2026-10-21T20:25:20.898Z"
 }
