@@ -32,7 +32,7 @@ async function main(){
     const body=typeof init?.body==="string"?JSON.parse(init.body):null;calls.push({url,method,body});
     let out:unknown=[];
     if(url.pathname==="/auth/v1/user")out={id:"verified-user"};
-    else if(url.pathname==="/rest/v1/agency_memberships")out=revoked?null:{agency_id:manager.id};
+    else if(url.pathname==="/rest/v1/agency_memberships")out=revoked?null:{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:manager.id};
     else if(url.pathname==="/rest/v1/partner_agencies")out={id:manager.id,name:manager.name};
     else if(url.pathname==="/rest/v1/agency_creators")out=manager.cloneIds.map(clone_id=>({clone_id}));
     else if(method!=="GET"&&method!=="HEAD")out=[];

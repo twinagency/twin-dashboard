@@ -68,6 +68,8 @@ jobs:
           node scripts/check-creator-preparation.cjs
           node --import tsx scripts/check-onlyfans-connection-status.ts
           node scripts/check-agency-team.cjs
+          node scripts/check-staff-creator-scope.cjs
+          node scripts/check-shared-media.cjs
           node scripts/check-creator-platforms.cjs
           node scripts/check-creator-platforms-ui.mjs
           node scripts/check-creator-sign-in-ui.mjs
@@ -194,5 +196,6 @@ jobs:
       - name: Exercise real PostgreSQL functions on isolated fixtures
         env:
           PGPASSWORD: synthetic-platform-test
-        run: psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
-
+        run: |
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql

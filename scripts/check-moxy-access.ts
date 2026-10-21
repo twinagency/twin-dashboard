@@ -44,7 +44,7 @@ async function main() {
     } else if(url.pathname==="/rest/v1/agency_memberships") {
       assert.equal(url.searchParams.get("user_id"),"eq.verified-moxy-user");
       assert.equal(url.searchParams.get("active"),"eq.true");
-      body=memberActive?{agency_id:signedInAgency}:null;
+      body=memberActive?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:signedInAgency}:null;
     } else if(url.pathname==="/rest/v1/agency_creators") {
       assert.equal(url.searchParams.get("agency_id"),`eq.${signedInAgency}`);
       body=[{clone_id:creator},{clone_id:secondCreator}];
@@ -145,4 +145,3 @@ async function main() {
   console.log("Moxy: tenant-bound login, revocation, read-only methods, disabled routes, two-creator scoping, private settings, branding and admin isolation passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
-

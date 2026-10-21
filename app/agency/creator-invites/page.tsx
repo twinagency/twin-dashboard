@@ -30,6 +30,7 @@ const dateOnly = (value: string | null) => (value ? value.slice(0, 10) : null);
 export default async function AgencyCreatorInvites({ searchParams }: { searchParams: Promise<{ result?: string; created?: string }> }) {
   const access = await getDashboardAccess();
   if (!access) redirect("/creator-management");
+  if (access.creatorScope === "selected") redirect("/clones");
   const { result, created } = await searchParams;
   const newCode = created && INVITE_CODE_PATTERN.test(created) ? created : null;
 

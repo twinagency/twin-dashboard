@@ -1,6 +1,7 @@
 "use client";
 import { ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/DashboardAccessProvider";
 import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
+import SharedMediaPanel from "@/components/SharedMediaPanel";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -1530,6 +1531,8 @@ export default function MediaManager({
 
       {twinRefresh && (tab === "photos" || tab === "videos") && <div className="twin-toolbar"><input aria-label="Search content descriptions" placeholder="Search content descriptions…" value={search} onChange={e => { setSearch(e.target.value); setSelectedPhotoIds(new Set()); setSelectedVideoIds(new Set()); }} /><span className="text-sm text-muted">{tab === "photos" ? visiblePhotos.length : visibleVideos.length} items</span></div>}
 
+      {twinRefresh && <ManagerOnly><SharedMediaPanel key={cloneId} creatorId={cloneId} selected={[...[...selectedPhotoIds].map(sourceId => ({ sourceId, kind: "photo" as const })), ...[...selectedVideoIds].map(sourceId => ({ sourceId, kind: "video" as const }))]} /></ManagerOnly>}
+
       <div className={tab === "photos" ? "grid gap-6" : "hidden"}>
         <ManagerOnly>{twinRefresh ? <details className="twin-upload"><summary>+ Add photos</summary><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></details> : <PhotoUploadQueue cloneId={cloneId} onDone={() => {}} />}</ManagerOnly>
         {photos.length > 0 ? (
@@ -1872,4 +1875,3 @@ function PricingTab({
     </div>
   );
 }
-

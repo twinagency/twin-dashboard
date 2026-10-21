@@ -1,17 +1,19 @@
 import { serviceClient } from "./supabase-service";
-export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; canManage?: boolean; userId?: string };
+import { staffCreatorIds } from "./staff-creator-scope";
+export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; canManage?: boolean; userId?: string; creatorScope?: "all" | "selected" };
 export async function agencyIdentity(token: string | undefined): Promise<AgencyIdentity | null> {
   if (!token) return null;
   const db = serviceClient();
   const { data, error } = await db.auth.getUser(token);
   if (error || !data.user) return null;
-  const member = await db.from("agency_memberships").select("agency_id,can_manage")
+  const member = await db.from("agency_memberships").select("agency_id,can_manage,creator_scope,creator_ids,creator_access_revision")
     .eq("user_id", data.user.id).eq("active", true).maybeSingle();
   if (member.error || !member.data) return null;
   const identity = await agencyIdentityById(member.data.agency_id);
   // This permission is server-owned membership data. Never copy it from Auth
   // metadata, a browser cookie, branding, or a submitted form field.
-  return identity ? { ...identity, userId: data.user.id, canManage: member.data.can_manage === true } : null;
+  const cloneIds = identity ? staffCreatorIds(identity.cloneIds, member.data) : null;
+  return identity && cloneIds ? { ...identity, cloneIds, ...(member.data.creator_scope === "selected" ? { creatorScope: "selected" as const } : {}), userId: data.user.id, canManage: member.data.can_manage === true } : null;
 }
 
 // Builds the SAME identity shape a real login produces, but keyed directly by

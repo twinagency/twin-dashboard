@@ -10,6 +10,7 @@ async function main(){
  from(table){
   const q={table,filters:[],action:"select",values:null};f.queries.push(q);
   const result=()=>{if(table==="partner_agencies")return{data:[{id:A,name:"Fixture agency",slug:"moxy"}].filter(row=>q.filters.every(([k,v])=>k==="active"?v===true:row[k]===v)),error:null};
+   if(table==="agency_creators"||table==="clones")return{data:[],error:null};
    const rows=f.members.filter(row=>q.filters.every(([k,v])=>row[k]===v));
    if(q.action==="update")rows.forEach(row=>Object.assign(row,q.values));
    if(q.action==="insert"){if(f.insertError)return{data:null,error:{}};f.members.push(q.values);return{data:null,error:null}}
@@ -48,7 +49,7 @@ async function main(){
   f.insertError=true;response=await send({...create,email:"failed@example.invalid"});assert.match(response.headers.get("location"),/result=error/);assert.deepEqual(f.deleted,[V]);f.insertError=false;
   f.authError=true;const count=f.queries.filter(q=>q.action==="insert").length;await send({...create,email:"existing@example.invalid"});assert.equal(f.queries.filter(q=>q.action==="insert").length,count);f.authError=false;
   const html=renderToStaticMarkup(await m.Page({searchParams:Promise.resolve({agency:A})}));
-  assert.match(html,/Fixture agency team/);assert.match(html,/member@example.invalid/);assert(!html.includes("foreign@example.invalid"));assert.match(html,/Creator access is shared across the agency/);assert.match(html,/Restore access|Revoke access/);
+  assert.match(html,/Fixture agency team/);assert.match(html,/member@example.invalid/);assert(!html.includes("foreign@example.invalid"));assert.match(html,/same creator access applies across Telegram/);assert.match(html,/Restore access|Revoke access/);
   const {JSDOM}=require("jsdom"),dom=new JSDOM(html);
   const memberForm=[...dom.window.document.querySelectorAll("[data-agency-member-form]")].find(form=>form.querySelector('[name="email"]').value==="member@example.invalid");
   const renderedForm=new dom.window.FormData(memberForm);
@@ -60,4 +61,3 @@ async function main(){
  }finally{delete globalThis.__agencyTeamTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(error=>{console.error(error);process.exitCode=1});
-

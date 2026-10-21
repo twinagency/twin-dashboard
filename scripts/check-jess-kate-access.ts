@@ -34,9 +34,9 @@ async function main(){
         assert.equal(url.searchParams.get("email"),`eq.${portal.loginEmail}`);
         body=active?{user_id:user,email:portal.loginEmail}:null;
       }else {
-        assert.equal(url.searchParams.get("select"),"agency_id,can_manage");
+        assert.equal(url.searchParams.get("select"),"agency_id,can_manage,creator_scope,creator_ids,creator_access_revision");
         assert.equal(url.searchParams.get("user_id"),`eq.${user}`);
-        body=active?{agency_id:wrongAgency?"different-agency":portal.id,can_manage:false}:null;
+        body=active?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:wrongAgency?"different-agency":portal.id,can_manage:false}:null;
       }
     }else if(url.pathname==="/rest/v1/partner_agencies")body=agencyActive?{id:wrongAgency?"different-agency":portal.id,name:portal.name}:null;
     else if(url.pathname==="/rest/v1/agency_creators")body=emptyScope?[]:[{clone_id:kate}];

@@ -53,7 +53,7 @@ async function main() {
         assert.equal(url.searchParams.get("agency_id"),`eq.${agencyId}`);
         assert.equal(url.searchParams.get("user_id"),`eq.${userId}`);
         body=memberActive?{user_id:userId}:null;
-      } else body=memberActive?{agency_id:agencyId}:null;
+      } else body=memberActive?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:agencyId}:null;
     } else if (url.pathname === "/rest/v1/partner_agencies") body=agencyActive?{id:agencyId,name:"LYNQ"}:null;
     else if (url.pathname === "/rest/v1/agency_creators") body=[{clone_id:creatorId}];
     else throw new Error(`Unexpected request ${url.pathname}`);

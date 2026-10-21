@@ -42,7 +42,7 @@ async function main() {
     if(url.includes('/auth/v1/user')) body={id:"verified-user"};
     else if(url.includes('/agency_memberships')) {
       assert.match(url,/user_id=eq.verified-user/);assert.match(url,/active=eq.true/);
-      body=enabled?{agency_id:"lynq"}:null;
+      body=enabled?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:"lynq"}:null;
     } else if(url.includes('/partner_agencies')) {assert.match(url,/id=eq.lynq/);body={id:"lynq",name:"LYNQ"};}
     else if(url.includes('/agency_creators')) {assert.match(url,/agency_id=eq.lynq/);body=[{clone_id:"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},{clone_id:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}];}
     else throw new Error(`Unexpected query ${url}`);

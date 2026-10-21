@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
   const access = await getDashboardAccess();
   if (!access) return new NextResponse("Agency sign in required", { status: 401 });
+  if (access.creatorScope === "selected") return new NextResponse("Agency-wide creator access required", { status: 403 });
 
   const fd = await req.formData();
   const action = String(fd.get("action") ?? "");

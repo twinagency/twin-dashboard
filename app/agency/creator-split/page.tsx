@@ -26,7 +26,7 @@ export default async function AgencyCreatorSplitPage() {
   let cuts: CreatorCutRow[] = [];
   try {
     const result = await listAgencyCreatorCuts(agencyId);
-    cuts = result || [];
+    cuts = (result || []).filter(row => access.cloneIds.includes(row.cloneId));
   } catch (error) {
     console.error("Error loading creator cuts:", error);
     cuts = [];
