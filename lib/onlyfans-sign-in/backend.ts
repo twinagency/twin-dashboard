@@ -1,24 +1,15 @@
 import 'server-only';
 import {createBackendTransport} from '@/lib/onlyfans/backend-transport';
 import {validBrowserSession,type BrowserSession} from '@/lib/creator-platforms/browser-connection';
+import {parseSignInAttempt,type SignInAttempt} from './model';
+export {parseSignInAttempt,type SignInAttempt} from './model';
 
 export type SignInScope={creatorId:string;actor:string};
 export type SignInNetwork={accountId:string|null;ownerId:number|null;proxyUrl:string|null;fingerprint:string};
-export type SignInAttempt={id:string;phase:'opening'|'waiting'|'ready'|'submitted'|'cancelled'|'expired'|'failed'|'wrong_account';handle:string|null;expiresAt:string;enrollmentId:string|null;width:number;height:number;keyboard?:'email'|'password'|'text'|null};
 export type SignInCapture={profileId:string;handle:string;session:BrowserSession&{networkFingerprint:string}};
 const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(v);
 export class SignInBackendError extends Error{
   constructor(readonly status:number,message:string){super(message);this.name='SignInBackendError';}
-}
-export function parseSignInAttempt(value:unknown):SignInAttempt|null{
-  if(!value||typeof value!=='object'||Array.isArray(value))return null;
-  const v=value as SignInAttempt;
-  if(Object.keys(v).some(k=>!['id','phase','handle','expiresAt','enrollmentId','width','height','keyboard'].includes(k)))return null;
-  if(!uuid(v.id)||!['opening','waiting','ready','submitted','cancelled','expired','failed','wrong_account'].includes(v.phase))return null;
-  if(v.handle!==null&&(typeof v.handle!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(v.handle)))return null;
-  if(typeof v.expiresAt!=='string'||!Number.isFinite(Date.parse(v.expiresAt))||(v.enrollmentId!==null&&!uuid(v.enrollmentId)))return null;
-  if(v.width!==432||v.height!==720||(v.keyboard!==undefined&&v.keyboard!==null&&!['email','password','text'].includes(v.keyboard)))return null;
-  return v;
 }
 export function createSignInBackend({baseUrl,token,fetchImpl}:{baseUrl:string;token:string;fetchImpl?:typeof fetch}){
   const transport=createBackendTransport(fetchImpl),root=baseUrl.replace(/\/+$/,'')+'/v1/attempts';
