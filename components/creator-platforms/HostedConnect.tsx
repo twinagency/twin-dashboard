@@ -8,10 +8,12 @@ const route='/creator-auth/platforms/onlyfans/sign-in';
 class SignInRequestError extends Error{constructor(readonly status:number,message:string){super(message);}}
 export default function HostedConnect({profileId,accountId,disabled,onChanged}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:()=>Promise<boolean>}){
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[statusNotice,setStatusNotice]=useState(''),[busy,setBusy]=useState(false),[sessionLost,setSessionLost]=useState(false),[showScreen,setShowScreen]=useState(false),[screenReady,setScreenReady]=useState(false),[keyboardOpen,setKeyboardOpen]=useState(false);
+  const [screenUpdating,setScreenUpdating]=useState(false);
+  const screenBlocked=useRef(true);
   const live=useRef(false),current=useRef<SignInAttempt|null>(null),started=useRef(false),startKey=useRef('');
   const canvas=useRef<HTMLCanvasElement>(null),keyboard=useRef<HTMLInputElement>(null),queue=useRef(Promise.resolve()),pendingInputs=useRef<Array<{input:Record<string,unknown>;identity:string;version:number}>>([]);
   const inputVersion=useRef(0),refreshFrame=useRef<(()=>void)|null>(null),commands=useRef(0),loginForm=useRef<HTMLFormElement>(null);
-  const generation=useRef(0),pointer=useRef<{x:number;y:number;left:number;top:number;width:number;height:number}|null>(null),changed=useRef(onChanged);changed.current=onChanged;
+  const generation=useRef(0),pointer=useRef<{id:number;version:number;x:number;y:number;left:number;top:number;width:number;height:number}|null>(null),changed=useRef(onChanged);changed.current=onChanged;
   const save=useCallback((value:SignInAttempt)=>{if(live.current){const next=currentSignInAttempt(value);current.current=next;setAttempt(next);if(next.phase!=='waiting'){loginForm.current?.reset();keyboard.current?.blur();setKeyboardOpen(false);}}},[]);
   const requestError=useCallback((error:unknown)=>{
     if(!live.current)return;
@@ -54,21 +56,25 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   },[attempt?.id,attempt?.expiresAt,attempt?.phase,save]);
   useEffect(()=>{
     if(!attempt||attempt.phase!=='waiting'||disabled||sessionLost||!showScreen)return;
-    let active=true,badFrames=0,running=false;const controller=new AbortController();let timer:number;setScreenReady(false);
+    let active=true,badFrames=0,running=false,redraw=false;const controller=new AbortController();let timer:number;screenBlocked.current=true;setScreenReady(false);setScreenUpdating(false);
     const schedule=(delay=0)=>{clearTimeout(timer);timer=window.setTimeout(()=>void draw(),delay);};
-    refreshFrame.current=()=>schedule();
+    refreshFrame.current=()=>{if(running)redraw=true;else schedule();};
     const screenError='Your sign-in screen could not be loaded. Restart sign-in to continue.';
-    const draw=async()=>{if(running)return;running=true;const version=inputVersion.current;try{
-      await queue.current;if(!active)return;
+    const draw=async()=>{if(running)return;running=true;redraw=false;const version=inputVersion.current;try{
+      await queue.current;if(!active)return;if(version!==inputVersion.current){redraw=true;return;}
+      // Only a frame requested after the input queue drained can unlock clicks.
       const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});
       if([401,403,404,410].includes(r.status))throw new SignInRequestError(r.status,'Your sign-in screen could not be loaded.');
       if(!r.ok||!['image/jpeg','image/png'].includes(r.headers.get('content-type')?.split(';')[0]??''))throw new Error('frame_unavailable');
-      const blob=await r.blob(),image=await createImageBitmap(blob);if(active&&version===inputVersion.current&&canvas.current){if(canvas.current.width!==image.width||canvas.current.height!==image.height){canvas.current.width=image.width;canvas.current.height=image.height;}canvas.current.getContext('2d')?.drawImage(image,0,0);badFrames=0;setScreenReady(true);setNotice(value=>value===screenError?'':value);}image.close();
-    }catch(error){if(active){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3)setNotice(screenError);}}finally{running=false;if(active)schedule(600);}};
-    void draw();return()=>{active=false;controller.abort();refreshFrame.current=null;clearTimeout(timer);};
+      const blob=await r.blob(),image=await createImageBitmap(blob);try{if(active&&version===inputVersion.current&&!pendingInputs.current.length&&!commands.current&&canvas.current){const context=canvas.current.getContext('2d');if(!context)throw new Error('canvas_unavailable');if(canvas.current.width!==image.width||canvas.current.height!==image.height){canvas.current.width=image.width;canvas.current.height=image.height;}context.drawImage(image,0,0);badFrames=0;screenBlocked.current=false;setScreenReady(true);setScreenUpdating(false);setNotice(value=>value===screenError?'':value);}}finally{image.close();}
+    }catch(error){if(active){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3){screenBlocked.current=true;setScreenReady(false);setNotice(screenError);}}}finally{running=false;if(active)schedule(redraw?0:600);}};
+    void draw();return()=>{active=false;screenBlocked.current=true;pointer.current=null;controller.abort();refreshFrame.current=null;clearTimeout(timer);};
   },[attempt?.id,attempt?.phase,disabled,sessionLost,showScreen,requestError]);
   function send(input:Record<string,unknown>){
     if(disabled||sessionLost||current.current?.phase!=='waiting')return;
+    // A queued pointer action could land on a page the user has not seen yet.
+    if((input.type==='click'||input.type==='scroll')&&screenBlocked.current)return;
+    screenBlocked.current=true;setScreenUpdating(true);
     const identity=current.current.id,version=generation.current;inputVersion.current++;
     pendingInputs.current.push({input,identity,version});
     queue.current=queue.current.then(async()=>{
@@ -88,8 +94,8 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   function type(event:KeyboardEvent<HTMLInputElement>){
     if(['Enter','Tab','Backspace','Delete','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();send({type:'key',key:event.key});}
   }
-  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const box=event.currentTarget.getBoundingClientRect();pointer.current={x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.blur();}
-  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const p=pointer.current;pointer.current=null;if(!p)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height)),x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});else if(Math.abs(p.x-event.clientX)<18)send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});}
+  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();if(screenBlocked.current||pointer.current)return;const box=event.currentTarget.getBoundingClientRect();pointer.current={id:event.pointerId,version:inputVersion.current,x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.blur();}
+  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const p=pointer.current;if(!p||p.id!==event.pointerId)return;pointer.current=null;if(screenBlocked.current||p.version!==inputVersion.current)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height)),x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});else if(Math.abs(p.x-event.clientX)<18)send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});}
   async function login(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy||disabled||sessionLost||current.current?.phase!=='waiting')return;
     const form=event.currentTarget,values=new FormData(form);
@@ -115,9 +121,10 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
         <button type="button" className={styles.otherOptions} onClick={()=>setShowScreen(true)}>Other sign-in options</button>
       </form>:<>
       <p className={styles.intro}>Complete the verification below.</p>
-      <div className={styles.viewer} aria-busy={!screenReady}>
+      <div className={styles.viewer} aria-busy={!screenReady||screenUpdating}>
         {!screenReady&&<div className={styles.screenLoading} role="status"><LoaderCircle size={22} className={styles.spinner}/>Loading your sign-in…</div>}
-        <canvas ref={canvas} width={432} height={720} className={styles.screen} data-ready={screenReady} aria-label="OnlyFans sign-in screen" onPointerDown={press} onPointerUp={release} onPointerCancel={()=>{pointer.current=null;}} onWheel={event=>{event.preventDefault();const box=event.currentTarget.getBoundingClientRect();send({type:'scroll',delta:Math.max(-1000,Math.min(1000,event.deltaY)),x:Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),y:Math.max(0,Math.min(1,(event.clientY-box.top)/box.height))});}}/>
+        {screenReady&&screenUpdating&&<div className={styles.screenUpdating} role="status"><span><LoaderCircle size={17} className={styles.spinner}/>Updating…</span></div>}
+        <canvas ref={canvas} width={432} height={720} className={styles.screen} data-ready={screenReady} aria-disabled={!screenReady||screenUpdating} aria-label="OnlyFans sign-in screen" onPointerDown={press} onPointerUp={release} onPointerCancel={()=>{pointer.current=null;}} onWheel={event=>{event.preventDefault();const box=event.currentTarget.getBoundingClientRect();send({type:'scroll',delta:Math.max(-1000,Math.min(1000,event.deltaY)),x:Math.max(0,Math.min(1,(event.clientX-box.left)/box.width)),y:Math.max(0,Math.min(1,(event.clientY-box.top)/box.height))});}}/>
         <input ref={keyboard} className={styles.keyboard} aria-label="Type in the selected OnlyFans field" type={attempt.keyboard==='password'?'password':attempt.keyboard==='email'?'email':'text'} autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false} onFocus={()=>setKeyboardOpen(true)} onBlur={()=>setKeyboardOpen(false)} onKeyDown={type} onBeforeInput={event=>{if((event.nativeEvent as InputEvent).inputType==='deleteContentBackward'){event.preventDefault();send({type:'key',key:'Backspace'});}}} onChange={event=>{if((event.nativeEvent as InputEvent).isComposing)return;const value=event.currentTarget.value;event.currentTarget.value='';if(value)send({type:'text',text:value});}} onCompositionEnd={event=>{const value=event.currentTarget.value;event.currentTarget.value='';if(value)send({type:'text',text:value});}}/>
       </div>
       <div className={styles.tools}><button type="button" onClick={()=>{keyboard.current?.blur();setShowScreen(false);}}>Back to sign-in</button><button type="button" onClick={()=>keyboardOpen?keyboard.current?.blur():keyboard.current?.focus({preventScroll:true})}>{keyboardOpen?'Hide keyboard':'Show keyboard'}</button>{keyboardOpen&&<><button type="button" onPointerDown={event=>event.preventDefault()} onClick={()=>{send({type:'key',key:'Tab'});keyboard.current?.focus({preventScroll:true});}}>Next field</button><button type="button" onPointerDown={event=>event.preventDefault()} onClick={()=>send({type:'key',key:'Enter'})}>Enter ↵</button></>}</div>
