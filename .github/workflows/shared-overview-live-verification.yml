@@ -1,0 +1,52 @@
+name: Shared overview live verification
+on:
+  push:
+    branches: ["codex/shared-overview-live-verification-20261021"]
+    paths:
+      - .github/workflows/shared-overview-live-verification.yml
+      - deployment/flirt-live-creators-check.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  # Preserve the existing release lock while these live checks are active.
+  group: flirt-release-dashboard
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/codex/shared-overview-live-verification-20261021'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      FLIRT_EXPECTED_COMMIT: ed68dc0ac8b75c22b5cb3f8f33bf1c25b0c6da3b
+      TWIN_EXPECTED_COMMIT: 6a65b2f5f911905238344e9ebd6d27eb71a5a00b
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: flirt
+      - uses: actions/checkout@v4
+        with:
+          ref: 6a65b2f5f911905238344e9ebd6d27eb71a5a00b
+          path: twin
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check live probe syntax
+        run: |
+          node --check flirt/deployment/flirt-live-creators-check.cjs
+          node --check flirt/deployment/flirt-overview-live-check.cjs
+      - name: Existing authorised AWS connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Verify FLIRT creators, shared layout, private media and denied unassigned access
+        working-directory: flirt
+        run: python3 deployment/flirt-live-creators-check.py
+      - name: Verify FLIRT live earnings, rankings and selected creator navigation
+        working-directory: flirt
+        run: python3 -c "import runpy; runpy.run_path('deployment/flirt-optional-live-check.py')['main']('flirt-overview-live-check.cjs')"
+      - name: Verify Moxy normal flow and exact fixture cleanup with stable containers
+        working-directory: twin
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="$TWIN_EXPECTED_COMMIT" --mode=photo-boundaries --removal-guards

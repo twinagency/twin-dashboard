@@ -66,7 +66,7 @@ async function main() {
     assert(fanCountResponse.ok && Number(fanCountResponse.headers.get('content-range')?.split('/')[1]) === overview.audience.total, 'Overview must show all recorded fans excluding test records');
     const selectedOverview = await page('/revenue?clone='+overviewId,{headers:{Cookie:cookie+'; clone_scope='+overviewId}});
     const selectedHtml = await selectedOverview.text();
-    assert(selectedOverview.ok && selectedHtml.includes('data-creator-overview="'+overviewId+'"') && selectedHtml.includes('Total fans') && selectedHtml.includes('Not connected') && selectedHtml.includes('Content library'), 'Every selected Overview must render the shared layout');
+    assert(selectedOverview.ok && selectedHtml.includes('data-creator-overview="'+overviewId+'"') && selectedHtml.includes('Total fans') && selectedHtml.includes('data-shared-overview="flirt"') && selectedHtml.includes('Earnings overview') && selectedHtml.includes('Reporting period') && selectedHtml.includes('Revenue performance') && selectedHtml.includes('Recent purchases') && selectedHtml.includes('All creators overview'), 'Every selected Overview must render the shared layout');
     for (const slot of slots) {
       const response = slot.url.startsWith('/api/creator-overview/photo?') ? await page(slot.url) : await request(slot.url, {method:'HEAD'});
       assert(response.ok && response.headers.get('content-type')?.startsWith('image/'), 'Every reviewed portrait must load');
@@ -88,7 +88,7 @@ async function main() {
   assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
-  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && CLONES.every(id=>agencyHtml.includes('data-agency-hero-creator="'+id+'"')) && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('data-shared-overview="flirt"') && agencyHtml.includes('data-creator-overview="all"') && agencyHtml.includes('Your creators, at a glance.') && agencyHtml.includes('Creator dashboards') && agencyHtml.includes('View more') && agencyHtml.includes('Reporting period') && agencyHtml.includes('Revenue performance') && agency.creators.slice(0,5).every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
   const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
   assert(monthResponse.ok,'Default 30-day agency earnings must load');
   const month=await monthResponse.json();
@@ -109,4 +109,3 @@ async function main() {
   console.log(JSON.stringify({ passed: true, creators: expected.map(row => row.name).sort(), checks, credentials_logged: false, database_records_copied: false }));
 }
 main().catch(error => { console.log(JSON.stringify({ passed: false, error: error.message, checks, credentials_logged: false })); process.exitCode = 1; });
-
