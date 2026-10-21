@@ -39,3 +39,17 @@ jobs:
                 }
               }
             }
+
+      - name: Stop the already-cancelled superseded deployment if it remains stuck
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run_id = 39622246854;
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id});
+            if (run.head_sha !== "d5424c70aa1174f9dbb9ba7ce7904b0cffd5035a") throw Error("Unexpected superseded source");
+            if (run.status !== "completed") {
+              try {
+                await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel", {...context.repo, run_id});
+                core.info("Stopped unresponsive superseded deployment " + run_id);
+              } catch (error) { if (error.status !== 409) throw error; }
+            }
