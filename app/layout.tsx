@@ -1,3 +1,4 @@
+import "./agency-team.css";
 import './moxy-overview.css';
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
