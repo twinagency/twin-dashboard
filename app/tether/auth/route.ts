@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase-service";
 import { agencyIdentity } from "@/lib/agency-identity";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { setAgencySessionCookies } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const response = json ? NextResponse.json({ ok: true }) : NextResponse.redirect(new URL("/revenue", dashboardOrigin(req)), 303);
     const options = { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" as const, path: "/" };
-    response.cookies.set(AGENCY_COOKIE, token, { ...options, maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });
+    await setAgencySessionCookies(response, data.session!);
     response.cookies.set(AGENCY_PORTAL_COOKIE, portal.slug, { ...options, maxAge: 60 * 60 * 24 * 30 });
     response.cookies.delete(SESSION_COOKIE);
     if (identity.cloneIds.length === 1) response.cookies.set(CLONE_SCOPE_COOKIE, identity.cloneIds[0], { ...options, maxAge: 60 * 60 * 24 * 30 });

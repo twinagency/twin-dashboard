@@ -1,3 +1,4 @@
+import { signDashboardMedia } from "./media-signing-cache";
 import { getDashboardAccess, withDashboardAccess } from './dashboard-access';
 import { usesAgencyOverview, isTopOnlyfansAgency } from './agency-brand';
 import { supabaseAdmin } from './supabase';
@@ -15,25 +16,34 @@ export async function getAgencyOverview(): Promise<OverviewCreator[]> {
     if (!access.cloneIds.length) return [];
     const rows = await supabaseAdmin.from('clones').select('id,name,intake,business_username,drip_enabled,drip_steps').in('id', access.cloneIds).order('name');
     if (rows.error) throw new Error('Creator details are temporarily unavailable');
-    return Promise.all((rows.data ?? []).map(async c => {
+    const creators = rows.data ?? [];
+    const requestedPhotos = new Set<string>();
+    for (const c of creators) {
+      const config = c.intake?.appearance?.agency_overview;
+      const library = Array.isArray(config?.library) ? [...new Set<string>(config.library.map((item: {photo_id?: unknown}) => item?.photo_id).filter(validId))].filter(id => id !== config?.photo_id && id !== config?.banner?.photo_id).slice(0, 3) : [];
+      [config?.photo_id, config?.banner?.photo_id, ...library].filter(validId).forEach(id => requestedPhotos.add(id));
+    }
+    const ids = [...requestedPhotos];
+    const batches = await Promise.all(Array.from({ length: Math.ceil(ids.length / 200) }, (_, i) =>
+      supabaseAdmin.from('photos').select('id,clone_id,storage_path').in('clone_id', access.cloneIds).in('id', ids.slice(i * 200, (i + 1) * 200))));
+    if (batches.some(batch => batch.error)) throw new Error('Creator overview is temporarily unavailable');
+    const owned = batches.flatMap(batch => batch.data ?? []).filter(p => p.storage_path?.startsWith(p.clone_id + '/'));
+    const signing = owned.length ? signDashboardMedia(owned.map(p => p.storage_path!)) : Promise.resolve({ data: [], error: null });
+    const [signed, audiences] = await Promise.all([signing, Promise.all(creators.map(c =>
+      supabaseAdmin.from('users').select('id', { count: 'exact', head: true }).eq('clone_id', c.id).or('is_test.is.null,is_test.eq.false')))]);
+    if (audiences.some(audience => audience.error)) throw new Error('Creator overview is temporarily unavailable');
+    const signedPaths = new Map((signed.data ?? []).filter(item => item.signedUrl).map(item => [item.path, item.signedUrl]));
+    return creators.map((c, index) => {
       const config = c.intake?.appearance?.agency_overview;
       const photoId = validId(config?.photo_id) ? config.photo_id : null;
       const bannerId = validId(config?.banner?.photo_id) && config.banner.photo_id !== photoId ? config.banner.photo_id : null;
       const libraryIds: string[] = Array.isArray(config?.library) ? [...new Set<string>(config.library.map((item: {photo_id?: unknown}) => item?.photo_id).filter(validId))].filter(id => id !== photoId && id !== bannerId).slice(0, 3) : [];
       const ids = [photoId, bannerId, ...libraryIds].filter(validId);
-      const [audience, photos] = await Promise.all([
-        supabaseAdmin.from('users').select('id', { count: 'exact', head: true }).eq('clone_id', c.id).or('is_test.is.null,is_test.eq.false'),
-        ids.length ? supabaseAdmin.from('photos').select('id,storage_path').eq('clone_id', c.id).in('id', ids) : Promise.resolve({ data: [], error: null }),
-      ]);
-      if (audience.error || photos.error) throw new Error('Creator overview is temporarily unavailable');
-      const owned = (photos.data ?? []).filter(p => p.storage_path?.startsWith(c.id + '/'));
+      const audience = audiences[index];
       const urls = new Map<string, string>();
-      if (owned.length) {
-        const signed = await supabaseAdmin.storage.from('media').createSignedUrls(owned.map(p => p.storage_path!), 3600);
-        if (!signed.error) for (const item of signed.data ?? []) {
-          const photo = owned.find(p => p.storage_path === item.path);
-          if (photo && item.signedUrl) urls.set(photo.id, item.signedUrl);
-        }
+      for (const photo of owned) {
+        const url = signedPaths.get(photo.storage_path);
+        if (photo.clone_id === c.id && ids.includes(photo.id) && url) urls.set(photo.id, url);
       }
       const image = (id: string | null, settings: {position?: unknown; zoom?: unknown} | undefined): OverviewImage | null => id && urls.has(id) ? { id, url: urls.get(id)!, position: position(settings?.position), zoom: zoom(settings?.zoom) } : null;
       return { id: c.id, name: c.name, photoUrl: photoId ? urls.get(photoId) ?? null : null, photoId,
@@ -43,7 +53,7 @@ export async function getAgencyOverview(): Promise<OverviewCreator[]> {
         library: libraryIds.map(id => image(id, config.library.find((item: {photo_id: string}) => item.photo_id === id))).filter((item): item is OverviewImage => !!item),
         automation: { enabled: c.drip_enabled === true, steps: Array.isArray(c.drip_steps) ? c.drip_steps.filter((s: {type?: string; after_hours?: number}) => ['text','voice','photo','video','bundle'].includes(s?.type ?? '') && Number.isFinite(Number(s.after_hours)) && Number(s.after_hours) >= 1 && Number(s.after_hours) <= 23).length : 0 },
       };
-    }));
+    });
   });
   return [...live, ...await getAgencyOnboardingCreators()];
 }

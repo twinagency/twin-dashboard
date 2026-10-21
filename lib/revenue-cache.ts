@@ -90,7 +90,7 @@ function evictIfFull() {
   }
 }
 
-function refresh(key: string, period: Period, cloneId: string | null, range?: DateRange, dashboardCloneIds?: string[] | null): Promise<Entry> {
+function refresh(key: string, period: Period, cloneId: string | null, range?: DateRange, dashboardCloneIds?: string[] | null, summary = false): Promise<Entry> {
   const running = inflight.get(key);
   if (running) return running;
 
@@ -100,10 +100,10 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
     // rolling window (or even drift a few milliseconds apart at the end).
     const nowMs = Date.now();
     const sharedRange = await resolveRevenueWindow(period, range, nowMs);
-    const value = await readRevenueSections(
-      getDashboard(period, sharedRange, nowMs, dashboardCloneIds),
-      getAnalytics(period, cloneId, sharedRange, undefined, nowMs, dashboardCloneIds),
-    );
+    const dashboardRead = getDashboard(period, sharedRange, nowMs, dashboardCloneIds, summary ? { overviewCloneId: cloneId } : undefined);
+    const value: RevenueRollup = summary
+      ? { dashboard: await dashboardRead, analytics: null, analyticsError: null }
+      : await readRevenueSections(dashboardRead, getAnalytics(period, cloneId, sharedRange, undefined, nowMs, dashboardCloneIds));
     const entry: Entry = { fetchedAt: Date.now(), value, reportWindow: sharedRange };
     if (!cache.has(key)) evictIfFull();
     cache.set(key, entry);
@@ -146,11 +146,11 @@ export async function getRevenueRollup(
   period: Period,
   cloneId: string | null,
   range?: DateRange,
-  options?: { awaitFresh?: boolean; force?: boolean },
+  options?: { awaitFresh?: boolean; force?: boolean; summary?: boolean },
 ): Promise<CachedRevenue> {
   const access = await getDashboardAccess();
   await requireCloneAccess(cloneId);
-  const key = `${await viewerCacheKey(access)}|${keyOf(period, cloneId, range)}`;
+  const key = `${await viewerCacheKey(access)}|${keyOf(period, cloneId, range)}|${options?.summary ? "summary" : "full"}`;
   const cached = cache.get(key);
   const dashboardCloneIds = resolveDashboardCloneScope(access, cloneId);
 
@@ -158,14 +158,14 @@ export async function getRevenueRollup(
     const ageMs = Date.now() - cached.fetchedAt;
     const stale = ageMs > TTL_MS;
     if (options?.force) {
-      const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
+      const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds, options?.summary));
       return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
     }
     if (stale) {
       // Ordinary callers receive the last good snapshot while one refresh is
       // running. The live dashboard opts into awaitFresh so its once-a-minute
       // poll instead waits for that same single-flight refresh to finish.
-      const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
+      const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds, options?.summary));
       if (options?.awaitFresh) {
         const entry = await updating;
         return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
@@ -179,7 +179,7 @@ export async function getRevenueRollup(
 
   // Cold. Nothing to serve, so this one waits. Errors propagate so the route can
   // return a 500 rather than an empty dashboard that reads as "you earned zero".
-  const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
+  const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds, options?.summary));
   return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
 }
 

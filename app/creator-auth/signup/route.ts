@@ -1,3 +1,4 @@
+import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { exactCaseInsensitiveEmailPattern } from "@/lib/creator-email";
 import { lookupCreatorInvitation } from "@/lib/creator-invite-agency";
 import { trustedFormOrigin, isLynqHost } from "@/lib/form-origin";
@@ -108,6 +109,7 @@ export async function POST(req: Request) {
     // not both. Clearing the operator state prevents the creator pages from
     // inheriting agency-scoped data access after signup.
     jar.delete(AGENCY_COOKIE);
+    jar.delete(AGENCY_REFRESH_COOKIE);
     jar.delete(AGENCY_PORTAL_COOKIE);
     jar.delete(SESSION_COOKIE);
     jar.delete(CLONE_SCOPE_COOKIE);

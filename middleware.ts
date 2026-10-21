@@ -1,3 +1,4 @@
+import { renewAgencySession, setAgencySessionCookies, clearAgencySessionCookies } from "@/lib/agency-session";
 import { agencyOnlyFansRequest } from "@/lib/onlyfans/agency-scope";
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
 import { isMarketingPath } from "@/lib/marketing-routing";
@@ -37,6 +38,34 @@ function creatorReferrer(req: NextRequest): boolean {
 const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  // Login/logout and independently authenticated endpoints must never renew an
+  // unrelated agency session or overwrite a new identity's response cookies.
+  const skip = isTwinLoginPath(path) || isMarketingPath(path) || path === "/admin-auth"
+    || /\/(?:auth|login|logout)$/.test(path) || path.startsWith("/creator")
+    || SELF_AUTHENTICATED_PREFIXES.some(prefix => path.startsWith(prefix))
+    || path.startsWith("/catalogue/") || path.startsWith("/api/catalogue/");
+  const renewal = skip ? { kind: "unchanged" as const } : await renewAgencySession(req);
+  if (renewal.kind === "unavailable") return privateResponse(new NextResponse("Sign-in service temporarily unavailable. Please retry.", { status: 503, headers: { "Retry-After": "5" } }));
+  if (renewal.kind === "invalid") {
+    const response = privateResponse(path.startsWith("/api/")
+      ? NextResponse.json({ error: "Session expired. Please sign in again." }, { status: 401 })
+      : NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value), dashboardOrigin(req))));
+    clearAgencySessionCookies(response);
+    return response;
+  }
+  if (renewal.kind === "renewed") req.cookies.set(AGENCY_COOKIE, renewal.session.access_token);
+  const response = await routeMiddleware(req);
+  if (renewal.kind === "renewed") {
+    // withPathname forwards the renewed request cookie to server components and
+    // handlers; the browser receives the same rotation on this response.
+    await setAgencySessionCookies(response, renewal.session, renewal.expires);
+    privateResponse(response);
+  }
+  return response;
+}
+
+async function routeMiddleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   // ── Moxy white-label host (dashboard.lynqai.co) ─────────────────────────
   // Same app, Moxy branding only. Redirects stay on the host the user came
