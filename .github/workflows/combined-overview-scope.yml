@@ -1,0 +1,23 @@
+name: Combined overview scope regression
+on:
+  pull_request:
+    paths:
+      - components/AllChannelsDashboard.tsx
+      - components/dashboard/LiveDashboardOverview.tsx
+      - scripts/check-combined-overview-scope.mjs
+      - .github/workflows/combined-overview-scope.yml
+permissions:
+  contents: read
+jobs:
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-combined-overview-scope.mjs
+      - run: npx tsc --noEmit
