@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import SharedOverview, { type SharedOverviewConfig } from "@/components/overview/SharedOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
@@ -41,7 +42,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // read by app/revenue/page.tsx) — when set, every number here scopes to that one
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
-type FullData = DashboardData & {
+export type FullData = DashboardData & {
   analytics: AnalyticsData;
   balance: StarBalance | null;
   /** Server snapshot metadata. The API deliberately never serves browser-cached revenue. */
@@ -206,9 +207,10 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId, dayDetailAvailable = true }: { cloneId?: string | null; dayDetailAvailable?: boolean } = {}) {
+export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, sharedOverview }: { cloneId?: string | null; dayDetailAvailable?: boolean; sharedOverview?: SharedOverviewConfig } = {}) {
   const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
+  const [showDetailed, setShowDetailed] = useState(false);
   const [period, setPeriod] = useState<Period>("1M");
   // Custom calendar range (yyyy-mm-dd strings, straight from <input type="date">).
   // When set, it overrides every preset period — the "Custom" pill lights up
@@ -472,8 +474,15 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true }:
       ? txSort.direction === "desc" ? "Highest amount first" : "Lowest amount first"
       : `${txSort.key === "fan" ? "Fan" : txSort.key === "creator" ? "Creator" : "Type"} ${txSort.direction === "asc" ? "A–Z" : "Z–A"}`;
 
+  if (sharedOverview && !showDetailed) return <SharedOverview {...sharedOverview}
+    cloneId={cloneId} data={data} loading={loading} error={loadError}
+    period={period} range={customRange} currency={currency} money={money}
+    onPeriod={value => { setCustomRange(null); setPeriod(value); }}
+    onRange={setCustomRange} onRefresh={refreshNow} onDetails={() => setShowDetailed(true)} />;
+
   return (
     <div className="pb-6">
+      {sharedOverview && <button type="button" className="mb-4 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-ink" onClick={() => setShowDetailed(false)}>Back to overview</button>}
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && !isAgency && (
