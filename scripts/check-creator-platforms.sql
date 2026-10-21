@@ -61,5 +61,33 @@ do $$ begin
  assert not has_function_privilege('authenticated','public.link_creator_platform_profile(uuid,uuid)','execute');
  assert has_function_privilege('service_role','public.link_creator_platform_profile(uuid,uuid)','execute');
 end $$;
+-- Future signups use the same function; no deployment-time list or migration is needed.
+set local role service_role;
+do $$ declare a uuid;u uuid;p uuid;before_clones bigint;i integer;begin
+ for i in 1..8 loop
+  a:=gen_random_uuid();u:=gen_random_uuid();
+  insert into public.creator_accounts(id,auth_user_id,display_name,source)
+    values(a,u,'Future creator '||i,case when i%2=0 then 'agency_invite' else 'twin' end);
+  if i%2=0 then
+   insert into public.creator_agency_assignments(creator_account_id,agency_id)
+    values(a,'30000000-0000-0000-0000-000000000001');
+  end if;
+  assert (select platform_creator_id is null and requested_channels='{}'::text[] from public.creator_accounts where id=a);
+  assert not exists(select 1 from public.clones where id=a);
+  select count(*) into before_clones from public.clones;
+  p:=public.setup_creator_platforms(a,u,array['telegram']);
+  assert p=a;
+  assert (select requested_channels=array['telegram'] from public.creator_accounts where id=a);
+  assert not exists(select 1 from public.creator_clone_links where creator_account_id=a);
+  assert public.setup_creator_platforms(a,u,array['telegram','onlyfans'])=p;
+  assert public.setup_creator_platforms(a,u,array['telegram','onlyfans'])=p;
+  assert (select count(*)=before_clones+1 from public.clones);
+  assert (select requested_channels=array['telegram','onlyfans'] and account_status='applicant' from public.creator_accounts where id=a);
+  assert (select bot_token='' and status='paused' and not voice_enabled and not charge_messages and not drip_enabled from public.clones where id=p);
+  assert not exists(select 1 from public.creator_clone_links where creator_account_id=a);
+  assert (select count(*)=case when i%2=0 then 1 else 0 end from public.agency_creators where clone_id=p);
+ end loop;
+end $$;
+reset role;
 rollback;
-\echo 'PASS: canonical identity, exact owner, OF-only paused profile, Telegram reuse, agency isolation, atomic relink, service-only RPCs'
+\echo 'PASS: current/future standalone and agency signups, explicit platform choice, paused neutral profile, no automatic connection, stable identity, Telegram reuse, agency isolation, atomic relink and service-only RPCs'

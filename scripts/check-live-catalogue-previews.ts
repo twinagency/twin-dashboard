@@ -6,23 +6,18 @@ import { promisify } from 'node:util';
 import sharp from 'sharp';
 import { serviceClient } from '../lib/supabase-service';
 import { videoPreviewSources } from '../lib/catalogue-video-preview';
+import { readCatalogueInventory, auditCataloguePreviews, type AuditVideo } from '../lib/catalogue-preview-audit';
 const run=promisify(execFile);
 async function main(){
  // This smoke check only prepares/reads private preview derivatives. It never sends media or charges a fan.
  const db=serviceClient();
- const clone=await db.from('clones').select('id').eq('slug','briana-redd').single();
- if(clone.error)throw new Error('Creator lookup failed');
- const [settings,videos]=await Promise.all([
-  db.from('creator_catalogue_settings').select('blur_strength').eq('clone_id',clone.data.id).single(),
-  db.from('videos').select('id,storage_path').eq('clone_id',clone.data.id).limit(1000),
- ]);
- if(settings.error||videos.error||!videos.data?.length)throw new Error('Preview inventory unavailable');
- let next=0,passed=0,failed=0;
- async function worker(){
-  for(;;){const index=next++;const item=videos.data![index];if(!item)return;
+ const inventory=await readCatalogueInventory(db),inventoryOnly=process.argv.includes('--inventory-only');
+ const maxRunMs=Number(process.env.CATALOGUE_PREVIEW_MAX_MS||1800000);
+ if(!Number.isFinite(maxRunMs)||maxRunMs<1000||maxRunMs>1800000)throw new Error('Invalid audit duration');
+ async function check(item:AuditVideo,blur:number){
    const dir=await mkdtemp(join(tmpdir(),'preview-check-'));
    try{
-    const sources=await videoPreviewSources(item.storage_path,settings.data!.blur_strength);
+    const sources=await videoPreviewSources(item.storage_path,blur);
     if(!Number.isFinite(sources.durationSeconds)||sources.durationSeconds!<=0)throw new Error('Full video duration unavailable');
     const range=await fetch(sources.url,{headers:{Range:'bytes=0-1023'},signal:AbortSignal.timeout(20_000)});
     await range.body?.cancel();if(range.status!==206)throw new Error('Video range request failed');
@@ -33,19 +28,16 @@ async function main(){
     const meta=JSON.parse((await run('ffprobe',['-v','error','-show_streams','-show_format','-of','json',filename],{timeout:8_000})).stdout);
     if(meta.streams.length!==1||meta.streams[0].codec_name!=='h264'||Math.abs(Number(meta.format.duration)-5)>.1)throw new Error('Invalid preview encoding');
     const image=await sharp(Buffer.from(await poster.arrayBuffer())).metadata();if(image.format!=='webp')throw new Error('Invalid poster');
-    passed++;console.log(`Video preview verified ${passed}/${videos.data!.length}: 5s, H.264, poster, HTTP 206 and full duration ${sources.durationSeconds!.toFixed(2)}s`);
-   }catch(error){
-    failed++;
-    const cause=error instanceof Error ? error.cause as {stage?:string;reason?:string}|undefined : undefined;
-    const stage=['download','probe','metadata','encode','output','poster','upload'].includes(cause?.stage||'')?cause!.stage:'verification';
-    const reason=['timeout','killed','invalid'].includes(cause?.reason||'')?cause!.reason:'failed';
-    console.error(`Video preview failed for item ${item.id}: ${stage}/${reason}`);
    }
    finally{await rm(dir,{recursive:true,force:true});}
-  }
  }
- await Promise.all([worker(),worker()]);console.log(`Live video preview check: ${passed} passed, ${failed} failed`);
- if(failed)process.exitCode=1;
+ let checked=0;
+ const report=await auditCataloguePreviews(inventory,check,{inventoryOnly,maxRunMs,onProgress:()=>{if(++checked%20===0)console.log(JSON.stringify({event:'audit_progress',checked,total:inventory.videos.length}));}});
+ const reportFile=join(tmpdir(),'catalogue-preview-audit.json');
+ await writeFile(reportFile,JSON.stringify(report),{mode:0o600});
+ const {results,failures,...summary}=report;
+ console.log(JSON.stringify({...summary,reportFile,creatorsWithFailures:results.filter(row=>row.failed).length,failures:failures.slice(0,20),failuresTruncated:failures.length>20}));
+ if(report.failed||!inventoryOnly&&!report.verificationComplete)process.exitCode=1;
 }
 if(process.env.CATALOGUE_PREVIEW_CHECK_LOAD_ONLY!=='1'){
  main().catch(()=>{console.error('Live video preview check could not complete');process.exitCode=1;});
