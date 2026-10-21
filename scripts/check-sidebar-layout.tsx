@@ -252,6 +252,20 @@ for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals
 }
 pathname = "/dashboard";
 assert.deepEqual(renderedLinks(render()).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Overview"]);
+
+for (const mobile of [false, true]) {
+  let groups: string[] | null = null;
+  for (const [route, search, active] of [["/dashboard", "", "Overview"], ["/dashboard", "workspace=telegram", "Overview"], ["/telegram", "", null], ["/revenue", "", "Earnings"]] as const) {
+    pathname = route; query = new URLSearchParams(search);
+    const html = render(undefined, false, clone, mobile);
+    const currentGroups = Array.from(html.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]);
+    if (!groups) groups = currentGroups;
+    assert.deepEqual(currentGroups, groups, `${route} keeps the same operator menu`);
+    assert.deepEqual(renderedLinks(html).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), active ? [active] : []);
+  }
+}
+pathname = "/dashboard"; query = new URLSearchParams();
+
 for (const mobile of [false, true]) {
   for (const scope of [null, clone]) {
     for (const selected of [null, "briana", "riley", "kyla"]) {

@@ -423,7 +423,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
   const rawChannel = channelDefinition(workspaceChannel(pathname, searchParams.get("workspace"), isAdmin));
   const channel = isAgency && rawChannel.channel === "onlyfans" ? { ...rawChannel, nav: rawChannel.nav.filter(item => item.key !== "of-operations") } : rawChannel;
-  const channelScoped = channel.channel !== "all";
+  // Telegram uses the same operator navigation as Overview and Earnings.
+  // OnlyFans retains its account-specific tools and verified route guards.
+  const channelScoped = channel.channel === "onlyfans" || !isAdmin && channel.channel !== "all";
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioRoute = isDashboardWorkspaceRoute(pathname);
@@ -443,8 +445,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
   const isGlobalActive = (href: string) => {
-    if (isAdmin && href === "/revenue") return pathname === "/dashboard" && searchParams.get("workspace") === "telegram";
-    if (isAdmin && href === "/dashboard") return pathname === "/dashboard" && searchParams.get("workspace") !== "telegram";
+    if (isAdmin && href === "/revenue") return pathname === "/revenue";
+    if (isAdmin && href === "/dashboard") return pathname === "/dashboard";
     if (isAdmin && href === "/clones" && isCreatorStudioRoute(pathname)) return false;
     if (isAdmin && ["/clones", "/agency-admin"].includes(href)) return pathname === href;
     if (moxyNavigation && href === "/clones" && isCreatorStudioRoute(pathname)) return false;

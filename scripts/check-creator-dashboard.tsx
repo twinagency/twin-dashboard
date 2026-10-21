@@ -168,13 +168,18 @@ async function main() {
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
     "@/lib/clone-scope": { getCloneScope: async () => "live-clone-id" },
     "@/lib/dashboard-access": { getDashboardAccess: async () => reportingAccess },
+    "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
+    "@/components/CombinedEarnings": { __esModule: true, default: () => null },
     "@/lib/agency-brand": { usesAgencyOverview: (name: string) => ["Moxy", "Top Onlyfans Agency"].includes(name) },
     "@/lib/agency-overview": { getAgencyOverview: async () => [] },
     "@/components/agency-overview/AgencyOverview": { __esModule: true, default: () => null },
     "@/components/RevenueDashboard": { __esModule: true, default: () => null },
     "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
   }).default;
-  await assert.rejects(Earnings({}), /redirect:\/dashboard\?workspace=telegram$/);
+  assert.equal((await Earnings({})).props["data-detailed-earnings"], true, "Internal Earnings opens detailed reporting without switching workspaces");
+  admin = false;
+  await assert.rejects(Earnings({}), /redirect:\/twin$/);
+  admin = true;
   for (const name of ["Moxy", "Top Onlyfans Agency", "Flirt", "Creator account"]) {
     reportingAccess = { name };
     const page = await Earnings({});

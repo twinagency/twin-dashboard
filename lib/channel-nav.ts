@@ -87,7 +87,7 @@ export const TELEGRAM_CHANNEL: ChannelDefinition = {
     { key: "media", label: "Content", href: "/media?workspace=telegram", icon: "Media", availability: "existing" },
     { key: "flows", label: "Flows", href: "/flows?workspace=telegram", icon: "Flows", availability: "existing" },
     { key: "business", label: "Telegram Stories", href: "/business?workspace=telegram", icon: "Bot", availability: "existing" },
-    { key: "telegram-earnings", label: "Earnings", href: "/dashboard?workspace=telegram", icon: "Dollar", availability: "existing" },
+    { key: "telegram-earnings", label: "Earnings", href: "/revenue", icon: "Dollar", availability: "existing" },
   ],
 };
 
