@@ -45,6 +45,9 @@ jobs:
       - name: Immediate navigation feedback and page prefetch
         run: |
           node scripts/check-navigation-feedback.cjs
+          node scripts/check-creator-switch-feedback.cjs
+          node --import tsx scripts/check-messages-read-parallelism.cjs
+          node --import tsx scripts/check-live-telegram.ts
           node scripts/check-navigation-ui.mjs
 
       - name: Live dashboard overview data and interaction checks
