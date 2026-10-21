@@ -27,17 +27,22 @@ try {
   await file('package.json', JSON.stringify({ private: true, dependencies: { next: require('next/package.json').version, react: require('react/package.json').version, 'react-dom': require('react-dom/package.json').version } }));
   await file('next.config.mjs', 'export default {experimental:{cpus:1},devIndicators:false};');
   await file('app/NavigationLink.js', await source('components/NavigationLink.tsx'));
-  await file('app/loading.js', await source('components/PageLoading.tsx'));
+  await file('app/slow/loading.js', await source('components/PageLoading.tsx'));
   await file('app/feedback.css', await readFile(resolve(root, 'app/navigation-feedback.css'), 'utf8'));
   await file('app/layout.js', `import Link from './NavigationLink';import './feedback.css';export default function Layout({children}){return <html><body style={{margin:0,fontFamily:'Arial',background:'#142337',color:'#eee'}}><aside style={{position:'fixed',width:180,top:0,bottom:0}}><nav style={{display:'grid',gap:16,padding:16}}><Link href="/">Home</Link><Link href="/slow?page=1">Creators</Link><Link href="/slow?page=2">Next page</Link><Link href="/slow?page=3">Prepared page</Link></nav></aside><main className="workspace-content" style={{marginLeft:180,padding:24}}>{children}</main></body></html>}`);
   await file('app/page.js', `export default function Home(){return <h1>Home ready</h1>}`);
   await file('app/slow/page.js', `export const dynamic='force-dynamic';export default async function Page({searchParams}){const page=(await searchParams).page;await new Promise(r=>setTimeout(r,1400));return <h1>Page {page} ready</h1>}`);
+  await file('app/retired/page.js', `import {redirect} from 'next/navigation';export const dynamic='force-dynamic';export default async function Page(){await Promise.resolve();redirect('/');}`);
   await run(['build']);
   if (process.env.NAV_UI_BUILD_ONLY === '1') { console.log('Navigation fixture production build passed'); }
   else {
     const listener = createServer(); await new Promise(r => listener.listen(0, '127.0.0.1', r)); const port = listener.address().port; await new Promise(r => listener.close(r));
     server = spawn(process.execPath, [require.resolve('next/dist/bin/next'), 'start', '-p', String(port), '-H', '127.0.0.1'], { cwd: fixture, env: { ...process.env, NEXT_TELEMETRY_DISABLED: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
     await new Promise((done, reject) => { const timer = setTimeout(() => reject(new Error(output)), 20000); const collect = d => { output += d; if (output.includes('Ready in')) { clearTimeout(timer); done(); } }; server.stdout.on('data', collect); server.stderr.on('data', collect); server.once('error', reject); });
+    const redirectResponse = await fetch(`http://127.0.0.1:${port}/retired`, {redirect:'manual'});
+    assert.equal(redirectResponse.status,307,'Loading feedback must preserve an async retired-route redirect');
+    assert.equal(new URL(redirectResponse.headers.get('location'), `http://127.0.0.1:${port}`).pathname,'/');
+    await redirectResponse.body?.cancel();
     stage = 'browser navigation';
     browser = await chromium.launch({ args: ['--no-sandbox'] });
     const page = await browser.newPage({ viewport: { width: 1100, height: 800 } }), errors = [];
@@ -68,7 +73,7 @@ try {
     await page.getByRole('link', { name: 'Next page', exact: true }).click();
     // Whether cached or pending, reduced-motion CSS is present and no script errors occur.
     assert.deepEqual(errors, []);
-    console.log(JSON.stringify({ test: 'real Next navigation', loadingShellMs: shellMs, prefetchedPageMs: preparedMs, paginationFeedback: 'passed', sidebarGeometry: 'unchanged', browserErrors: 0 }));
+    console.log(JSON.stringify({ test: 'real Next navigation', loadingShellMs: shellMs, prefetchedPageMs: preparedMs, paginationFeedback: 'passed', asyncRedirect: 'preserved', sidebarGeometry: 'unchanged', browserErrors: 0 }));
   }
 } catch (error) { console.error(output.slice(-8000)); throw error; }
 finally { stage = 'cleanup'; if (browser) await browser.close(); if (server) { server.kill('SIGTERM'); await Promise.race([new Promise(done => server.once('exit', done)), new Promise(done => setTimeout(() => { server.kill('SIGKILL'); done(); }, 3000))]); } await rm(fixture, { recursive: true, force: true }); clearTimeout(watchdog); }
