@@ -29,7 +29,7 @@ jobs:
       - name: Shared overview desktop and mobile layout
         run: |
           npx playwright install chromium
-          node scripts/check-moxy-overview-ui.mjs
+          node --import tsx scripts/check-moxy-overview-ui.mjs
         env:
           MOXY_REVIEW_OUT: test-results/moxy-overview
       - uses: actions/upload-artifact@v4

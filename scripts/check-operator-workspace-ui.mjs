@@ -79,7 +79,7 @@ args.path.includes("FlowGraph")?'import React from "react";export default functi
 }}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith(".js")).text;
 const moduleCSS=bundle.outputFiles.filter(f=>f.path.endsWith(".css")).map(f=>f.text).join("\n");
-const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/creator-workspace.css";\n@import "./app/studio-workspace.css";\n@import "./app/twin-theme.css";',{from:path.join(root,"operator-ui.css")});
+const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/creator-workspace.css";\n@import "./app/studio-workspace.css";\n@import "./app/twin-theme.css";\n@import "./app/compact-workspace.css";',{from:path.join(root,"operator-ui.css")});
 const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>html{--font-sans:Arial,sans-serif;--font-display:Arial,sans-serif;--font-heading:Arial,sans-serif}body{margin:0}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 const requests=[];
 const server=createServer((req,res)=>{
@@ -127,17 +127,17 @@ for (const width of [390, 900, 1440]) {
     await sidebar.waitFor({state:"visible"});
     const metrics=await sidebar.evaluate(element=>{
       const rect=element.getBoundingClientRect(), brand=element.querySelector(".studio-brand-row").getBoundingClientRect(),
-      switcher=element.querySelector("[data-channel-switch]").getBoundingClientRect(), nav=element.querySelector("nav").getBoundingClientRect(),
-      footer=element.querySelector(".studio-account").getBoundingClientRect();
+      switcher=element.querySelector("[data-channel-switch]").getBoundingClientRect(), nav=element.querySelector("nav").getBoundingClientRect();
       const topbar=document.querySelector(".dashboard-topbar").getBoundingClientRect();
       return {width:rect.width,left:rect.left,background:getComputedStyle(element).backgroundColor,
       brandTop:brand.top,brandHeight:brand.height,switchTop:switcher.top,switchHeight:switcher.height,
-      navTop:nav.top,footerTop:footer.top,headerTop:topbar.top,headerHeight:topbar.height};
+      navTop:nav.top,headerTop:topbar.top,headerHeight:topbar.height};
     });
     assert.equal(metrics.background,"rgb(8, 8, 8)",`${width} ${route}: shared dark sidebar`);
     if(!baseline)baseline=metrics;
     assert.deepEqual(metrics,baseline,`${width} ${route}: sidebar and header must stay in place`);
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
+    assert.equal(await sidebar.locator('a[href="/settings"]').count(),1,"Settings remains reachable exactly once in each workspace");
     assert.equal(await sidebar.locator('.workspace-nav-row').first().evaluate(e=>e.getBoundingClientRect().height),46);
     if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
     await noOverflow(page,`shared shell ${width} ${route}`);

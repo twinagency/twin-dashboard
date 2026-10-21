@@ -223,7 +223,7 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/users"'), "Live Telegram is reachable on desktop and mobile");
   assert.doesNotMatch(admin, /href="\/(?:fans|inbox|campaigns|content-library)"|Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  const orderedLabels = ["Overview", "Earnings", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
   assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
   const { JSDOM } = nativeRequire("jsdom");
   const document = new JSDOM(admin).window.document;
@@ -241,16 +241,17 @@ for (const mobile of [false, true]) {
   })) for (const href of hrefs) assert.ok(Array.from(group(name).querySelectorAll("a")).some((a: any) => a.getAttribute("href") === href), `${href} belongs to ${name}`);
   const hrefs = Array.from(document.querySelectorAll('nav[aria-label="Main navigation"] a')).map((a: any) => a.getAttribute("href"));
   assert.equal(new Set(hrefs).size, hrefs.length, "Each destination appears once");
-  assert.deepEqual(renderedLinks(admin).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Dashboard"]);
+  assert.deepEqual(renderedLinks(admin).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Overview"]);
   assert.ok(admin.includes('href="/dashboard"'));
-  assert.ok(!admin.includes('href="/revenue"'), "Internal earnings is consolidated in Dashboard");
+  assert.ok(admin.includes('href="/revenue"'), "The detailed earnings view stays directly reachable");
+  assert.equal(document.querySelectorAll('a[href="/settings"]').length, 1, "Settings appears once");
 
 }
 for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals.TETHER_PORTAL.name]) {
   assert.ok(!render(agencyName, true).includes('href="/dashboard"') && !render(agencyName, true).includes('href="/content-library"') && !render(agencyName, true).includes('href="/inbox"'), "The new internal Dashboard does not widen partner navigation");
 }
 pathname = "/dashboard";
-assert.deepEqual(renderedLinks(render()).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Dashboard"]);
+assert.deepEqual(renderedLinks(render()).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Overview"]);
 for (const mobile of [false, true]) {
   for (const scope of [null, clone]) {
     for (const selected of [null, "briana", "riley", "kyla"]) {

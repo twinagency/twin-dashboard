@@ -19,7 +19,8 @@ export default async function RevenuePage({ searchParams }: { searchParams?: Pro
     for (const [key, value] of Object.entries(await searchParams ?? {})) {
       if (typeof value === "string") query.set(key, value);
     }
-    redirect(`/dashboard${query.size ? `?${query}` : ""}`);
+    query.set("workspace", "telegram");
+    redirect(`/dashboard?${query}`);
   }
   if (access && usesAgencyOverview(access.name)) return <AgencyOverview key={cloneId ?? 'agency'} cloneId={cloneId} initialCreators={await getAgencyOverview()} />;
   return (

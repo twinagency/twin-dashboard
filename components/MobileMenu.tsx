@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Ellipsis, X } from "lucide-react";
 import { SidebarContent } from "@/components/Sidebar";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { usesCompactWorkspace } from "@/lib/compact-workspace";
 import ChannelSwitch from "@/components/ChannelSwitch";
 import workspaceStyles from "./WorkspaceStudio.module.css";
 import type { DashboardChannel } from "@/lib/channel-nav";
@@ -17,6 +18,7 @@ import type { DashboardChannel } from "@/lib/channel-nav";
 export default function MobileMenu({
   activeCloneId,
   channels = ["all"],
+  variant = "header",
 }: {
   activeCloneId: string | null;
   /**
@@ -25,6 +27,7 @@ export default function MobileMenu({
    * a caller that has not been told the scope gets today's drawer.
    */
   channels?: DashboardChannel[];
+  variant?: "header" | "bottom";
 }) {
   const pathname = usePathname();
   const { audience, agencyName } = useDashboardAccess();
@@ -32,6 +35,10 @@ export default function MobileMenu({
   const studio = operator || audience !== "creator" && isDashboardWorkspaceRoute(pathname);
   const creatorBrand = agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin";
   const [open, setOpen] = useState(false);
+  const uniqueId = useId();
+  const drawerId = variant === "header" ? "mobile-sidebar" : uniqueId;
+  const trigger = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
 
   useEffect(() => {
     setOpen(false);
@@ -39,11 +46,20 @@ export default function MobileMenu({
 
   useEffect(() => {
     if (!open) return;
+    const priorOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const focusable = () => Array.from(drawer.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),select,input,[tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Tab") return;
+      const items = focusable(), first = items[0], last = items.at(-1);
+      if (!first) { event.preventDefault(); return; }
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    return () => { window.removeEventListener("keydown", closeOnEscape); document.body.style.overflow = priorOverflow; trigger.current?.focus(); };
   }, [open]);
 
   return (
@@ -52,11 +68,12 @@ export default function MobileMenu({
         type="button"
         aria-label="Open navigation"
         aria-expanded={open}
-        aria-controls="mobile-sidebar"
+        ref={trigger}
+        aria-controls={drawerId}
         onClick={() => setOpen(true)}
-        className="rounded-full p-2 text-white/80 transition hover:bg-white/10 hover:text-white"
+        className={variant === "bottom" ? "compact-more-button" : "rounded-full p-2 text-white/80 transition hover:bg-white/10 hover:text-white"}
       >
-        <svg
+        {variant === "bottom" ? <><Ellipsis size={21} aria-hidden="true" /><span>More</span></> : <svg
           xmlns="http://www.w3.org/2000/svg"
           viewBox="0 0 24 24"
           fill="none"
@@ -67,7 +84,7 @@ export default function MobileMenu({
           className="h-5 w-5"
         >
           <path d="M3 12h18M3 6h18M3 18h18" />
-        </svg>
+        </svg>}
       </button>
 
       {open ? createPortal(
@@ -79,7 +96,9 @@ export default function MobileMenu({
             className="absolute inset-0 bg-[#071526]/24 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
           />
           <aside
-            id="mobile-sidebar"
+            id={drawerId}
+            ref={drawer}
+            data-compact-workspace={usesCompactWorkspace(audience, agencyName) || undefined}
             data-workspace-theme={operator ? "dark" : undefined}
             data-creator-studio={operator ? creatorBrand : undefined}
             data-studio-sidebar={studio || undefined}

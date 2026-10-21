@@ -174,7 +174,7 @@ async function main() {
     "@/components/RevenueDashboard": { __esModule: true, default: () => null },
     "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
   }).default;
-  await assert.rejects(Earnings({}), /redirect:\/dashboard$/);
+  await assert.rejects(Earnings({}), /redirect:\/dashboard\?workspace=telegram$/);
   for (const name of ["Moxy", "Top Onlyfans Agency", "Flirt", "Creator account"]) {
     reportingAccess = { name };
     const page = await Earnings({});

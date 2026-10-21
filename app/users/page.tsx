@@ -1,3 +1,4 @@
+import MessagesWorkspace from "@/components/MessagesWorkspace";
 import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -974,7 +975,7 @@ export default async function FansPage({
       {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
           gets the extra room for data/filters, right takes whatever's left. */}
-      <div className="grid gap-3 lg:h-full lg:grid-cols-3">
+      <MessagesWorkspace key={selected?.id ?? "none"} selected={!!selected}>
         {/* ── Left: fan list (data above, bigger search, filters) ───────── */}
         <Card size="sm" className={`users-panel users-panel-list flex h-[34rem] ${colHeight} flex-col overflow-hidden p-0`}>
           {v2.unavailable.length > 0 && <p role="status" className="border-b border-line px-3 py-2 text-xs text-warn">Could not refresh {v2.unavailable.join(", ")}. Retrying automatically.</p>}
@@ -1758,10 +1759,7 @@ export default async function FansPage({
             </div>
           )}
         </Card>
-      </div>
+      </MessagesWorkspace>
     </div>
   );
 }
-
-
-
