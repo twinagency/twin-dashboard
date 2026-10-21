@@ -101,6 +101,34 @@ async function main(){
   const signInStart=f.calls.find(c=>c.name==='signin-start');assert.equal(signInStart.scope.creatorId,f.profile);assert.match(signInStart.scope.actor,/^creator-session:[a-f0-9]{64}$/);assert.equal(signInStart.network.proxyUrl,'http://synthetic-private-proxy.example');
   const frameResponse=await m.signin.GET(request(signInPath+'?attempt='+f.attempt.id+'&frame=1'));assert.equal(frameResponse.status,200);assert.equal(frameResponse.headers.get('content-type'),'image/jpeg');assert.equal(frameResponse.headers.get('cache-control'),'private, no-store');assert.equal(frameResponse.headers.get('cross-origin-resource-policy'),'same-origin');
   assert.deepEqual(f.calls.at(-1).scope,signInStart.scope);
+  const tap={action:'input',profileId:f.profile,attempt:f.attempt.id,input:{type:'click',x:.5,y:.5}};
+  const paired=()=>m.signin.POST(request(signInPath,tap,{accept:'image/png'}));
+  const queryCount=f.queries.length,callCount=f.calls.length;
+  const pairedResponse=await paired();
+  assert.equal(pairedResponse.status,200);assert.equal(pairedResponse.headers.get('content-type'),'image/jpeg');
+  assert.equal(pairedResponse.headers.get('cache-control'),'private, no-store');
+  assert.equal(pairedResponse.headers.get('cross-origin-resource-policy'),'same-origin');
+  assert.match(pairedResponse.headers.get('server-timing'),/^auth;dur=[\d.]+,input;dur=[\d.]+,frame;dur=[\d.]+$/);
+  assert.deepEqual(JSON.parse(decodeURIComponent(pairedResponse.headers.get('x-twin-sign-in-attempt'))),f.attempt);
+  assert.deepEqual([...new Uint8Array(await pairedResponse.arrayBuffer())],[255,216,255,217]);
+  assert.equal(f.queries.length-queryCount,2,'Input and frame share one current profile validation');
+  assert.deepEqual(f.calls.slice(callCount).map(c=>c.name),['signin-input','signin-frame']);
+  assert.deepEqual(f.calls.at(-1).scope,signInStart.scope);
+  const originalFrame=f.signIn.frame;
+  for(const status of [429,503]){
+    f.signIn.frame=async()=>{throw new f.SignInBackendError(status,'fixture unavailable')};
+    const beforeInput=f.calls.filter(c=>c.name==='signin-input').length;
+    const fallback=await paired();assert.equal(fallback.status,200);assert.deepEqual(await fallback.json(),{ok:true,attempt:f.attempt});
+    assert.equal(f.calls.filter(c=>c.name==='signin-input').length,beforeInput+1,'Screenshot failure never replays accepted input');
+  }
+  f.signIn.frame=async()=>{throw new f.SignInBackendError(410,'expired')};assert.equal((await paired()).status,410);
+  f.signIn.frame=originalFrame;
+  f.token='';assert.equal((await paired()).status,401);f.token='real-creator-cookie';
+  assert.equal((await m.signin.POST(request(signInPath,tap,{accept:'image/png',origin:'https://foreign.example'}))).status,403);
+  for(const protectedView of ['readOnly','viewAs']){
+    if(protectedView==='readOnly')f.creator={...creator,readOnly:true};else f.viewAs=true;
+    assert.equal((await paired()).status,403);f.creator=creator;f.viewAs=false;
+  }
   assert.equal((await sendSignIn({action:'cancel',profileId:f.profile,attempt:f.attempt.id})).status,410,'Expired attempts permit a fresh start');
   f.attempt={...f.attempt,phase:'ready',handle:'synthetic'};f.signInCapture={...browserCommand,session:{...browserSession,networkFingerprint:'a'.repeat(64)}};f.ackFail=true;
   const confirm={action:'confirm',profileId:f.profile,attempt:f.attempt.id};
