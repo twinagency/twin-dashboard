@@ -1,6 +1,6 @@
 import importlib.util, io, unittest, base64, json, copy
 from types import SimpleNamespace
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 from unittest.mock import patch
 from urllib.error import HTTPError
 from pathlib import Path
@@ -24,6 +24,17 @@ class ReleaseBoundaryTests(unittest.TestCase):
     def test_retention_never_touches_docker_when_capacity_is_healthy(self):
         with patch.object(release.shutil, "disk_usage", return_value=SimpleNamespace(free=8*1024**3)), patch.object(release,"command") as commands:
             release.reclaim_dashboard_archives()
+        commands.assert_not_called()
+
+    def test_retention_progress_preserves_the_single_json_release_result(self):
+        inventory = [{"Id": str(i), "Name": name, "State": {"Running": i < 2, "StartedAt": "unchanged"}}
+                     for i, name in enumerate(["/next-app", "/flirt-dashboard", "/flirt-dashboard-rollback"])]
+        output, progress = io.StringIO(), io.StringIO()
+        with patch.object(release.shutil, "disk_usage", return_value=SimpleNamespace(free=7*1024**3)), patch.object(release, "secured_directory"), patch.object(release, "docker_inventory", return_value=inventory), patch.object(release, "private_write"), patch.object(release, "command") as commands, redirect_stdout(output), redirect_stderr(progress):
+            release.reclaim_dashboard_archives()
+            print(json.dumps({"running": "flirt-dashboard", "commit": "a" * 40}))
+        self.assertEqual(json.loads(output.getvalue())["running"], "flirt-dashboard")
+        self.assertTrue(json.loads(progress.getvalue())["archive_retention"]["running_unchanged"])
         commands.assert_not_called()
 
     def test_archive_name_retains_prior_archives_and_retries_collisions(self):

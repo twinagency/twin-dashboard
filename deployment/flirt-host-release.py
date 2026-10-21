@@ -240,7 +240,7 @@ def reclaim_dashboard_archives():
         raise RuntimeError("Dashboard state changed during archive retention")
     report = {"free_before":free_before,"free_after":shutil.disk_usage("/").free,"removed":removed,"running_unchanged":True,"rollback_retained":True}
     private_write(ROOT / "archive-retention-last.json", json.dumps(report))
-    print(json.dumps({"archive_retention":report}), flush=True)
+    print(json.dumps({"archive_retention":report}), file=sys.stderr, flush=True)
 
 
 def deploy(kind, image, sha):
