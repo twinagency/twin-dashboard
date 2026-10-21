@@ -9,10 +9,11 @@ const hash=async(bytes:ArrayBuffer)=>Array.from(new Uint8Array(await crypto.subt
 const size=(bytes:number)=>bytes>=1024**3?`${(bytes/1024**3).toFixed(1)} GB`:`${(bytes/1024**2).toFixed(1)} MB`;
 const labels:Record<string,string>={receiving:"Transferring files",pending:"Queued",running:"Uploading to OnlyFans",complete:"Finished",failed:"Needs review",interrupted:"Interrupted, review required",superseded:"Account connection changed",expired:"Cancelled or expired"};
 
-export default function VaultUploader({accountId,connectionRevision,onChanged}:{accountId:string;connectionRevision:number|null;onChanged:()=>void}){
+export default function VaultUploader({accountId,connectionRevision,onChanged,onBusy}:{accountId:string;connectionRevision:number|null;onChanged:()=>void;onBusy?:(busy:boolean)=>void}){
   const router=useRouter(),base=`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/vault/uploads`;
   const [data,setData]=useState<UploadRead|null>(null),[files,setFiles]=useState<File[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState(""),[denied,setDenied]=useState(false);
   const [progress,setProgress]=useState<{fileId:string;bytes:number}|null>(null),[statusNotice,setStatusNotice]=useState("");
+  useEffect(()=>{onBusy?.(busy);return()=>onBusy?.(false);},[busy,onBusy]);
   const live=useRef(false),controller=useRef<AbortController|null>(null),inFlight=useRef(false),known=useRef<Map<string,string>|null>(null);
   const createRequest=useRef<{requestId:string;expectedConnectionRevision:number;files:Array<{fileId:string;name:string;size:number}>}|null>(null);
   const reading=useRef(false),authLost=useRef(false);
