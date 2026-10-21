@@ -45,6 +45,7 @@ jobs:
           node --import tsx scripts/check-overview-wallet.cjs
           node --import tsx scripts/check-flirt-overview-navigation.tsx
       - name: Shared overview desktop and mobile interactions
+        timeout-minutes: 8
         run: |
           npx playwright install --with-deps chromium
           node scripts/check-navigation-ui.mjs
