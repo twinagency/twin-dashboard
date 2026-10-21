@@ -38,7 +38,11 @@ jobs:
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - name: Default agency homepage and creator navigation
-        run: node --import tsx scripts/check-flirt-overview-navigation.tsx
+        run: |
+          node --import tsx scripts/check-overview-loading.cjs
+          node --import tsx scripts/check-overview-recent.cjs
+          node --import tsx scripts/check-overview-wallet.cjs
+          node --import tsx scripts/check-flirt-overview-navigation.tsx
       - name: Shared overview desktop and mobile interactions
         run: |
           npx playwright install --with-deps chromium
