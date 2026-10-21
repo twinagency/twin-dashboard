@@ -85,6 +85,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
     void read(null, { query: search.trim(), kind, folderId }).then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } });
   }
   async function goPage(after: string | null, trail: (string | null)[]) {
+    if (busy) return;
     setBusy(true);
     const ok = await read(after);
     if (active.current) { setBusy(false); if (ok) { setPageTrail(trail); setNotice(""); libraryTop.current?.scrollIntoView({ block: "start" }); } }
@@ -200,10 +201,11 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
           </article>)}
         </div>
         {!data.items.length ? <p className="mt-3 text-sm text-muted">No files match this view. Try another media type, search or folder.</p> : null}
-        <div className="mt-4 flex flex-wrap items-center gap-3">
+        <div className="mt-4 flex flex-wrap items-center gap-3" aria-busy={busy}>
           <button type="button" className={buttonClass} disabled={!pageTrail.length} onClick={() => void goPage(pageTrail.at(-1) ?? null, pageTrail.slice(0, -1))}>Previous</button>
           <span className="text-sm">Page {pageTrail.length + 1}{data.summary ? ` of ${Math.max(1, Math.ceil(data.summary.matching / 24))}` : ""}</span>
           <button type="button" data-of-vault-next className={buttonClass} disabled={!data.nextCursor} onClick={() => data.nextCursor && void goPage(data.nextCursor, [...pageTrail, cursor])}>Next page →</button>
+          {busy && <span role="status" className="text-sm text-muted">Loading page…</span>}
         </div>
       </fieldset>
       {selected.size>0&&!readySelection?<p className="mt-3 text-xs text-muted" data-of-vault-readiness-hold>Selected assets need verified availability before creating a catalogue item. You can still organize them in folders.</p>:null}
@@ -233,3 +235,4 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" data-of-vault-retry className={buttonClass} disabled={busy} onClick={() => void execute(retry)}>Retry same request</button><button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { setRetry(null); clearSelection(); setNotice("Review the recorded catalogue and sync status before starting another request. The previous command may already have committed."); }}>Use refreshed vault</button></div> : null}
   </Card>;
 }
+

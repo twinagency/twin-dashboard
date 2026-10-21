@@ -1,5 +1,5 @@
 import { AdminOnly } from "@/components/DashboardAccessProvider";
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
 import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
@@ -8,6 +8,7 @@ import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getAgencyOnboardingCreators } from "@/lib/agency-overview";
+import { signDashboardMedia } from "@/lib/media-signing-cache";
 import { isMoxy } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
@@ -20,10 +21,12 @@ const MOXY_VISIBLE_CREATOR_IDS = new Set([
 ]);
 
 export default async function ClonesPage() {
-  const { data, error } = await supabaseAdmin
+  const [access, onboarding, { data, error }] = await Promise.all([
+    getDashboardAccess(), getAgencyOnboardingCreators(), supabaseAdmin
     .from("clones")
     .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake,intent_classic_promotions_enabled,intent_classic_promotions_enabled_at,intent_classic_promotion_version")
-    .order("created_at", { ascending: true });
+    .order("created_at", { ascending: true }),
+  ]);
 
   if (error) {
     return (
@@ -33,7 +36,6 @@ export default async function ClonesPage() {
     );
   }
 
-  const access = await getDashboardAccess();
   const clones = ((data ?? []) as Partial<Clone>[]).filter(
     (clone) => !isMoxy(access?.name) || (clone.id !== undefined && MOXY_VISIBLE_CREATOR_IDS.has(clone.id)),
   );
@@ -62,9 +64,7 @@ export default async function ClonesPage() {
     // each, adding up to 1-1.5s of pure round trip latency for ten clones.
     const pathEntries = [...firstPath.entries()];
     if (pathEntries.length > 0) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from("media")
-        .createSignedUrls(pathEntries.map(([, path]) => path), 3600);
+      const { data: signed } = await signDashboardMedia(pathEntries.map(([, path]) => path));
       pathEntries.forEach(([cloneId], i) => {
         const url = signed?.[i]?.signedUrl;
         if (url) avatarUrlByCloneId.set(cloneId, url);
@@ -92,7 +92,6 @@ export default async function ClonesPage() {
     ].filter(Boolean) as string[],
   }));
 
-  const onboarding = await getAgencyOnboardingCreators();
   for (const creator of onboarding) cards.push({
     id: creator.id, name: creator.name, slug: "", status: "Setup pending",
     active: false, cohort: "control", cohortEnrolledAt: null,

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { ArrowRight, ChevronRight, Home, Images, Sparkles, Wallet, CircleHelp, LogOut } from "lucide-react";

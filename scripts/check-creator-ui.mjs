@@ -109,7 +109,7 @@ export const useSearchParams=()=>new URLSearchParams(useLocation().split('?')[1]
 const router={refresh(){},push(p){history.pushState({},'',p);dispatchEvent(new PopStateEvent('popstate'))},replace(p){history.replaceState({},'',p);dispatchEvent(new PopStateEvent('popstate'))}};
 export const useRouter=()=>router;
 `;
-const linkMock = `import React from 'react';export default function Link({children,href,onClick,...props}){const target=String(href);return <a {...props} href={target} onClick={e=>{onClick?.(e);if(!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey){e.preventDefault();history.pushState({},'',target);dispatchEvent(new PopStateEvent('popstate'));}}}>{children}</a>}`;
+const linkMock = `import React from 'react';export const useLinkStatus=()=>({pending:false});export default function Link({children,href,onClick,...props}){const target=String(href);return <a {...props} href={target} onClick={e=>{onClick?.(e);if(!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey){e.preventDefault();history.pushState({},'',target);dispatchEvent(new PopStateEvent('popstate'));}}}>{children}</a>}`;
 const cloneScopeMock = `export async function setCloneScope(){}`;
 const logoutMock = `export async function logout(){}`;
 const assistantMock = `import React from 'react';export default function Assistant({variant}){return <div data-testid="twin-assistant" data-variant={variant||''}>AI Assistant</div>}`;

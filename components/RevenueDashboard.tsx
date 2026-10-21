@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/NavigationLink";
 import type { SharedOverviewRenderer } from "@/components/overview/SharedOverview";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
@@ -2766,3 +2766,4 @@ function AiCostDrillIn({
     </Card>
   );
 }
+

@@ -5,6 +5,7 @@ import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
+import "./navigation-feedback.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./studio-workspace.css";
@@ -143,3 +144,4 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </body>
   </html>;
 }
+
