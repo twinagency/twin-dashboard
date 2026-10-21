@@ -36,16 +36,34 @@ async function creatorFans(clone: InboxClone): Promise<any[]> {
 export async function loadV2Fans(clones: InboxClone[], selectedCloneId: string | null) {
   const access = await getDashboardAccess();
   const allowed = clones.filter(clone => clone.engine === "v2" && (!selectedCloneId || clone.id === selectedCloneId) && (!access || access.cloneIds.includes(clone.id)));
+  // At most six matching reads across the whole fleet. Each 150-ID batch
+  // still returns the same scoped, authoritative records; batches no longer
+  // wait for every previous database round trip for that creator.
+  const slots: Promise<unknown>[] = Array.from({ length: 6 }, () => Promise.resolve());
+  let nextSlot = 0;
+  const match = <T,>(read: () => PromiseLike<T>): Promise<T> => {
+    const slot = nextSlot++ % slots.length;
+    const task = slots[slot].then(read);
+    slots[slot] = task.catch(() => undefined);
+    return task;
+  };
   const fans: InboxFan[] = [], originals = new Map<string, InboxFan>(), unavailable: string[] = [];
   await Promise.all(allowed.map(async clone => {
     try {
       const raw = (await creatorFans(clone)).filter(row => overlayV2Fan(clone, row));
       const ids = [...new Set(raw.map(row => Number(row.chatId)))];
       const existing = new Map<string, InboxFan>();
+      const batches = [];
       for (let start = 0; start < ids.length; start += 150) {
-        const res = await supabaseAdmin.from("users").select("*").eq("clone_id", clone.id).in("telegram_id", ids.slice(start, start + 150)).limit(150);
-        if (res.error) throw new Error("Could not match Telegram fans");
-        for (const row of res.data ?? []) existing.set(String(row.telegram_id), row as InboxFan);
+        const batch = ids.slice(start, start + 150);
+        batches.push(match(async () => {
+          const res = await supabaseAdmin.from("users").select("*").eq("clone_id", clone.id).in("telegram_id", batch).limit(150);
+          if (res.error) throw new Error("Could not match Telegram fans");
+          return res.data ?? [];
+        }));
+      }
+      for (const rows of await Promise.all(batches)) {
+        for (const row of rows) existing.set(String(row.telegram_id), row as InboxFan);
       }
       for (const row of raw) {
         const original = existing.get(String(row.chatId));
