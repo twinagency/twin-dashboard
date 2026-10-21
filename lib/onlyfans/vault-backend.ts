@@ -41,7 +41,7 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
     },
     async get(accountId: string, afterMediaId: string | null = null, filters: { query?: string; kind?: string; folderId?: string } = {}) {
       try {
-        const url = base(accountId) + "/vault?limit=24" + (afterMediaId ? "&afterMediaId=" + encodeURIComponent(afterMediaId) : "") +
+        const url = base(accountId) + "/vault?limit=24&includeSummary=1" + (afterMediaId ? "&afterMediaId=" + encodeURIComponent(afterMediaId) : "") +
           (filters.query ? "&q=" + encodeURIComponent(filters.query) : "") +
           (filters.kind && filters.kind !== "all" ? "&kind=" + encodeURIComponent(filters.kind) : "") +
           (filters.folderId ? "&folderId=" + encodeURIComponent(filters.folderId) : "");

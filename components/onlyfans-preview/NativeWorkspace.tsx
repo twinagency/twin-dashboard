@@ -48,10 +48,10 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
         className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}
         href={workspaceHref(path, { creatorId, accountId: item.accountId })}>{item.binding.creatorName} · @{item.binding.handle}</Link>)}
     </nav>
-    <div className="mb-5 rounded-xl border border-line p-4 text-sm" role="status" data-of-native-freshness>
+    {section !== "content" ? <div className="mb-5 rounded-xl border border-line p-4 text-sm" role="status" data-of-native-freshness>
       <p>{data.historyRecoveryRequired ? "Your account history is still syncing." : "Your account history is synced."}</p>
       <p className="mt-1 text-xs text-muted">Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
-    </div>
+    </div> : null}
     {section === "content" && configuredContentBackend(ctx.fetch) ? <VaultManager key={account.accountId} accountId={account.accountId} readOnly={!ctx.canManage} /> : null}
     {section !== "settings" ? <WorkspaceBody data={data} contentEditable={ctx.canManage && section === "content" && !!configuredContentBackend(ctx.fetch)} /> : null}
     {section === "settings" && ctx.canManage && configuredConfigurationBackend(ctx.fetch) ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
@@ -64,7 +64,7 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
 }
 
 function WorkspaceBody({ data, contentEditable = false }: { data: WorkspaceRead; contentEditable?: boolean }) {
-  if (data.section === "content") return <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3" data-of-catalogue>
+  if (data.section === "content") return <section className="mt-8"><h2 className="mb-2 text-lg font-semibold">Items prepared for sale</h2><p className="mb-4 text-sm text-muted">Your curated offers, separate from the media library above.</p><div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3" data-of-catalogue>
     {data.items.map(item => <Card key={item.itemId} className="min-w-0 p-4" data-of-catalog-item={item.itemId}>
       <div className="flex flex-wrap items-start justify-between gap-2"><h2 className="break-words font-semibold">{item.label}</h2><span className="rounded-full bg-elev px-2 py-1 text-xs text-muted">{READY[item.readiness]}</span></div>
       <p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted">{item.description || "No saved description."}</p>
@@ -73,8 +73,8 @@ function WorkspaceBody({ data, contentEditable = false }: { data: WorkspaceRead;
       <p className="mt-3 text-xs text-muted">{item.kind}. {item.readiness === "terms_checked" ? "Catalogue terms passed the current media checks. Sale permission also depends on the conversation and account." : "Saved catalogue metadata."}</p>
       {contentEditable ? <ContentEditor key={`${data.accountId}:${item.itemId}`} accountId={data.accountId} itemId={item.itemId} /> : null}
     </Card>)}
-    {!data.items.length ? <p className="text-sm text-muted">No catalogue items are recorded on this page.</p> : null}
-  </div>;
+    {!data.items.length ? <p className="text-sm text-muted">No items prepared for sale yet. Choose media above, then open Create an item for sale.</p> : null}
+  </div></section>;
   if (data.section === "sales") return <div data-of-sales>
     <h2 className="font-semibold">All recorded transactions</h2>
     <p className="mt-1 text-xs text-muted">Gross amounts remain separate by currency and payment status. An offer or delivery receipt is not a purchase.</p>

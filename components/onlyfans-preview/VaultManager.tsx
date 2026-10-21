@@ -12,7 +12,8 @@ import { parseVault, parseVaultCreateAck, parseVaultSyncAck, validVaultProduct,
 import VaultOrganization from "./VaultOrganization";
 import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
-import { MediaLibraryFilters } from "@/components/CreatorMediaLibrary";
+import VaultMetadataEditor from "./VaultMetadataEditor";
+import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
 import VaultUploader from "./VaultUploader";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
@@ -26,6 +27,8 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const [busy, setBusy] = useState(true), [denied, setDenied] = useState(false), [notice, setNotice] = useState("Loading recorded vault…");
   const [selected, setSelected] = useState<Map<string, VaultItem>>(new Map()), [previews, setPreviews] = useState<Set<string>>(new Set());
   const [label, setLabel] = useState(""), [description, setDescription] = useState(""), [price, setPrice] = useState(""), [enabled, setEnabled] = useState(false);
+  const [pageTrail, setPageTrail] = useState<(string | null)[]>([]);
+  const libraryTop = useRef<HTMLDivElement>(null);
   const [retry, setRetry] = useState<Pending | null>(null), [created, setCreated] = useState<string | null>(null);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const [search, setSearch] = useState(""), [mediaKind, setMediaKind] = useState("all");
@@ -34,7 +37,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const [folderId,setFolderId]=useState(""),[assetId,setAssetId]=useState<string|null>(null),[organizationBusy,setOrganizationBusy]=useState(false);
   const base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}`;
   const clearSelection = useCallback(() => { setSelected(new Map()); setPreviews(new Set()); }, []);
-  const read = useCallback(async (after: string | null, filters = appliedFilters.current) => {
+  const read = useCallback(async (after: string | null, filters = appliedFilters.current, background = false) => {
     const generation = ++readGeneration.current;
     try {
       const parameters = new URLSearchParams();
@@ -42,7 +45,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
       if (filters.query) parameters.set("q", filters.query);
       if (filters.kind !== "all") parameters.set("kind", filters.kind);
       if (filters.folderId) parameters.set("folderId", filters.folderId);
-      const response = await fetch(base + "/vault" + (parameters.size ? "?" + parameters : ""), { credentials: "same-origin", cache: "no-store", redirect: "error" });
+      const response = await fetch(base + "/vault" + (parameters.size ? "?" + parameters : ""), { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
       if (!active.current || generation !== readGeneration.current) return false;
       if ([401, 403].includes(response.status)) {
         sessionDenied.current = true; setData(null); clearSelection(); setCreated(null); setLabel(""); setDescription(""); setPrice(""); setRetry(null); setDenied(true);
@@ -50,22 +53,41 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
       }
       const next = response.ok ? parseVault(await response.json(), accountId) : null;
       if (!active.current || generation !== readGeneration.current) return false;
-      if (!next) { setData(null); setNotice("The recorded vault could not be refreshed. Try again."); return false; }
+      if (!next) { if (!background) setData(null); setNotice("The recorded vault could not be refreshed. Try again."); return false; }
       appliedFilters.current = filters; setData(next); setCursor(after);
       setSelected(previous=>new Map([...previous].map(([id,row])=>[id,next.items.find(item=>item.mediaId===id)??row])));
       return true;
-    } catch { if (active.current && generation === readGeneration.current) { setData(null); setNotice("The recorded vault could not be refreshed. Try again."); } return false; }
+    } catch { if (active.current && generation === readGeneration.current) { if (!background) setData(null); setNotice("The recorded vault could not be refreshed. Try again."); } return false; }
   }, [accountId, base, clearSelection, router]);
   useEffect(() => { active.current = true; void read(null).then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } }); return () => { active.current = false; readGeneration.current++; }; }, [read]);
   async function refresh(after: string | null, reset = false) {
-    setBusy(true); if (reset) clearSelection(); const ok = await read(after);
+    setBusy(true); if (reset) { clearSelection(); setPageTrail([]); } const ok = await read(after);
     if (active.current) { setBusy(false); if (ok) setNotice(""); }
   }
   const changeFolder = useCallback((id:string)=>{
-    setFolderId(id);setBusy(true);clearSelection();
+    setFolderId(id);setBusy(true);clearSelection();setPageTrail([]);
     void read(null,{...appliedFilters.current,folderId:id}).then(ok=>{if(active.current){setBusy(false);if(ok)setNotice("");}});
   },[read,clearSelection]);
-  const organizationChanged = useCallback(()=>{void read(null);router.refresh();},[read,router]);
+  const organizationChanged = useCallback(()=>{void read(cursor);router.refresh();},[read,router,cursor]);
+  useEffect(() => {
+    if (busy || denied || organizationBusy || assetId || retry || !["pending", "running"].includes(data?.sync?.status ?? "")) return;
+    let reading = false;
+    const timer = setInterval(() => {
+      if (reading || document.visibilityState !== "visible" || submitting.current) return;
+      reading = true; void read(cursor, appliedFilters.current, true).finally(() => { reading = false; });
+    }, 8000);
+    return () => clearInterval(timer);
+  }, [busy, denied, organizationBusy, assetId, retry, data?.sync?.status, cursor, read]);
+  function changeType(kind: string) {
+    if (busy || retry) return;
+    setMediaKind(kind); setBusy(true); setPageTrail([]); clearSelection();
+    void read(null, { query: search.trim(), kind, folderId }).then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } });
+  }
+  async function goPage(after: string | null, trail: (string | null)[]) {
+    setBusy(true);
+    const ok = await read(after);
+    if (active.current) { setBusy(false); if (ok) { setPageTrail(trail); setNotice(""); libraryTop.current?.scrollIntoView({ block: "start" }); } }
+  }
   async function execute(command: Pending) {
     if (submitting.current) return;
     submitting.current = true; setBusy(true); setNotice(command.kind === "sync" ? "Requesting vault sync…" : "Creating catalogue item…");
@@ -81,7 +103,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
       }
       const value: unknown = response.ok ? await response.json() : null;
       if (command.kind === "sync" && response.ok && parseVaultSyncAck(value, { accountId })) {
-        nextRetry = null; message = "Sync request recorded. Refresh for the worker’s latest progress.";
+        nextRetry = null; message = "Vault sync started. Progress updates automatically while this page is open.";
       } else if (command.kind === "create" && response.ok) {
         const item = parseVaultCreateAck(value, { accountId, product: command.body.product });
         if (item) { nextRetry = null; setCreated(item.itemId); clearSelection(); setLabel(""); setDescription(""); setPrice(""); setEnabled(false); message = `Catalogue item #${item.itemId} recorded. The catalogue has been refreshed.`; }
@@ -115,9 +137,9 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const productValid = readySelection && mediaValid && validVaultProduct(product);
 
   return <Card className="mb-6 min-w-0 p-4" data-of-vault-manager>
-    <h2 className="font-semibold">Vault and catalogue products</h2>
+    <h2 className="text-lg font-semibold">Your media library</h2>
     {readOnly ? <p className="mt-2 text-xs text-muted">Read-only team access</p> : null}
-    <p className="mt-1 text-xs text-muted">Sync this account’s existing OnlyFans vault, then choose assets and save a catalogue item for eligible offers.</p>
+    <p className="mt-1 text-xs text-muted">Browse your imported OnlyFans photos and videos. Use descriptions, tags and folders to organize them.</p>
     {notice ? <p role="status" className="mt-3 text-sm" data-of-vault-notice>{notice}</p> : null}
     {!denied ? <div className="mt-3 flex flex-wrap gap-2">
       <button type="button" className={buttonClass} data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}>Refresh vault</button>
@@ -126,36 +148,51 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
       {data?.connectionRevision == null ? <Link className="self-center text-xs font-semibold text-accent" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
     </div> : null}
     {data && !denied ? <>
-      {!readOnly ? <VaultUploader key={accountId} accountId={accountId} connectionRevision={data.connectionRevision} onChanged={organizationChanged}/> : null}
-      <div className="mt-4 rounded-lg border border-line p-3 text-xs" data-of-vault-sync-status>
-        {data.sync ? <><p>Last sync: <strong>{SYNC_STATUS[data.sync.status]}</strong> · {data.sync.pagesRead} pages · {data.sync.itemsSeen} assets observed</p><p className="mt-1 text-muted">Updated {new Date(data.sync.updatedAt).toLocaleString()}{data.sync.completedAt ? ` · Completed ${new Date(data.sync.completedAt).toLocaleString()}` : ""}</p>{data.sync.lastError ? <p className="mt-1 text-muted">Sync needs review. Check the account connection and request a new sync when ready.</p> : null}</> : <p>No vault synchronization has been recorded.</p>}
+      <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4" data-of-vault-summary>
+        {[["All media", data.summary?.total], ["Photos", data.summary?.photos], ["Videos", data.summary?.videos], ["Folders", data.summary?.folders]].map(([label, count]) => <div key={label} className="min-w-0 rounded-xl border border-line p-3"><p className="text-xs text-muted">{label}</p><p className="mt-1 text-2xl font-semibold tabular-nums">{typeof count === "number" ? count.toLocaleString() : "—"}</p></div>)}
       </div>
+      <p className="mt-2 text-xs text-muted">{data.summary ? "Totals cover this account’s imported library, across every page." : "Library totals are unavailable. Refresh to try again."}{data.summary?.other ? ` Includes ${data.summary.other} other-format assets.` : ""}</p>
+      <div className="mt-4 rounded-lg border border-line p-3 text-xs" data-of-vault-sync-status>
+        {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? "Vault sync complete" : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
+          <p className="mt-1 text-muted">{data.sync.itemsSeen.toLocaleString()} files checked in this sync. {["pending", "running"].includes(data.sync.status) ? "Totals may increase. This page updates automatically." : `Last updated ${new Date(data.sync.updatedAt).toLocaleString()}.`}</p>
+          {data.sync.lastError ? <p className="mt-2">Sync stopped ({data.sync.lastError.replaceAll("_", " ")}). Imported files remain below. Check the connection, then try Sync vault again.</p> : null}
+        </> : <p>No vault sync has run yet. Choose Sync vault to import this account’s existing media.</p>}
+
+      </div>
+      <div ref={libraryTop} className="scroll-mt-48"/>
       <form className="mt-4 space-y-3" onSubmit={event => {
         event.preventDefault(); if (busy || retry) return;
-        setBusy(true); void read(null, { query: search.trim(), kind: mediaKind, folderId }).then(ok => {
+        setBusy(true); setPageTrail([]); clearSelection(); void read(null, { query: search.trim(), kind: mediaKind, folderId }).then(ok => {
           if (active.current) { setBusy(false); if (ok) setNotice(""); }
         });
       }}>
-        <MediaLibraryFilters tabs={[{ key: "all", label: "All" }, { key: "photo", label: "Photos" }, { key: "video", label: "Videos" }]}
-          activeTab={mediaKind} onTabChange={setMediaKind} search={search} onSearchChange={setSearch} disabled={busy || !!retry} searchLimit={120} />
+        <div className="grid grid-cols-3 gap-2" role="tablist" aria-label="Media type">
+          {[{ key: "all", label: "All media" }, { key: "photo", label: "Photos" }, { key: "video", label: "Videos" }].map(tab => <button key={tab.key} type="button" role="tab" aria-selected={mediaKind === tab.key} className={`min-h-11 min-w-0 rounded-lg border px-2 py-2 text-sm font-semibold ${mediaKind === tab.key ? "border-accent bg-accent text-white" : "border-line text-ink"}`} disabled={busy || !!retry} onClick={() => changeType(tab.key)}>{tab.label}</button>)}
+        </div>
+        <label className="block text-sm">Search descriptions and tags<input type="search" aria-label="Search your media" className={`${inputClass} w-full`} placeholder="Search this library" maxLength={120} value={search} onChange={event => setSearch(event.target.value)} disabled={busy || !!retry}/></label>
         <button type="submit" data-of-vault-search className={buttonClass} disabled={busy || !!retry}>Search vault</button>
       </form>
-      {!readOnly ? <VaultOrganization accountId={accountId} assetId={assetId} selectedIds={[...selected.keys()]} folderId={folderId}
+      {!readOnly ? <VaultOrganization accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId}
         onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/> : null}
       <fieldset disabled={busy || !!retry || organizationBusy} className="mt-4 min-w-0">
-        <legend className="text-sm font-semibold">Choose assets</legend>
-        <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3" data-of-vault-grid>
+        <legend className="text-sm font-semibold">{data.summary ? `${data.summary.matching.toLocaleString()} matching files` : "Imported media"} · Page {pageTrail.length + 1}</legend>
+        <p className="mt-1 text-xs text-muted">Showing {data.items.length} files. Open a preview to view media; use Edit details for descriptions and tags.</p>
+        <div className="mt-4 grid min-w-0 gap-4 min-[380px]:grid-cols-2 xl:grid-cols-3" data-of-vault-grid>
           {data.items.map(row => <article key={row.mediaId} className="min-w-0 overflow-hidden rounded-2xl border border-line bg-panel" data-of-vault-item={row.mediaId}>
-            <div className="flex items-center justify-between gap-3 px-4 py-3"><label className="flex items-center gap-2 text-xs"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /><span className="capitalize">{row.kind}</span></label><span className="text-xs text-muted">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</span></div>
-            <VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly}/>
-            <div className="p-4"><p className="line-clamp-3 break-words text-sm">{row.description || "No saved description"}</p><p className="mt-2 text-xs text-muted">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</p><button type="button" disabled={readOnly} data-of-vault-edit={row.mediaId} className="mt-3 text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata →</button><details className="mt-2"><summary>Asset details</summary><p className="break-all text-xs text-muted">Asset #{row.mediaId}</p></details></div>
+            <div className="flex flex-wrap items-start justify-between gap-2 px-3 py-3"><label className="flex items-center gap-2 text-xs"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /><span className="capitalize">{row.kind}</span></label><span className="text-xs text-muted">{vaultAvailability(row).label}</span></div>
+            <VaultAssetPreview key={row.mediaId} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly}/>
+            <div className="p-3"><p className="line-clamp-2 break-words text-sm">{row.description || "No saved description"}</p><p className="mt-2 text-xs text-muted">{row.durationSeconds === null ? "" : vaultDuration(row.durationSeconds)}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</p><button type="button" disabled={readOnly} data-of-vault-edit={row.mediaId} className="mt-2 min-h-11 text-sm font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit details</button><details className="mt-2"><summary className="min-h-11 py-2 text-xs">Availability details</summary><p className="mb-2 text-xs text-muted">{vaultAvailability(row).explanation}</p><p className="break-all text-xs text-muted">Asset #{row.mediaId}</p></details></div>
           </article>)}
         </div>
-        {!data.items.length ? <p className="mt-3 text-sm text-muted">No vault assets are recorded on this page.</p> : null}
-        <div className="mt-3 flex flex-wrap gap-2">{data.nextCursor ? <button type="button" data-of-vault-next className={buttonClass} onClick={() => void refresh(data.nextCursor)}>Next vault page →</button> : null}{cursor ? <button type="button" className={buttonClass} onClick={() => void refresh(null)}>First vault page</button> : null}</div>
+        {!data.items.length ? <p className="mt-3 text-sm text-muted">No files match this view. Try another media type, search or folder.</p> : null}
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button type="button" className={buttonClass} disabled={!pageTrail.length} onClick={() => void goPage(pageTrail.at(-1) ?? null, pageTrail.slice(0, -1))}>Previous</button>
+          <span className="text-sm">Page {pageTrail.length + 1}{data.summary ? ` of ${Math.max(1, Math.ceil(data.summary.matching / 24))}` : ""}</span>
+          <button type="button" data-of-vault-next className={buttonClass} disabled={!data.nextCursor} onClick={() => data.nextCursor && void goPage(data.nextCursor, [...pageTrail, cursor])}>Next page →</button>
+        </div>
       </fieldset>
       {selected.size>0&&!readySelection?<p className="mt-3 text-xs text-muted" data-of-vault-readiness-hold>Selected assets need verified availability before creating a catalogue item. You can still organize them in folders.</p>:null}
-      {!readOnly ? <form className="mt-5 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
+      {!readOnly ? <details className="mt-6 rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>
           {selected.size ? <ul className="space-y-2">{[...selected.values()].map(row => <li key={row.mediaId} className="flex flex-wrap items-center gap-3 rounded-lg border border-line p-2 text-xs">
@@ -169,9 +206,11 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
           <label className="flex items-start gap-2 text-sm"><input data-of-vault-product-enabled type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} /><span>Enable this item for eligible offers</span></label>
           <button type="submit" data-of-vault-create className={buttonClass} disabled={!productValid}>Create catalogue item</button>
         </fieldset>
-      </form> : null}
+      </form></details> : null}
+      {!readOnly ? <details className="mt-4 rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Upload photos and videos</summary><VaultUploader key={accountId} accountId={accountId} connectionRevision={data.connectionRevision} onChanged={organizationChanged}/></details> : null}
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
+    {assetId && !readOnly && !denied ? <VaultMetadataEditor key={`${accountId}:${assetId}`} accountId={accountId} mediaId={assetId} onClose={() => setAssetId(null)} onChanged={organizationChanged}/> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" data-of-vault-retry className={buttonClass} disabled={busy} onClick={() => void execute(retry)}>Retry same request</button><button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { setRetry(null); clearSelection(); setNotice("Review the recorded catalogue and sync status before starting another request. The previous command may already have committed."); }}>Use refreshed vault</button></div> : null}
   </Card>;
 }

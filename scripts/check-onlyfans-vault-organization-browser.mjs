@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 export async function checkVaultOrganization(page,context,origin){
- const panel=page.locator("[data-of-vault-organization]"),notice=panel.locator("[data-of-vault-edit-notice]");
+ const panel=page.locator("[data-of-vault-organization]"),dialog=page.getByRole("dialog"),notice=dialog.locator("[data-of-vault-edit-notice]");
  await page.locator('[data-of-vault-edit="11"]').click();
- const editor=panel.locator('[data-of-vault-asset-editor="11"]');await editor.waitFor();
+ const editor=dialog.locator('[data-of-vault-asset-editor="11"]');await editor.waitFor();
  await editor.locator('[data-of-vault-asset-description]').fill("Approved browser coast");
  await editor.locator('[data-of-vault-asset-tags]').fill("Coast, Sunset");
  const requests=[];
@@ -12,11 +12,14 @@ export async function checkVaultOrganization(page,context,origin){
   requests.push(route.request().postData());const response=await route.fetch();assert.equal(response.status(),200);await route.abort("connectionfailed");
  };
  await page.route("**/vault/manage/assets/11",lose);await editor.locator("[data-of-vault-asset-save]").click();
- await notice.filter({hasText:"Outcome not confirmed."}).waitFor();await page.unroute("**/vault/manage/assets/11",lose);
+ await notice.filter({hasText:"Save not confirmed."}).waitFor();await page.unroute("**/vault/manage/assets/11",lose);
  const observe=r=>{if(r.method()==="POST"&&r.url().endsWith("/vault/manage/assets/11"))requests.push(r.postData());};page.on("request",observe);
- await panel.locator("[data-of-vault-edit-retry]").click();await notice.filter({hasText:"Vault change recorded."}).waitFor();page.off("request",observe);
+ await dialog.locator("[data-of-vault-edit-retry]").click();await notice.filter({hasText:"Description and tags saved."}).waitFor();page.off("request",observe);
  assert.equal(requests.length,2);assert.equal(requests[0],requests[1]);
  assert.equal(await editor.locator('[data-of-vault-asset-tags]').inputValue(),"coast, sunset");
+ await dialog.getByRole("button",{name:"Close",exact:true}).click();
+ await panel.locator("summary").filter({hasText:"Manage folders"}).click();
+ await page.locator("summary").filter({hasText:"Create an item for sale"}).click();
  await panel.locator("[data-of-vault-folder-name]").fill("Browser coast");
  const created=page.waitForResponse(r=>r.request().method()==="POST"&&r.url().endsWith("/vault/manage/folders"));
  await panel.locator("[data-of-vault-folder-create]").click();const response=await created;assert.equal(response.status(),200);const ack=await response.json();
@@ -43,8 +46,10 @@ export async function checkVaultOrganization(page,context,origin){
  await panel.getByRole("button",{name:"Archive selected folder",exact:true}).click();assert.equal((await archived).status(),200);
  await page.waitForFunction(()=>document.querySelector('[data-of-vault-folder]')?.value==="");
  await page.setViewportSize({width:1440,height:1000});
+ await page.locator('[data-of-vault-edit="11"]').click();
  await editor.locator('[data-of-vault-asset-description]').fill("Must not persist after session loss");await context.clearCookies();await editor.locator('[data-of-vault-asset-save]').click();
- await panel.waitFor({state:"detached"});
+ await dialog.getByText("Your session cannot edit this asset.",{exact:false}).waitFor();
+ assert.equal(await editor.count(),0);
  await context.addCookies([{name:"allie_admin_session",value:process.env.ONLYFANS_TEST_COOKIE,url:origin}]);
  await page.goto(origin+"/onlyfans/content?account=acc-a",{waitUntil:"networkidle"});
  console.log("Vault organization browser PASS: shared metadata lock/normalization, exact lost-ack retry, internal folder create/filter/rename/archive, no readiness bypass, session clearing and mobile layout");
