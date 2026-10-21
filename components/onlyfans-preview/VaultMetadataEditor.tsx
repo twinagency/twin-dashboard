@@ -67,7 +67,7 @@ export default function VaultMetadataEditor({ accountId, mediaId, onClose, onCha
   const body: VaultEditRequest | null = asset ? { requestId: "00000000-0000-4000-8000-000000000000", expectedFingerprint: asset.fingerprint, patch } : null;
   const dirty = !!asset && (description !== (asset.description ?? "") || tags !== (asset.tags?.join(", ") ?? ""));
   return <Dialog open onOpenChange={open => { if (!open && !submitting.current && (!pending || denied)) onClose(); }}>
-    <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-lg" showCloseButton={!submitting.current && (!pending || denied)} data-of-vault-metadata-dialog>
+    <DialogContent className="max-h-[85dvh] overflow-y-auto bg-panel text-ink sm:max-w-lg" showCloseButton={!submitting.current && (!pending || denied)} data-of-vault-metadata-dialog>
       <DialogHeader><DialogTitle>Edit description and tags</DialogTitle><DialogDescription>Asset #{mediaId}. These details organize your Twin library.</DialogDescription></DialogHeader>
       {notice ? <p role="status" data-of-vault-edit-notice className="text-sm">{notice}</p> : null}
       {asset && !denied ? <form data-of-vault-asset-editor={mediaId} onSubmit={event => { event.preventDefault(); if (body && dirty && !busy && !pending) void save({ ...body, requestId: crypto.randomUUID() }); }}>

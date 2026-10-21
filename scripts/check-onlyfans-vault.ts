@@ -15,7 +15,7 @@ async function main() {
     assert.equal(parseVault({...read, vault: {...read.vault, summary: {...summary, ...patch}}}, "acc-a"), null);
   assert.equal(vaultDuration(630), "10:30"); assert.equal(vaultDuration(3661), "1:01:01");
   assert.equal(vaultAvailability({ready: false, reason: "readiness_unknown"}).label, "Availability unconfirmed");
-  assert.equal(vaultAvailability({ready: false, reason: "not_ready"}).label, "Not ready on OnlyFans");
+  assert.equal(vaultAvailability({ready: false, reason: "not_ready"}).label, "Full access unconfirmed");
   assert(parseVault(read, "acc-a")); assert.equal(parseVault(read, "acc-b"), null);
   assert(vaultMediaId("9007199254740993")); assert.equal(vaultMediaId("9223372036854775808"), false);
   for (const changed of [{ mediaId: "0" }, { kind: "audio" }, { durationSeconds: -1 }, { width: 0 }, { description: "é".repeat(1001) },

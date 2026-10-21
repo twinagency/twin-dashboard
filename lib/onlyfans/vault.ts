@@ -81,7 +81,7 @@ export function vaultAvailability(row: Pick<VaultItem, "ready" | "reason">): { l
     case "removed": return { label: "Unavailable on OnlyFans", explanation: "OnlyFans reports this asset as removed or hidden. It cannot be offered." };
     case "unsupported_kind": return { label: "Unsupported format", explanation: "Only photo and video assets can be used for offers." };
     case "unverified_owner": return { label: "Verification needed", explanation: "This asset has not been verified against the current account connection. Finish vault sync, or reconnect if the connection has expired." };
-    case "not_ready": return { label: "Not ready on OnlyFans", explanation: "OnlyFans has not confirmed this file is available for offers. It may still be processing or access may be restricted." };
+    case "not_ready": return { label: "Full access unconfirmed", explanation: "Twin cannot confirm usable full-file access for this asset. Its full-file link may be missing, processing or restricted. You can still edit its details and organize it, but Twin currently blocks it from paid offers." };
     default: return { label: "Availability unconfirmed", explanation: "OnlyFans did not provide enough information to confirm this file is ready for offers. You can still organize its description, tags and folders. This does not mean the file is damaged." };
   }
 }
