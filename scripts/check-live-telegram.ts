@@ -45,19 +45,34 @@ assert(model.compareMessages({ ...v1[0], created_at: "2026-10-12T00:00:00.123456
 // replaced. Scope checks happen before network access and before cache reuse.
 let access: { cloneIds: string[] } | null = { cloneIds: [clone.id] };
 let dbRows: any[] = [old], dbHistory: any[] = [], failHistory = false;
+let rawFans: any[] = [raw];
+let matchingDelay = false, failMatching = false, activeMatches = 0, peakMatches = 0;
 let monitorHistory = [{ id: "turn:0", at: at(500), role: "user", content: "hello", delivery: "received" }, { id: "turn:1", at: at(501), role: "assistant", content: "recorded reply", delivery: "unverified" }];
 const calls: { url: URL; params: URLSearchParams }[] = [];
 const dbCalls: any[][] = [];
 const db = { from(table: string) {
   const filters: any[][] = [["table", table]];
-  const q: any = { then(resolve: any) { dbCalls.push(filters); return Promise.resolve({ data: table === "users" ? dbRows : dbHistory, error: null }).then(resolve); } };
+  const q: any = { then(resolve: any, reject: any) {
+    dbCalls.push(filters);
+    return (async () => {
+      if (table === "users" && matchingDelay) {
+        activeMatches++; peakMatches = Math.max(peakMatches, activeMatches);
+        await new Promise<void>(done => setTimeout(done, 5));
+        activeMatches--;
+      }
+      const ids = filters.find(([key]) => key === "in")?.[2];
+      const creatorId = filters.find(([key, field]) => key === "eq" && field === "clone_id")?.[2];
+      return { data: table === "users" ? dbRows.filter(row => (!ids || ids.includes(row.telegram_id)) && (!creatorId || creatorId === row.clone_id)) : dbHistory,
+        error: table === "users" && failMatching ? new Error("fixture unavailable") : null };
+    })().then(resolve, reject);
+  } };
   for (const key of ["select", "eq", "in", "gte", "lte", "or", "order", "limit"]) q[key] = (...args: any[]) => { filters.push([key, ...args]); return q; };
   return q;
 } };
 const oldFetch = globalThis.fetch;
 globalThis.fetch = async (input: any) => {
   const url = new URL(String(input)); calls.push({ url, params: url.searchParams });
-  if (url.pathname.endsWith("/fans")) return Response.json([raw]);
+  if (url.pathname.endsWith("/fans")) return Response.json(rawFans);
   if (failHistory) return new Response("unavailable", { status: 502 });
   return Response.json({ history: monitorHistory, hasMore: false });
 };
@@ -76,6 +91,26 @@ async function main() {
     assert.equal(index.fans.length, 1); assert.equal(index.fans[0].id, old.id);
     assert(calls.every(call => call.params.get("girl") === clone.slug), "never fetch an unassigned creator");
     assert(dbCalls.every(query => query.some(([key, field, value]) => key === "eq" && field === "clone_id" && value === clone.id)));
+    // More than six batches, across two authorized creators: every batch is
+    // covered once, runs concurrently, and the whole fleet shares the bound.
+    const batchClone = { ...clone, id: "dddddddd-dddd-dddd-dddd-dddddddddddd", slug: "batch-a" };
+    const batchOther = { ...other, id: "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", slug: "batch-b" };
+    access = { cloneIds: [batchClone.id, batchOther.id] };
+    rawFans = Array.from({ length: 1351 }, (_, i) => ({ ...raw, chatId: String(1000 + i) }));
+    dbRows = [batchClone, batchOther].flatMap(c => rawFans.map((row, i) => ({ ...old, clone_id: c.id, id: `${c.id}-${i}`, telegram_id: Number(row.chatId), total_spent_stars: i })));
+    matchingDelay = true;
+    const beforeBatches = dbCalls.length;
+    const batched = await bridge.loadV2Fans([batchClone, batchOther], null);
+    assert.equal(batched.fans.length, 2702); assert.equal(batched.unavailable.length, 0);
+    assert(peakMatches > 1, "matching batches must actually overlap");
+    assert(peakMatches <= 6, "all creators share one six-read bound");
+    assert.equal(dbCalls.length - beforeBatches, 20);
+    for (const query of dbCalls.slice(beforeBatches)) assert(query.find(([key]) => key === "in")[2].length <= 150);
+    assert(batched.fans.every((fan: any) => fan.total_spent_stars === fan.telegram_id - 1000), "parallel matching preserves authoritative financial values");
+    failMatching = true;
+    const unavailable = await bridge.loadV2Fans([batchClone], batchClone.id);
+    assert.equal(unavailable.fans.length, 0); assert.deepEqual(unavailable.unavailable, [batchClone.name]);
+    matchingDelay = false; failMatching = false; rawFans = [raw]; dbRows = [old];
     access = { cloneIds: [other.id] }; const requestsBefore = calls.length;
     const denied = await bridge.loadV2Fans([clone], null);
     assert.equal(denied.fans.length, 0); assert.equal(calls.length, requestsBefore, "cached data cannot escape revoked scope");

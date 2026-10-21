@@ -1,0 +1,73 @@
+"""Replace only the monitor's fan reader on its exact current image; retain bot runtime."""
+import hashlib,json,pathlib,subprocess,time,urllib.request
+ROOT=pathlib.Path('/home/ubuntu/twin-v2')
+payload=json.loads(pathlib.Path('/tmp/messages-monitor-patch.json').read_text())
+revision=hashlib.sha256(json.dumps(payload,sort_keys=True).encode()).hexdigest()[:20]
+release=pathlib.Path('/home/ubuntu/twin-v2-backups/messages-load-20261022')/revision
+release.mkdir(parents=True,exist_ok=True)
+override=ROOT/'photo-release.override.json'
+def inspect(name):return json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
+def runtime(name):
+ r=inspect(name);assert r['State']['Running'],name+' not running'
+ return {'id':r['Id'],'image':r['Image']}
+def sha(data):return hashlib.sha256(data).hexdigest()
+def atomic(file,data):
+ file.parent.mkdir(parents=True,exist_ok=True);tmp=file.with_name(file.name+'.messages-tmp');tmp.write_bytes(data);tmp.replace(file)
+def compose():subprocess.run(['docker','compose','-p','twin-v2','-f',str(ROOT/'docker-compose.yml'),'-f',str(override),'up','-d','--no-build','--no-deps','dash'],check=True,timeout=90)
+def verify():
+ for attempt in range(20):
+  try:
+   with urllib.request.urlopen('http://127.0.0.1:4300/',timeout=2) as ready:assert ready.status==200
+   break
+  except (OSError,AssertionError):
+   if attempt==19:raise
+   time.sleep(0.5)
+ report=[]
+ for slug in ['briana-redd','fit-sid']:
+  start=time.monotonic()
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/fans?girl='+slug,timeout=12) as r:rows=json.load(r)
+  elapsed=round((time.monotonic()-start)*1000)
+  assert isinstance(rows,list) and rows,'Existing monitor fans available'
+  fan=next(row for row in rows if str(row.get('chatId','')).isdigit())
+  with urllib.request.urlopen('http://127.0.0.1:4300/api/chat-history?girl='+slug+'&chatId='+str(fan['chatId']),timeout=12) as r:history=json.load(r)
+  assert history.get('scope')=='all-stored' and history.get('days') is None
+  report.append({'creator':slug,'fans':len(rows),'fanReadMs':elapsed,'history':'all-stored'})
+ return report
+before_bot=runtime('twin-v2-bot-1');before_dash=runtime('twin-v2-dash-1')
+settings=dict(e.split('=',1) for e in inspect('twin-v2-dash-1')['Config']['Env'])
+if settings.get('MONITOR_LOAD_REVISION')==revision:
+ print(json.dumps({'alreadyDeployed':revision,'verified':verify(),'botUnchanged':True}));raise SystemExit(0)
+old_server=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
+assert sha(old_server)==payload['expectedServerSha256'],'Monitor source changed since inspection'
+source=old_server.decode()
+for patch in payload['patches']:
+ assert source.count(patch['old'])==1,'Fan reader changed since inspection'
+ source=source.replace(patch['old'],patch['new'],1)
+new_server=source.encode();old_override=override.read_bytes()
+host_server=ROOT/'dashboard/server.ts';old_host=host_server.read_bytes()
+# Another release may have a different host checkout. Never overwrite it.
+assert old_host==old_server,'Host checkout differs from inspected runtime'
+assert inspect('twin-v2-dash-1')['Config']['Labels']['com.docker.compose.project.config_files']==str(ROOT/'docker-compose.yml')+','+str(override)
+for file,data in [('server-before.ts',old_server),('override-before.json',old_override),('before.json',json.dumps({'bot':before_bot,'dash':before_dash}).encode())]:atomic(release/file,data)
+atomic(release/'server.ts',new_server)
+atomic(release/'parity.cjs',pathlib.Path('/tmp/messages-monitor-parity.cjs').read_bytes())
+atomic(release/'Dockerfile',b'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nCOPY server.ts /app/dashboard/server.ts\nCOPY server-before.ts /app/deployment/messages-monitor-original.source\nCOPY parity.cjs /app/deployment/messages-monitor-parity.cjs\n')
+tag='twin-monitor-messages:'+revision
+subprocess.run(['docker','build','--network=none','--build-arg','BASE_IMAGE='+before_dash['image'],'-t',tag,str(release)],check=True,timeout=120)
+subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_INCREMENTAL=1','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-parity.cjs'],check=True,timeout=45)
+subprocess.run(['docker','run','--rm','--network=none','--entrypoint','node',tag,'--import','tsx','scripts/check-dashboard-history.ts'],check=True,timeout=45)
+image=subprocess.check_output(['docker','image','inspect','-f','{{.Id}}',tag],text=True).strip()
+assert runtime('twin-v2-bot-1')==before_bot and runtime('twin-v2-dash-1')==before_dash,'Concurrent runtime change'
+assert override.read_bytes()==old_override and host_server.read_bytes()==old_host,'Concurrent deployment edit'
+try:
+ updated=json.loads(old_override);dash=updated.setdefault('services',{}).setdefault('dash',{});dash['image']=image;dash.setdefault('environment',{})['MONITOR_LOAD_REVISION']=revision
+ atomic(host_server,new_server);atomic(override,json.dumps(updated,indent=2).encode());compose()
+ assert runtime('twin-v2-dash-1')['image']==image
+ report=verify();assert runtime('twin-v2-bot-1')==before_bot,'Bot runtime changed'
+ result={'monitorLoadRevision':revision,'serverSha256':sha(new_server),'verified':report,'botUnchanged':True,'backup':str(release)}
+ atomic(release/'result.json',json.dumps(result).encode());print(json.dumps(result))
+except Exception:
+ atomic(host_server,old_host);atomic(override,old_override);compose()
+ assert runtime('twin-v2-dash-1')['image']==before_dash['image']
+ assert runtime('twin-v2-bot-1')==before_bot
+ print(json.dumps({'monitorRolledBack':True,'botUnchanged':True}));raise

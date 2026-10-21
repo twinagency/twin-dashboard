@@ -300,16 +300,24 @@ export default async function FansPage({
   const countOf = (build: (q: any) => any) =>
     build(scoped(supabaseAdmin.from("users").select("id", { count: "exact", head: true })));
 
-  const [clonesRes, usersRes, totalRes, activeRes, payingRes, flaggedRes] = await Promise.all([
+  const clonesTask = Promise.resolve(
+    supabaseAdmin
+      .from("clones")
+      .select("id,name,slug,engine,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled")
+  );
+  const v2Task = clonesTask.then(result => {
+    if (result.error) throw new Error("Could not load Telegram conversations. Please retry.");
+    return loadV2Fans((result.data ?? []) as CloneRow[], cloneId);
+  });
+
+  const [clonesRes, usersRes, totalRes, activeRes, payingRes, flaggedRes, v2] = await Promise.all([
     // id/name for the fan-list "via X" line; the rest reconstructs every fan's
     // exact onboarding position, campaign position and credit-freeze state (see
     // onboardingActive() in bot/src/onboarding-state.ts and the step walk in
     // bot/src/campaign.ts, mirrored here the same way lib/persona-facts.ts
     // mirrors prompt.ts). Both step lists are per-CLONE, so they are fetched
     // once here and joined to each fan row, never queried per fan.
-    supabaseAdmin
-      .from("clones")
-      .select("id,name,slug,engine,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled"),
+    clonesTask,
     // The visible slice, ordered and ranged in the database. `id` is the tie
     // breaker: paging an unstable order can show the same fan twice and skip
     // another, and every sort key here has ties (a whole clone can share a null
@@ -328,12 +336,12 @@ export default async function FansPage({
     countOf((q: any) => q.gte("last_message_received", cutoffIso)),
     countOf((q: any) => q.or("purchase_count.gt.0,total_spent_stars.gt.0")),
     countOf((q: any) => q.eq("blocked", true)),
+    v2Task,
   ]);
 
   if (clonesRes.error || usersRes.error) throw new Error("Could not load Telegram conversations. Please retry.");
   const clones = (clonesRes.data ?? []) as CloneRow[];
   const cloneById = new Map(clones.map((c) => [c.id, c]));
-  const v2 = await loadV2Fans(clones, cloneId);
   const fetchedFans = (usersRes.data ?? []) as any[];
   const mergedFans = new Map(fetchedFans.map(fan => [fanKey(fan), fan]));
   for (const fan of v2.fans) mergedFans.set(fanKey(fan), fan);
@@ -357,8 +365,8 @@ export default async function FansPage({
   // before: that older window was ordered by time, so on a busy fleet the fans
   // in the list were frequently not in it and simply got no chip.
   const pageTelegramIds = Array.from(new Set(filtered.map((u) => u.telegram_id))).slice(0, 300);
-  const routeLogsRes = pageTelegramIds.length
-    ? await scoped(
+  const routeLogsQuery = pageTelegramIds.length
+    ? scoped(
         supabaseAdmin
           .from("system_logs")
           .select("clone_id,telegram_id,detail")
@@ -393,8 +401,71 @@ export default async function FansPage({
   const pageUserIds = filtered.map((u) => u.id).filter(isStoredFan);
   const idChunks: string[][] = [];
   for (let i = 0; i < pageUserIds.length; i += ID_CHUNK) idChunks.push(pageUserIds.slice(i, i + ID_CHUNK));
-  const mediaBuyRows = (
-    await Promise.all(
+  // Conversation, routing chips and unlock chips have independent inputs.
+  // Waiting together keeps all existing data while removing two serial waits.
+  const [conversation, routeLogsRes, mediaPages] = await Promise.all([
+    (async () => {
+      // The fan in ?fan= is normally on the current slice. When he is not (a deep
+      // link, or he sorted off the end of it) he is fetched on his own rather than
+      // silently swapped for whoever is at the top, which is what falling back to
+      // filtered[0] alone would do.
+      let selected = (fanParam && [...mergedFans.values()].find((u) => u.id === fanParam || u._v2 && virtualFanId(u.clone_id, u.telegram_id) === fanParam)) || null;
+      if (!selected && fanParam && isStoredFan(fanParam)) {
+        const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
+        selected = (data as any) ?? null;
+      }
+      if (!selected) selected = filtered[0] || null;
+
+      let history: any[] = [];
+      let historyHasMore = false;
+      const historyBefore = parseInboxCursor(params.before);
+      const historyAfter = historyBefore ? null : parseHistoryCursor(params.after);
+      let combinedHistory = false;
+      let historyUnavailable = false;
+      const selectedV2 = !!selected && cloneById.get(selected.clone_id)?.engine === "v2";
+      let purchases: any[] = [];
+      let profile: any = null;
+      // Manual takeover (migration 096) photo picker: restricted to this fan's
+      // clone's FREE photos only — see manualSendPhoto in ./actions.ts for why
+      // paid photos are never offered here. Only fetched when the panel can
+      // actually render (fan already paused), to avoid an extra query otherwise.
+      let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
+      if (selected) {
+        const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
+          loadTelegramHistory(cloneById.get(selected.clone_id)!, selected.telegram_id, { before: params.before, after: params.after }),
+          supabaseAdmin
+            .from("star_transactions")
+            // select * (not named columns) for the same reason chat_history does it
+            // just above: `media_type`/`media_id` (migration 121, which media he
+            // actually unlocked) come along the moment that migration is applied,
+            // and nothing breaks in the window before it is.
+            .select("*")
+            .eq("clone_id", selected.clone_id)
+            .or(isStoredFan(selected.id) ? `user_id.eq.${selected.id},telegram_id.eq.${selected.telegram_id}` : `telegram_id.eq.${selected.telegram_id}`)
+            .order("paid_at", { ascending: false }),
+          isStoredFan(selected.id) ? supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle() : Promise.resolve({ data: null }),
+          selected.paused && !selectedV2
+            ? supabaseAdmin
+                .from("photos")
+                .select("id,storage_path,caption,image_name")
+                .eq("clone_id", selected.clone_id)
+                .eq("is_free", true)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+        historyHasMore = historyRes.hasMore;
+        history = historyRes.rows;
+        combinedHistory = historyRes.combined;
+        historyUnavailable = historyRes.unavailable;
+        // See lib/star-dedupe.ts: collapse double-recorded payments before showing this fan's total.
+        purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
+        profile = (profileRes.data ?? null) as any;
+        freePhotos = (freePhotosRes.data ?? []) as any[];
+      }
+      return { selected, history, purchases, profile, freePhotos, historyHasMore, historyBefore, historyAfter, combinedHistory, historyUnavailable, selectedV2 };
+    })(),
+    routeLogsQuery,
+    Promise.all(
       idChunks.map((chunk) =>
         selectAllRows<{
           id: string;
@@ -415,8 +486,10 @@ export default async function FansPage({
           { label: "users:media-unlocks" },
         ),
       ),
-    )
-  ).flatMap((r) => r.rows);
+    ),
+  ]);
+  const { selected, history, purchases, profile, freePhotos, historyHasMore, historyBefore, historyAfter, combinedHistory, historyUnavailable, selectedV2 } = conversation;
+  const mediaBuyRows = mediaPages.flatMap((r) => r.rows);
   // See lib/star-dedupe.ts: collapse double-recorded payments before counting unlocks.
   const mediaBuysByFan = new Map<string, { count: number; stars: number }>();
   for (const row of dedupeStarRows(mediaBuyRows)) {
@@ -460,64 +533,6 @@ export default async function FansPage({
   const flaggedFans = flaggedRes.count ?? 0;
 
   const hasMore = (matchingFans.length > showCount || legacyHasMore) && showCount < FAN_MAX;
-
-  // The fan in ?fan= is normally on the current slice. When he is not (a deep
-  // link, or he sorted off the end of it) he is fetched on his own rather than
-  // silently swapped for whoever is at the top, which is what falling back to
-  // filtered[0] alone would do.
-  let selected = (fanParam && [...mergedFans.values()].find((u) => u.id === fanParam || u._v2 && virtualFanId(u.clone_id, u.telegram_id) === fanParam)) || null;
-  if (!selected && fanParam && isStoredFan(fanParam)) {
-    const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
-    selected = (data as any) ?? null;
-  }
-  if (!selected) selected = filtered[0] || null;
-
-  let history: any[] = [];
-  let historyHasMore = false;
-  const historyBefore = parseInboxCursor(params.before);
-  const historyAfter = historyBefore ? null : parseHistoryCursor(params.after);
-  let combinedHistory = false;
-  let historyUnavailable = false;
-  const selectedV2 = !!selected && cloneById.get(selected.clone_id)?.engine === "v2";
-  let purchases: any[] = [];
-  let profile: any = null;
-  // Manual takeover (migration 096) photo picker: restricted to this fan's
-  // clone's FREE photos only — see manualSendPhoto in ./actions.ts for why
-  // paid photos are never offered here. Only fetched when the panel can
-  // actually render (fan already paused), to avoid an extra query otherwise.
-  let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
-  if (selected) {
-    const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
-      loadTelegramHistory(cloneById.get(selected.clone_id)!, selected.telegram_id, { before: params.before, after: params.after }),
-      supabaseAdmin
-        .from("star_transactions")
-        // select * (not named columns) for the same reason chat_history does it
-        // just above: `media_type`/`media_id` (migration 121, which media he
-        // actually unlocked) come along the moment that migration is applied,
-        // and nothing breaks in the window before it is.
-        .select("*")
-        .eq("clone_id", selected.clone_id)
-        .or(isStoredFan(selected.id) ? `user_id.eq.${selected.id},telegram_id.eq.${selected.telegram_id}` : `telegram_id.eq.${selected.telegram_id}`)
-        .order("paid_at", { ascending: false }),
-      isStoredFan(selected.id) ? supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle() : Promise.resolve({ data: null }),
-      selected.paused && !selectedV2
-        ? supabaseAdmin
-            .from("photos")
-            .select("id,storage_path,caption,image_name")
-            .eq("clone_id", selected.clone_id)
-            .eq("is_free", true)
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] as any[] }),
-    ]);
-    historyHasMore = historyRes.hasMore;
-    history = historyRes.rows;
-    combinedHistory = historyRes.combined;
-    historyUnavailable = historyRes.unavailable;
-    // See lib/star-dedupe.ts: collapse double-recorded payments before showing this fan's total.
-    purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
-    profile = (profileRes.data ?? null) as any;
-    freePhotos = (freePhotosRes.data ?? []) as any[];
-  }
 
   // ── Rich bubbles (chat_history.meta, migration 030) ───────────────────────
   // Rows written since the meta column landed carry {type, media_id, tg_file_id,

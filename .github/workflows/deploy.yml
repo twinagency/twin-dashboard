@@ -79,6 +79,11 @@ jobs:
           node deployment/creator-flow-live-check.test.cjs
           node deployment/creator-flow-upload-memory.test.cjs
           python3 -m py_compile deployment/creator-flow-live-check.py
+      - name: Messages loading and creator switch feedback
+        run: |
+          node scripts/check-creator-switch-feedback.cjs
+          node --import tsx scripts/check-messages-read-parallelism.cjs
+          node --import tsx scripts/check-live-telegram.ts
       - name: Dashboard loading and day-long session regressions
         run: |
           node --import tsx scripts/check-agency-session.ts
