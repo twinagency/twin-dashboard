@@ -1,5 +1,5 @@
 {
-  "reason": "Add Johnny Coco (@johnnycocox) to the FLIRT operator creator scope, using his existing live Twin record and profile portrait.",
-  "source_commit": "9d0a05b142f53098ef7d7f56077fe0d7b9bfd39a",
-  "requested_at": "2026-10-21T17:47:04.849Z"
+  "reason": "Celia empty agency workspace: working Flirt agency sign-in and logout routing, supplied Flirt wordmark/icon, Outfit typography and brand-guide colours.",
+  "source_commit": "ac977bb41810e16fdc2e466c7c7fb650ee9af7cc",
+  "requested_at": "2026-10-21T17:55:00Z"
 }
