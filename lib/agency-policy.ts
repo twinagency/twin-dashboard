@@ -6,7 +6,7 @@ export const isAgencyPath = (path: string) => path === "/agency" || path.startsW
 export function agencyRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (!isAgencyPath(path) || serverAction) return false;
   if (method === "GET" || method === "HEAD") return true;
-  return method === "POST" && ["/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
+  return method === "POST" && ["/agency/team/manage", "/agency/join/email", "/agency/join/accept", "/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
 }
 export function scopeAgencyClones(allowed: readonly string[], requested?: string): string[] {
   if (requested && !allowed.includes(requested)) throw new Error("Creator access denied");
@@ -31,3 +31,4 @@ export function agencyDashboardPath(path: string, agencyName?: string, canManage
   if (/^\/sequences\/[0-9a-f-]{36}$/i.test(path)) return true;
   return ["/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/media-sign", "/api/fx", "/api/models", "/api/avatar", "/api/voice", "/api/business-account", "/api/business-connection"].includes(path);
 }
+

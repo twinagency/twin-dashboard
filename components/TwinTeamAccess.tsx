@@ -7,10 +7,10 @@ import type { StaffCreatorScope } from "@/lib/staff-creator-scope";
 
 type Member = { user_id: string; email: string; active: boolean; can_manage: boolean } & Partial<StaffCreatorScope>;
 type Agency = { id: string; name: string; slug: string };
-export default function TwinTeamAccess({ agencies, agency, members, error, status, fixedManagement, managementAvailable, truncated, creators = [], creatorsUnavailable = false }: {
+export default function TwinTeamAccess({ agencies, agency, members, error, status, fixedManagement, managementAvailable, truncated, creators = [], creatorsUnavailable = false, ownerIds = [], ownersUnavailable = false }: {
   agencies: Agency[]; agency: Agency; members: Member[]; error: boolean; status: string | null;
   fixedManagement: boolean; managementAvailable: boolean; truncated: boolean;
-  creators?: { id: string; name: string }[]; creatorsUnavailable?: boolean;
+  creators?: { id: string; name: string }[]; creatorsUnavailable?: boolean; ownerIds?: string[]; ownersUnavailable?: boolean;
 }) {
   const [selectedId, setSelectedId] = useState(members[0]?.user_id ?? "");
   const [adding, setAdding] = useState(false);
@@ -47,6 +47,7 @@ export default function TwinTeamAccess({ agencies, agency, members, error, statu
             <button className="twin-primary-link" name="operation" value={selected.active ? "set-access" : "restore"}>{selected.active ? "Save access" : "Restore access"}</button>
             {selected.active && <button className="twin-outline-link" name="operation" value="revoke">Revoke access</button>}
           </form>
+          {!ownersUnavailable && <form action="/agency-admin/team-owner" method="post" className="mt-5 border-t border-line pt-5"><h2>Agency owner delegation</h2><input type="hidden" name="agency" value={agency.id}/><input type="hidden" name="user_id" value={selected.user_id}/><p className="twin-help">Owners can invite and remove staff and assign access within this agency. Requires an active member with all-creator access. This does not change creator management permissions.</p><button className="twin-outline-link" name="operation" value={ownerIds.includes(selected.user_id)?"revoke":"grant"} disabled={!ownerIds.includes(selected.user_id) && (!selected.active || selected.creator_scope!=="all")}>{ownerIds.includes(selected.user_id)?"Remove owner delegation":"Make agency owner"}</button></form>}
           {selected.creator_access_revision && !creatorsUnavailable ? <StaffCreatorForm key={selected.user_id + selected.creator_access_revision} agencyId={agency.id} member={selected} creators={creators} /> : <p className="twin-help">Creator access settings are unavailable. Refresh before changing assignments.</p>}
         </>}
       </aside>

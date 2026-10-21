@@ -1,3 +1,4 @@
+import "./agency-team.css";
 import './moxy-overview.css';
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
@@ -95,7 +96,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // pages, not part of the login/portal shell that prefix otherwise means:
   // they need the real Sidebar and DashboardAccessProvider below, not the
   // bare shell every other /agency/* path gets.
-  const isAgencyOperatorPage = pathname === "/agency/creators" || pathname === "/agency/creator-invites";
+  const isAgencyOperatorPage = pathname === "/agency/creators" || pathname === "/agency/creator-invites" || pathname === "/agency/setup" || pathname === "/agency/team";
   if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname) && !isAgencyOperatorPage)) {
     return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
@@ -145,5 +146,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </body>
   </html>;
 }
+
 
 

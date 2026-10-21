@@ -41,7 +41,7 @@ export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   // Login/logout and independently authenticated endpoints must never renew an
   // unrelated agency session or overwrite a new identity's response cookies.
-  const skip = isTwinLoginPath(path) || isMarketingPath(path) || path === "/admin-auth"
+  const skip = path === "/agency/join" || path.startsWith("/agency/join/") || isTwinLoginPath(path) || isMarketingPath(path) || path === "/admin-auth"
     || /\/(?:auth|login|logout)$/.test(path) || path.startsWith("/creator")
     || SELF_AUTHENTICATED_PREFIXES.some(prefix => path.startsWith(prefix))
     || path.startsWith("/catalogue/") || path.startsWith("/api/catalogue/");
@@ -215,7 +215,9 @@ async function routeMiddleware(req: NextRequest) {
   }
   if (isAgencyPath(pathname)) {
     if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
-    return privateResponse(withPathname(req));
+    const response = privateResponse(withPathname(req));
+    if (pathname === "/agency/join" || pathname.startsWith("/agency/join/") || pathname === "/agency/team") { response.headers.set("Referrer-Policy", "no-referrer"); response.headers.set("X-Robots-Tag", "noindex, nofollow"); }
+    return response;
   }
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
   const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE)) || viewAs?.targetType === "creator";
@@ -268,3 +270,4 @@ async function routeMiddleware(req: NextRequest) {
 // Only the exact upload route bypasses body buffering; it enforces origin, creator auth and view-as itself.
 // tonconnect-manifest.json is fetched unauthenticated by fans' TON wallets; it must never redirect to login.
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|tonconnect-manifest.json|creator-auth/upload/?$|creator-auth/ppv-upload/?$).*)"] };
+
