@@ -74,12 +74,14 @@ if (release/'before.json').exists():
    assert runtime('twin-v2-dash-1')['image']==previous['dash']['image']
    print(json.dumps({'exactPreviousMonitorRestored':True,'botUnchanged':True}),flush=True)
 before_bot=runtime('twin-v2-bot-1');before_dash=runtime('twin-v2-dash-1')
+old_history=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/history.ts'])
 settings=dict(e.split('=',1) for e in inspect('twin-v2-dash-1')['Config']['Env'])
 if settings.get('MONITOR_LOAD_REVISION')==revision:
  recorded=json.loads((release/'result.json').read_text())
  actual=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
  print(json.dumps({'currentSource':sha(actual),'recordedSource':recorded['serverSha256'],'patchPresence':[{'old':actual.decode().count(patch['old']),'new':actual.decode().count(patch['new'])} for patch in payload['patches']],'monitorImage':before_dash['image']}),flush=True)
  assert sha(actual)==recorded['serverSha256'],'Monitor source changed after this release'
+ if payload.get('history'):assert sha(old_history)==recorded['historySha256'],'History source changed after this release'
  verified=verify();assert runtime('twin-v2-bot-1')==before_bot,'Concurrent bot release'
  print(json.dumps({'alreadyDeployed':revision,'verified':verified,'botUnchanged':True}));raise SystemExit(0)
 old_server=subprocess.check_output(['docker','exec','twin-v2-dash-1','cat','/app/dashboard/server.ts'])
@@ -89,6 +91,11 @@ for patch in payload['patches']:
  assert source.count(patch['old'])==1,'Fan reader changed since inspection'
  source=source.replace(patch['old'],patch['new'],1)
 new_server=source.encode();old_override=override.read_bytes()
+new_history=old_history
+if payload.get('history'):
+ h=payload['history'];assert sha(old_history)==h['expectedSha256'],'History source changed since inspection'
+ text=old_history.decode();assert text.count(h['old'])==1,'History cache setting changed'
+ new_history=text.replace(h['old'],h['new'],1).encode()
 host_server=ROOT/'dashboard/server.ts';old_host=host_server.read_bytes()
 # Preserve a separate host checkout; the running image is the deployment base.
 new_host=old_host
@@ -100,32 +107,44 @@ if payload.get('patchHostHunks'):
  new_host=host_text.encode()
 elif old_host==old_server:new_host=new_server
 update_host=new_host!=old_host
+host_history=ROOT/'dashboard/history.ts';old_host_history=host_history.read_bytes();new_host_history=old_host_history
+if payload.get('history'):
+ h=payload['history'];text=old_host_history.decode()
+ if text.count(h['old'])==1:new_host_history=text.replace(h['old'],h['new'],1).encode()
+update_history_host=new_host_history!=old_host_history
 assert inspect('twin-v2-dash-1')['Config']['Labels']['com.docker.compose.project.config_files']==str(ROOT/'docker-compose.yml')+','+str(override)
 for file,data in [('server-before.ts',old_server),('override-before.json',old_override),('before.json',json.dumps({'bot':before_bot,'dash':before_dash}).encode())]:atomic(release/file,data)
 atomic(release/'server.ts',new_server)
 atomic(release/'parity.cjs',pathlib.Path('/tmp/messages-monitor-parity.cjs').read_bytes())
 atomic(release/'fleet-cache.cjs',pathlib.Path('/tmp/messages-monitor-fleet-cache.cjs').read_bytes())
-atomic(release/'Dockerfile',b'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nCOPY server.ts /app/dashboard/server.ts\nCOPY server-before.ts /app/deployment/messages-monitor-original.source\nCOPY parity.cjs /app/deployment/messages-monitor-parity.cjs\nCOPY fleet-cache.cjs /app/deployment/messages-monitor-fleet-cache.cjs\n')
+atomic(release/'history-cache.cjs',pathlib.Path('/tmp/messages-history-cache.cjs').read_bytes())
+atomic(release/'history.ts',new_history)
+atomic(release/'history-before.ts',old_history)
+atomic(release/'Dockerfile',b'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\nCOPY server.ts /app/dashboard/server.ts\nCOPY server-before.ts /app/deployment/messages-monitor-original.source\nCOPY parity.cjs /app/deployment/messages-monitor-parity.cjs\nCOPY fleet-cache.cjs /app/deployment/messages-monitor-fleet-cache.cjs\nCOPY history.ts /app/dashboard/history.ts\nCOPY history-before.ts /app/deployment/messages-history-original.source\nCOPY history-cache.cjs /app/deployment/messages-history-cache.cjs\n')
 tag='twin-monitor-messages:'+revision
 subprocess.run(['docker','build','--network=none','--build-arg','BASE_IMAGE='+before_dash['image'],'-t',tag,str(release)],check=True,timeout=120)
-if payload.get('kind')!='fleet-capacity':
+if payload.get('kind')=='fan-metadata':
  subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_INCREMENTAL=1','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-parity.cjs'],check=True,timeout=45)
 subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_ORIGINAL=/app/deployment/messages-monitor-original.source','-e','MONITOR_CANDIDATE=/app/dashboard/server.ts','--entrypoint','node',tag,'deployment/messages-monitor-fleet-cache.cjs'],check=True,timeout=45)
+if payload.get('history'):
+ subprocess.run(['docker','run','--rm','--network=none','-e','MONITOR_CANDIDATE=/app/dashboard/history.ts','--entrypoint','node',tag,'deployment/messages-history-cache.cjs'],check=True,timeout=45)
 subprocess.run(['docker','run','--rm','--network=none','--entrypoint','node',tag,'--import','tsx','scripts/check-dashboard-history.ts'],check=True,timeout=45)
 image=subprocess.check_output(['docker','image','inspect','-f','{{.Id}}',tag],text=True).strip()
 assert runtime('twin-v2-bot-1')==before_bot and runtime('twin-v2-dash-1')==before_dash,'Concurrent runtime change'
-assert override.read_bytes()==old_override and host_server.read_bytes()==old_host,'Concurrent deployment edit'
+assert override.read_bytes()==old_override and host_server.read_bytes()==old_host and host_history.read_bytes()==old_host_history,'Concurrent deployment edit'
 try:
  updated=json.loads(old_override);dash=updated.setdefault('services',{}).setdefault('dash',{});dash['image']=image;dash.setdefault('environment',{})['MONITOR_LOAD_REVISION']=revision
  if update_host:atomic(host_server,new_host)
+ if update_history_host:atomic(host_history,new_host_history)
  atomic(override,json.dumps(updated,indent=2).encode());compose()
  assert runtime('twin-v2-dash-1')['image']==image
  report=verify();assert runtime('twin-v2-bot-1')==before_bot,'Bot runtime changed'
- result={'monitorLoadRevision':revision,'serverSha256':sha(new_server),'verified':report,'botUnchanged':True,'hostSourcePreserved':not update_host,'hostHunksUpdated':bool(payload.get('patchHostHunks') and update_host),'backup':str(release)}
+ result={'monitorLoadRevision':revision,'serverSha256':sha(new_server),'historySha256':sha(new_history),'verified':report,'botUnchanged':True,'hostSourcePreserved':not update_host,'hostHunksUpdated':bool(payload.get('patchHostHunks') and update_host),'backup':str(release)}
  atomic(release/'result.json',json.dumps(result).encode());print(json.dumps(result))
 except Exception:
  # Undo only this rollout's own state. A concurrent deployment is preserved.
  if update_host and host_server.read_bytes()==new_host:atomic(host_server,old_host)
+ if update_history_host and host_history.read_bytes()==new_host_history:atomic(host_history,old_host_history)
  if runtime('twin-v2-dash-1')['image']==image and override.read_bytes()==json.dumps(updated,indent=2).encode():
   rollback=json.loads(old_override);rollback.setdefault('services',{}).setdefault('dash',{})['image']=before_dash['image']
   atomic(override,json.dumps(rollback,indent=2).encode());compose()
