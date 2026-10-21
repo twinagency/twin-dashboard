@@ -2,7 +2,7 @@
 import json, pathlib, subprocess, time
 instances = ['i-09a9dd3bd749643a5', 'i-0584d283506f3f6be']
 print(subprocess.check_output(['aws','ec2','describe-instances','--instance-ids',*instances,'--query','Reservations[].Instances[].{id:InstanceId,state:State.Name,privateIp:PrivateIpAddress}','--output','json'],text=True))
-source_read = "const fs=require('node:fs'),s=fs.readFileSync('/app/dashboard/server.ts','utf8');console.log(JSON.stringify({chats:s.slice(s.indexOf('export function chats'),s.indexOf('/** Stage 3:')),fans:s.slice(s.indexOf('export function fans'),s.indexOf('/** One request row')),revision:process.env.GIT_SHA}));"
+source_read = "const fs=require('node:fs'),ts=require('typescript'),s=fs.readFileSync('/app/dashboard/server.ts','utf8'),ast=ts.createSourceFile('server.ts',s,ts.ScriptTarget.Latest,true);const nodes=ast.statements;console.log(JSON.stringify({summary:nodes.filter(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='reqSummary'||ts.isVariableStatement(n)&&n.declarationList.declarations.some(d=>d.name.getText(ast)==='reqSummary')).map(n=>n.getText(ast)),names:nodes.flatMap(n=>ts.isFunctionDeclaration(n)?[n.name?.text]:ts.isVariableStatement(n)?n.declarationList.declarations.map(d=>d.name.getText(ast)):[])}));"
 import shlex
 commands = [
     ["sudo docker inspect --format '{{json .NetworkSettings.Networks}}' next-app", "sudo docker network inspect twin-onlyfans_default --format '{{json .IPAM.Config}}'", "ip route get 172.31.6.134", "curl --max-time 5 -s -o /dev/null -w 'host monitor HTTP %{http_code}, %{time_total}s\\n' http://172.31.6.134:4300/api/girls || true"],
