@@ -37,7 +37,7 @@ jobs:
           node --check deployment/creator-flow-live-check.cjs
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
-      - name: Default agency homepage and creator navigation
+      - name: Default agency homepage, summary loading and creator navigation
         run: |
           node --import tsx scripts/check-overview-loading.cjs
           node --import tsx scripts/check-overview-recent.cjs
