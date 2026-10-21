@@ -31,6 +31,7 @@ export default function CreatorWorkspaceShell({
   connected,
   onboardingFinished = true,
   connectionPage = false,
+  homePage = false,
   allTimeStars,
   usdPerStar,
   children,
@@ -45,6 +46,7 @@ export default function CreatorWorkspaceShell({
   connected: boolean;
   onboardingFinished?: boolean;
   connectionPage?: boolean;
+  homePage?: boolean;
   allTimeStars: number;
   usdPerStar?: number;
   children: ReactNode;
@@ -86,7 +88,7 @@ export default function CreatorWorkspaceShell({
               />
               <MainShell>
                 {cloneBeingCreated && <CreatorCloneSetupBanner brand="moxy" />}
-                {!connectionPage && <CreatorContentAccess />}
+                {!connectionPage && !homePage && <CreatorContentAccess />}
                 {!connectionPage && !connected && !cloneBeingCreated && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     {onboardingFinished
