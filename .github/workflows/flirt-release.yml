@@ -40,6 +40,8 @@ jobs:
       - name: Default agency homepage, scoped navigation feedback and creator navigation
         run: |
           node scripts/check-navigation-feedback.cjs
+          node scripts/check-creator-switch-feedback.cjs
+          node --import tsx scripts/check-messages-read-parallelism.cjs
           node --import tsx scripts/check-overview-loading.cjs
           node --import tsx scripts/check-overview-recent.cjs
           node --import tsx scripts/check-overview-wallet.cjs

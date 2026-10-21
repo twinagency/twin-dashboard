@@ -50,6 +50,7 @@ export default function CloneSwitcher({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
+  const [switchError, setSwitchError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
   const active = activeCloneId ? clones.find((c) => c.id === activeCloneId) : null;
@@ -83,15 +84,29 @@ export default function CloneSwitcher({
   }
 
   function pick(id: string | null) {
+    if (pending) return;
+    setSwitchError("");
     setOpen(false);
     startTransition(async () => {
+      try {
       if (isAgency) {
         const response = await fetch("/agency/clone-scope",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clone:id})});
         if (!response.ok) throw new Error("Unable to switch creator");
       } else await setCloneScope(id);
       const dest = isAgency && isFlirtOverviewPath(pathname, agencyName) ? flirtOverviewHref(id) : cloneRouteFor(id);
-      if (dest) router.push(dest);
-      router.refresh();
+      if (dest) {
+        router.push(dest);
+        router.refresh();
+      } else if (isAgency) {
+        // The JSON endpoint sets the cookie; it does not return a new tree.
+        router.refresh();
+      }
+      // setCloneScope already revalidates and returns the current tree for
+      // internal viewers. Refreshing it again repeats the entire page load.
+      } catch {
+        setSwitchError("Unable to switch creator. Please try again.");
+        setOpen(true);
+      }
     });
   }
 
@@ -143,6 +158,8 @@ export default function CloneSwitcher({
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Switch creator"
+        aria-busy={pending}
+        data-creator-switch-pending={pending || undefined}
         disabled={pending}
         className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-[#e5f0f8] disabled:opacity-60"
       >
@@ -160,9 +177,18 @@ export default function CloneSwitcher({
             <span>All creators</span>
           </>
         )}
+        {pending ? (
+          <span role="status" aria-label="Switching creator" className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" fill="none" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+              <circle cx="12" cy="12" r="9" opacity="0.25" />
+              <path d="M12 3a9 9 0 0 1 9 9" />
+            </svg>
+          </span>
+        ) : (
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth={2}>
           <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
+        )}
       </button>
 
       <DialogContent
@@ -174,6 +200,7 @@ export default function CloneSwitcher({
         </DialogHeader>
 
         <div className="border-b border-line p-3">
+          {switchError && <p role="alert" className="mb-2 text-sm text-crit">{switchError}</p>}
           <Input
             ref={inputRef}
             type="text"
@@ -226,3 +253,4 @@ export default function CloneSwitcher({
     </Dialog>
   );
 }
+

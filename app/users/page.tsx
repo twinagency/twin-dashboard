@@ -329,8 +329,8 @@ export default async function FansPage({
   // before: that older window was ordered by time, so on a busy fleet the fans
   // in the list were frequently not in it and simply got no chip.
   const pageTelegramIds = Array.from(new Set(filtered.map((u) => u.telegram_id))).slice(0, 300);
-  const routeLogsRes = pageTelegramIds.length
-    ? await scoped(
+  const routeLogsQuery = pageTelegramIds.length
+    ? scoped(
         supabaseAdmin
           .from("system_logs")
           .select("clone_id,telegram_id,detail")
@@ -365,8 +365,68 @@ export default async function FansPage({
   const pageUserIds = filtered.map((u) => u.id);
   const idChunks: string[][] = [];
   for (let i = 0; i < pageUserIds.length; i += ID_CHUNK) idChunks.push(pageUserIds.slice(i, i + ID_CHUNK));
-  const mediaBuyRows = (
-    await Promise.all(
+  // Conversation, routing chips and unlock chips have independent inputs.
+  // Waiting together keeps all existing data while removing two serial waits.
+  const [conversation, routeLogsRes, mediaPages] = await Promise.all([
+    (async () => {
+      // The fan in ?fan= is normally on the current slice. When he is not (a deep
+      // link, or he sorted off the end of it) he is fetched on his own rather than
+      // silently swapped for whoever is at the top, which is what falling back to
+      // filtered[0] alone would do.
+      let selected = (fanParam && filtered.find((u) => u.id === fanParam)) || null;
+      if (!selected && fanParam) {
+        const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
+        selected = (data as any) ?? null;
+      }
+      if (!selected) selected = filtered[0] || null;
+
+      let history: any[] = [];
+      let purchases: any[] = [];
+      let profile: any = null;
+      // Manual takeover (migration 096) photo picker: restricted to this fan's
+      // clone's FREE photos only — see manualSendPhoto in ./actions.ts for why
+      // paid photos are never offered here. Only fetched when the panel can
+      // actually render (fan already paused), to avoid an extra query otherwise.
+      let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
+      if (selected) {
+        const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
+          supabaseAdmin
+            .from("chat_history")
+            // select * (not named columns) so the additive `meta` column (migration
+            // 030, rich bubbles) comes along when applied and nothing breaks before.
+            .select("*")
+            .eq("clone_id", selected.clone_id)
+            .eq("telegram_id", selected.telegram_id)
+            .order("created_at", { ascending: false })
+            .limit(90),
+          supabaseAdmin
+            .from("star_transactions")
+            // select * (not named columns) for the same reason chat_history does it
+            // just above: `media_type`/`media_id` (migration 121, which media he
+            // actually unlocked) come along the moment that migration is applied,
+            // and nothing breaks in the window before it is.
+            .select("*")
+            .eq("user_id", selected.id)
+            .order("paid_at", { ascending: false }),
+          supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle(),
+          selected.paused
+            ? supabaseAdmin
+                .from("photos")
+                .select("id,storage_path,caption,image_name")
+                .eq("clone_id", selected.clone_id)
+                .eq("is_free", true)
+                .order("created_at", { ascending: false })
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+        history = ((historyRes.data ?? []) as any[]).slice().reverse();
+        purchases = (purchasesRes.data ?? []) as any[];
+        profile = (profileRes.data ?? null) as any;
+        freePhotos = (freePhotosRes.data ?? []) as any[];
+      }
+      return { selected, history, purchases, profile, freePhotos };
+    })(),
+    routeLogsQuery,
+    Promise.all(
       idChunks.map((chunk) =>
         selectAllRows<{ user_id: string; amount_stars: number | null }>(
           supabaseAdmin
@@ -378,8 +438,10 @@ export default async function FansPage({
           { label: "users:media-unlocks" },
         ),
       ),
-    )
-  ).flatMap((r) => r.rows);
+    ),
+  ]);
+  const { selected, history, purchases, profile, freePhotos } = conversation;
+  const mediaBuyRows = mediaPages.flatMap((r) => r.rows);
   const mediaBuysByFan = new Map<string, { count: number; stars: number }>();
   for (const row of mediaBuyRows) {
     const prev = mediaBuysByFan.get(row.user_id) ?? { count: 0, stars: 0 };
@@ -419,61 +481,6 @@ export default async function FansPage({
   const flaggedFans = flaggedRes.count ?? 0;
 
   const hasMore = fetchedFans.length > showCount && showCount < FAN_MAX;
-
-  // The fan in ?fan= is normally on the current slice. When he is not (a deep
-  // link, or he sorted off the end of it) he is fetched on his own rather than
-  // silently swapped for whoever is at the top, which is what falling back to
-  // filtered[0] alone would do.
-  let selected = (fanParam && filtered.find((u) => u.id === fanParam)) || null;
-  if (!selected && fanParam) {
-    const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
-    selected = (data as any) ?? null;
-  }
-  if (!selected) selected = filtered[0] || null;
-
-  let history: any[] = [];
-  let purchases: any[] = [];
-  let profile: any = null;
-  // Manual takeover (migration 096) photo picker: restricted to this fan's
-  // clone's FREE photos only — see manualSendPhoto in ./actions.ts for why
-  // paid photos are never offered here. Only fetched when the panel can
-  // actually render (fan already paused), to avoid an extra query otherwise.
-  let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
-  if (selected) {
-    const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
-      supabaseAdmin
-        .from("chat_history")
-        // select * (not named columns) so the additive `meta` column (migration
-        // 030, rich bubbles) comes along when applied and nothing breaks before.
-        .select("*")
-        .eq("clone_id", selected.clone_id)
-        .eq("telegram_id", selected.telegram_id)
-        .order("created_at", { ascending: false })
-        .limit(90),
-      supabaseAdmin
-        .from("star_transactions")
-        // select * (not named columns) for the same reason chat_history does it
-        // just above: `media_type`/`media_id` (migration 121, which media he
-        // actually unlocked) come along the moment that migration is applied,
-        // and nothing breaks in the window before it is.
-        .select("*")
-        .eq("user_id", selected.id)
-        .order("paid_at", { ascending: false }),
-      supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle(),
-      selected.paused
-        ? supabaseAdmin
-            .from("photos")
-            .select("id,storage_path,caption,image_name")
-            .eq("clone_id", selected.clone_id)
-            .eq("is_free", true)
-            .order("created_at", { ascending: false })
-        : Promise.resolve({ data: [] as any[] }),
-    ]);
-    history = ((historyRes.data ?? []) as any[]).slice().reverse();
-    purchases = (purchasesRes.data ?? []) as any[];
-    profile = (profileRes.data ?? null) as any;
-    freePhotos = (freePhotosRes.data ?? []) as any[];
-  }
 
   // ── Rich bubbles (chat_history.meta, migration 030) ───────────────────────
   // Rows written since the meta column landed carry {type, media_id, tg_file_id,
@@ -1684,4 +1691,5 @@ export default async function FansPage({
     </div>
   );
 }
+
 
