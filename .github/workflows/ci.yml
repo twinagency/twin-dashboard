@@ -43,7 +43,11 @@ jobs:
           npx playwright install --with-deps chromium webkit
 
       - name: Live dashboard overview data and interaction checks
-        run: node --import tsx scripts/check-live-overview-ui.mjs
+        run: |
+          node --import tsx scripts/check-overview-loading.cjs
+          node --import tsx scripts/check-overview-recent.cjs
+          node --import tsx scripts/check-overview-wallet.cjs
+          node --import tsx scripts/check-live-overview-ui.mjs
 
       - name: Shared operator workspace desktop and mobile checks
         run: |
