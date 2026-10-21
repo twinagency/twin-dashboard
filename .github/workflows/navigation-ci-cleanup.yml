@@ -30,8 +30,7 @@ jobs:
               for (const run of data.workflow_runs) {
                 if (!superseded.has(run.head_sha) || run.status === "completed") continue;
                 try {
-                  if (run.status === "in_progress") await github.rest.actions.forceCancelWorkflowRun({...context.repo, run_id: run.id});
-                  else await github.rest.actions.cancelWorkflowRun({...context.repo, run_id: run.id});
+                  await github.rest.actions.cancelWorkflowRun({...context.repo, run_id: run.id});
                   core.info("Stopped superseded check " + run.id);
                 } catch (error) {
                   if (![409,422].includes(error.status)) throw error;
