@@ -8,7 +8,7 @@ async function main(){
  const root=process.cwd(),dir=mkdtempSync(join(root,'creator-platform-routes-'));
  const creator={accountId:'creator-account',userId:'verified-user',creatorName:'Verified creator',readOnly:false};
  const f=globalThis.__creatorPlatformsTest={token:'real-creator-cookie',creator,viewAs:false,body:{channels:['onlyfans']},queries:[],calls:[],profile:'canonical-creator',linked:null,accounts:[],list:[],detail:null};
- f.db={from(table){const q={table,filters:[]};f.queries.push(q);const b={select(value){q.select=value;return b},eq(k,v){q.filters.push([k,v]);return b},neq(k,v){q.filters.push([k,'neq',v]);return b},async maybeSingle(){return {error:null,data:table==='creator_accounts'?{id:creator.accountId,auth_user_id:creator.userId,platform_creator_id:f.profile,requested_channels:['onlyfans']}:table==='creator_clone_links'?(f.linked?{clone_id:f.linked}:null):null}}};return b},async rpc(name,args){f.calls.push({name,args});return {data:f.profile,error:null}}};
+ f.db={from(table){const q={table,filters:[]};f.queries.push(q);const b={select(value){q.select=value;return b},eq(k,v){q.filters.push([k,v]);return b},neq(k,v){q.filters.push([k,'neq',v]);return b},async maybeSingle(){return {error:null,data:table==='creator_accounts'?{id:f.creator.accountId,auth_user_id:f.creator.userId,platform_creator_id:f.profile,requested_channels:f.requested||['onlyfans']}:table==='creator_clone_links'?(f.linked?{clone_id:f.linked}:null):table==='clones'&&f.linked?{id:f.linked,status:'active',business_username:'synthetic-telegram'}:null}}};return b},async rpc(name,args){f.calls.push({name,args});f.profile??='profile-'+f.creator.accountId;f.requested=args.p_channels;return {data:f.profile,error:null}}};
  f.read={async listAccounts(scope){f.calls.push({name:'accounts',scope});return {ok:true,data:f.accounts}},async listConversations(account,cursor){f.calls.push({name:'list',account,cursor});return {ok:true,data:{items:f.list,nextCursor:null}}},async getConversation(account,id){f.calls.push({name:'detail',account,id});return {ok:true,data:f.detail}}};
  f.connection={async enroll(command){f.calls.push({name:'enroll',command});return {ok:true,data:{id:'request-1',status:'pending',accountId:null,error:null,expiresAt:new Date(Date.now()+3600000).toISOString()}}},async enrollments(){return{ok:true,data:[]}},async get(account){f.calls.push({name:'connection-get',account});return {ok:true,data:{accountId:account}}},async command(account,command){f.calls.push({name:'command',account,command});return {ok:true,ack:{ok:true}}}};
  f.SignInBackendError=class extends Error{constructor(status,message){super(message);this.status=status}};
@@ -134,7 +134,30 @@ async function main(){
   const authenticated=path=>request(path,undefined,{cookie:'creator_session=real-creator-cookie'});
   assert.equal((await m.middleware(authenticated('/creator/platforms'))).status,200);assert.equal((await m.middleware(authenticated('/creator/onlyfans/inbox'))).status,200);assert.equal((await m.middleware(authenticated('/creator/edit'))).status,307);
   assert.equal((await m.middleware(authenticated('/creator-auth/platforms'))).status,200);assert.equal((await m.middleware(authenticated('/creator-auth/onlyfans/accounts'))).status,200);
-  console.log('PASS creator platforms: authenticated sign-in/frame/confirmation, private capture context, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, canonical profile, forged/foreign account refusal, no creator activation, read-only owned history, exact middleware routes.');
+  // New identities receive the same optional capability, without a creator roster or provider account.
+  const actors=new Set();
+  for(const kind of ['new-standalone','new-agency-creator','existing-telegram']){
+    f.creator={accountId:kind+'-account',userId:kind+'-user',creatorName:kind,readOnly:false,onboarded:false,cloneIds:[]};
+    f.profile=kind==='existing-telegram'?'existing-telegram-profile':null;f.linked=f.profile;
+    f.requested=kind==='existing-telegram'?['telegram']:[];f.accounts=[];f.calls=[];f.queries=[];
+    const beforeRead=await m.server.platformSnapshot(f.creator);
+    assert.deepEqual(beforeRead.requested,f.requested);assert.deepEqual(beforeRead.onlyfans.accounts,[]);
+    assert.equal(beforeRead.onlyfans.status,'ready');assert.equal(f.calls.some(c=>c.name==='setup_creator_platforms'||c.name==='enroll'||c.name==='signin-start'),false,'Reading a creator page must not connect or migrate them');
+    assert.equal(beforeRead.telegram.configured,kind==='existing-telegram');
+    const channels=kind==='existing-telegram'?['telegram','onlyfans']:['onlyfans'];
+    const chosen=await m.setup.POST(request('/creator-auth/platforms',{channels}));assert.equal(chosen.status,200);
+    assert.deepEqual(f.calls.find(c=>c.name==='setup_creator_platforms').args,{p_account_id:f.creator.accountId,p_user_id:f.creator.userId,p_channels:channels});
+    const chosenSnapshot=await chosen.json();assert.deepEqual(chosenSnapshot.onlyfans.accounts,[]);assert.deepEqual(chosenSnapshot.requested,channels);
+    assert.equal(chosenSnapshot.telegram.configured,kind==='existing-telegram');
+    for(const q of f.queries.filter(q=>q.table==='creator_accounts'))assert.deepEqual(q.filters,[['id',f.creator.accountId],['auth_user_id',f.creator.userId]]);
+    f.attempt={...f.attempt,phase:'waiting',enrollmentId:null,handle:null};
+    const nextStart=await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id});assert.equal(nextStart.status,200);
+    const call=f.calls.find(c=>c.name==='signin-start');assert.equal(call.scope.creatorId,f.profile);actors.add(call.scope.actor);
+    assert.equal(f.calls.some(c=>c.name==='enroll'||c.name==='command'),false,'Starting login is not account enrollment or delivery activation');
+    assert.equal((await m.account.GET(request('/'),accountContext('someone-elses-account'))).status,404);
+  }
+  assert.equal(actors.size,3,'Each creator has their own private sign-in actor');
+  console.log('PASS creator platforms: current/future and agency creator identities, opt-in without migration, Telegram preservation, owner-isolated sign-in, authenticated frame/confirmation, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, no creator activation, read-only owned history and middleware routes.');
  }finally{delete globalThis.__creatorPlatformsTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

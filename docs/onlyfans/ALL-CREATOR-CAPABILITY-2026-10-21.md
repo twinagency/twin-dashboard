@@ -1,0 +1,11 @@
+# All-creator capability and media checks, 21 October 2026
+
+Creator preparation and platform connection use the current verified creator account, including new standalone and agency signups. A creator chooses Telegram, OnlyFans or both. Reading Home or Platforms does not enrol an account. Adding OnlyFans preserves an existing Telegram identity. No current creator is assumed to own an OnlyFans account or an audience to import.
+
+The legacy catalogue deployment check previously selected only `briana-redd`. It now discovers all creator profiles, video records and preview settings with keyset pagination. Future profiles are discovered on the next run without a roster edit. Each creator's blur setting is preserved, with the existing product default where none is configured. A creator without videos is reported as `no_videos`, rather than a failed connection.
+
+The check keeps two concurrent video checks and a six-minute admission budget. It reports failures by creator and media ID. An interrupted or incomplete audit exits unsuccessfully and never reports unchecked media as healthy. The complete private metadata report is saved at `/tmp/catalogue-preview-audit.json`; logs contain bounded progress and summary output, without original storage paths, signed URLs or credentials. `--inventory-only` discovers the roster without reading source video bytes or claiming playback verification.
+
+Regression coverage exercises more than 1,000 video records, server page caps, a creator added after the first audit, empty creators, creator-specific blur/defaults, failures at the tail of pagination, unknown ownership and interrupted/unavailable inventory. HTTP and disposable PostgreSQL checks cover new standalone/agency creators, explicit platform choice, a paused neutral profile, stable ownership, Telegram preservation, private sign-in actors and absence of automatic enrolment/delivery activation.
+
+Focused audit and creator-route tests and TypeScript passed locally. CI, live inventory and release results are recorded on the pull request. No database migration or creator-data change is part of this work. Existing damaged catalogue sources remain reported. The earlier native-media activation hold and real authorised-account provider/purchase acceptance remain separate outstanding items.
