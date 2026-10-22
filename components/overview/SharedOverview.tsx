@@ -113,7 +113,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
       {selected ? <div className={styles.selectedPortrait}><Portrait key={selected.id} creator={selected} /></div> : <div className={styles.creatorDisplay}>
       <div className={styles.creatorHeading}><span className={styles.creatorCount}><Users size={16} />{count(creators.length)} creators</span><Link href={creatorsHref} className={styles.viewAll}>View all<ArrowRight size={14} /></Link></div>
       <nav className={styles.portraits} aria-label="Creator dashboards" tabIndex={0}>
-        {profileCreators.map(creator => <button type="button" key={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-busy={switching && openingCreator === creator.id} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span>{switching && openingCreator === creator.id && <span data-navigation-pending role="status" aria-label="Opening creator" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>)}
+        {profileCreators.map(creator => <button type="button" key={creator.id} data-overview-creator={creator.id} disabled={switching} onClick={() => void chooseCreator(creator.id)} className={`${styles.creatorShortcut} creator-name`} aria-busy={switching && openingCreator === creator.id} aria-label={`Open ${creator.name} dashboard`}><span className={styles.portrait}><Portrait creator={creator} /></span><span>{creator.name}</span>{switching && openingCreator === creator.id && <span data-navigation-pending role="status" aria-label="Opening creator" className="navigation-link-pending"><span aria-hidden="true" /></span>}</button>)}
       </nav></div>}
     </section>
     {switchError && <div className={styles.error} role="alert">{switchError}</div>}
@@ -135,4 +135,5 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     <Dialog open={dateOpen} onOpenChange={setDateOpen}><DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Custom date range</DialogTitle></DialogHeader><form className={styles.dateForm} onSubmit={applyDates}><label>From<input aria-label="Start date" type="date" required value={draft.start} max={draft.end || undefined} onChange={e => setDraft(value => ({ ...value, start: e.target.value }))} /></label><label>To<input aria-label="End date" type="date" required value={draft.end} min={draft.start || undefined} onChange={e => setDraft(value => ({ ...value, end: e.target.value }))} /></label>{dateError && <p role="alert">{dateError}</p>}<button type="submit">Apply dates</button></form></DialogContent></Dialog>
   </div>;
 }
+
 

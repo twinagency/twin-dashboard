@@ -52,6 +52,7 @@ jobs:
 
       - name: Live dashboard overview data and interaction checks
         run: |
+          node scripts/check-live-overview-contract.cjs
           node --import tsx scripts/check-overview-loading.cjs
           node --import tsx scripts/check-overview-recent.cjs
           node --import tsx scripts/check-overview-wallet.cjs
@@ -75,6 +76,16 @@ jobs:
           node scripts/check-creator-platforms.cjs
           node scripts/check-creator-platforms-ui.mjs
           node scripts/check-creator-sign-in-ui.mjs
+
+      - name: Build isolated agency trial
+        run: node scripts/build-agency-trial.cjs
+
+      - name: Agency trial review file
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-agency-trial
+          path: test-results/agency-trial/index.html
+          retention-days: 7
 
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs
@@ -202,4 +213,5 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-agency-team-onboarding.sql
+
 
