@@ -12,6 +12,7 @@ const CLONES = Object.freeze([
   "64d9532d-aac9-4e60-a48c-a3e5c53bb00a", // Johnny Coco (@johnnycocox)
   "3484f7d9-0cda-4f52-84de-e104c238ce5e", // Trashy (@trashybagqueen)
   "7c2e9452-1d4e-475c-86ef-07a797f52ce5", // Olivia Jade
+  "7626a96d-809e-47f1-b96b-d2e3bc583328", // Amber Richardson (advoree)
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }

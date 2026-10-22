@@ -62,7 +62,7 @@ async function main() {
     assert(slots.every(p => p.id === 'profile-' + overviewId || ownPhotos.some(own => own.id === p.id)), 'Overview photos must belong to this creator');
     if (overviewId === 'e0464c19-d5b7-4154-ba46-a60a2ed2a8a3' && !ownPhotos.length) assert(!overview.presentation.hero && !overview.presentation.library.length, 'A creator without photos must use the honest empty state');
     // Newly assigned creators use their existing portraits until showcase photos are reviewed.
-    else if (['64d9532d-aac9-4e60-a48c-a3e5c53bb00a', '3484f7d9-0cda-4f52-84de-e104c238ce5e', '7c2e9452-1d4e-475c-86ef-07a797f52ce5'].includes(overviewId)) assert(!overview.presentation.hero && !overview.presentation.library.length, 'New creator must not display unreviewed showcase photos');
+    else if (['64d9532d-aac9-4e60-a48c-a3e5c53bb00a', '3484f7d9-0cda-4f52-84de-e104c238ce5e', '7c2e9452-1d4e-475c-86ef-07a797f52ce5', '7626a96d-809e-47f1-b96b-d2e3bc583328'].includes(overviewId)) assert(!overview.presentation.hero && !overview.presentation.library.length, 'New creator must not display unreviewed showcase photos');
     else assert(overview.presentation.hero && overview.presentation.library.length === 3, 'Reviewed creator photos must be available');
     const fanCountResponse = await request(live.url + '/rest/v1/users?select=id&clone_id=eq.' + overviewId + '&or=(is_test.is.null,is_test.eq.false)', {method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
     assert(fanCountResponse.ok && Number(fanCountResponse.headers.get('content-range')?.split('/')[1]) === overview.audience.total, 'Overview must show all recorded fans excluding test records');
@@ -77,7 +77,7 @@ async function main() {
   assert((await page('/api/creator-overview?clone='+outside)).status === 403, 'Overview must reject an unassigned creator');
   assert((await page('/api/creator-overview/photo?clone='+outside+'&slot=hero')).status === 403, 'Portrait endpoint must reject an unassigned creator');
   assert((await page('/api/creator-overview/photo?clone='+CLONES[0]+'&slot=unreviewed')).status === 404, 'Portrait endpoint must reject arbitrary media slots');
-  checks.push('All nine creator Overviews, unique owned photos, all-time fans and portrait isolation verified live');
+  checks.push('All ten creator Overviews, unique owned photos, all-time fans and portrait isolation verified live');
   const agencyResponse = await page('/api/creator-overview');
   assert(agencyResponse.ok, 'Agency overview data must load');
   const agency = await agencyResponse.json();
