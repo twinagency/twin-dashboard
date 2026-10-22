@@ -50,6 +50,7 @@ try{
   await page.setViewportSize({width,height:900});
   const strip=page.getByRole('navigation',{name:'Creator dashboards'});
   assert.equal(await strip.getByRole('button').count(),clones.length,'Every authorized creator remains in the strip');
+  assert.deepEqual((await strip.locator('[data-overview-creator]').evaluateAll(buttons=>buttons.map(button=>button.dataset.overviewCreator))).sort(),clones.map(c=>c.id).sort(),'Creator identity markers match the actual shared Overview buttons');
   const photos=await strip.locator('img').evaluateAll(images=>images.map(image=>{const rect=image.getBoundingClientRect(),parent=image.parentElement.getBoundingClientRect();return {height:rect.height,parentHeight:parent.height,loaded:image.complete&&image.naturalWidth>0,display:getComputedStyle(image.closest('button')).display}}));
   assert.ok(photos.every(p=>p.display!=='none'),'Responsive rules must not hide creators');
   assert.ok(photos.every(p=>p.height>=p.parentHeight-5),'Photos fill their circular frame instead of showing only a top slice');
@@ -75,4 +76,5 @@ try{
  await page.getByRole('button',{name:'All creators overview',exact:true}).click();await page.getByRole('button',{name:'Open Fixture Creator B dashboard',exact:true}).click();await page.getByRole('heading',{name:clones[1].name,exact:true}).waitFor();assert.deepEqual(errors,[]);
  console.log(brand+' shared overview passed: API totals, six KPIs, dates, currency, shared-header currency and scope picker, detailed reporting, mobile widths, failed refresh and empty ledger.');
 }finally{await browser.close();server.close()}
+
 
