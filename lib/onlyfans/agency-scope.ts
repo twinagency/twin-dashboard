@@ -42,8 +42,15 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
   // Decode once for the route policy without allowing encoded path separators.
   if (/%(?:2f|5c)/i.test(path)) return false;
   try { path = decodeURIComponent(path); } catch { return false; }
-  if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:accounts|inbox|content|sales|settings|campaigns))?\/?$/.test(path)) return true;
+  if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:accounts|inbox|content|sales|settings|campaigns|launch(?:\/(?:automation|memory))?))?\/?$/.test(path)) return true;
   const api = /^\/api\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}\/(?:conversations(?:\/[A-Za-z0-9._:-]{1,64}(?:\/handover)?)?|workspace\/(?:content|sales|settings)))?\/?$/.test(path);
   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
+  // Launch routes have a section before /accounts. Whitelist delivered routes
+  // and their methods explicitly; future launch endpoints remain default-deny.
+  const launchRead = /^\/api\/onlyfans-launch\/(?:abc\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:access|readiness|purchases|personality)|memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans(?:\/[A-Za-z0-9._:-]{1,64})?|automation\/accounts\/[A-Za-z0-9._:-]{1,64}\/follow-ups)\/?$/.test(path);
+  const launchPost = /^\/api\/onlyfans-launch\/(?:abc\/accounts\/[A-Za-z0-9._:-]{1,64}\/command|automation\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:follow-ups|emergency-stop))\/?$/.test(path);
+  const launchPatch = /^\/api\/onlyfans-launch\/memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans\/[A-Za-z0-9._:-]{1,64}\/?$/.test(path);
+  if ((launchRead && ["GET", "HEAD"].includes(method)) ||
+      (canManage && ((launchPost && method === "POST") || (launchPatch && method === "PATCH")))) return true;
   return (api && ["GET", "HEAD"].includes(method)) || (purpose && (["GET", "HEAD"].includes(method) || (method === "POST" && canManage)));
 }

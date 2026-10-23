@@ -127,6 +127,9 @@ jobs:
         run: |
           npm run test:onlyfans-offer-import
           npm run test:onlyfans-content-sync
+          npm run test:onlyfans-launch
+          npm run test:onlyfans-launch-b
+          npm run test:onlyfans-launch-access
           npm run test:onlyfans-browser-syntax
 
       - name: Build
