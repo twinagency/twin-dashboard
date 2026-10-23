@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredConfigurationBackend } from "@/lib/onlyfans/configuration-backend";
 import { CONFIGURATION_SCHEMA, canonicalConfiguration, validConfigurationRequest } from "@/lib/onlyfans/configuration";
+import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,8 +23,7 @@ export async function GET(_request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   const ctx = await requireOnlyFansRead({ agency: true, write: true }); if (ctx instanceof NextResponse) return ctx;
   if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
-  const expectedOrigin = `${request.nextUrl.protocol}//${request.headers.get("host")}`;
-  if (request.headers.get("origin") !== expectedOrigin || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
+  if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
     request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return refuse(403, "Save changes from this dashboard.");
   const accountId = requestId((await context.params).accountId);
   if (!accountId) return refuse(400, "That account reference is invalid.");

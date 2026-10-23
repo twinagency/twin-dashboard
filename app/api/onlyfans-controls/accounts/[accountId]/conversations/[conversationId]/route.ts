@@ -4,6 +4,7 @@ import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/
 import { configuredControlBackend } from "@/lib/onlyfans/controls-backend";
 import { CONTROL_SCHEMA, isControlAction } from "@/lib/onlyfans/controls";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
+import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -18,10 +19,9 @@ export async function POST(request: NextRequest, context: {
   const ctx = await requireOnlyFansRead({ agency: true, write: true });
   if (ctx instanceof NextResponse) return ctx;
   if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
-  // Next may canonicalize nextUrl's hostname to localhost. The HTTP Host is
-  // the browser-facing authority; do not trust a forwarded-host override.
-  const expectedOrigin = `${request.nextUrl.protocol}//${request.headers.get("host")}`;
-  if (request.headers.get("origin") !== expectedOrigin ||
+  // Behind the Apache proxy, nextUrl and Host are the internal upstream (http://127.0.0.1:3001),
+  // so the browser Origin is checked against the dashboard's canonical origin (lib/form-origin).
+  if (!trustedFormOrigin(request) ||
       ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
       request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") {
     return refuse(403, "This change must be requested from this dashboard.");
