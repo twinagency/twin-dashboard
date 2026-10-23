@@ -310,7 +310,7 @@ async function main() {
     assert.deepEqual(writes, [], "a submitted application must not accept onboarding mutations");
     const lockedUpload = await withDashboardAccess(null, () => uploadCreatorOnboarding(new NextRequest(origin + "/creator-auth/upload", {
       method: "POST",
-      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
+      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin, accept: "application/json" },
       body: invalidUploadForm,
     })));
     assert.equal(lockedUpload.status, 409);
