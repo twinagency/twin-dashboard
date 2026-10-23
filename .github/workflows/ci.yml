@@ -87,6 +87,19 @@ jobs:
           path: test-results/agency-trial/index.html
           retention-days: 7
 
+      - name: Complete CRM demonstration and offline safety checks
+        run: |
+          npm run demo:crm
+          npm run test:crm-demo
+          node scripts/check-crm-demo-ui.mjs
+
+      - name: CRM demonstration review file
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-crm-demonstration
+          path: test-results/crm-demo/
+          retention-days: 7
+
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs
 

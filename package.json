@@ -97,7 +97,11 @@
     "test:onlyfans-media": "node --import tsx scripts/check-onlyfans-vault-media.ts && node scripts/check-onlyfans-vault-origin.cjs",
     "test:onlyfans-agency": "node --import tsx scripts/check-onlyfans-agency.ts",
     "test:onlyfans-agency-http": "node --import tsx scripts/check-onlyfans-agency-http.ts",
-    "test:catalogue-audit": "node scripts/check-catalogue-preview-audit.cjs"
+    "test:catalogue-audit": "node scripts/check-catalogue-preview-audit.cjs",
+    "demo:crm": "node scripts/build-crm-demo.cjs",
+    "prebuild": "npm run demo:crm",
+    "test:crm-demo": "node --import tsx scripts/check-crm-demo.ts",
+    "predev": "npm run demo:crm"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -27,6 +27,7 @@ export type SharedOverviewConfig = {
 };
 type Range = { start: string; end: string };
 type Props = SharedOverviewConfig & {
+  channelLabel?: string;
   cloneId?: string | null; data: FullData | null; loading: boolean; error: string | null;
   period: Period; range: Range | null; currency: string;
   money: (stars: number, cloneId?: string | null) => string;
@@ -48,7 +49,7 @@ function Portrait({ creator }: { creator: SharedOverviewCreator }) {
 
 /** Shared presentation only. RevenueDashboard retains each deployment's reader,
  * revenue projection, currency rates, refresh lifecycle and report state. */
-export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, onSelectCreator, cloneId, data, loading, error, period, range, currency, money, onPeriod, onRange, onRefresh, onDetails }: Props) {
+export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, onSelectCreator, cloneId, data, loading, error, period, range, currency, money, onPeriod, onRange, onRefresh, onDetails, channelLabel = "Telegram" }: Props) {
   const router = useRouter();
   const { isAgency, agencyName } = useDashboardAccess();
   const brand = configuredBrand ?? (agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin");
@@ -123,8 +124,8 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     <section className={styles.metrics} aria-label="Earnings summary">{metrics.map(([label, value, meta, isMoney]) => <article key={label} className={styles.metric} data-overview-metric={label}><h3>{label}</h3><strong className={isMoney ? "money-value" : undefined}>{value}</strong><small>{meta}</small></article>)}</section>
     <div className={styles.mainGrid}>
       <section className={styles.panel} aria-label="Revenue performance"><header className={styles.panelHeading}><div><h2>Revenue performance</h2><p>{selected?.name ?? "All creators"} · {reportingWindow}</p></div></header>
-        <div className={styles.chartToolbar}><div className={styles.legend}><span />Telegram<strong className="money-value">{stats ? money(stats.stars) : loadingValue}</strong></div><div className={styles.chartOptions}>{!cloneId && chartCreators.length > 1 && <button type="button" aria-pressed={byCreator} onClick={() => setByCreator(value => !value)}>By creator</button>}<div role="group" aria-label="Chart type">{(["line", "bar"] as const).map(value => <button type="button" key={value} aria-pressed={chartType === value} onClick={() => setChartType(value)}>{value === "line" ? "Line" : "Bar"}</button>)}</div></div></div>
-        <div className={styles.chart} role="img" aria-label={`Telegram revenue for ${reportingWindow}`}>
+        <div className={styles.chartToolbar}><div className={styles.legend}><span />{channelLabel}<strong className="money-value">{stats ? money(stats.stars) : loadingValue}</strong></div><div className={styles.chartOptions}>{!cloneId && chartCreators.length > 1 && <button type="button" aria-pressed={byCreator} onClick={() => setByCreator(value => !value)}>By creator</button>}<div role="group" aria-label="Chart type">{(["line", "bar"] as const).map(value => <button type="button" key={value} aria-pressed={chartType === value} onClick={() => setChartType(value)}>{value === "line" ? "Line" : "Bar"}</button>)}</div></div></div>
+        <div className={styles.chart} role="img" aria-label={`${channelLabel} revenue for ${reportingWindow}`}>
           {!data ? <div className={styles.empty}>{loading ? "Loading earnings…" : "Earnings are unavailable. Use Refresh to try again."}</div> : chartRows.length ? <ResponsiveContainer width="100%" height="100%">{chartType === "line" ? <LineChart data={chartRows} margin={{ top: 12, right: 14, bottom: 5, left: 0 }}>{chartAxes}{byCreator && !cloneId ? chartCreators.map(c => <Line key={c.id} dataKey={c.id} stroke={c.color} dot={false} strokeWidth={2} isAnimationActive={false} />) : <Line dataKey="__total" stroke="var(--overview-accent)" dot={false} strokeWidth={2.5} isAnimationActive={false} />}</LineChart> : <BarChart data={chartRows} margin={{ top: 12, right: 14, bottom: 5, left: 0 }}>{chartAxes}{byCreator && !cloneId ? chartCreators.map(c => <Bar key={c.id} dataKey={c.id} stackId="creators" fill={c.color} isAnimationActive={false} />) : <Bar dataKey="__total" fill="var(--overview-accent)" radius={[3, 3, 0, 0]} isAnimationActive={false} />}</BarChart>}</ResponsiveContainer> : <div className={styles.empty}>No revenue recorded in this period.</div>}
         </div>{byCreator && !cloneId && <div className={styles.creatorLegend}>{chartCreators.map(c => <span key={c.id}><i style={{ background: c.color }} />{c.name}</span>)}</div>}
       </section>
@@ -135,5 +136,6 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     <Dialog open={dateOpen} onOpenChange={setDateOpen}><DialogContent className="max-w-sm"><DialogHeader><DialogTitle>Custom date range</DialogTitle></DialogHeader><form className={styles.dateForm} onSubmit={applyDates}><label>From<input aria-label="Start date" type="date" required value={draft.start} max={draft.end || undefined} onChange={e => setDraft(value => ({ ...value, start: e.target.value }))} /></label><label>To<input aria-label="End date" type="date" required value={draft.end} min={draft.start || undefined} onChange={e => setDraft(value => ({ ...value, end: e.target.value }))} /></label>{dateError && <p role="alert">{dateError}</p>}<button type="submit">Apply dates</button></form></DialogContent></Dialog>
   </div>;
 }
+
 
 

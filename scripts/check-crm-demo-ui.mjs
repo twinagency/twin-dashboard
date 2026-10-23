@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import http from 'node:http';
+import { chromium } from 'playwright';
+const html=fs.readFileSync('test-results/crm-demo/index.html');
+const server=http.createServer((req,res)=>{res.setHeader('Content-Type','text/html');res.end(html)});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const url=`http://127.0.0.1:${server.address().port}/`;
+const browser=await chromium.launch({headless:true});
+const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[],calls=[];
+page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.url().includes('/api/')||!r.url().startsWith(url))calls.push(r.url())});
+const nav=name=>page.getByRole('navigation',{name:'Main navigation'}).getByRole('button',{name,exact:true}).click();
+const close=()=>page.getByRole('dialog').getByRole('button',{name:'Close',exact:true}).click();
+try{
+ await page.goto(url);await page.getByRole('heading',{name:'Overview',exact:true}).waitFor();await page.getByRole('button',{name:'Close guide',exact:true}).click();
+ const sections=[['Creators','Creators'],['Inbox','Inbox'],['Fan management','Fan management'],['Staff workflow','Staff workflow'],['Requests & approvals 3','Requests & approvals'],['Automation','Automation centre'],['Playbooks','Scripts & playbooks'],['Campaigns','Campaigns & follow-ups'],['Content library','Content library'],['Reports','Agency reporting'],['Commissions','Commissions & statements'],['Team & access','Team & access'],['Activity 2','Activity & notifications'],['Data management','Data management'],['Agency settings','Agency settings']];
+ for(const [name,title] of sections){await nav(name);await page.getByRole('heading',{name:title,exact:true}).waitFor();assert(await page.locator('main').innerText(),title);}
+ await nav('Staff workflow');await page.getByRole('button',{name:'Create task',exact:true}).click();await page.locator('input[name=title]').fill('Presentation follow-up');await page.locator('input[name=due]').fill('2026-11-01T18:00');await page.getByRole('dialog').getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('heading',{name:'Presentation follow-up',exact:true}).waitFor();
+ await nav('Inbox');await page.getByRole('button',{name:'Take over',exact:true}).click();await page.getByRole('textbox',{name:'Manual message',exact:true}).fill('Sample operator reply');await page.getByRole('button',{name:'Send as creator',exact:true}).click();await page.getByText('Sample operator reply',{exact:true}).first().waitFor();await page.getByRole('button',{name:'Hand back to automation',exact:true}).click();await page.getByRole('button',{name:'Play autonomous sale',exact:true}).click();await page.getByText('Perfect, just picked it up. Thank you!',{exact:true}).first().waitFor();
+ await page.getByRole('button',{name:'Fan profile & notes',exact:true}).click();await page.getByRole('button',{name:'Add note',exact:true}).click();await page.locator('textarea[name=text]').fill('Presentation internal note');await page.getByRole('dialog').last().getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('tab',{name:'Notes',exact:true}).click();await page.getByText('Presentation internal note',{exact:true}).waitFor();await close();
+ await nav('Content library');await page.getByRole('button',{name:'Voice-note draft',exact:true}).click();await page.locator('input[name=title]').fill('Weekend voice draft');await page.locator('textarea[name=script]').fill('Hope your weekend is going well!');await page.getByRole('button',{name:'Send for approval',exact:true}).click();await page.getByRole('heading',{name:'Weekend voice draft',exact:true}).waitFor();
+ await nav('Campaigns');await page.getByRole('button',{name:'Create campaign',exact:true}).click();await page.getByRole('dialog').getByRole('textbox').first().fill('Presentation campaign');await page.getByRole('textbox',{name:'Step 1 message',exact:true}).fill('Hey {{fan}}, your weekend update is ready.');await page.getByRole('button',{name:'Add follow-up step',exact:true}).click();await page.getByRole('textbox',{name:'Step 2 message',exact:true}).fill('Would you still like your update?');await page.getByRole('button',{name:'Save draft',exact:true}).click();await page.getByRole('heading',{name:'Presentation campaign',exact:true}).waitFor();
+ await page.getByLabel('Demonstration role').selectOption('viewer');await nav('Creators');assert.equal(await page.getByRole('button',{name:'Open creator',exact:false}).count(),1);await nav('Staff workflow');assert.equal(await page.getByRole('button',{name:'Create task',exact:true}).isEnabled(),false);await nav('Team & access');await page.getByRole('heading',{name:'Agency owner access required',exact:true}).waitFor();
+ await page.getByLabel('Demonstration role').selectOption('owner');await page.getByRole('button',{name:'Reset demonstration',exact:true}).click();await page.getByRole('button',{name:'Reset sample data',exact:true}).click();await page.getByRole('heading',{name:'Overview',exact:true}).waitFor();
+ await page.setViewportSize({width:390,height:844});
+ for(const [name,title] of sections){await page.getByRole('button',{name:'Open navigation',exact:true}).click();await nav(name);await page.getByRole('heading',{name:title,exact:true}).waitFor();assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),`Mobile overflow: ${name}`);}
+ await page.getByLabel('Preview state').selectOption('error');await page.getByRole('button',{name:'Retry',exact:true}).click();await page.getByRole('heading',{name:'Agency settings',exact:true}).waitFor();
+ fs.mkdirSync('test-results/crm-demo/screenshots',{recursive:true});await page.screenshot({path:'test-results/crm-demo/screenshots/mobile-settings.png',fullPage:true});
+ assert.deepEqual(errors,[]);assert.deepEqual(calls,[]);console.log('CRM demo browser checks passed: 16 screens, shared inbox actions, connected sale, task/note/voice/campaign forms, read-only access, recovery and mobile widths.');
+}finally{await browser.close();await new Promise(r=>server.close(r))}

@@ -14,3 +14,6 @@ preview/onlyfans/shots/
 archive/
 DOCKER.md
 .media-repair-state/
+
+# Rebuilt from shared components by demo:crm before dev, CI and production builds.
+lib/agency-demo/compiled.json
