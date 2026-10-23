@@ -121,6 +121,14 @@ jobs:
       - name: Type check
         run: npx tsc --noEmit
 
+      # Offline contracts and browser-check syntax only. The browser checks themselves run in the
+      # isolated API/worker/dashboard integration harness (ONLYFANS_TEST_OFFER_IMPORT=1), not here.
+      - name: OnlyFans offer import and content sync contracts
+        run: |
+          npm run test:onlyfans-offer-import
+          npm run test:onlyfans-content-sync
+          npm run test:onlyfans-browser-syntax
+
       - name: Build
         run: npm run build
         env:

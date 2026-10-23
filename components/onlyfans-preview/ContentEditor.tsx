@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { displayContentPrice, parseContentPrice, type ContentPatch } from "@/lib/onlyfans/content";
 import { parseContentItemV2 as parseContentItem, parseContentAckV2 as parseContentAck, validContentRequestV2 as validContentRequest,
   type ContentItemV2 as ContentItem, type ContentRequestV2 as ContentRequest } from "@/lib/onlyfans/content-v2";
+import type { SyncDraft } from "@/lib/onlyfans/content-sync";
+import { syncCall, type SyncReply } from "@/lib/onlyfans/content-sync-client";
+import ContentSyncDraft from "./ContentSyncDraft";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -25,11 +28,23 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
   const [notice, setNotice] = useState("");
   const [retry, setRetry] = useState<ContentRequest | null>(null);
   const [override, setOverride] = useState(false);
+  const [syncDraft, setSyncDraft] = useState<SyncDraft | null>(null);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const endpoint = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/items/${encodeURIComponent(itemId)}?contract=v2`;
   const clear = () => { setData(null); setLabel(""); setDescription(""); setPrice(""); setEnabled(false); setRetry(null); };
 
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  // The sync draft that created this item, if any. Lookup problems never block the existing editor.
+  const findDraft = useCallback(async () => {
+    let after: string | null = null;
+    for (let page = 0; page < 4; page++) {
+      const reply: SyncReply<{ items: SyncDraft[]; nextCursor: string | null }> = await syncCall<{ items: SyncDraft[]; nextCursor: string | null }>(accountId, "/drafts?limit=50" + (after ? `&after=${encodeURIComponent(after)}` : ""));
+      if (!active.current || reply.kind !== "ok") return;
+      const hit = reply.data.items.find(draft => draft.itemId === itemId);
+      if (hit) { setSyncDraft(hit); return; }
+      after = reply.data.nextCursor; if (!after) return;
+    }
+  }, [accountId, itemId]);
   const read = useCallback(async () => {
     try {
       const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error" });
@@ -43,9 +58,10 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
       if (!next) { setData(null); setNotice("This catalogue item could not be refreshed. Try again."); return false; }
       setData(next); setLabel(next.label ?? ""); setDescription(next.description ?? ""); setDescriptionEdited(false);
       setPrice(next.priceCents === null ? "" : displayContentPrice(next.priceCents)); setEnabled(next.enabled); setOverride(false);
+      void findDraft();
       return true;
     } catch { if (active.current) { setData(null); setNotice("This catalogue item could not be refreshed. Try again."); } return false; }
-  }, [accountId, endpoint, itemId, router]);
+  }, [accountId, endpoint, findDraft, itemId, router]);
 
   async function refresh() {
     setBusy(true); setNotice("Loading current catalogue details…");
@@ -64,7 +80,9 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
   const source = data?.provenance ?? null;
   // A fixed imported price may only change with an explicit operator override.
   const needsOverride = !!source && patch.priceCents !== undefined && patch.priceCents !== source.sourcePriceCents;
-  const request: ContentRequest | null = data && Object.keys(patch).length && validPrice && (!needsOverride || override) ? {
+  // Media that is not fully synced to OnlyFans can never be switched on from here.
+  const enableBlocked = !!syncDraft && !syncDraft.readiness.canEnable && !!data && !data.enabled;
+  const request: ContentRequest | null = data && Object.keys(patch).length && validPrice && (!needsOverride || override) && !(enableBlocked && patch.enabled === true) ? {
     patch, expectedRevision: data.revision, expectedFingerprint: data.fingerprint, acknowledgeOverride: needsOverride && override,
   } : null;
 
@@ -121,14 +139,16 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
             {data.descriptionTruncated ? <span className="mt-1 block text-xs text-muted">The full saved description exceeds this editor’s limit. Enter a complete replacement to change it.</span> : null}
           </label>
           {data.descriptionTruncated ? <button type="button" className="text-xs font-semibold text-accent" onClick={() => { setDescription(""); setDescriptionEdited(true); }}>Clear the saved description</button> : null}
-          <label className="block text-sm">Saved price (USD)
+          <label className="block text-sm">{data.pricingMode === "fixed" ? "Price for future messages (USD)" : "Saved price (USD)"}
             <input data-of-edit-content-price className={inputClass} inputMode="decimal" autoComplete="off" value={price} onChange={event => setPrice(event.target.value)} aria-invalid={!validPrice} />
-            <span className="mt-1 block text-xs text-muted">{data.isFreeTeaser ? "This item is a free teaser; its price must remain USD 0.00." : "Paid items: USD 3.00–200.00, with up to two decimal places."}</span>
+            <span className="mt-1 block text-xs text-muted">{data.isFreeTeaser ? "This item is a free teaser; its price must remain USD 0.00." : data.pricingMode === "fixed" ? "Fixed. Every future offer of this item uses this exact amount. USD 3.00–200.00, with up to two decimal places." : "Paid items: USD 3.00–200.00, with up to two decimal places."}</span>
           </label>
           {source ? <p className="text-sm" data-of-content-source>Price from selected OnlyFans offer: USD {displayContentPrice(source.sourcePriceCents)}{source.sourceAt ? `, sent ${new Date(source.sourceAt).toLocaleDateString()}` : ""}.
             {data.priceOverridden ? " The saved price is an operator override." : ""}{source.withdrawn ? " This draft was withdrawn." : ""}</p> : null}
           {needsOverride ? <label className="flex items-start gap-2 text-sm"><input data-of-edit-content-override type="checkbox" checked={override} onChange={event => setOverride(event.target.checked)} className="mt-1" /><span>Override the price from the selected OnlyFans offer</span></label> : null}
-          <label className="flex items-start gap-2 text-sm"><input data-of-edit-content-enabled type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} className="mt-1" /><span>Enabled in the catalogue</span></label>
+          <label className="flex items-start gap-2 text-sm"><input data-of-edit-content-enabled type="checkbox" checked={enabled} disabled={enableBlocked} onChange={event => setEnabled(event.target.checked)} className="mt-1" /><span>Enabled in the catalogue</span></label>
+          {enableBlocked ? <p className="text-sm" role="status" data-of-content-enable-blocked>This item can&apos;t be switched on until every file is synced to OnlyFans and nothing needs review.</p> : null}
+          {syncDraft ? <ContentSyncDraft accountId={accountId} draft={syncDraft} onChanged={() => void findDraft()} /> : null}
           <p className="text-xs text-muted">Saved changes apply to future eligible offers. Existing offers keep their recorded terms.</p>
           <button data-of-save-content type="submit" className={buttonClass} disabled={!request || !validContentRequest(request)}>Save catalogue item</button>
         </fieldset>

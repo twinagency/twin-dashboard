@@ -15,6 +15,7 @@ import ContentEditor from "./ContentEditor";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
 import VaultMediaPicker from "./VaultMediaPicker";
+import ContentSyncSave from "./ContentSyncSave";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -228,6 +229,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
         </fieldset>
       </form></details> : null}
       {!readOnly ? <div className="mt-4 rounded-xl border border-line p-4"><button type="button" className={`${buttonClass} min-h-11`} disabled={busy || !!retry} onClick={() => setPicker("upload")}>Upload photos and videos</button><p className="mt-2 text-xs text-muted">Add new files to the connected OnlyFans vault. You can also upload while preparing an item above.</p></div> : null}
+      <ContentSyncSave key={accountId} accountId={accountId} readOnly={readOnly} />
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
     {assetId && !readOnly && !denied ? <VaultMetadataEditor key={`${accountId}:${assetId}`} accountId={accountId} mediaId={assetId} onClose={() => setAssetId(null)} onChanged={organizationChanged}/> : null}

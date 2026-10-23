@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createOfferImportBackend } from "../lib/onlyfans/offer-import-backend";
 import { IMPORT_HEADER, IMPORT_SCHEMA, parseCandidate, parseCandidatePage, parseDraftResults, parseJobResponse,
   validCancelRequest, validDraft, validDraftRequest, validJobRequest, usd } from "../lib/onlyfans/offer-import";
+import { dispatchImport, type ImportCall } from "../lib/onlyfans/offer-import-route";
 import { CONTENT_SCHEMA, parseContentItem } from "../lib/onlyfans/content";
 import { CONTENT_V2_SCHEMA, parseContentItemV2, validContentRequestV2, parseContentAckV2 } from "../lib/onlyfans/content-v2";
 
@@ -78,6 +79,42 @@ async function main() {
   reply = () => new Response(JSON.stringify({ ok: false, error: "That command was already used with different details." }), { status: 409 });
   const refused = await backend.drafts(ACCOUNT, [{ ...draft, commandKey: keys[0] }], "op-session:" + "b".repeat(64));
   assert(!refused.ok && refused.outcome === "refused");
+
+
+  // Route dispatch (the extracted proxy module): read-only writes refused, identity server-derived, exact retries, strict bodies.
+  const wire: { url: string; method: string; body: Record<string, unknown> | null }[] = [];
+  let routeReply: () => Response = () => Response.json(envelope({ job }));
+  const routeBackend = createOfferImportBackend({ baseUrl: "http://backend.invalid", token: "t", fetchImpl: (async (url: string, init: RequestInit) => {
+    wire.push({ url: String(url), method: String(init.method), body: typeof init.body === "string" ? JSON.parse(init.body) : null }); return routeReply(); }) as typeof fetch });
+  const operator = "op-session:" + "b".repeat(64);
+  const call = (extra: Partial<ImportCall>) => dispatchImport({ method: "POST", accountId: ACCOUNT, path: ["jobs"], after: null, actor: operator, canManage: true, ...extra }, routeBackend);
+  const jobBody = { requestId: JOB, mode: "inventory", sources: null };
+  const wrote = wire.length;
+  for (const path of [["jobs"], ["jobs", JOB, "cancel"], ["drafts"]])
+    assert.equal((await call({ path, canManage: false, body: path[0] === "drafts" ? { drafts: [draft] } : path.length === 3 ? { expectedRevision: 1 } : jobBody })).status, 403);
+  assert.equal((await call({ actor: null, body: jobBody })).status, 403);
+  assert.equal(wire.length, wrote, "a read-only or anonymous write never reaches the backend");
+  assert.equal((await call({ body: jobBody })).status, 200);
+  assert.deepEqual(Object.keys(wire.at(-1)!.body!).sort(), ["actor", "commandKey", "mode", "sources"]);
+  assert.equal(wire.at(-1)!.body!.actor, operator);
+  const firstKey = wire.at(-1)!.body!.commandKey;
+  await call({ body: jobBody }); assert.equal(wire.at(-1)!.body!.commandKey, firstKey, "an exact retry resolves to the same command");
+  await call({ body: { ...jobBody, requestId: OBS } }); assert.notEqual(wire.at(-1)!.body!.commandKey, firstKey);
+  const guarded = wire.length;
+  for (const body of [{ ...jobBody, actor: "browser" }, { ...jobBody, tenant: "t" }, { mode: "inventory", sources: null }, { ...jobBody, mode: "posts" }]) assert.equal((await call({ body })).status, 400);
+  assert.equal((await call({ path: ["jobs", "not-a-job", "cancel"], body: { expectedRevision: 1 } })).status, 404);
+  assert.equal((await call({ path: ["drafts"], body: { drafts: [{ ...draft, priceCents: 100 }] } })).status, 400);
+  assert.equal((await call({ path: ["status"], body: {} })).status, 404);
+  assert.equal(wire.length, guarded, "invalid commands never reach the backend");
+  routeReply = () => Response.json(envelope({ results: [results[0]], created: 1, failed: 0 }));
+  const dispatched = await call({ path: ["drafts"], body: { drafts: [draft] } });
+  assert.equal(dispatched.status, 502, "a reply that does not match the request is reported as unconfirmed, never as created");
+  assert.equal((dispatched.body as { outcome: string }).outcome, "unconfirmed");
+  const sentDraft = (wire.at(-1)!.body!.drafts as Record<string, unknown>[])[0];
+  assert.deepEqual(Object.keys(sentDraft).sort(), ["commandKey", "description", "descriptionApproved", "expectedFingerprint", "label", "observationId", "reuseConfirmed"]);
+  routeReply = () => Response.json(envelope({ job }));
+  assert.equal((await call({ method: "GET", path: ["jobs", JOB, "candidates"], after: "not-a-hash", canManage: false })).status, 400);
+  assert.equal((await call({ method: "GET", path: ["jobs", JOB], canManage: false })).status, 200, "read-only sessions can read");
 
   // Content v2 adds provenance without changing v1.
   const item = { revision: 1, fingerprint: "a".repeat(64), label: "Two photos", labelTruncated: false, description: "Approved.",

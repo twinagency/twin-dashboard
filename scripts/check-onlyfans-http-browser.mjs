@@ -8,6 +8,8 @@ import { checkVaultPreviews } from "./check-onlyfans-vault-previews-browser.mjs"
 import { checkContent } from "./check-onlyfans-content-browser.mjs";
 import { checkOperator } from "./check-onlyfans-operator-browser.mjs";
 import { checkConnections } from "./check-onlyfans-connections-browser.mjs";
+import { checkOfferImport } from "./check-onlyfans-offer-import-browser.mjs";
+import { checkContentSync } from "./check-onlyfans-content-sync-browser.mjs";
 
 const require = createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
   ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "package.json") : new URL("../preview/onlyfans-integration/package.json", import.meta.url));
@@ -119,6 +121,7 @@ try {
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
       if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultPreviews(page, context, origin); await checkVaultOrganization(page, context, origin); }
+      if (process.env.ONLYFANS_TEST_OFFER_IMPORT === "1") { await checkOfferImport(page, context, origin); await checkContentSync(page, context, origin); await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "networkidle" }); }
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
       await page.waitForFunction(() => document.querySelectorAll("[data-of-catalog-item]").length === 7, undefined, { timeout: 15000 });

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { inputCls } from "@/components/clone/fields";
+import { useRouter } from "next/navigation";
+import ContentSyncStatus from "./ContentSyncStatus";
 import { MAX_DRAFTS, MAX_REFRESH_SOURCES, REASON_LABELS, STATUS_LABELS, usd,
   type CandidateDetail, type CandidateSummary, type DraftInput, type DraftResult, type ImportJob, type Observation } from "@/lib/onlyfans/offer-import";
 
@@ -21,7 +23,8 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
   const [label, setLabel] = useState(""), [description, setDescription] = useState("");
   const [reusable, setReusable] = useState(false), [approved, setApproved] = useState(false);
   const [queue, setQueue] = useState<Reviewed[]>([]), [results, setResults] = useState<DraftResult[]>([]);
-  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retry, setRetry] = useState<Pending | null>(null);
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retry, setRetry] = useState<Pending | null>(null), [denied, setDenied] = useState(false);
+  const router = useRouter();
   const generation = useRef(0), active = useRef(true);
   useEffect(() => { active.current = true; return () => { active.current = false; generation.current++; }; }, []);
 
@@ -31,9 +34,14 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
       : { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body), signal: AbortSignal.timeout(20000) });
     if (!active.current || mine !== generation.current) return null;
+    if ([401, 403].includes(response.status)) {
+      // A lost session must not leave private offers on screen.
+      generation.current++; setDenied(true); setJob(null); setRefreshJob(null); setItems([]); setNext(null); setDetail(null); setQueue([]); setResults([]); setRetry(null); setNotice("");
+      router.refresh(); return null;
+    }
     const value = await response.json().catch(() => null) as { ok?: boolean; data?: unknown; error?: string; outcome?: string } | null;
     return { status: response.status, value };
-  }, [base]);
+  }, [base, router]);
 
   const loadCandidates = useCallback(async (jobId: string, after: string | null) => {
     const result = await call(`/jobs/${jobId}/candidates` + (after ? `?after=${after}` : ""));
@@ -85,10 +93,30 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
     } finally { setBusy(false); }
   }
 
-  async function scan() {
-    const data = await command("/jobs", { requestId: crypto.randomUUID(), mode: "inventory", sources: null }) as ImportJob | null;
-    if (data) { setJob(data); setItems([]); setDetail(null); }
+  /** Applies a confirmed reply. Used for first attempts and for exact retries, so both end in the same state. */
+  async function settle(path: string, body: unknown, data: unknown) {
+    if (path === "/jobs" && (body as { mode?: string }).mode === "inventory") {
+      const started = data as ImportJob;
+      setJob(started); setItems([]); setDetail(null);
+      // A replayed scan can already be finished; its groups are read now instead of waiting for a poll.
+      if (!["pending", "running"].includes(started.status)) await loadCandidates(started.jobId, null);
+    } else if (path === "/jobs") setRefreshJob(data as ImportJob);
+    else if (path.endsWith("/cancel")) { const stopped = data as ImportJob; (stopped.mode === "inventory" ? setJob : setRefreshJob)(stopped); }
+    else if (path === "/drafts") {
+      const sent = (body as { drafts: DraftInput[] }).drafts, outcome = (data as { results: DraftResult[] }).results;
+      setResults(outcome);
+      // Keep exactly the drafts that were not created, matched by the source observation each request named.
+      const created = new Set(outcome.flatMap((r, i) => r.ok ? [sent[i].observationId] : []));
+      setQueue(previous => previous.filter(q => !created.has(q.observationId)));
+      if (job) await loadCandidates(job.jobId, null);
+      if (created.size) router.refresh();
+    }
   }
+  async function run(path: string, body: unknown) {
+    const data = await command(path, body);
+    if (data) await settle(path, body, data);
+  }
+  const scan = () => run("/jobs", { requestId: crypto.randomUUID(), mode: "inventory", sources: null });
 
   async function open(candidate: string) {
     if (!job) return;
@@ -101,13 +129,11 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
   async function refreshSources() {
     if (!detail) return;
     const sources = detail.samples.slice(0, MAX_REFRESH_SOURCES).map(s => ({ fanId: s.fanId, messageId: String(s.messageId) }));
-    const data = await command("/jobs", { requestId: crypto.randomUUID(), mode: "refresh", sources }) as ImportJob | null;
-    if (data) setRefreshJob(data);
+    await run("/jobs", { requestId: crypto.randomUUID(), mode: "refresh", sources });
   }
 
   async function cancel(target: ImportJob) {
-    const data = await command(`/jobs/${target.jobId}/cancel`, { expectedRevision: target.revision }) as ImportJob | null;
-    if (data) (target.mode === "inventory" ? setJob : setRefreshJob)(data);
+    await run(`/jobs/${target.jobId}/cancel`, { expectedRevision: target.revision });
   }
 
   const selected: Observation | undefined = detail?.observations.find(o => o.observationId === choice);
@@ -123,20 +149,18 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
 
   async function createDrafts() {
     const drafts = queue.map(({ candidateId: _c, priceCents: _p, sourceAt: _s, ...draft }) => draft);
-    const data = await command("/drafts", { drafts }) as { results: DraftResult[] } | null;
-    if (!data) return;
-    setResults(data.results);
-    const failed = new Set(data.results.filter(r => !r.ok).map((_r, i) => i));
-    setQueue(previous => previous.filter((_q, i) => failed.has(i)));
-    if (job) await loadCandidates(job.jobId, null);
+    await run("/drafts", { drafts });
   }
 
+  if (denied) return <Card className="mt-6 min-w-0 p-4" data-offer-import><h2 className="text-lg font-semibold">Import existing OnlyFans offers</h2>
+    <p role="status" className="mt-3 text-sm" data-import-denied>Your session cannot manage imports. Sign in again.</p></Card>;
   return <Card className="mt-6 min-w-0 p-4" data-offer-import>
     <h2 className="text-lg font-semibold">Import existing OnlyFans offers</h2>
+    <ContentSyncStatus accountId={accountId} readOnly={readOnly} />
     <div className="mt-3 flex flex-wrap gap-2">
       <button type="button" className={buttonClass} disabled={readOnly || busy || !!retry || (!!job && ["pending", "running"].includes(job.status))} onClick={scan}>Scan imported history</button>
       {job && ["pending", "running"].includes(job.status) && !readOnly ? <button type="button" className={buttonClass} disabled={busy} onClick={() => cancel(job)}>Cancel scan</button> : null}
-      {retry ? <button type="button" className={buttonClass} disabled={busy} onClick={() => command(retry.path, retry.body)}>Retry the same request</button> : null}
+      {retry ? <button type="button" className={buttonClass} disabled={busy} onClick={() => run(retry.path, retry.body)}>Retry the same request</button> : null}
     </div>
     {notice ? <p role="status" className="mt-2 text-sm">{notice}</p> : null}
     {job ? <p className="mt-3 text-sm" data-import-job>
@@ -199,6 +223,10 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
       <button type="button" className={`${buttonClass} mt-2`} disabled={readOnly || busy || !!retry} onClick={createDrafts}>Create selected drafts</button>
     </section> : null}
     {results.length ? <ul className="mt-3 text-sm" aria-label="Draft results">{results.map(r => <li key={r.commandKey} data-draft-result={r.ok ? "created" : r.code}>
-      {r.ok ? `Draft created: item ${r.itemId} at ${usd(r.priceCents)}, switched off.` : `Not created: ${r.error}`}</li>)}</ul> : null}
+      {r.ok ? `Draft created: item ${r.itemId} at ${usd(r.priceCents)}, switched off.` : `Not created: ${r.error}`}
+      {r.ok ? <button type="button" className="ml-2 min-h-11 underline" data-view-item={r.itemId} onClick={() => {
+        const card = document.querySelector(`[data-of-catalog-item="${r.itemId}"]`);
+        if (card) card.scrollIntoView({ block: "center" }); else setNotice("The item appears under Items prepared for sale once the page refreshes.");
+      }}>View item</button> : null}</li>)}</ul> : null}
   </Card>;
 }
