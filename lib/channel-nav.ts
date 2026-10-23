@@ -88,6 +88,7 @@ export const TELEGRAM_CHANNEL: ChannelDefinition = {
     { key: "flows", label: "Flows", href: "/flows?workspace=telegram", icon: "Flows", availability: "existing" },
     { key: "business", label: "Telegram Stories", href: "/business?workspace=telegram", icon: "Bot", availability: "existing" },
     { key: "telegram-earnings", label: "Earnings", href: "/revenue", icon: "Dollar", availability: "existing" },
+    { key: "telegram-payouts", label: "Payouts", href: "/payouts", icon: "Payouts", availability: "built" },
   ],
 };
 
@@ -173,3 +174,4 @@ export function telegramWorkspaceHref(path: string): string {
   const params = new URLSearchParams(query); params.set("workspace", "telegram");
   return `${pathname}?${params}`;
 }
+

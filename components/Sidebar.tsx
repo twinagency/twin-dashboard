@@ -53,6 +53,7 @@ function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
 }
 
 const PATHS: Record<string, string> = {
+  Payouts: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>',
   Home: '<path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-8H9v8H4a1 1 0 0 1-1-1z"/>',
   Revenue: '<path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h5v5"/>',
   Clones: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -108,6 +109,7 @@ const TWIN_ADMIN_NAV_LABELS: Record<string, string> = {
 
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Payouts", href: "/payouts", icon: "Payouts", color: "blue" },
   { kind: "route", label: "Sales Health", href: "/sales-health", icon: "ListChecks", color: "blue" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
@@ -160,6 +162,7 @@ const MOXY_LINKS: NavLink[] = [
   { kind: "route", label: "Overview", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Creator onboarding", href: "/agency/creators", icon: "ListChecks", color: "gray" },
+  { kind: "route", label: "Payouts", href: "/payouts", icon: "Payouts", color: "blue" },
   { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "route", label: "Telegram Stories", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
@@ -208,7 +211,7 @@ const ADMIN_LINKS: NavLink[] = [
 ];
 
 // Internal Twin ordering is shared by the desktop sidebar and mobile menu.
-const TWIN_ADMIN_ORDER = ["/dashboard", "/revenue", "/clones", "/users", "/media", "/business", "ppvs", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
+const TWIN_ADMIN_ORDER = ["/dashboard", "/revenue", "/payouts", "/clones", "/users", "/media", "/business", "ppvs", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
 const TWIN_ADMIN_LINKS: NavLink[] = [
   { kind: "route", label: "Content", href: "/media", icon: "Media", color: "blue" },
   { kind: "route", label: "Overview", href: "/dashboard", icon: "Clones", color: "blue" },
@@ -226,6 +229,7 @@ type AdminGroup = { label: string; icon: string; href?: string; children?: strin
 const TWIN_ADMIN_GROUPS: AdminGroup[] = [
   { label: "Overview", icon: "Clones", href: "/dashboard" },
   { label: "Earnings", icon: "EarningsCombo", href: "/revenue" },
+  { label: "Payouts", icon: "Payouts", href: "/payouts" },
   { label: "Creators", icon: "Clones", href: "/clones", children: ["identity", "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"] },
   { label: "Live Telegram", icon: "Inbox", href: "/users" },
   { label: "Content", icon: "Media", href: "/media", children: ["ppvs", "/business"] },
@@ -527,15 +531,15 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     <nav aria-label="Main navigation" className="moxy-sidebar-nav">
       <section className="moxy-sidebar-group" aria-label="Workspace">
         <h2 className="moxy-sidebar-heading">Workspace</h2>
-        {MOXY_LINKS.slice(0, 3).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+        {MOXY_LINKS.slice(0, 4).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
       </section>
       <section className="moxy-sidebar-group" aria-label="Creator tools">
         <h2 className="moxy-sidebar-heading">Creator tools</h2>
-        {MOXY_LINKS.slice(3, 7).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+        {MOXY_LINKS.slice(4, 8).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
       </section>
     </nav>
     <nav aria-label="Utilities" className="moxy-sidebar-utilities"><div>
-      {MOXY_LINKS.slice(7).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+      {MOXY_LINKS.slice(8).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
     </div></nav>
   </>;
 
@@ -557,5 +561,6 @@ export default function Sidebar({ clones: _clones, activeCloneId, channels }: { 
   const studio = audience === "admin" || !isCreator && isDashboardWorkspaceRoute(pathname);
   return <aside data-workspace-theme={audience === "admin" ? "dark" : undefined} data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
 }
+
 
 
