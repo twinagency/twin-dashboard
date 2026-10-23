@@ -1,11 +1,12 @@
 const assert = require('node:assert/strict');
 const { build } = require('esbuild');
 const { resolve, join } = require('node:path');
-const { mkdtempSync, rmSync } = require('node:fs');
+const { mkdirSync, mkdtempSync, rmSync } = require('node:fs');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
 (async () => {
+  mkdirSync(resolve('node_modules/.cache'), { recursive: true });
   const dir = mkdtempSync(resolve('node_modules/.cache/moxy-overview-'));
   const outfile = join(dir, 'page.cjs');
   try {
