@@ -355,7 +355,7 @@
 .platform :global(.of-account-status > div) { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
 .platform :global(.of-account-status dt) { color: #61758e; }
 .platform :global(.of-account-status dd) { text-align: right; }
-@media (min-width: 1600px) { .platform.platform :global([data-of-vault-grid].of-media-grid) { grid-template-columns: repeat(6,minmax(0,1fr)); } }
+@media (min-width: 1440px) { .platform.platform :global([data-of-vault-grid].of-media-grid) { grid-template-columns: repeat(6,minmax(0,1fr)); } }
 @media (max-width: 1279px) {
   .platform :global(.of-content-actions) { position: static; margin: 0 0 20px; }
   .platform :global([data-of-native-section="content"] [data-creator-platform-heading]) { padding-right: 0; }
@@ -393,7 +393,7 @@
 .platform :global([data-view="list"] .of-media-cover) { width: 100px; flex-shrink: 0; aspect-ratio: 1; }
 .platform :global([data-view="list"] .of-media-caption) { flex: 1; min-width: 0; padding: 0; }
 .platform :global([data-view="list"] .of-media-kind) { display: none; }
-.platform :global(.of-history-status) { margin: -6px 0 20px; color: #61758e; font-size: 12px; }
+.platform :global(.of-history-status) { margin: -6px 0 20px; padding: 0; background: transparent; color: #61758e; font-size: 12px; }
 .platform :global(.of-history-status summary) { width: fit-content; min-height: 32px; padding-block: 8px; cursor: pointer; }
 .platform :global(.of-history-status p) { padding: 8px 12px; margin-top: 4px; border-radius: 8px; background: #eaf5fd; }
 .platform :global(.of-tab-workspace[data-active="replies"] > .of-settings-layout) { grid-template-columns: 1fr; }
