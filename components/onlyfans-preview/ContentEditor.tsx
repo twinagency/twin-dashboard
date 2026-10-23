@@ -4,8 +4,9 @@ import { inputCls } from "@/components/clone/fields";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { displayContentPrice, parseContentPrice, parseContentItem, parseContentAck, validContentRequest,
-  type ContentItem, type ContentPatch, type ContentRequest } from "@/lib/onlyfans/content";
+import { displayContentPrice, parseContentPrice, type ContentPatch } from "@/lib/onlyfans/content";
+import { parseContentItemV2 as parseContentItem, parseContentAckV2 as parseContentAck, validContentRequestV2 as validContentRequest,
+  type ContentItemV2 as ContentItem, type ContentRequestV2 as ContentRequest } from "@/lib/onlyfans/content-v2";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -23,8 +24,9 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
   const [denied, setDenied] = useState(false);
   const [notice, setNotice] = useState("");
   const [retry, setRetry] = useState<ContentRequest | null>(null);
+  const [override, setOverride] = useState(false);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
-  const endpoint = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/items/${encodeURIComponent(itemId)}`;
+  const endpoint = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/items/${encodeURIComponent(itemId)}?contract=v2`;
   const clear = () => { setData(null); setLabel(""); setDescription(""); setPrice(""); setEnabled(false); setRetry(null); };
 
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
@@ -40,7 +42,7 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("This catalogue item could not be refreshed. Try again."); return false; }
       setData(next); setLabel(next.label ?? ""); setDescription(next.description ?? ""); setDescriptionEdited(false);
-      setPrice(next.priceCents === null ? "" : displayContentPrice(next.priceCents)); setEnabled(next.enabled);
+      setPrice(next.priceCents === null ? "" : displayContentPrice(next.priceCents)); setEnabled(next.enabled); setOverride(false);
       return true;
     } catch { if (active.current) { setData(null); setNotice("This catalogue item could not be refreshed. Try again."); } return false; }
   }, [accountId, endpoint, itemId, router]);
@@ -59,8 +61,11 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
   }
   const changedPrice = !!data && price !== (data.priceCents === null ? "" : displayContentPrice(data.priceCents));
   const validPrice = !changedPrice || (cents !== null && (data?.isFreeTeaser ? cents === 0 : cents >= 300));
-  const request: ContentRequest | null = data && Object.keys(patch).length && validPrice ? {
-    patch, expectedRevision: data.revision, expectedFingerprint: data.fingerprint,
+  const source = data?.provenance ?? null;
+  // A fixed imported price may only change with an explicit operator override.
+  const needsOverride = !!source && patch.priceCents !== undefined && patch.priceCents !== source.sourcePriceCents;
+  const request: ContentRequest | null = data && Object.keys(patch).length && validPrice && (!needsOverride || override) ? {
+    patch, expectedRevision: data.revision, expectedFingerprint: data.fingerprint, acknowledgeOverride: needsOverride && override,
   } : null;
 
   async function save(command: ContentRequest) {
@@ -120,6 +125,9 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
             <input data-of-edit-content-price className={inputClass} inputMode="decimal" autoComplete="off" value={price} onChange={event => setPrice(event.target.value)} aria-invalid={!validPrice} />
             <span className="mt-1 block text-xs text-muted">{data.isFreeTeaser ? "This item is a free teaser; its price must remain USD 0.00." : "Paid items: USD 3.00–200.00, with up to two decimal places."}</span>
           </label>
+          {source ? <p className="text-sm" data-of-content-source>Price from selected OnlyFans offer: USD {displayContentPrice(source.sourcePriceCents)}{source.sourceAt ? `, sent ${new Date(source.sourceAt).toLocaleDateString()}` : ""}.
+            {data.priceOverridden ? " The saved price is an operator override." : ""}{source.withdrawn ? " This draft was withdrawn." : ""}</p> : null}
+          {needsOverride ? <label className="flex items-start gap-2 text-sm"><input data-of-edit-content-override type="checkbox" checked={override} onChange={event => setOverride(event.target.checked)} className="mt-1" /><span>Override the price from the selected OnlyFans offer</span></label> : null}
           <label className="flex items-start gap-2 text-sm"><input data-of-edit-content-enabled type="checkbox" checked={enabled} onChange={event => setEnabled(event.target.checked)} className="mt-1" /><span>Enabled in the catalogue</span></label>
           <p className="text-xs text-muted">Saved changes apply to future eligible offers. Existing offers keep their recorded terms.</p>
           <button data-of-save-content type="submit" className={buttonClass} disabled={!request || !validContentRequest(request)}>Save catalogue item</button>

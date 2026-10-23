@@ -10,6 +10,7 @@ import ConfigurationEditor from "./ConfigurationEditor";
 import { configuredContentBackend } from "@/lib/onlyfans/content-backend";
 import ContentEditor from "./ContentEditor";
 import VaultManager from "./VaultManager";
+import OfferImportPanel from "./OfferImportPanel";
 
 export type NativeSearch = { account?: string | string[]; creator?: string | string[]; cursor?: string | string[] };
 const TITLES = { content: "Content", sales: "Sales", settings: "Settings" } as const;
@@ -53,6 +54,7 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
       <p className="mt-1 text-xs text-muted">Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
     </div> : null}
     {section === "content" && configuredContentBackend(ctx.fetch) ? <VaultManager key={account.accountId} accountId={account.accountId} readOnly={!ctx.canManage} /> : null}
+    {section === "content" && configuredContentBackend(ctx.fetch) ? <OfferImportPanel key={`import:${account.accountId}`} accountId={account.accountId} readOnly={!ctx.canManage} /> : null}
     {section !== "settings" ? <WorkspaceBody data={data} contentEditable={ctx.canManage && section === "content" && !!configuredContentBackend(ctx.fetch)} /> : null}
     {section === "settings" && ctx.canManage && configuredConfigurationBackend(ctx.fetch) ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
     {section === "settings" ? <details className="mt-6 rounded-xl border border-line bg-panel p-5"><summary>Advanced account details</summary><div className="mt-4"><WorkspaceBody data={data} /></div></details> : null}

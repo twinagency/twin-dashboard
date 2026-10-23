@@ -133,13 +133,13 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
   const cents = parseContentPrice(price);
   const product = { label: label.trim(), description: description.trim(), priceCents: cents ?? -1, enabled,
     mediaIds: [...selected.keys()], previewMediaIds: [...selected.keys()].filter(id => previews.has(id)) };
-  const videoCount = [...selected.values()].filter(row => row.kind === "video").length;
-  const mediaValid = videoCount <= 1 && (!videoCount || [...selected.values()].filter(row => row.kind === "photo").every(row => previews.has(row.mediaId)));
+  // Bundles may sell several photos and/or videos for one total; at least one asset stays paid and only photos can be free previews.
+  const mediaValid = [...selected.values()].some(row => !previews.has(row.mediaId)) && [...previews].every(id => selected.get(id)?.kind === "photo");
   const readySelection = [...selected.values()].every(row=>row.ready&&["photo","video"].includes(row.kind));
   const productIssues = [
     ...(!selected.size ? ["Add at least one photo or video."] : []),
     ...(!readySelection ? ["Remove files with unconfirmed full access before creating a paid item."] : []),
-    ...(!mediaValid ? ["Choose photos, or one video with every attached photo marked as a free preview."] : []),
+    ...(!mediaValid ? ["Leave at least one paid file. Only photos can be free previews."] : []),
     ...(selected.size > 0 && previews.size >= selected.size ? ["Keep at least one file behind the paid unlock."] : []),
     ...(!product.label ? ["Enter an item label."] : new TextEncoder().encode(product.label).length > 160 ? ["Shorten the item label to 160 bytes."] : []),
     ...(!product.description ? ["Describe what the fan receives."] : new TextEncoder().encode(product.description).length > 2000 ? ["Shorten the description to 2,000 bytes."] : []),
@@ -217,7 +217,7 @@ export default function VaultManager({ accountId, readOnly = false }: { accountI
             <span className="min-w-0 break-words">{row.description || `Asset #${row.mediaId}`} · {row.kind}<span className="mt-1 block text-muted">{vaultAvailability(row).label}</span></span>{row.kind === "photo" ? <label className="flex items-center gap-2"><input data-of-vault-preview={row.mediaId} type="checkbox" checked={previews.has(row.mediaId)} onChange={event => { const next = new Set(previews); if (event.target.checked) next.add(row.mediaId); else next.delete(row.mediaId); setPreviews(next); }} />Free preview</label> : null}
             <button type="button" className="ml-auto text-accent" onClick={() => toggle(row)}>Remove</button>
           </li>)}</ul> : <p className="text-sm text-muted">No media attached yet. Use Add media to choose files from your vault, or Upload new files to add files from your device.</p>}
-          {!mediaValid ? <p role="status" className="text-xs text-muted">Use one video with photo previews, or a set of photos. Every photo attached to a video must be marked as a free preview.</p> : null}
+          {!mediaValid ? <p role="status" className="text-xs text-muted">Leave at least one paid file. Only photos can be free previews.</p> : null}
           {selected.size > 0 && previews.size >= selected.size ? <p role="status" className="text-xs text-muted">Keep at least one selected asset behind the paid unlock.</p> : null}
           <div className="grid min-w-0 gap-3 md:grid-cols-2"><label className="min-w-0 text-sm">Item label<input data-of-vault-product-label className={inputClass} maxLength={160} value={label} onChange={event => setLabel(event.target.value)} required /></label><label className="min-w-0 text-sm">Price (USD)<input data-of-vault-product-price className={inputClass} inputMode="decimal" value={price} onChange={event => setPrice(event.target.value)} required /><span className="mt-1 block text-xs text-muted">USD 3.00–200.00</span></label></div>
           <label className="block text-sm">What the fan receives<textarea data-of-vault-product-description className={`${inputClass} min-h-24`} maxLength={2000} value={description} onChange={event => setDescription(event.target.value)} required /></label>
