@@ -51,6 +51,11 @@ export default function ChannelSwitch({
   // is what a session with no channel workspace should see.
   if (!shouldShowChannelSwitch(allowed)) return null;
 
+  if (active === "onlyfans") return <details className="of-channel-menu" data-channel-switch={active}>
+    <summary><span className="of-channel-symbol" aria-hidden="true">OF</span><span>OnlyFans<small>Workspace</small></span><span aria-hidden="true">⌄</span></summary>
+    <div role="group" aria-label="Channel workspace">{offered.map(channel => <Link key={channel.channel} href={channel.href} aria-current={channel.channel === active ? "page" : undefined} title={channel.summary}>{channel.label}</Link>)}</div>
+  </details>;
+
   return (
     <div
       role="group"

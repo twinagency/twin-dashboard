@@ -130,7 +130,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
       <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar} cloneRates={cloneRates} fleetUsdPerStar={headerUsdPerStar}><BlurProvider>
-        <WorkspaceShell activeCloneId={activeCloneId}>
+        <WorkspaceShell activeCloneId={activeCloneId} creators={clones}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} channels={channelScope.allowed} />
           <div className="workspace-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">

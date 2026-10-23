@@ -118,7 +118,7 @@ for (const width of [390, 900, 1440]) {
   await context.route("**/*", route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
   await page.goto(`${origin}/dashboard?brand=Twin`,{waitUntil:"networkidle"});
   await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;animation:none!important}"});
-  let baseline;
+  const baselines = new Map();
   for (const route of ["/dashboard","/overview","/telegram","/users","/onlyfans/accounts","/onlyfans/inbox","/revenue"]) {
     await page.evaluate(route=>history.pushState({},"",route+"?brand=Twin"),route);
     await page.locator('[data-workspace-theme="dark"]').first().waitFor();
@@ -133,12 +133,13 @@ for (const width of [390, 900, 1440]) {
       brandTop:brand.top,brandHeight:brand.height,switchTop:switcher.top,switchHeight:switcher.height,
       navTop:nav.top,headerTop:topbar.top,headerHeight:topbar.height};
     });
-    assert.equal(metrics.background,"rgb(230, 246, 255)",`${width} ${route}: shared light-blue Twin sidebar`);
-    if(!baseline)baseline=metrics;
-    assert.deepEqual(metrics,baseline,`${width} ${route}: sidebar and header must stay in place`);
+    const onlyfans = route.startsWith("/onlyfans/"), workspace = onlyfans ? "onlyfans" : "shared";
+    assert.equal(metrics.background,onlyfans?"rgb(232, 245, 255)":"rgb(230, 246, 255)",`${width} ${route}: scoped light-blue sidebar`);
+    if(!baselines.has(workspace))baselines.set(workspace,metrics);
+    assert.deepEqual(metrics,baselines.get(workspace),`${width} ${route}: geometry stays stable within each workspace`);
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
     assert.equal(await sidebar.locator('a[href="/settings"]').count(),1,"Settings remains reachable exactly once in each workspace");
-    assert.equal(await sidebar.locator('.workspace-nav-row').first().evaluate(e=>e.getBoundingClientRect().height),46);
+    assert.equal(await sidebar.locator('.workspace-nav-row').first().evaluate(e=>e.getBoundingClientRect().height),onlyfans?48:46);
     if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
     await noOverflow(page,`shared shell ${width} ${route}`);
   }
@@ -146,12 +147,12 @@ for (const width of [390, 900, 1440]) {
   if(width<1024)await page.getByRole("button",{name:"Open navigation",exact:true}).click();
   const switcher=width<1024?page.locator("#mobile-sidebar [data-channel-switch]"):page.locator("aside.dashboard-sidebar [data-channel-switch]").first();
   await switcher.getByRole("link",{name:"OnlyFans",exact:true}).click();
-  await page.waitForURL("**/onlyfans/accounts");
+  await page.waitForURL("**/onlyfans/overview");
   if(width<1024)await page.locator("#mobile-sidebar").waitFor({state:"detached"});
   await capture(page,`shared-dark-${width}.png`);
   assert.deepEqual(errors,[]);await context.close();
 }
-console.log("PASS: Main, Telegram and OnlyFans retain identical dark sidebar and header geometry at 390, 900 and 1440px; channel links and mobile drawer work.");
+console.log("PASS: Main and Telegram retain their shared geometry; OnlyFans retains its dedicated studio geometry at 390, 900 and 1440px; channel links and mobile drawer work.");
 // Real roster UI: channel membership, canonical joins and scoped navigation.
 for(const width of [390,1440]){
  const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage();

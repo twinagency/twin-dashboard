@@ -8,6 +8,8 @@ import BlurProvider from "@/components/BlurProvider";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
+import WorkspaceShell from "@/components/WorkspaceShell";
+import WorkspaceMobileNav from "@/components/WorkspaceMobileNav";
 import MainShell from "@/components/MainShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import { PREVIEW_CLONES } from "@/lib/onlyfans-preview/workspace";
@@ -36,8 +38,8 @@ export default function PreviewLayout({ children }: { children: React.ReactNode 
         <DashboardAccessProvider canManage>
           <CurrencyProvider>
             <BlurProvider>
-              <div className="flex h-screen">
-                <Sidebar clones={PREVIEW_CLONES} activeCloneId={activeCloneId} />
+              <WorkspaceShell activeCloneId={activeCloneId} creators={PREVIEW_CLONES}>
+                <Sidebar clones={PREVIEW_CLONES} activeCloneId={activeCloneId} channels={PREVIEW_CHANNELS} />
                 <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
                   <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
                     <Link href="/overview" aria-label="Twin Technologies">
@@ -62,8 +64,9 @@ export default function PreviewLayout({ children }: { children: React.ReactNode 
                     <div className="mb-3 text-xs text-ink-muted">Synthetic integration · no real accounts or sending</div>
                     {children}
                   </MainShell>
+                  <WorkspaceMobileNav activeCloneId={activeCloneId} channels={PREVIEW_CHANNELS} />
                 </div>
-              </div>
+              </WorkspaceShell>
             </BlurProvider>
           </CurrencyProvider>
         </DashboardAccessProvider>

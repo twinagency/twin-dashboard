@@ -511,10 +511,8 @@ function ActionColumn({
       </div>
 
       {actionSet.blocked.length > 0 ? (
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-            Not available here
-          </div>
+        <details open={!!incident} className="of-blocked-actions">
+          <summary className="text-xs font-semibold text-muted">Unavailable actions ({actionSet.blocked.length})</summary>
           <div className="mt-2 space-y-1.5">
             {actionSet.blocked.map((entry) => (
               <div key={entry.action} className="rounded-lg bg-[#fbfdfe] px-3 py-2">
@@ -523,7 +521,7 @@ function ActionColumn({
               </div>
             ))}
           </div>
-        </div>
+        </details>
       ) : null}
 
       {result ? (
@@ -588,7 +586,7 @@ function FanContext({ detail }: { detail: ConversationDetail }) {
 
       <div>
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-          Facts with provenance
+          Saved facts
         </div>
         <ul className="mt-2 space-y-2">
           {detail.facts.map((item) => (
@@ -610,7 +608,7 @@ function FanContext({ detail }: { detail: ConversationDetail }) {
 
       {detail.ownedMedia.length > 0 ? (
         <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Owned media</div>
+          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Purchase history</div>
           <ul className="mt-2 space-y-2">
             {detail.ownedMedia.map((item) => (
               <li
@@ -747,7 +745,7 @@ export default function InboxView({
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
 
       <nav aria-label="Inbox panels" className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
-        {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Controls"] ] as const).map(([key, label]) =>
+        {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Fan info"] ] as const).map(([key, label]) =>
           <button key={key} type="button" data-of-mobile-panel={key} aria-pressed={mobilePanel === key}
             onClick={() => setMobilePanel(key)} disabled={key !== "conversations" && !selectedConversationId}
             className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-ink text-white" : "text-muted"}`}>{label}</button>)}
@@ -864,8 +862,8 @@ export default function InboxView({
                 }
               />
 
-              <DeliveryLedger messages={detail.messages} />
               <FanContext detail={detail} />
+              <details open={!!detail.deliveryIncident}><summary className="text-sm font-semibold">Delivery history</summary><DeliveryLedger messages={detail.messages} /></details>
 
               <div className="border-t border-line pt-3">
                 <FreshnessLine freshness={detail.freshness} />

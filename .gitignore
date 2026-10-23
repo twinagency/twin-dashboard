@@ -14,3 +14,6 @@ preview/onlyfans/shots/
 archive/
 DOCKER.md
 .media-repair-state/
+
+# Reproducible synthetic UI review output.
+preview/onlyfans-ui/dist/
