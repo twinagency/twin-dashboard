@@ -53,7 +53,7 @@ jobs:
           sha=os.environ['GITHUB_SHA']; image=os.environ['IMAGE']
           command=f'''set -eu
           current=$(docker exec next-app printenv GIT_SHA)
-          test "$current" = f61aaea609a2cb391c066fb48c98ca2584d17e9e || test "$current" = {sha}
+          test "$current" = f61aaea609a2cb391c066fb48c98ca2584d17e9e || test "$current" = a88b050f1e531abcb967235fd48223fa7f305344 || test "$current" = {sha}
           sudo /usr/local/bin/twin-pull.sh '{image}' next-app /home/ubuntu/allieai2-dashboard -p 127.0.0.1:3001:3001 -e PORT=3001 --network twin-onlyfans_default
           test "$(docker exec next-app printenv GIT_SHA)" = {sha}
           docker inspect --format '{{{{.State.Running}}}}' next-app
