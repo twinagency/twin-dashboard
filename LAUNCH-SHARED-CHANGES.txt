@@ -1,0 +1,71 @@
+LAUNCH-SHARED-CHANGES (Chat 5 part B: sections D memory + E automation)
+Branch codex/onlyfans-launch-dashboard-b. Nothing below has been applied. Head dev applies.
+
+=== 1. PAGES (new files under shared app routing) ===
+The panels are client components that take canManage (fail-closed default false). Server must pass it.
+
+--- app/onlyfans/launch/automation/page.tsx (new)
+import BAutomationPanel from "@/components/onlyfans-launch/automation/BAutomationPanel";
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { agencyCanManage } from "@/lib/agency-management-policy";
+import { isAuthed } from "@/lib/auth";
+export const dynamic = "force-dynamic";
+export default async function Page() {
+  const agency = await getDashboardAccess();
+  const canManage = agency ? agencyCanManage(agency) : await isAuthed();
+  return <BAutomationPanel canManage={canManage} />;
+}
+
+--- app/onlyfans/launch/memory/page.tsx (new): same, using BMemoryPanel from components/onlyfans-launch/memory/BMemoryPanel.
+(The server still enforces: the control route and the launch routes refuse writes for read-only sessions. canManage only disables buttons.)
+
+=== 2. NAVIGATION ===
+Add two entries under the OnlyFans section: "Automation" -> /onlyfans/launch/automation, "Fan memory" -> /onlyfans/launch/memory.
+
+=== 3. lib/onlyfans/agency-scope.ts  agencyOnlyFansRequest()  (agency sessions are default-deny)
+- page regex: add launch pages
+-   if (["GET","HEAD"].includes(method) && /^\/onlyfans(?:\/(?:accounts|inbox|content|sales|settings|campaigns|launch\/(?:automation|memory)))?\/?$/.test(path)) return true;
+- purpose regex: add onlyfans-launch
+-   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns|launch)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
+Without this, agency users are refused on all launch B routes (operators are unaffected).
+NOTE: the panels read GET /api/onlyfans/accounts (the list). The `api` regex only allows /accounts/{id}/..., not the list. If agencies must switch accounts, allow GET /api/onlyfans/accounts too, or have the server page pass the account list.
+
+=== 4. package.json scripts (add) ===
+"test:onlyfans-launch-b": "node --import tsx scripts/check-onlyfans-launch-b.ts",
+append to "test:onlyfans-browser-syntax": " && node --check scripts/check-onlyfans-launch-b-browser.mjs"
+append "npm run test:onlyfans-launch-b" to test:offline.
+The browser check scripts/check-onlyfans-launch-b-browser.mjs needs a running dashboard plus pages. It was run against temporary harness pages at /launch-b-harness/{automation,memory}?manage=1|0 (a page that passes canManage from the query). Re-point its goto URLs to /onlyfans/launch/* once the real pages exist and use a read-only session cookie for the read-only scenario.
+
+=== 5. .github/workflows/ci.yml === add `npm run test:onlyfans-launch-b` next to the other onlyfans unit checks.
+
+=== 6. BACKEND CONTRACTS NEEDED (none exist today) ===
+Dashboard routes already answer 501 contract_pending; screens say "contract pending" and show data only in an explicit FIXTURE-ONLY preview.
+All: bearer + X-OnlyFans-Agency-Scope like the other purposes; every row scoped to accountId; errors {ok:false,code,error}.
+
+A) Fan memory (Chat 2)
+ GET /onlyfans/memory/v1/accounts/{accountId}/fans?cursor=
+   -> {accountId, coverage:{state:"complete|partial|not_started|unsupported", messagesImported:int|null, messagesKnownTotal:int|null, oldestAt:iso|null, newestAt:iso|null, memoryBuiltAt:iso|null},
+       fansTotal:int|null, fansWithMemory:int|null, nextCursor:string|null,
+       fans:[{fanId, displayName, coverage:<state>, factCount:int}]}
+ GET /onlyfans/memory/v1/accounts/{accountId}/fans/{fanId}
+   -> {accountId, fanId, displayName, revision:int, coverage:{...as above},
+       summary: null | {text<=4000, updatedAt, source:"history|operator|inferred"},
+       facts:[{factId, field, label, value<=2000, source:"history|operator|inferred", updatedAt|null, editable:bool}]}
+ PATCH /onlyfans/memory/v1/accounts/{accountId}/fans/{fanId}  body {factId, value:string(<=500)|null (null clears), expectedRevision:int}
+   -> 200 {ok:true, revision:int} | 409 stale revision | 400 not an editable field.
+   Must write an audit row with actor; only fields with editable=true; value validation repeated server-side.
+
+B) Follow-ups (Chat 4)
+ GET /onlyfans/engagement/v1/accounts/{accountId}/follow-ups
+   -> {accountId, followUps:[{followUpId, conversationId, fanName, scheduledFor:iso, kind, status:"scheduled|sending|sent|cancelled|blocked", cancellable:bool, blockedReason:string|null}]}
+ POST /onlyfans/engagement/v1/accounts/{accountId}/follow-ups/{followUpId}/cancel  body {expectedStatus:"scheduled", commandKey, actor}
+   -> {ok:true, status:"cancelled"} | 409 already sending/sent. Idempotent and audited.
+ (The dashboard POST currently sends {action:"cancel", followUpId} to its own route; the adapter maps to this once final.)
+
+C) Account-level emergency stop and handling mode
+ POST /onlyfans/control/v1/accounts/{accountId}/emergency-stop  body {commandKey, actor, expectedRevision}
+   -> ack like of-controls.v1 (recordedRevision). Halts all queued/automatic outgoing for the account and is visible in workspace/settings (runtimeEnabled=false or a new field).
+ POST /onlyfans/control/v1/accounts/{accountId}/mode  body {mode:"automated|paused|human_controlled", expectedRevision, commandKey, actor}
+ Until these exist, account-mode change and emergency stop stay not connected (the stop button reports "Nothing was stopped").
+
+D) Conversation list shows only the first page. If more than ~200 conversations matter, add a cursor parameter handling on GET /api/onlyfans/accounts/{id}/conversations in the panel (dashboard shows "More exist" today).
