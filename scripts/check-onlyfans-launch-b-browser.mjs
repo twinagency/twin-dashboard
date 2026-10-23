@@ -151,11 +151,24 @@ export async function checkNativeLaunchB(page, context, origin) {
       request.method() === "PATCH" &&
       request.url() === `${memoryBase}/fans/${fanId}`,
   );
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      response.url() === `${memoryBase}/fans/${fanId}`,
+  );
   await page.getByRole("button", { name: "Save value", exact: true }).click();
   const savedCommand = (await saveRequest).postDataJSON();
+  const savedResponse = await saveResponse;
+  eq(savedResponse.status(), 200, "correction acknowledgement");
+  const savedAck = await savedResponse.json();
+  eq(savedAck.schemaVersion, "of-launch-b.v1");
+  eq(savedAck.ok, true);
+  eq(savedAck.accountId, account);
+  eq(savedAck.fanId, fanId);
+  ok(Number.isSafeInteger(savedAck.correction?.revision));
   await page
-    .locator('[data-b-fact="home_city"]')
-    .getByText("Synthetic launch city", { exact: true })
+    .locator('[data-b-fact="home_city"] > p')
+    .filter({ hasText: /^Synthetic launch city$/ })
     .waitFor({ timeout: 20000 });
   const after = await (
     await context.request.get(`${memoryBase}/fans/${fanId}`)
