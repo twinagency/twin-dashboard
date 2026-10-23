@@ -47,7 +47,7 @@ function jpegWithDimensions(input: Uint8Array, width: number, height: number) {
 async function main() {
   for (const status of ["applicant", "approved", "active"]) assert.equal(creatorAccountStatusAllowsAccess(status), true);
   for (const status of ["paused", "rejected", "archived", "unexpected", null]) assert.equal(creatorAccountStatusAllowsAccess(status), false);
-  Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://creator-offline.supabase.co", SUPABASE_SERVICE_KEY: "offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
+  Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_PUBLIC_ORIGIN: origin, SUPABASE_URL: "https://creator-offline.supabase.co", SUPABASE_SERVICE_KEY: "offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
   const oldFetch = globalThis.fetch;
   let accountExists = true, accountStatus = "active", accountSource = "twin", mismatched = false, onboarded = true, linked = true, databaseError = false;
   let assignmentExists = true, agencyId: string = TETHER_PORTAL.id, agencyName: string = TETHER_PORTAL.name, agencyActive = true;

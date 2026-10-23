@@ -7,6 +7,7 @@ on:
       - components/PayoutDashboard.tsx
       - components/PayoutDashboard.module.css
       - scripts/check-payouts.cjs
+      - scripts/check-creator-workspace.ts
       - deployment/flirt-release.py
       - deployment/flirt-host-release.py
       - deployment/flirt-host-release.test.py
