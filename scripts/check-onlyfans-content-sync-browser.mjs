@@ -119,6 +119,10 @@ export async function checkContentSync(page, context, origin, options = {}) {
     const tab = targetPage.getByRole("tab", { name: "Offers", exact: true });
     if (await tab.count()) await tab.click();
   };
+  const showVault = async (targetPage = page) => {
+    const tab = targetPage.getByRole("tab", { name: "Vault", exact: true });
+    if (await tab.count()) await tab.click();
+  };
   const target = options.path ?? "/onlyfans/content?account=acc-a";
   const { state, handle, status } = backend();
   const external = [];
@@ -225,6 +229,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     state.conflicts = []; state.status = { ...state.status, openConflicts: 0 };
 
     // Save and upload: hash, create draft, send parts (one lost acknowledgement), commit, follow to synced.
+    await showVault();
     const form = page.locator("[data-content-sync-save]");
     await form.locator("[data-sync-save-files]").waitFor({ timeout: 15000 });
     const photo = Buffer.alloc(10, 7), video = Buffer.alloc(CHUNK + 5, 9);
@@ -287,6 +292,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     await sync.locator("[data-sync-connection]").waitFor({ timeout: 15000 });
     assert((await sync.locator("[data-sync-connection] a").getAttribute("href")).includes("/onlyfans/accounts?account=acc-a"));
     assert((await sync.innerText()).includes("Connection required"));
+    await showVault();
     const recent = page.locator("[data-sync-recent]");
     const connection = recent.locator('[data-sync-draft="dr-conn"]'), blocked = recent.locator('[data-sync-draft="dr-review"]');
     await connection.waitFor({ timeout: 15000 });
@@ -307,6 +313,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     assert.equal(state.requests.filter(r => r.path === "operations/op-retry-1/retry").at(-1).postData, retryFirst.postData, "the retry is byte-identical");
     // Sync now while the connection is gone is refused plainly.
     state.refuseNext = { key: "sync", status: 409, code: "connection_unavailable" };
+    await showOffers();
     await sync.locator("[data-sync-now]").click();
     await sync.locator("[data-sync-notice]").filter({ hasText: "Connection required. Reconnect this OnlyFans account, then try again." }).waitFor();
     assert(await sync.locator("[data-sync-notice] a").count());
@@ -355,6 +362,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     const [top, bottom] = [await review.locator("[data-conflict-terms]").nth(0).boundingBox(), await review.locator("[data-conflict-terms]").nth(1).boundingBox()];
     assert(bottom.y > top.y + top.height - 2, "terms stack on a phone");
     assert(await fits(page), "content sync overflows a 390px viewport");
+    await showVault();
     await form.locator("[data-sync-save-files]").scrollIntoViewIfNeeded();
     assert(await fits(page));
     await shot(page, "sync-mobile-390.png");
@@ -387,7 +395,9 @@ export async function checkContentSync(page, context, origin, options = {}) {
       await showOffers(readPage);
       await readPage.locator("[data-content-sync-status] [data-sync-state]").waitFor({ timeout: 15000 });
       assert.equal(await readPage.locator("[data-sync-toggle]").count(), 0); assert.equal(await readPage.locator("[data-sync-now]").count(), 0);
+      await showVault(readPage);
       assert.equal(await readPage.locator("[data-sync-save-submit]").count(), 0);
+      await showOffers(readPage);
       await readPage.locator("[data-conflict-choice]").first().waitFor();
       assert.equal(await readPage.locator("[data-conflict-choice]:enabled").count(), 0);
       assert.equal(await readPage.locator("[data-conflict-apply]").count(), 0);

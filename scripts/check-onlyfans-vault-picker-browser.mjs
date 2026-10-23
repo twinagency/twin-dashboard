@@ -8,10 +8,15 @@ try{
  const envelope=extra=>({schemaVersion:'of-content.v1',ok:true,accountId,...extra});
  const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aSFEAAAAASUVORK5CYII=','base64');
  const rows=Array.from({length:30},(_,i)=>({mediaId:String(i+1),kind:'photo',durationSeconds:null,width:640,height:480,ready:i!==1,reason:i===1?'not_ready':null,description:`Landscape ${i+1}`}));
+ const syncStatus={enabled:false,status:'off',revision:0,blockedReason:null,lastIncrementalAt:null,nextIncrementalAt:null,lastReconcileAt:null,nextReconcileAt:null,lastFullReconcileAt:null,coveredThroughMessageId:null,backlog:0,initial:null,
+  coverage:Object.fromEntries(['media','paidMessages','paidPosts'].map(source=>[source,{state:'not_started',checkedAt:null,detail:null}])),openConflicts:0,
+  uploads:{draft:0,queued:0,uploading:0,verifying:0,synced:0,retrying:0,connectionRequired:0,needsReview:0,outcomeUnconfirmed:0}};
  let deny=false,failRead=false,folder=null;const members=new Set(),products=[],folderWrites=[];
  await page.route('**/api/onlyfans-content/accounts/acc-a/**',async route=>{
   const req=route.request(),url=new URL(req.url()),suffix=url.pathname.split('/acc-a')[1];
   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
+  if(suffix==='/sync/status'&&req.method()==='GET'&&!url.search)return deny?json({ok:false},401):json({schemaVersion:'of-content-sync.v1',ok:true,accountId,data:syncStatus});
+  if(suffix==='/sync/drafts'&&req.method()==='GET'&&url.search==='?limit=10')return deny?json({ok:false},401):json({schemaVersion:'of-content-sync.v1',ok:true,accountId,data:{items:[],nextCursor:null}});
   if(suffix==='/items'&&req.method()==='POST'){products.push(req.postDataJSON());return json({ok:false},503);}
   if(suffix==='/vault'){
    if(deny)return json({ok:false},401);if(failRead)return json({ok:false},503);
@@ -31,8 +36,10 @@ try{
  });
  await page.goto(origin+'/vault-fixture',{waitUntil:'networkidle'});
  await page.locator('[data-of-vault-item="24"]').waitFor();
- assert(await page.locator('[data-of-vault-folder-create]').isVisible(),'Create folder is visible without expanding Manage folders');
- await page.locator('summary').filter({hasText:'Create an item for sale'}).click();
+ await page.locator('.of-folder-tools > summary').click();
+ await page.getByRole('button',{name:'New folder / add to folder',exact:true}).click();
+ assert(await page.locator('[data-of-vault-folder-create]').isVisible(),'Create folder remains available in the compact folder tools');
+ await page.getByRole('button',{name:'Create offer',exact:true}).click();
  await page.locator('[data-of-vault-product-label]').fill('Draft landscape');await page.locator('[data-of-vault-product-price]').fill('3');await page.locator('[data-of-vault-product-description]').fill('A landscape photo');
  for(const enabled of [false,true]){await page.locator('[data-of-vault-product-enabled]').setChecked(enabled);assert(await page.locator('[data-of-vault-create]').isDisabled());assert.match(await page.locator('[data-of-product-issues]').innerText(),/Add at least one photo or video/);}
  await page.locator('[data-of-add-media]').click();const picker=page.locator('[data-of-media-picker]');await picker.locator('[data-of-picker-item="24"]').waitFor();

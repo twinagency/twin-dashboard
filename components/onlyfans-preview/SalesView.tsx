@@ -1,13 +1,14 @@
+import CreatorPortrait from "./CreatorPortrait";
 import { StudioTabs, StudioTabPanel } from "./StudioTabs";
 import { formatRecordedMoney, type SalesRead } from "@/lib/onlyfans/workspace";
 import { paymentLabel, recordedTime } from "@/lib/onlyfans/overview";
 
-export default function SalesView({ data, creatorName }: { data: SalesRead; creatorName: string }) {
+export default function SalesView({ data, creatorName, creatorId }: { data: SalesRead; creatorName: string; creatorId?: string }) {
   return <div data-of-sales className="of-sales"><StudioTabs label="Sales records" tabs={[{ value: "transactions", label: "Transactions" }, { value: "offers", label: `Open offers (${data.openOfferCount})` }]}>
     <StudioTabPanel value="transactions"><div className="of-panel of-table-panel"><div className="of-section-heading"><h2>Recorded transactions</h2><span className="of-panel-description">{data.transactions.length} records on this page · UTC</span></div>
       <p className="of-panel-description">{creatorName}. Amounts keep their recorded currency and payment status.</p>
       <div className="of-table-scroll"><table className="of-transaction-table"><thead><tr><th>Date & time (UTC)</th><th>Fan</th><th>Creator</th><th>Type</th><th>Gross amount</th><th>Recorded net</th><th>Status</th></tr></thead><tbody>
-        {data.transactions.map(item => <tr key={item.transactionId} data-of-sale={item.transactionId}><td>{recordedTime(item.occurredAt)}</td><td>{item.fanId ? `Fan ${item.fanId}` : "No fan reference"}</td><td>{creatorName}</td><td>{item.kind.replaceAll("_", " ")}</td><td className="of-money">{formatRecordedMoney(item.grossCents, item.currency)}</td><td>{item.netCents === null ? "Not recorded" : formatRecordedMoney(item.netCents, item.currency)}</td><td><span className="of-payment-badge" data-status={item.status}>{paymentLabel(item.status)}</span></td></tr>)}
+        {data.transactions.map(item => <tr key={item.transactionId} data-of-sale={item.transactionId}><td>{recordedTime(item.occurredAt)}</td><td><span className="of-sale-fan"><span aria-hidden="true">{item.fanId ? String(item.fanId).slice(-2) : "?"}</span>{item.fanId ? `Fan ${item.fanId}` : "No fan reference"}</span></td><td><span className="of-sale-creator"><CreatorPortrait creatorId={creatorId ?? ""} name={creatorName} />{creatorName}</span></td><td>{item.kind.replaceAll("_", " ")}</td><td className="of-money">{formatRecordedMoney(item.grossCents, item.currency)}</td><td>{item.netCents === null ? "Not recorded" : formatRecordedMoney(item.netCents, item.currency)}</td><td><span className="of-payment-badge" data-status={item.status}>{paymentLabel(item.status)}</span></td></tr>)}
       </tbody></table></div>{!data.transactions.length ? <p className="of-empty-copy">No transactions are recorded on this page.</p> : null}
     </div>
     <details className="of-panel of-sales-totals"><summary>Recorded totals by currency and status</summary><div className="of-compact-totals">{data.totals.map(total => <div key={`${total.currency}:${total.status}`} data-of-sales-total={`${total.currency}:${total.status}`}><span>{paymentLabel(total.status)} gross</span><strong>{formatRecordedMoney(total.grossCents, total.currency)}</strong><small>{total.count} recorded transactions</small></div>)}</div></details>

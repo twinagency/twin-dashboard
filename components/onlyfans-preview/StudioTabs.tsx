@@ -2,12 +2,14 @@
 import { createContext, useContext, useEffect, useId, useState, type ReactNode } from "react";
 
 const TabsContext = createContext({ active: "", id: "" });
-export function StudioTabs({ tabs, label, children }: { tabs: { value: string; label: string }[]; label: string; children: ReactNode }) {
-  const [active, setActive] = useState(tabs[0].value);
+export function StudioTabs({ tabs, label, children, active: controlled, onChange }: { tabs: { value: string; label: string }[]; label: string; children: ReactNode; active?: string; onChange?: (value: string) => void }) {
+  const [localActive, setLocalActive] = useState(tabs[0].value);
   const [interactive, setInteractive] = useState(false);
   useEffect(() => { setInteractive(true); }, []);
+  const active = controlled ?? localActive;
+  const setActive = onChange ?? setLocalActive;
   const id = useId();
-  return <TabsContext.Provider value={{ active, id }}><div className="of-tab-workspace">
+  return <TabsContext.Provider value={{ active, id }}><div className="of-tab-workspace" data-active={active}>
     <div className="of-tabs" role="tablist" aria-label={label} aria-busy={!interactive}>
       {tabs.map((tab, index) => <button key={tab.value} type="button" role="tab" id={`${id}-tab-${tab.value}`}
         aria-controls={`${id}-panel-${tab.value}`} aria-selected={active === tab.value} tabIndex={active === tab.value ? 0 : -1} disabled={!interactive}
