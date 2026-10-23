@@ -162,3 +162,24 @@
   .telegram-live-composer:has(.telegram-composer-status) { display: none; }
   .telegram-live-composer { padding: 8px; }
 }
+
+/* Give desktop operators the full remaining viewport for conversation history. */
+@media (min-width: 1024px) {
+  .users-workspace.telegram-live-page { padding: 10px 12px 8px; gap: 8px; }
+  .telegram-live-heading { min-height: 30px; gap: 12px; }
+  .telegram-live-page .telegram-live-heading h1 { font-size: 24px; line-height: 1.2; }
+  .telegram-live-heading p { display: none; }
+  .telegram-live-grid { grid-template-rows: minmax(0, 1fr); }
+  .telegram-chat-header { min-height: 60px; padding: 9px 12px; gap: 8px; flex-wrap: nowrap; }
+  .telegram-chat-header .telegram-fan-avatar { width: 36px; height: 36px; font-size: 12px; }
+  .telegram-chat-actions { margin-left: auto; flex-basis: auto; gap: 5px; }
+  .telegram-history-badge { padding: 5px 7px; font-size: 10px; }
+  .telegram-live-page .telegram-history-nav { padding: 5px 10px; gap: 5px 8px; }
+  .telegram-live-page .tg-thread { padding: 12px 16px; overscroll-behavior-y: contain; }
+  .telegram-live-page .tg-bubble { padding: 9px 12px; }
+  .telegram-live-page .tg-meta { margin-top: 4px; }
+  .telegram-live-page [data-thread-status] { padding: 5px 12px; }
+  .telegram-live-composer:has(.telegram-composer-status) { display: none; }
+  .telegram-live-composer { padding: 8px 10px; }
+  .telegram-list-toolbar { padding: 10px 10px 6px; }
+}
