@@ -10,10 +10,10 @@ export type Load<T> =
   | { kind: "loading" }
   | { kind: "ok"; data: T }
   | { kind: "denied"; error: string }
-  | { kind: "pending"; error: string }   // backend contract missing or unreachable
+  | { kind: "unavailable"; error: string }   // backend not configured or unreachable
   | { kind: "error"; error: string };
 
-/** The base for every proxy call. */
+/** The base for every readiness and purchases proxy call. */
 export const launchBase = (accountId: string) => `/api/onlyfans-launch/abc/accounts/${encodeURIComponent(accountId)}`;
 
 /** Reads one resource. A response for an earlier account or request can never overwrite a newer one. */
@@ -30,7 +30,7 @@ export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null,
       const j = await r.json().catch(() => null) as { ok?: boolean; data?: unknown; error?: string; outcome?: string } | null;
       if (mine !== generation.current) return;
       if (r.status === 401 || r.status === 403) { setState({ kind: "denied", error: j?.error ?? "Your session cannot read this." }); return; }
-      if (r.status === 503 || j?.outcome === "unavailable") { setState({ kind: "pending", error: j?.error ?? "The backend contract is not available." }); return; }
+      if (r.status === 503 || j?.outcome === "unavailable") { setState({ kind: "unavailable", error: j?.error ?? "The backend is not available right now." }); return; }
       if (!r.ok || (unwrap && !j?.ok) || j === null) { setState({ kind: "error", error: j?.error ?? "This could not be read." }); return; }
       const data = parse(unwrap ? j!.data : j);
       setState(data === null ? { kind: "error", error: "The backend answer was not in the expected shape, so nothing is shown." } : { kind: "ok", data });
@@ -43,43 +43,27 @@ export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null,
   return { state, reload: load };
 }
 
-export type Post = { ok: true } | { ok: false; outcome: "refused" | "unconfirmed" | "unavailable" | "denied"; error: string };
-/** Sends one command. A lost reply is reported as unconfirmed, never as success. */
-export async function postCommand(accountId: string, command: unknown): Promise<Post> {
-  try {
-    const r = await fetch(`${launchBase(accountId)}/command`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify(command), signal: AbortSignal.timeout(20_000) });
-    const j = await r.json().catch(() => null) as { ok?: boolean; error?: string; outcome?: string } | null;
-    if (r.ok && j?.ok) return { ok: true };
-    if (r.status === 401 || r.status === 403) return { ok: false, outcome: "denied", error: j?.error ?? "Your session cannot make this change." };
-    return { ok: false, outcome: (j?.outcome as "refused" | "unconfirmed" | "unavailable") ?? "refused", error: j?.error ?? "The change was not accepted." };
-  } catch { return { ok: false, outcome: "unconfirmed", error: "The outcome is not confirmed. Refresh, then retry if it did not apply." }; }
-}
-
 export const useLaunchResource = <T,>(accountId: string, resource: string, parse: (v: unknown) => T | null) => useJsonResource<T>(`${launchBase(accountId)}/${resource}`, parse);
 
-export function useCanManage(accountId: string) {
-  const [canManage, setCanManage] = useState<boolean | null>(null);
+export type Access = { canManage: boolean; accountPause: boolean };
+/** Permission from the server session. Null until known; controls stay disabled until then. */
+export function useAccess(accountId: string): Access | null {
+  const [access, setAccess] = useState<Access | null>(null);
   useEffect(() => {
-    let live = true; setCanManage(null);
-    fetch(`${launchBase(accountId)}/access`, { credentials: "same-origin", cache: "no-store" }).then(r => r.json()).then(j => { if (live) setCanManage(j?.ok === true && j.data?.canManage === true); }).catch(() => { if (live) setCanManage(false); });
+    let live = true; setAccess(null);
+    if (!accountId) return;
+    fetch(`${launchBase(accountId)}/access`, { credentials: "same-origin", cache: "no-store" }).then(r => r.json()).then(j => {
+      if (live) setAccess(j?.ok === true && typeof j.data?.canManage === "boolean" ? { canManage: j.data.canManage, accountPause: j.data.accountPause === true } : { canManage: false, accountPause: false }); })
+      .catch(() => { if (live) setAccess({ canManage: false, accountPause: false }); });
     return () => { live = false; };
   }, [accountId]);
-  return canManage;
+  return access;
 }
 
-export function FixtureBanner({ what }: { what: string }) {
-  return <div role="note" data-launch-fixture="true" className="rounded-lg border-2 border-dashed border-[#d9a441] bg-[#fff8e8] px-3 py-2 text-sm font-semibold text-[#6b4a00]">
-    FIXTURE-ONLY, NOT CONNECTED. {what} Sample data on this screen is not from your account. Nothing here can be saved.</div>;
-}
-
-export function Pending({ screen, error, onFixture, children }: { screen: string; error: string; onFixture: () => void; children?: ReactNode }) {
-  return <div data-launch-state="pending" role="status" className="rounded-xl border border-[#f0d9a8] bg-[#fff8e8] p-4">
-    <div className="text-sm font-semibold text-ink">{screen}: backend contract not available</div>
-    <p className="mt-1 text-xs leading-5 text-muted">{error} Nothing is shown as live. You can look at a labelled sample of the layout.</p>
-    {children}
-    <button type="button" className={`${buttonClass} mt-3`} onClick={onFixture}>Show FIXTURE-ONLY sample</button>
-  </div>;
+export function Unavailable({ screen, error }: { screen: string; error: string }) {
+  return <div data-launch-state="unavailable" role="status" className="rounded-xl border border-[#f0d9a8] bg-[#fff8e8] p-4">
+    <div className="text-sm font-semibold text-ink">{screen}: not available right now</div>
+    <p className="mt-1 text-xs leading-5 text-muted">{error} Nothing is shown as live and nothing was changed.</p></div>;
 }
 
 export function StateLine({ state, retry, label }: { state: Load<unknown>; retry: () => void; label: string }) {
