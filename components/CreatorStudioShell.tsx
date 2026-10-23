@@ -61,6 +61,6 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
       </header>
       <main id="creator-studio-main" className={styles.main} tabIndex={-1}>{children}<footer className={styles.footer}><span>Made for you. Powered by {brand === "moxy" ? "Moxy" : "Flirt"}.</span><span>Your space to grow ♡</span></footer></main>
     </div>
-    <nav className={styles.mobileNav} aria-label="Mobile creator navigation">{navigation(true)}</nav>
+    <nav className={styles.mobileNav} style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }} aria-label="Mobile creator navigation">{navigation(true)}</nav>
   </div>;
 }
