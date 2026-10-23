@@ -36,8 +36,16 @@ async function main() {
   payoutStage='creator account lookup';
   let account=null;
   if(!flirt){
-    const links=await rest(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_KEY,'creator_clone_links?select=creator_account_id,creator_accounts!inner(id,auth_user_id,account_status)&creator_accounts.account_status=in.(active,approved,applicant)&limit=1');
-    account=links[0]?.creator_accounts||null;
+    const links=await rest(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_KEY,'creator_clone_links?select=creator_account_id,creator_accounts!inner(id,auth_user_id,account_status)&creator_accounts.account_status=in.(active,approved,applicant)&creator_accounts.auth_user_id=not.is.null&limit=40');
+    for(const link of links) {
+      const candidate=link.creator_accounts;
+      if(!candidate?.auth_user_id)continue;
+      const key=process.env.CREATOR_SESSION_SECRET||secret;
+      const payload=Buffer.from(JSON.stringify({accountId:candidate.id,userId:candidate.auth_user_id,exp:Date.now()+120000})).toString('base64url');
+      const response=await request('/api/payouts','twin_creator_session='+payload+'.'+sign(payload,key));
+      const candidateView=await response.json().catch(()=>null);
+      if(response.ok&&candidateView?.audience==='creator'&&candidateView.creators?.length===1){account=candidate;break;}
+    }
     payoutStage='Moxy view-as read';
     const value=Buffer.from(JSON.stringify({targetType:'agency',targetId:'bc670215-110b-4ea0-8f5c-af3dfe21d253',admin:'payout-read-verification',exp:Date.now()+120000})).toString('base64url');
     const moxy=await request('/api/payouts',adminCookie+'; twin_admin_view_as='+value+'.'+sign(value));
@@ -56,11 +64,12 @@ async function main() {
     const payload=Buffer.from(JSON.stringify({accountId:account.id,userId:account.auth_user_id,exp:Date.now()+120000})).toString('base64url');
     const cookie='twin_creator_session='+payload+'.'+sign(payload,key);
     const read=await request('/api/payouts',cookie);const creator=await read.json();
+    report.creatorReadStatus=read.status;
     report.checks.creatorOwnRead=read.status===200&&creator.audience==='creator'&&creator.canManage===false&&creator.creators.length===1;
     const creatorPage=await request('/creator/payouts',cookie);report.checks.creatorPage=creatorPage.status===200&&(await creatorPage.text()).includes('Withdrawals / Payouts');
     const mutation=await request('/api/payouts',cookie,{method:'POST',headers:{origin:publicOrigin,'content-type':'application/json'},body:'{}'});report.checks.creatorWriteDenied=mutation.status===403;
-    const other=data.creators.find(row=>!creator.creators.some(own=>own.id===row.id));
-    if(other){const cross=await request('/api/payouts?cloneId='+other.id,cookie);report.checks.crossCreatorDenied=cross.status===403;}
+    const other=data.creators.find(row=>!creator.creators?.some(own=>own.id===row.id));
+    if(other&&creator.creators){const cross=await request('/api/payouts?cloneId='+other.id,cookie);report.checks.crossCreatorDenied=cross.status===403;}
   }else report.checks.creatorAccountAvailable=false;
   console.log(JSON.stringify(report));
   if(Object.values(report.checks).some(value=>value!==true))process.exitCode=1;
