@@ -88,15 +88,19 @@ async function uiChecks() {
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>',{url:'https://dashboard.example.test/payouts',pretendToBeVisual:true});
   for(const key of ['window','document','HTMLElement','HTMLInputElement','HTMLSelectElement','Event','FormData','MutationObserver'])global[key]=dom.window[key];
   global.IS_REACT_ACT_ENVIRONMENT=true;
+  global.localStorage=dom.window.localStorage;
   dom.window.HTMLElement.prototype.scrollIntoView=function(){};
   const temp=path.resolve('.payout-test');fs.mkdirSync(temp,{recursive:true});
-  buildSync({entryPoints:['components/PayoutDashboard.tsx'],outfile:path.join(temp,'ui.cjs'),bundle:true,platform:'node',format:'cjs',packages:'external',loader:{'.css':'local-css'},jsx:'automatic'});
+  buildSync({stdin:{contents:'export { default } from "./components/PayoutDashboard"; export { default as CurrencyProvider, useCurrency } from "./components/CurrencyProvider";',resolveDir:process.cwd(),loader:'tsx'},outfile:path.join(temp,'ui.cjs'),bundle:true,platform:'node',format:'cjs',packages:'external',loader:{'.css':'local-css'},jsx:'automatic'});
   const React=require('react');const {act}=React;const {createRoot}=require('react-dom/client');const UI=require(path.join(temp,'ui.cjs')).default;
+  const Provider=require(path.join(temp,'ui.cjs')).CurrencyProvider;const useCurrency=require(path.join(temp,'ui.cjs')).useCurrency;
+  function SharedToggle(){const {currency,setCurrency}=useCurrency();return React.createElement('button',{'data-shared-currency':currency,onClick:()=>setCurrency(currency==='AUD'?'USD':'AUD')},'Toggle shared currency')}
+  const View=props=>React.createElement(Provider,null,React.createElement(SharedToggle),React.createElement(UI,props));
   const snapshot={audience:'admin',canManage:true,brand:'twin',creators:[{id:creator,name:'Test creator',earnedUsdCents:780,paid:{USD:0,AUD:0},lastPaidOn:null}],history:[],historyCount:0,page:0,pageSize:50,checkedAt:new Date().toISOString()};
   let posts=0;
-  global.fetch=async(_url,options)=>{if(options?.method==='POST'){posts++;return Response.json({id:requestId},{status:201})}return Response.json(snapshot)};
+  global.fetch=async(_url,options)=>{if(_url==='/api/fx')return Response.json({usd_to_aud:2});if(options?.method==='POST'){posts++;return Response.json({id:requestId},{status:201})}return Response.json(snapshot)};
   const root=createRoot(document.getElementById('root'));
-  await act(async()=>{root.render(React.createElement(UI,{audience:'admin',brand:'twin'}));await new Promise(resolve=>setTimeout(resolve,25))});
+  await act(async()=>{root.render(React.createElement(View,{audience:'admin',brand:'twin'}));await new Promise(resolve=>setTimeout(resolve,25))});
   check('admin manual form is present',()=>assert(document.querySelector('form')));
   check('no payout date is prefilled',()=>assert.equal(document.querySelector('input[name="paidOn"]').value,''));
   check('no payout amount is prefilled',()=>assert.equal(document.querySelector('input[name="amount"]').value,''));
@@ -109,12 +113,34 @@ async function uiChecks() {
   check('admin submits one manual payout',()=>assert.equal(posts,1));
   check('successful save clears typed date and amount',()=>{assert.equal(document.querySelector('input[name="amount"]').value,'');assert.equal(document.querySelector('input[name="paidOn"]').value,'')});
   check('successful save is surfaced',()=>assert(document.body.textContent.includes('Payout recorded.')));
+  snapshot.creators[0].paid={USD:100,AUD:2000};
+  snapshot.history=[{id:'usd',cloneId:creator,creatorName:'Test creator',amountCents:100,currency:'USD',paidOn:'2026-10-20',reference:'USD receipt',voided:false},{id:'aud',cloneId:creator,creatorName:'Test creator',amountCents:2000,currency:'AUD',paidOn:'2026-10-21',reference:'AUD receipt',voided:false}];snapshot.historyCount=2;
+  const displaySelect=()=>Array.from(document.querySelectorAll('label')).find(label=>label.textContent.includes('Display currency')).querySelector('select');
+  async function sharedSwitch(){await act(async()=>document.querySelector('[data-shared-currency]').click())}
+  async function pageSwitch(value){await act(async()=>{displaySelect().value=value;displaySelect().dispatchEvent(new Event('change',{bubbles:true}))})}
+  function checkAmounts(expectedCurrency,earned,paid,history) {
+    const totals=document.querySelector('[aria-label="Earnings and payout totals"]');
+    assert(totals.textContent.includes(earned));assert(totals.textContent.includes(paid));
+    const cells=Array.from(document.querySelectorAll('#payout-history tbody tr')).map(row=>row.children[2]?.textContent);
+    for(let index=0;index<history.length;index++)assert(cells[index].includes(history[index]),JSON.stringify(cells));
+    assert.equal(displaySelect().value,expectedCurrency);
+    assert.equal(document.querySelector('[data-shared-currency]').dataset.sharedCurrency,expectedCurrency);
+  }
+  await act(async()=>{window.dispatchEvent(new Event('focus'));await new Promise(resolve=>setTimeout(resolve,25))});
+  await sharedSwitch();
+  check('shared USD switch converts earnings, mixed-currency totals, creator row and every receipt',()=>{checkAmounts('USD','$7.80','$11.00',['$1.00','$10.00']);assert(document.getElementById('payout-creators-title').closest('section').textContent.includes('$11.00'))});
+  await pageSwitch('AUD');
+  check('page AUD switch also updates shared currency with live rate',()=>checkAmounts('AUD','A$15.60','A$22.00',['A$2.00','A$20.00']));
+  check('converted history keeps the original recorded amount in its label',()=>assert(document.querySelector('[title="Originally paid $1.00 USD"]')));
+  check('display conversion never posts or changes source payout cents',()=>{assert.equal(posts,1);assert.equal(snapshot.history[0].amountCents,100);assert.equal(snapshot.history[1].amountCents,2000);assert.equal(snapshot.history[1].currency,'AUD')});
   await act(async()=>root.unmount());
   const creatorRoot=createRoot(document.getElementById('root'));snapshot.audience='creator';snapshot.canManage=false;
-  await act(async()=>{creatorRoot.render(React.createElement(UI,{audience:'creator',brand:'moxy'}));await new Promise(resolve=>setTimeout(resolve,20))});
+  await act(async()=>{creatorRoot.render(React.createElement(View,{audience:'creator',brand:'moxy'}));await new Promise(resolve=>setTimeout(resolve,20))});
   check('creator has no form or mutation control',()=>{assert.equal(document.querySelectorAll('form').length,0);assert(!document.body.textContent.includes('Add payout'));assert(!document.body.textContent.includes('Save payout'))});
   check('creator sees history and automatic sync state',()=>{assert(document.body.textContent.includes('Payment history'));assert(document.body.textContent.includes('New payments appear automatically.'))});
   check('Moxy styling is selected without changing layout',()=>assert(document.querySelector('[data-payout-brand="moxy"]')));
+  await act(async()=>document.querySelector('[data-shared-currency]').click());
+  check('creator payout history and totals share the same currency toggle',()=>{assert(document.querySelector('[aria-label="Earnings and payout totals"]').textContent.includes('$11.00'));assert(document.getElementById('payout-history').textContent.includes('$10.00'))});
   await act(async()=>creatorRoot.unmount());dom.window.close();fs.rmSync(temp,{recursive:true,force:true});
 }
 (async()=>{await serverChecks();await uiChecks();console.log(`Telegram payouts: ${checks} checks passed.`)})().catch(error=>{console.error(error);process.exitCode=1});
