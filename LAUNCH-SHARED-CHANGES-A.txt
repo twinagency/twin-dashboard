@@ -1,0 +1,43 @@
+LAUNCH A/B/C SHARED-FILE REQUESTS (for the head dev). Screens A readiness, B purchases, C personality.
+
+1. PAGE (new file, shared route tree). app/onlyfans/launch/page.tsx:
+   import AbcWorkspace from "@/components/onlyfans-launch/AbcWorkspace";
+   export const dynamic = "force-dynamic";
+   export default function LaunchPage() { return <AbcWorkspace />; }
+   (The /onlyfans layout already gates the channel. The component fetches /api/onlyfans/accounts itself.)
+   Merge note: the D/E agent mounts its own component; combine both into one tabbed page if wanted.
+
+2. NAVIGATION: add a "Launch" entry linking to /onlyfans/launch in the OnlyFans nav/NativeWorkspace tab list (file owned by head dev).
+
+3. package.json scripts:
+   "test:onlyfans-launch": "node --import tsx scripts/check-onlyfans-launch.ts",
+   and append to test:onlyfans-browser-syntax: " && node --check scripts/check-onlyfans-launch-browser.mjs"
+   and add "npm run test:onlyfans-launch" to test:offline.
+   Browser check (not for CI unless chromium exists): node scripts/check-onlyfans-launch-browser.mjs
+
+4. ENV (server only): ONLYFANS_LAUNCH_TOKEN (>=16 chars, must differ from every other ONLYFANS_*_TOKEN). Uses ONLYFANS_API_BASE_URL.
+   Optional: add "LAUNCH" to PURPOSES in lib/onlyfans/backend-transport.ts so token-reuse checks cover it (my backend already refuses reuse).
+
+BACKEND CONTRACTS NEEDED (none exist today; proxy answers 503 "unavailable" and the UI shows FIXTURE-ONLY opt-in).
+Headers: Authorization: Bearer <launch token>; X-OnlyFans-Launch-Version: of-launch.v1
+Envelope on success: {"schemaVersion":"of-launch.v1","ok":true,"accountId":"<id>","data":{...}}  (writes also "applied":true)
+Account-scoped; the backend must enforce agency scope itself. 404/501/503 = contract missing.
+
+GET  /onlyfans/launch/v1/accounts/{id}/readiness
+  data: {"asOf":iso|null,"blockers":[{"id","area","status":"ok|warn|blocked|unknown","title","detail","evidence":str|null,
+         "action":null|{"label","kind":"link|command","href":"/relative","command":"purchases|personality"}}]}
+GET  /onlyfans/launch/v1/accounts/{id}/purchases?after=<id>&status=<a-z_>
+  data: {"scan":{"state":"complete|running|held|never_started|unknown","offset":int|null,"error":str|null,"appliedOwnershipRows":int|null,"messagesMarkedPaid":int|null},
+         "items":[{"id","kind":"failed_import|unmatched|reversal","status":"open|retry_queued|resolved","revision":int,"fanId":str|null,"messageId":str|null,
+         "amountCents":int|null,"currency":str|null,"reason","evidence":[{"id","source","ref","observedAt"}],
+         "audit":[{"at","actor","resolution","reason","evidenceId":str|null}]}],"nextCursor":str|null}
+POST /onlyfans/launch/v1/accounts/{id}/purchases/retry/{itemId}        body {expectedRevision, actor, commandKey}
+POST /onlyfans/launch/v1/accounts/{id}/purchases/resolve/{itemId}      body {expectedRevision, resolution:"confirmed_owned|not_owned|leave_unmatched", reason, evidenceId:str|null, actor, commandKey}
+  Backend MUST reject confirmed_owned unless evidenceId names an existing evidence row of that item; 409 on stale revision; idempotent on commandKey.
+GET  /onlyfans/launch/v1/accounts/{id}/personality
+  data: {"drafts":[{"id","revision","field","imported","edited":str|null,"source","approved":bool}],"configApproved":bool,"configRevision":int,
+         "model":str|null,"dailyBudgetCents":int|null,"behaviour":{"maxRepliesPerHour":int|null,"allowSales":bool|null}}
+POST .../personality/draft/{draftId}   body {expectedRevision, edited, actor, commandKey}
+POST .../personality/approve           body {expectedRevision, actor, commandKey}    (approval must NOT enable sending)
+POST .../personality/settings          body {expectedRevision, model, dailyBudgetCents, maxRepliesPerHour, allowSales, actor, commandKey}
+Browser never sends actor/commandKey; the dashboard route derives both. Write success: {"schemaVersion","ok":true,"applied":true,"accountId","data":null|{}}.

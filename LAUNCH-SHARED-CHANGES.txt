@@ -1,0 +1,13 @@
+OnlyFans launch dashboard integration
+
+Both launch contributions have been combined on codex/onlyfans-final-integration-20261023.
+The add/add handoff conflict is resolved without discarding either contribution:
+- LAUNCH-SHARED-CHANGES-A.txt: readiness, purchases and personality requests.
+- LAUNCH-SHARED-CHANGES-B.txt: memory and automation requests.
+
+These files record integration requests, not proof that the requested work is implemented.
+Backend candidate: 9adc4f58090c2a7b27a29e8e4645917eaabe2219.
+The backend now mounts personality, engagement and history-memory under /onlyfans/configuration/v1/accounts/{account_id}/.
+Reconcile dashboard contracts with those actual routes before claiming live connection.
+Entry pages, navigation, agency routing, CI registration and remaining API work require validation.
+No deployment or account activation is part of this merge commit.
