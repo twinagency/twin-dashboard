@@ -64,6 +64,17 @@ jobs:
           node --import tsx scripts/check-channel-roster.ts
           node scripts/check-operator-workspace-ui.mjs
 
+      - name: OnlyFans render layout and preserved content controls
+        run: node scripts/check-onlyfans-render-browser.mjs
+
+      - name: Keep OnlyFans visual review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-render-review
+          path: test-results/onlyfans-render/
+          if-no-files-found: ignore
+
       - name: Creator platform ownership and connection journey
         run: |
           node scripts/check-creator-preparation.cjs

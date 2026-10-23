@@ -150,6 +150,7 @@ export default function TopBar({
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
         {isCreator ? <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} /> : <CloneSwitcher clones={scopedClones} activeCloneId={scopeId} locked={scopeLocked} fallbackName={fallbackScope} allowNewCreator={channel !== "onlyfans"} />}
         <div className="h-5 w-px shrink-0 bg-line" />
+        {channel === "onlyfans" ? <span className="of-workspace-context"><img src="/brand/platforms/onlyfans.svg" alt="" width="24" height="24" />OnlyFans workspace</span> : null}
         {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle.
             Telegram Stars are Telegram money. On the OnlyFans channel this pill
