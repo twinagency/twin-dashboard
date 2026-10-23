@@ -23,7 +23,7 @@
 .platform :global(button), .platform :global(select), .platform :global(input), .platform :global(textarea) { font: inherit; }
 .platform :global(:is(h1,h2,h3,p)) { margin: 0; }
 .platform.platform.platform :global(.dashboard-sidebar) {
-  width: 240px; background: linear-gradient(165deg,#e8f5ff,#f0f9ff) !important;
+  width: 240px; background: linear-gradient(165deg,#e8f5ff,#f0f9ff) !important; background-color: #e8f5ff !important;
   color: var(--studio-nav-ink); border-right: 1px solid var(--studio-line); box-shadow: none;
 }
 .platform.platform.platform :global(.studio-brand-row) { min-height: 104px; padding: 24px 26px; }
