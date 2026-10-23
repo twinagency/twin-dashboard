@@ -146,6 +146,8 @@ try {
       assert((await page.locator("[data-of-open-offers]").innerText()).includes("USD 8.00"));
     }
     if (section === "settings") {
+      // Account details sit behind "Advanced account details" since f6eda7e; open it as an operator would.
+      await page.getByText("Advanced account details", { exact: true }).click();
       await page.locator("[data-of-settings]").getByText("Saved synthetic creator persona for settings.", { exact: true }).waitFor();
       await page.getByText("Synthetic Harbor", { exact: true }).waitFor();
       assert((await page.locator("[data-of-settings]").innerText()).includes("2 / 5"));
