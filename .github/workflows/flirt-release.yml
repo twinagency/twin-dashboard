@@ -4,6 +4,9 @@ on:
     branches: ["flirt/independent-backend-2026-09-19"]
     paths:
       - .github/workflows/flirt-release.yml
+      - components/PayoutDashboard.tsx
+      - components/PayoutDashboard.module.css
+      - scripts/check-payouts.cjs
       - deployment/flirt-release.py
       - deployment/flirt-host-release.py
       - deployment/flirt-host-release.test.py
