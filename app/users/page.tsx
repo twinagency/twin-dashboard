@@ -1,4 +1,6 @@
-import MessagesWorkspace from "@/components/MessagesWorkspace";
+import MessagesWorkspace from "@/components/users/TelegramLiveWorkspace";
+import TelegramSpendSummary from "@/components/users/TelegramSpendSummary";
+import { Sparkles, FileText, ShoppingCart, UserRound, MapPin, Clock3, SlidersHorizontal, MessageCircle } from "lucide-react";
 import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "@/components/NavigationLink";
 import { redirect } from "next/navigation";
@@ -199,9 +201,10 @@ const profileValueText = (value: unknown): string => {
 // Visible quick filters. Additional status filters remain supported by the
 // query logic, but stay out of the compact Fans toolbar.
 const FILTERS = [
-  { key: "all", label: "👥 All", on: "border-line bg-muted/20 text-ink", off: "border-line text-ink/70" },
-  { key: "active", label: "🟢 Active", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },
-  { key: "flagged", label: "🚩 Flagged", on: "border-crit/50 bg-crit/15 text-crit", off: "border-crit/20 text-crit/70" }, // = users.blocked
+  { key: "all", label: "All", on: "border-line bg-muted/20 text-ink", off: "border-line text-ink/70" },
+  { key: "active", label: "Active", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },
+  { key: "paying", label: "Paid", on: "border-accent/50 bg-accent/15 text-accent", off: "border-line text-ink/70" },
+  { key: "flagged", label: "Flagged", on: "border-crit/50 bg-crit/15 text-crit", off: "border-crit/20 text-crit/70" }, // = users.blocked
 ];
 
 // Sort chips: click again to flip direction (default = descending, "live view").
@@ -970,9 +973,9 @@ export default async function FansPage({
     })),
   );
 
-  // No heading, no vh-calc guessing — <main> in app/layout.tsx is already
-  // pinned to exactly the remaining viewport height for every page (fixed
-  // shell, TopBar included in that budget), so h-full here just flex-fills it
+  // The shell owns the viewport; the heading and panels share its remaining height.
+  // <main> in app/layout.tsx already accounts for the fixed shell and TopBar,
+  // so h-full here fills the remaining space
   // exactly. Only applied at lg+ though: below that the 3 columns stack into one
   // scrolling page (see layout.tsx's overflow-y-auto lg:overflow-hidden) —
   // forcing h-full there too used to squash 3 fixed-height panes into one
@@ -980,7 +983,15 @@ export default async function FansPage({
   const colHeight = "lg:h-full";
 
   return (
-    <div className="users-workspace lg:h-full">
+    <div className="users-workspace telegram-live-page lg:h-full">
+      <header className="telegram-live-heading">
+        <div><h1>Live Telegram</h1><p>Your conversations, with context.</p></div>
+        <div className="telegram-inbox-totals" aria-label="Telegram fan counts">
+          <span><strong>{fmtNum(totalFans)}</strong> fans</span>
+          <span><strong>{fmtNum(activeFans)}</strong> active</span>
+          <span><strong>{fmtNum(payingFans)}</strong> paying</span>
+        </div>
+      </header>
       {/* The ONE live connection for this page, and the toast stack it feeds.
           Both mounted here rather than in the layout: they are the Fans
           inbox's, and a stream open on every page in the app would be a poll
@@ -994,21 +1005,7 @@ export default async function FansPage({
         {/* ── Left: fan list (data above, bigger search, filters) ───────── */}
         <Card size="sm" className={`users-panel users-panel-list flex h-[34rem] ${colHeight} flex-col overflow-hidden p-0`}>
           {v2.unavailable.length > 0 && <p role="status" className="border-b border-line px-3 py-2 text-xs text-warn">Could not refresh {v2.unavailable.join(", ")}. Retrying automatically.</p>}
-          <div className="border-b border-line p-3">
-            {/* Data above the list */}
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              {[
-                { label: "Fans", value: fmtNum(totalFans) },
-                { label: "Active", value: fmtNum(activeFans) },
-                { label: "Paying", value: fmtNum(payingFans) },
-              ].map((s) => (
-                <div key={s.label} className="users-stat rounded-md border border-line bg-bg px-2 py-1.5 text-center">
-                  <div className="text-sm font-semibold tabular-nums text-ink">{s.value}</div>
-                  <div className="text-[10px] text-muted">{s.label}</div>
-                </div>
-              ))}
-            </div>
-
+          <div className="telegram-list-toolbar border-b border-line p-3">
             {/* Bigger search */}
             <form className="relative mb-2.5">
               <svg
@@ -1027,7 +1024,8 @@ export default async function FansPage({
               <Input
                 name="q"
                 defaultValue={q}
-                placeholder="Search fans…"
+                placeholder="Search conversations…"
+                aria-label="Search conversations"
                 className="h-11 pl-9 text-sm"
               />
             </form>
@@ -1037,7 +1035,7 @@ export default async function FansPage({
                 well under the 44px touch minimum, and stacked 4px apart, so on
                 a phone they read as one grey band and mis-taps were routine.
                 Desktop keeps the tight row - a mouse does not need the room. */}
-            <div className="mb-2 flex flex-wrap gap-1.5 sm:gap-1">
+            <div className="telegram-list-filters mb-2 flex flex-wrap gap-1.5 sm:gap-1">
               {FILTERS.map((s) => {
                 // Flagged is the "needs attention" chip: always fully lit when any
                 // exist, with a count badge, so it never fades into the row.
@@ -1045,6 +1043,7 @@ export default async function FansPage({
                 return (
                   <Link
                     key={s.key}
+                    aria-current={status === s.key ? "page" : undefined}
                     href={baseQs({ status: s.key === "all" ? "" : s.key })}
                     className={
                       "flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition hover:brightness-125 sm:min-h-7 sm:px-2.5 " +
@@ -1063,7 +1062,8 @@ export default async function FansPage({
               })}
             </div>
 
-            {/* Sort */}
+            <details className="telegram-sort">
+              <summary><SlidersHorizontal size={14} aria-hidden="true" /> Sort: {SORTS.find(item => item.key === sortKey)?.label} {asc ? "↑" : "↓"}</summary>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-1">
               <span className="text-[10px] text-muted">Sort:</span>
               {SORTS.map((s) => {
@@ -1085,8 +1085,9 @@ export default async function FansPage({
                 );
               })}
             </div>
+            </details>
           </div>
-          <div className="flex-1 divide-y divide-line overflow-y-auto">
+          <div className="telegram-conversation-list flex-1 divide-y divide-line overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-muted">
                 {q ? `No fans match "${q}".` : "No fans yet."}
@@ -1129,8 +1130,9 @@ export default async function FansPage({
                   <Link
                     key={u.id}
                     href={qs(u.id)}
+                    aria-current={selected?.id === u.id ? "true" : undefined}
                     className={
-                      "flex items-center gap-2.5 border-l-2 px-3.5 py-3 text-left transition sm:px-3 sm:py-2.5 " +
+                      "telegram-conversation-row flex items-center gap-2.5 border-l-2 px-3.5 py-3 text-left transition sm:px-3 sm:py-2.5 " +
                       stage.stripe +
                       " " +
                       (selected?.id === u.id ? "bg-accent/10" : "hover:bg-muted/10")
@@ -1140,7 +1142,7 @@ export default async function FansPage({
                       cloneId={u.clone_id}
                       telegramId={u.telegram_id}
                       name={displayName(u)}
-                      className="h-9 w-9 text-xs"
+                      className="telegram-fan-avatar h-9 w-9 text-xs"
                     />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center gap-1.5">
@@ -1189,9 +1191,9 @@ export default async function FansPage({
                         ) : null}
                         <span className="creator-name">{cloneById.get(u.clone_id)?.name ?? "-"}</span>
                       </span>
-                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                      <span className="telegram-conversation-flags mt-1 flex flex-wrap items-center gap-1">
                         <span
-                          className={chip + " " + stage.tone}
+                          className={"telegram-journey-chip " + chip + " " + stage.tone}
                           title={
                             j.nextStep
                               ? `Next onboarding step: ${nextLabel?.label ?? j.nextStep.type} at ${j.nextStep.after_messages ?? "?"} messages. ${j.firedSteps.length} of ${j.onboardingSteps.length} already sent.`
@@ -1260,12 +1262,12 @@ export default async function FansPage({
               {/* Header. Telegram's own order: who he is, then his handle and
                   ids. The name he TYPED at her sits under those as a note, not
                   as the headline — see the identity comment above. */}
-              <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-3 sm:py-2">
+              <div className="telegram-chat-header flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-3 sm:py-2">
                 <FanAvatar
                   cloneId={selected.clone_id}
                   telegramId={selected.telegram_id}
                   name={displayName(selected)}
-                  className="h-9 w-9 text-[11px]"
+                  className="telegram-fan-avatar h-9 w-9 text-[11px]"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
@@ -1296,22 +1298,22 @@ export default async function FansPage({
                     </div>
                   )}
                 </div>
-                <Info
-                  className="shrink-0"
-                  text="Under a message, the pill says which flow produced it: her live reply, an onboarding step, the campaign, the out-of-credits wall. Only sends made from 2026-08-18 onward carry it, so an older message with no pill is unknown, not confirmed live. Buttons drawn under a bubble are the ones the fan actually saw."
-                />
-                <span className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] font-medium text-muted">
-                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="#2AABEE">
-                    <path d="M21.9 3.4c.3-1.2-.9-2.2-2-1.7L2.5 9.1c-1.3.5-1.2 2.3.1 2.7l4.4 1.4 1.7 5.5c.4 1.2 1.9 1.5 2.7.6l2.4-2.6 4.5 3.3c1 .7 2.4.2 2.7-1l3-15.6zM8.5 12.6l9.5-6.2c.2-.2.5.2.3.4l-7.6 7.2-.3 3.2-1.9-4.6z" />
-                  </svg>
-                  Telegram
-                </span>
+                <div className="telegram-chat-actions">
+                  <span className="telegram-history-badge"><Sparkles size={14} aria-hidden="true" />{selected.paused ? "Paused" : "Live history"}</span>
+                  {!selectedV2 && isStoredFan(selected.id) && <MutationForm action={setPaused}>
+                    <input type="hidden" name="userId" value={selected.id} />
+                    <input type="hidden" name="paused" value={selected.paused ? "false" : "true"} />
+                    <ConfirmSubmit className="telegram-takeover" message={selected.paused ? "Resume automated replies for this fan?" : "Take over this fan's conversation? Automated replies and campaigns for this fan pause until you resume them."}>
+                      <UserRound size={16} aria-hidden="true" />{selected.paused ? "Resume AI" : "Take over"}
+                    </ConfirmSubmit>
+                  </MutationForm>}
+                </div>
               </div>
 
               <ChatThread
                 key={`${selected.id}:${params.before ?? ""}:${params.after ?? ""}`}
                 historyNavigation={
-                  <nav aria-label="Conversation history" className="flex flex-wrap items-center justify-center gap-3 border-b border-line px-3 py-2 text-xs">
+                  <nav aria-label="Conversation history" className="telegram-history-nav flex flex-wrap items-center justify-center gap-3 border-b border-line px-3 py-2 text-xs">
                     <span className="text-muted">All stored history</span>
                     {historyUnavailable && <span role="status" className="text-warn">Some stored messages could not refresh. Retrying automatically.</span>}
                     {history.length > 0 && (historyHasMore || !combinedHistory && historyAfter) && (
@@ -1331,6 +1333,13 @@ export default async function FansPage({
                 spentStars={totalSpent}
                 purchasedCount={mediaPurchaseCount}
               />
+              <div className="telegram-live-composer">
+                {selected.paused && !selectedV2 && isStoredFan(selected.id) ? (
+                  <ManualTakeover userId={selected.id} freePhotos={freePhotos} />
+                ) : (
+                  <div className="telegram-composer-status"><MessageCircle size={18} aria-hidden="true" /><span>{selectedV2 || !isStoredFan(selected.id) ? "Live conversation. New messages appear automatically." : "Take over to send a message."}</span></div>
+                )}
+              </div>
             </>
           )}
         </Card>
@@ -1342,15 +1351,15 @@ export default async function FansPage({
               Pick a fan to see their data.
             </div>
           ) : (
-            <div className="flex flex-col gap-5">
+            <div className="telegram-profile-content flex flex-col gap-5">
               <div>
                 {/* Who this panel is about - name up top, same as the chat header. */}
-                <div className="mb-2.5 flex items-center gap-2.5">
+                <div className="telegram-profile-header mb-2.5 flex items-center gap-2.5">
                   <FanAvatar
                     cloneId={selected.clone_id}
                     telegramId={selected.telegram_id}
                     name={displayName(selected)}
-                    className="h-9 w-9 text-xs"
+                    className="telegram-fan-avatar h-9 w-9 text-xs"
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-ink">{displayName(selected)}</div>
@@ -1422,6 +1431,33 @@ export default async function FansPage({
                 </Link>
               </div>
 
+              <dl className="telegram-fan-meta">
+                <div><dt><UserRound size={16} aria-hidden="true" />Fan since</dt><dd>{dateTime(selected.first_seen_at)}</dd></div>
+                {personalProfileCategories.find(row => row.label === "Location")?.value && <div><dt><MapPin size={16} aria-hidden="true" />Location</dt><dd>{personalProfileCategories.find(row => row.label === "Location")?.value}</dd></div>}
+                <div><dt><Clock3 size={16} aria-hidden="true" />Last message</dt><dd>{dateTime(selected.last_message_received)}</dd></div>
+              </dl>
+
+              <section className="telegram-context-section" aria-labelledby="telegram-saved-facts">
+                <h2 id="telegram-saved-facts"><Sparkles size={18} aria-hidden="true" />Saved facts</h2>
+                {[...personalRows, ...contextRows, ...otherRows].some(row => row.items.length > 0) ? (
+                  <ul className="telegram-saved-facts">{[...personalRows, ...contextRows, ...otherRows].filter(row => row.items.length > 0).slice(0, 2).map(row => <li key={row.label}><span aria-hidden="true">{row.emoji}</span><div><small>{row.label}</small><span>{row.items.join(" · ")}</span></div></li>)}</ul>
+                ) : <p className="telegram-context-empty">No saved facts yet.</p>}
+              </section>
+
+              <section className="telegram-context-section" aria-labelledby="telegram-conversation-summary">
+                <h2 id="telegram-conversation-summary"><FileText size={18} aria-hidden="true" />Conversation summary</h2>
+                <p className="telegram-summary">{sentenceCase(profile?.summary?.trim() ?? "") || "No conversation summary recorded yet."}</p>
+              </section>
+
+              <section className="telegram-context-section" aria-labelledby="telegram-purchase-history">
+                <h2 id="telegram-purchase-history"><ShoppingCart size={18} aria-hidden="true" />Purchase history</h2>
+                <div className="telegram-spend-card"><TelegramSpendSummary stars={totalSpent} cloneId={selected.clone_id} /><span>Total recorded spend · {fmtNum(purchases.length)} purchases</span></div>
+                <details className="telegram-purchase-records"><summary>View purchases ({fmtNum(purchases.length)})</summary>
+                  {purchases.length === 0 ? <p className="telegram-context-empty">No purchases recorded yet.</p> : <div className="telegram-purchase-list">{purchases.map((purchase, index) => <div key={index}><span>{purchase.kind === "credits" ? "messages" : purchase.kind}<small>{dateTime(purchase.paid_at)}</small></span><StarAmount stars={purchase.amount_stars} cloneId={selected.clone_id} /></div>)}</div>}
+                </details>
+              </section>
+
+              <details className="telegram-fan-details"><summary>More fan details & controls</summary><div className="telegram-fan-details-body">
               <div className="grid grid-cols-2 gap-2">
                 {[
                   {
@@ -1621,38 +1657,6 @@ export default async function FansPage({
                 />
               </div>
 
-              {/* Purchases */}
-              <div>
-                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  Purchases {purchases.length > 0 && `(${purchases.length})`}
-                </div>
-                {purchases.length === 0 ? (
-                  <div className="text-xs text-muted">None yet.</div>
-                ) : (
-                  <div className="flex flex-col divide-y divide-line">
-                    {purchases.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between gap-2 py-1.5 text-xs">
-                        <span className="text-muted">
-                          {p.kind === "credits" ? "messages" : p.kind} · {dateTime(p.paid_at)}
-                        </span>
-                        <span className="font-mono text-ink">
-                          <StarAmount stars={p.amount_stars} cloneId={selected.clone_id} />
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Manual fan takeover (migration 096) - only once this fan is
-                  paused (see the Pause/Resume control below), an operator can
-                  compose a text, a generated voice note, or an existing FREE
-                  photo and send it as her. See ManualTakeover.tsx +
-                  bot/src/manual-send.ts for the full mechanism. */}
-              {selected.paused && !selectedV2 && isStoredFan(selected.id) && (
-                <ManualTakeover userId={selected.id} freePhotos={freePhotos} />
-              )}
-
               {/* Controls - the destructive/rare ops, tucked away but all here */}
               {!selectedV2 && isStoredFan(selected.id) && <details className="mt-auto rounded-md border border-line bg-bg">
                 <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted hover:text-ink">
@@ -1771,6 +1775,7 @@ export default async function FansPage({
                   </MutationForm>
                 </div>
               </details>}
+              </div></details>
             </div>
           )}
         </Card>

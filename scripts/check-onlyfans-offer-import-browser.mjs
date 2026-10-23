@@ -105,6 +105,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(origin + target, { waitUntil: "networkidle" });
+    if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
     const panel = page.locator("[data-offer-import]");
     await panel.getByRole("heading", { name: "Import existing OnlyFans offers" }).waitFor({ timeout: 15000 });
     const scan = panel.getByRole("button", { name: "Scan imported history", exact: true });
@@ -243,6 +244,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
 
     // Account switching: an in-flight reply for one account is never shown under another.
     await page.goto(origin + target, { waitUntil: "networkidle" });
+    if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
     const others = page.locator('nav[aria-label$="account"] a');
     if (await others.count() > 1) {
       state.delay = 1500;
@@ -261,6 +263,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
       const readPage = await viewer.newPage();
       await readPage.route("**/api/onlyfans-content/accounts/*/imports/**", handle);
       await readPage.goto(origin + target, { waitUntil: "networkidle" });
+      if (await readPage.getByRole("tab", { name: "Offers", exact: true }).count()) await readPage.getByRole("tab", { name: "Offers", exact: true }).click();
       const readPanel = readPage.locator("[data-offer-import]");
       assert(await readPanel.getByRole("button", { name: "Scan imported history", exact: true }).isDisabled(), "read-only team access cannot start a scan");
       assert.equal(await readPanel.getByRole("button", { name: "Create selected drafts" }).count(), 0);

@@ -303,6 +303,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // The editor never offers to switch on an item whose media is not fully synced.
     const editor = page.locator("[data-of-content-editor]").first();
     if (await editor.count()) {
+      if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
       const itemId = await editor.getAttribute("data-of-content-editor");
       state.extraDrafts.push({ ...state.extraDrafts[1], draftId: "dr-item", itemId, label: "Synthetic item draft" });
       await editor.locator("[data-of-edit-content-open]").click();

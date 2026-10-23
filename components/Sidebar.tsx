@@ -429,7 +429,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioRoute = isDashboardWorkspaceRoute(pathname);
-  const studioNavigation = isAdmin;
+  const studioNavigation = isAdmin || channel.channel === "onlyfans";
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!isAdmin) return;

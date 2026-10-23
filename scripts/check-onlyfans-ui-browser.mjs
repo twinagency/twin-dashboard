@@ -1,0 +1,71 @@
+/** Shared production presentation with synthetic data only; real API acceptance is separate. */
+import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import http from "node:http";
+import path from "node:path";
+import { chromium } from "playwright";
+
+const root = path.resolve(import.meta.dirname, ".."), dist = path.join(root, "preview/onlyfans-ui/dist");
+const shots = process.env.ONLYFANS_UI_ARTIFACT_DIR || path.join(root, "test-results/onlyfans-ui");
+await fs.mkdir(shots, { recursive: true });
+let checks = 0;
+const check = (condition, message) => { assert(condition, message); checks++; };
+const types = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css" };
+const server = http.createServer(async (request, response) => {
+  try {
+    const url = new URL(request.url, "http://localhost"), candidate = path.resolve(dist, "." + decodeURIComponent(url.pathname));
+    if (candidate !== dist && !candidate.startsWith(dist + path.sep)) throw new Error("path");
+    const stat = await fs.stat(candidate), file = stat.isDirectory() ? path.join(candidate, "index.html") : candidate;
+    response.writeHead(200, { "Content-Type": types[path.extname(file)] || "application/octet-stream", "Cache-Control": "no-store" });
+    response.end(await fs.readFile(file));
+  } catch { response.writeHead(404); response.end("Not found"); }
+});
+await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+const origin = `http://127.0.0.1:${server.address().port}`;
+let browser;
+try {
+  browser = await chromium.launch({ headless: true, ...(process.env.PREVIEW_CHROME ? { executablePath: process.env.PREVIEW_CHROME } : {}), args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  const page = await browser.newPage(), errors = [];
+  page.on("pageerror", error => errors.push(String(error)));
+  const pages = ["overview", "accounts", "inbox", "campaigns", "content", "sales", "settings", "operations"];
+  for (const width of [390, 430, 768, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const section of pages) {
+      await page.goto(`${origin}/onlyfans/${section}/`, { waitUntil: "load" });
+      await page.getByRole("heading", { name: section[0].toUpperCase() + section.slice(1), exact: true }).first().waitFor();
+      if (section === "accounts") await page.locator("[data-of-account-id]").first().waitFor();
+      if (section === "inbox") await page.locator("[data-of-conversation-id]").first().waitFor();
+      if (section === "settings") await page.locator("[data-of-edit-persona]").waitFor();
+      const sizing = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: innerWidth, main: document.querySelector("main")?.scrollWidth }));
+      check(sizing.page <= sizing.viewport + 1, `${section} overflows at ${width}px: ${JSON.stringify(sizing)}`);
+      await page.screenshot({ path: path.join(shots, `${width}-${section}.png`), fullPage: true });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${origin}/onlyfans/settings/`, { waitUntil: "load" });
+  await page.locator("[data-of-edit-persona]").fill("Retained unsaved synthetic persona");
+  await page.getByRole("tab", { name: "Reply settings", exact: true }).click();
+  await page.locator("[data-of-edit-budget]").fill("125");
+  await page.locator("[data-of-edit-reasoning]").selectOption("medium");
+  await page.getByRole("tab", { name: "Account", exact: true }).click();
+  await page.getByRole("tab", { name: "Personality", exact: true }).click();
+  check(await page.locator("[data-of-edit-persona]").inputValue() === "Retained unsaved synthetic persona", "Persona edits survive presentation tabs");
+  await page.getByRole("tab", { name: "Reply settings", exact: true }).click();
+  check(await page.locator("[data-of-edit-budget]").inputValue() === "125", "Native budget edit survives presentation tabs");
+  check(await page.locator("[data-of-edit-reasoning]").inputValue() === "medium", "Native reasoning edit survives presentation tabs");
+  await page.getByRole("tab", { name: "Reply settings", exact: true }).focus(); await page.keyboard.press("Home");
+  check(await page.getByRole("tab", { name: "Personality", exact: true }).getAttribute("aria-selected") === "true", "Keyboard Home selects and focuses the first tab");
+  check(await page.getByRole("link", { name: "Launch control", exact: true }).count() > 0, "Native launch controls remain directly reachable");
+  await page.goto(`${origin}/onlyfans/sales/`, { waitUntil: "load" });
+  await page.getByRole("tab", { name: "Open offers (1)", exact: true }).click();
+  check(await page.locator("[data-of-open-offers]").isVisible(), "Open offers remain separate from payments");
+  await page.getByRole("tab", { name: "Transactions", exact: true }).click();
+  check(await page.getByText("Pending", { exact: true }).first().isVisible(), "Pending payments keep their actual state");
+  const refused = await page.evaluate(async () => (await fetch("/api/onlyfans-configuration/accounts/synthetic", { method: "POST", body: "{}" })).status);
+  check(refused === 403, "Synthetic review refuses every external mutation");
+  check(errors.length === 0, `Browser errors: ${errors.join("; ")}`);
+  console.log(`OnlyFans UI synthetic browser: ${checks} assertions passed, 0 failed; 32 page/viewport cases. No live-account or provider acceptance.`);
+} finally {
+  await browser?.close();
+  await new Promise(resolve => server.close(resolve));
+}

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { checkCombinedEarnings } from "./check-combined-earnings-browser.mjs";
+import { checkOnlyFansOverview } from "./check-onlyfans-overview-browser.mjs";
 import { checkConfiguration } from "./check-onlyfans-configuration-browser.mjs";
 import { checkVaultOrganization } from "./check-onlyfans-vault-organization-browser.mjs";
 import { checkVaultPreviews } from "./check-onlyfans-vault-previews-browser.mjs";
@@ -56,6 +57,7 @@ try {
     process.exit(0);
   }
   await checkCombinedEarnings(page,context,origin);
+  await checkOnlyFansOverview(page,origin);
   await page.goto(origin + "/onlyfans/inbox?creator=creator-acc-a&account=acc-a", { waitUntil: "domcontentloaded", timeout: 45000 });
   // Selecting the real conversation causes the detail handler to run.
   await page.locator('[data-of-conversation-id="acc-a:101"]').click();
@@ -128,10 +130,11 @@ try {
     assert.equal(await page.getByText("private transaction source", { exact: false }).count(), 0);
     assert.equal(await page.getByText("private creator config field", { exact: false }).count(), 0);
     if (section === "content") {
+      await page.getByRole("tab", { name: "Offers", exact: true }).click();
       assert.equal(await page.locator("[data-of-catalog-item]").count(), 25);
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
-      if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultPreviews(page, context, origin); await checkVaultOrganization(page, context, origin); }
+      if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await page.getByRole("tab", { name: "Vault", exact: true }).click(); await checkVaultPreviews(page, context, origin); await checkVaultOrganization(page, context, origin); }
       if (process.env.ONLYFANS_TEST_OFFER_IMPORT === "1") { await checkOfferImport(page, context, origin); await checkContentSync(page, context, origin); await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "domcontentloaded" }); }
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
@@ -139,20 +142,31 @@ try {
       assert.equal(await page.locator("[data-of-catalog-item]").count(), 7);
     }
     if (section === "sales") {
+      await page.getByText("Recorded totals by currency and status", { exact: true }).click();
       assert((await page.locator('[data-of-sales-total="USD:cleared"]').innerText()).includes("USD 10.00"));
       assert((await page.locator('[data-of-sales-total="EUR:cleared"]').innerText()).includes("EUR 7.00"));
       assert((await page.locator('[data-of-sales-total="USD:pending"]').innerText()).includes("USD 25.00"));
       assert((await page.locator('[data-of-sales-total="USD:refunded"]').innerText()).includes("USD 6.00"));
       assert.equal(await page.locator("[data-of-sale]").count(), 4);
+      await page.getByRole("tab", { name: "Open offers (1)", exact: true }).click();
       assert((await page.locator("[data-of-open-offers]").innerText()).includes("Open offers: 1"));
       assert((await page.locator("[data-of-open-offers]").innerText()).includes("USD 8.00"));
     }
     if (section === "settings") {
-      await page.getByText("Advanced account details", { exact: true }).click();
-      await page.locator("[data-of-settings]").getByText("Saved synthetic creator persona for settings.", { exact: true }).waitFor();
+      await page.getByRole("tab", { name: "Account", exact: true }).click();
+      try {
+        await page.locator("[data-of-settings]").getByText("Saved synthetic creator persona for settings.", { exact: true }).waitFor();
+      } catch (error) {
+        console.log("Settings tab visibility diagnostic", await page.evaluate(() => ({
+          tabs: [...document.querySelectorAll('[role="tab"]')].map(element => ({name:element.textContent,selected:element.getAttribute("aria-selected"),disabled:element.hasAttribute("disabled")})),
+          panels: [...document.querySelectorAll('[role="tabpanel"]')].map(element => ({id:element.id,hidden:element.hasAttribute("hidden"),display:getComputedStyle(element).display})),
+          savedViewAncestors: [...document.querySelectorAll('[data-of-settings]')].map(element => {const rows=[];for(let node=element;node&&rows.length<7;node=node.parentElement)rows.push({tag:node.tagName,role:node.getAttribute("role"),hidden:node.hasAttribute("hidden"),display:getComputedStyle(node).display});return rows;}),
+        })));
+        throw error;
+      }
       await page.getByText("Synthetic Harbor", { exact: true }).waitFor();
       assert((await page.locator("[data-of-settings]").innerText()).includes("2 / 5"));
-      if (process.env.ONLYFANS_TEST_CONFIGURATION === "1") await checkConfiguration(page, context, origin);
+      if (process.env.ONLYFANS_TEST_CONFIGURATION === "1") { await page.getByRole("tab", { name: "Personality", exact: true }).click(); await checkConfiguration(page, context, origin); }
     }
     await page.setViewportSize({ width: 390, height: 844 });
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), `${section} overflows mobile`);

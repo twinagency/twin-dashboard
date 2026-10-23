@@ -63,6 +63,13 @@ jobs:
       - name: Video validation tools
         timeout-minutes: 7
         run: |
+          # Release-only retry: use Ubuntu's primary mirror after repeated
+          # timeouts from the runner's regional mirror. Keep APT verification.
+          for mirror_list in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_list" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$mirror_list"
+            fi
+          done
           if [ -f scripts/install-ci-video-tools.sh ]; then
             bash scripts/install-ci-video-tools.sh
           else
@@ -109,6 +116,13 @@ jobs:
       - name: Video preview encoder
         timeout-minutes: 7
         run: |
+          # Release-only retry: use Ubuntu's primary mirror after repeated
+          # timeouts from the runner's regional mirror. Keep APT verification.
+          for mirror_list in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_list" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$mirror_list"
+            fi
+          done
           if [ -f scripts/install-ci-video-tools.sh ]; then
             bash scripts/install-ci-video-tools.sh
           else

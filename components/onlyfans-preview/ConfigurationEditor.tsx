@@ -5,6 +5,7 @@ import { inputCls } from "@/components/clone/fields";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { StudioTabPanel } from "./StudioTabs";
 import { FACT_KEYS, parseConfiguration, parseConfigurationAck, validConfigurationRequest,
   type Configuration, type ConfigurationPatch, type ConfigurationRequest, type FactKey } from "@/lib/onlyfans/configuration";
 
@@ -121,7 +122,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     {notice ? <p role="status" className="mt-3 text-sm" data-of-configuration-notice>{notice}</p> : null}
     {data && !denied ? <form className="mt-4" onSubmit={event => { event.preventDefault(); if (command && !retry) void save(command); }}>
       <fieldset disabled={busy || !!retry} className="min-w-0 space-y-4">
-        <label className="block text-sm">{data.personaTruncated ? "Replace saved persona" : "Creator persona"}
+        <StudioTabPanel value="personality"><label className="block text-sm">{data.personaTruncated ? "Replace saved persona" : "Creator persona"}
           <textarea data-of-edit-persona className={`${inputClass} min-h-32`} maxLength={4096} value={persona} onChange={event => setPersona(event.target.value)} />
           {data.personaTruncated ? <span className="mt-1 block text-xs text-muted">The full saved persona exceeds this editor’s limit. Enter a complete replacement only if you want to replace it.</span> : null}
         </label>
@@ -152,7 +153,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </div>)}</div>
           <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it for OnlyFans. Save only facts approved by the creator. Save or discard other edits before choosing Use Twin value.</p>
         </div>
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+        </StudioTabPanel><StudioTabPanel value="replies"><div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Default model<select data-of-edit-model className={inputClass} disabled={!data.modelsValid} value={defaultModel} onChange={event => setDefaultModel(event.target.value)}>
             {!data.defaultModel ? <option value="" disabled>No saved model</option> : !data.modelOptions.includes(data.defaultModel) ? <option value={data.defaultModel} disabled>Current choice needs review</option> : null}
             {data.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
@@ -181,7 +182,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           <p className="mt-2 text-xs text-muted">Use eligible saved catalogue items for direct content requests. Existing pricing, spending limits and qualification checks apply. Sending also requires a verified active account, paid-media permission and current purchase reconciliation.</p>
           {!data.salesConfigurationValid ? <p className="mt-2 text-xs text-muted">Saved sales settings need review before this option can be changed.</p> : null}
         </div>
-        <button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command)} className={buttonClass}>Save creator settings</button>
+        </StudioTabPanel><button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command)} className={buttonClass}>Save creator settings</button>
       </fieldset>
     </form> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-3">

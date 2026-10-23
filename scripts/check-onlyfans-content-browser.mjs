@@ -3,6 +3,7 @@ import path from "node:path";
 
 /** Runs against the real Next/API/PostgreSQL fixture, with synthetic catalogue rows. */
 export async function checkContent(page, context, origin) {
+  await page.getByRole("tab", { name: "Offers", exact: true }).click();
   const editor = page.locator("[data-of-content-editor]").first();
   const itemId = await editor.getAttribute("data-of-content-editor");
   assert(itemId && /^[1-9][0-9]*$/.test(itemId));
@@ -68,6 +69,7 @@ export async function checkContent(page, context, origin) {
     return response.status;
   }, { endpoint, original });
   assert.equal(restored, 200); await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("tab", { name: "Offers", exact: true }).click();
   await page.getByText(original.label, { exact: true }).waitFor();
   await page.setViewportSize({ width: 1440, height: 1000 });
   console.log("Content browser PASS: real saved label/description/exact price/enabled, exact lost-ack retry, concurrent conflict refresh, session clearing and mobile layout");

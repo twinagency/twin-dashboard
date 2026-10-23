@@ -131,6 +131,7 @@ jobs:
           npm run test:onlyfans-launch-b
           npm run test:onlyfans-launch-access
           npm run test:onlyfans-browser-syntax
+          npm run test:onlyfans-ui-browser
 
       - name: Build
         run: npm run build

@@ -35,7 +35,8 @@ const when = (value: string) => new Date(value).toLocaleString();
 export default function CampaignManager({ accountId, readOnly = false }: { accountId: string; readOnly?: boolean }) {
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
-  const twinRefresh = usesTwinAgencyRefresh(audience, agencyName, usePathname());
+  const pathname = usePathname();
+  const twinRefresh = pathname.startsWith("/onlyfans/") || usesTwinAgencyRefresh(audience, agencyName, pathname);
   const endpoint = `/api/onlyfans-campaigns/accounts/${encodeURIComponent(accountId)}/campaigns`;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]), [truncated, setTruncated] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);

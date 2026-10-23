@@ -2,7 +2,7 @@
 
 import Link from "@/components/NavigationLink";
 import { usePathname } from "next/navigation";
-import { House, Users, MessageCircle, ChartNoAxesCombined } from "lucide-react";
+import { House, Users, MessageCircle, ChartNoAxesCombined, Megaphone } from "lucide-react";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import MobileMenu from "./MobileMenu";
 import { usesCompactWorkspace } from "@/lib/compact-workspace";
@@ -12,6 +12,15 @@ import type { DashboardChannel } from "@/lib/channel-nav";
 export default function WorkspaceMobileNav({ activeCloneId, channels }: { activeCloneId: string | null; channels: DashboardChannel[] }) {
   const { audience, agencyName, canManage } = useDashboardAccess();
   const pathname = usePathname();
+  if (pathname.startsWith("/onlyfans/") && audience !== "creator") {
+    const items = [
+      { label: "Overview", href: "/onlyfans/overview", Icon: House },
+      { label: "Inbox", href: "/onlyfans/inbox", Icon: MessageCircle },
+      { label: "Campaigns", href: "/onlyfans/campaigns", Icon: Megaphone },
+      { label: "Sales", href: "/onlyfans/sales", Icon: ChartNoAxesCombined },
+    ];
+    return <nav className="of-mobile-nav" aria-label="OnlyFans quick navigation">{items.map(({ label, href, Icon }) => <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}><Icon size={21} aria-hidden="true" /><span>{label}</span></Link>)}<MobileMenu activeCloneId={activeCloneId} channels={channels} variant="bottom" /></nav>;
+  }
   if (!usesCompactWorkspace(audience, agencyName) || isPartnerPreview(agencyName)) return null;
   const admin = audience === "admin";
   const earnings = pathname === "/revenue";

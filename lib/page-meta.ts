@@ -39,6 +39,7 @@ const PAGE_LABELS: Record<string, string> = {
   // labelled differently in two places.
   "/overview": "Overview",
   "/telegram": "Telegram creators",
+  "/onlyfans/overview": "Overview",
   "/onlyfans/inbox": "Inbox",
   "/onlyfans/campaigns": "Campaigns",
   "/onlyfans/accounts": "Accounts",

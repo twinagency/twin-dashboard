@@ -222,9 +222,22 @@ async function main() {
   headerAudience.isCreator = false; headerPath = "/onlyfans/inbox";
   const nativeHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
   assert.doesNotMatch(nativeHeader, /LIVE_BALANCE/, "OnlyFans navigation must not present Telegram Stars as account earnings");
-  assert.match(nativeHeader, /aria-label="Channel workspace"/, "The real shared channel control remains available");
-  assert.match(nativeHeader, /href="\/onlyfans\/accounts"/);
+  assert.match(nativeHeader, /class="of-currency-label"[^>]*>USD</, "OnlyFans header identifies recorded summary currency");
+  assert.doesNotMatch(nativeHeader, /data-channel-switch=/, "OnlyFans keeps one workspace switch in the sidebar");
+  const WorkspaceSwitch = compile("components/ChannelSwitch.tsx", {
+    "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
+    "@/lib/channel-nav": channelNav,
+    "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
+    "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+  }).default;
+  const switchMarkup = renderToStaticMarkup(<WorkspaceSwitch channels={["all", "telegram", "onlyfans"]} />);
+  assert.match(switchMarkup, /aria-label="Channel workspace"/, "The real sidebar workspace switch remains available");
+  assert.match(switchMarkup, /href="\/onlyfans\/overview"/);
+  assert.match(switchMarkup, /href="\/telegram"/);
   headerPath = "/users";
+  const sharedHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
+  assert.match(sharedHeader, /aria-label="Channel workspace"/, "Non-admin shared headers retain their channel control");
+  assert.match(sharedHeader, /href="\/onlyfans\/overview"/, "The non-admin shared header still opens the authorised OnlyFans Overview");
 
   // Execute the real component with the existing shell's currency context
   // isolated. Any new network request or global currency mutation is a failure.
