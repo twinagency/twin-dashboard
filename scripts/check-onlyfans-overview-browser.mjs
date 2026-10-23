@@ -3,13 +3,17 @@ import path from "node:path";
 
 /** Real authenticated overview with the PostgreSQL rehearsal's recorded sales. */
 export async function checkOnlyFansOverview(page, origin) {
-  const writes = [];
+  const writes = [], errors = [];
+  const consoleError = message => { if (message.type() === "error") errors.push(message.text()); };
+  const pageError = error => errors.push(String(error));
   const observe = request => {
     if (request.url().startsWith(origin + "/") && !["GET", "HEAD"].includes(request.method())) {
       writes.push({ method: request.method(), url: request.url() });
     }
   };
   page.on("request", observe);
+  page.on("console", consoleError);
+  page.on("pageerror", pageError);
   try {
     await page.goto(origin + "/onlyfans/overview?account=acc-a", { waitUntil: "domcontentloaded", timeout: 90000 });
     const overview = page.locator('[data-of-surface="onlyfans-overview"]');
@@ -34,14 +38,19 @@ export async function checkOnlyFansOverview(page, origin) {
     await page.getByText("USD · UTC · Rolling 30 days", { exact: true }).waitFor();
     assert.equal(await page.locator(".of-sale-row").count(), 4, "Account activity is independent of the summary period");
     if (process.env.ONLYFANS_TEST_EVIDENCE) {
-      await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-onlyfans-overview.png"), fullPage: true });
+      // Hiding carets mutates even hidden inputs and can race React hydration.
+      // Preserve the DOM while capturing this read-only server-rendered page.
+      await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-onlyfans-overview.png"), fullPage: true, caret: "initial" });
     }
     await page.goto(origin + "/onlyfans/overview?account=acc-not-authorised", { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.getByText("That account is not available to this session.", { exact: true }).waitFor({ timeout: 15000 });
     assert.equal(await page.locator(".of-sale-row").count(), 0, "An unlisted account must not expose sales activity");
     assert.deepEqual(writes, [], "Overview and its reporting-period refresh must remain read-only");
+    assert.deepEqual(errors, [], "Overview must not log hydration or application errors");
     console.log("OnlyFans Overview browser PASS: actual account/sales reads, original currencies and payment states, scoped period refresh, unavailable out-of-scope activity, no writes");
   } finally {
     page.off("request", observe);
+    page.off("console", consoleError);
+    page.off("pageerror", pageError);
   }
 }
