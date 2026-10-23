@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
-import { bGate, bPending } from "@/lib/onlyfans/launch/b-route";
+import { liveRoute } from "@/lib/onlyfans/launch/b-route";
+import { stopControl, type ConnectionPort } from "@/lib/onlyfans/launch/live/engagement";
+import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-/** Contract pending: account-level emergency stop. Never reports success. */
-export async function POST(request: NextRequest, context: { params: Promise<{ accountId: string }> }) {
-  const gate = await bGate(request, (await context.params).accountId, true);
-  return "ctx" in gate ? bPending("POST /onlyfans/control/v1/accounts/{accountId}/emergency-stop") : gate;
+type Ctx = { params: Promise<{ accountId: string }> };
+/** scope "engagement" stops proactive messages; scope "account" pauses the connection (Twin operator only). Success only when the backend recorded it. */
+export async function POST(request: NextRequest, context: Ctx) {
+  return liveRoute(request, (await context.params).accountId, true, (env, body) => stopControl(env, body, configuredConnectionBackend() as unknown as ConnectionPort | null));
 }
