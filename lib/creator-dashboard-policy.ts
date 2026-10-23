@@ -5,6 +5,7 @@ export const CREATOR_DASHBOARD_NAV = [
   // creator workspace is a permission variant of that interface, not a second
   // independently styled navigation system.
   { href: "/creator", label: "Earnings", icon: "EarningsCombo" },
+  { href: "/creator/payouts", label: "Payouts", icon: "Payouts" },
   { href: "/creator/ppvs", label: "Pay Per View", icon: "Media" },
   { href: "/creator/business", label: "Business", icon: "Bot" },
   { href: "/creator/info", label: "Info", icon: "Info" },
@@ -17,7 +18,7 @@ export function isCreatorDashboardPath(path: string | null | undefined): boolean
 }
 export function creatorApiAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (serverAction || !["GET", "HEAD"].includes(method)) return false;
-  return ["/api/dashboard", "/api/dashboard/day-insight", "/api/media-sign", "/api/fx", "/api/avatar", "/api/business-account", "/api/business-connection"].includes(path);
+  return ["/api/payouts", "/api/dashboard", "/api/dashboard/day-insight", "/api/media-sign", "/api/fx", "/api/avatar", "/api/business-account", "/api/business-connection"].includes(path);
 }
 export function assertCreatorQuery(params: URLSearchParams, cloneIds: readonly string[]): void {
   for (const key of ["clone", "cloneId", "clone_id"]) {
@@ -27,7 +28,7 @@ export function assertCreatorQuery(params: URLSearchParams, cloneIds: readonly s
   for (const sub of params.getAll("sub")) if (sub) throw new Error("Additional settings are not available to creators");
 }
 export function creatorDashboardAlias(path: string, params: URLSearchParams, cloneIds: readonly string[]): string | null {
-  const aliases: Record<string, string> = { "/": "/creator", "/revenue": "/creator", "/business": "/creator/business", "/info": "/creator/info", "/logs": "/creator/logs", "/media": "/creator/ppvs" };
+  const aliases: Record<string, string> = { "/payouts": "/creator/payouts", "/": "/creator", "/revenue": "/creator", "/business": "/creator/business", "/info": "/creator/info", "/logs": "/creator/logs", "/media": "/creator/ppvs" };
   if (aliases[path]) return aliases[path];
   const clone = path.match(/^\/clones\/([0-9a-f-]{36})$/i)?.[1];
   if (clone && cloneIds.includes(clone)) return params.get("tab") === "ppvs" ? "/creator/ppvs" : "/creator/edit";

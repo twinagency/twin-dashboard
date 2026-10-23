@@ -50,6 +50,7 @@ function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
 }
 
 const PATHS: Record<string, string> = {
+  Payouts: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h3"/>',
   Dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>',
   Revenue: '<path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h5v5"/>',
   Clones: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
@@ -96,6 +97,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Payouts", href: "/payouts", icon: "Payouts", color: "blue" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
@@ -131,6 +133,7 @@ const MORE_LINKS: NavLink[] = [
 // FLIRT operators use the requested fixed order on desktop and mobile.
 const FLIRT_OWNER_LINKS: NavLink[] = [
   { kind: "route", label: "Overview", href: "/revenue", icon: "Dashboard", color: "good" },
+  { kind: "route", label: "Payouts", href: "/payouts", icon: "Payouts", color: "blue" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Live Telegram", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },

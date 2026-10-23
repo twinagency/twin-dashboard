@@ -15,6 +15,7 @@ export const AGENCY_LIVE_CRM_ROUTES: Record<string, string> = {
   "/crm/platforms": "/business",
 };
 export function agencyManagementRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
+  if (path === "/api/payouts" && !serverAction) return ["POST", "PATCH"].includes(method);
   if (serverAction) {
     return method === "POST" && (["/", "/revenue", "/analytics", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/business"].includes(path)
       || /^\/clones\/[0-9a-f-]{36}(\/fans\/[0-9a-f-]{36})?$/i.test(path)
