@@ -31,6 +31,7 @@ jobs:
         run: npm ci
 
       - name: Install browsers for interface verification
+        timeout-minutes: 10
         run: |
           # Playwright downloads its pinned browser separately. Its OS libraries
           # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
@@ -40,7 +41,23 @@ jobs:
           while IFS= read -r source; do
             sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
-          npx playwright install --with-deps chromium webkit
+          # Use the same verified primary HTTPS mirror recovery as deployment.
+          for mirror_list in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_list" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$mirror_list"
+            fi
+          done
+          # Bound both APT connections and the complete dependency operation;
+          # a stalled mirror must fail this required gate rather than hang it.
+          sudo tee /etc/apt/apt.conf.d/99-ci-browser-timeouts > /dev/null <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          DPkg::Lock::Timeout "30";
+          APT
+          # Root timeout can also terminate the root-owned APT child processes.
+          sudo timeout --kill-after=10s 300s "$(command -v node)" node_modules/playwright/cli.js install-deps chromium webkit
+          timeout --kill-after=10s 240s npx playwright install chromium webkit
 
       - name: Immediate navigation feedback and page prefetch
         run: |
