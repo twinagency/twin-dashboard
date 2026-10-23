@@ -18,8 +18,10 @@ export async function checkVaultOrganization(page,context,origin){
  assert.equal(requests.length,2);assert.equal(requests[0],requests[1]);
  assert.equal(await editor.locator('[data-of-vault-asset-tags]').inputValue(),"coast, sunset");
  await dialog.getByRole("button",{name:"Close",exact:true}).click();
+ await page.locator('.of-folder-tools > summary').click();
+ await panel.getByRole('button',{name:'New folder / add to folder',exact:true}).click();
  await panel.locator("summary").filter({hasText:"Manage folders"}).click();
- await page.locator("summary").filter({hasText:"Create an item for sale"}).click();
+ await page.getByRole('button',{name:'Create offer',exact:true}).click();
  await panel.locator("[data-of-vault-folder-name]").fill("Browser coast");
  const created=page.waitForResponse(r=>r.request().method()==="POST"&&r.url().endsWith("/vault/manage/folders"));
  await panel.locator("[data-of-vault-folder-create]").click();const response=await created;assert.equal(response.status(),200);const ack=await response.json();

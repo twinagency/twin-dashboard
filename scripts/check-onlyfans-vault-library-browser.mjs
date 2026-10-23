@@ -31,11 +31,13 @@ try{
  await page.goto(origin+'/vault-fixture',{waitUntil:'networkidle'});
  await page.locator('[data-of-vault-item="24"]').waitFor();
  assert.equal(await page.locator('[data-of-vault-item]').count(),24);
+ await page.locator('.of-sync-tools > summary').click();
  const totals=page.locator('[data-of-vault-summary]');assert.match(await totals.innerText(),/All media\s*50/);assert.match(await totals.innerText(),/Photos\s*34/);assert.match(await totals.innerText(),/Videos\s*16/);
  assert.equal(await page.getByText('Needs review',{exact:true}).count(),0);
  await page.getByRole('tab',{name:'Videos',exact:true}).click();await page.waitForFunction(()=>document.querySelectorAll('[data-of-vault-item]').length===16);assert.equal(lastQuery.get('kind'),'video');
  await page.getByRole('tab',{name:'All media',exact:true}).click();await page.locator('[data-of-vault-item="1"]').waitFor();
  await page.locator('[data-of-vault-next]').click();await page.locator('[data-of-vault-item="25"]').waitFor();assert.match(await totals.innerText(),/All media\s*50/);await page.getByRole('button',{name:'Previous',exact:true}).click();await page.locator('[data-of-vault-item="1"]').waitFor();
+ await page.locator('.of-folder-tools > summary').click();
  await page.locator('[data-of-vault-folder-filter]').selectOption('7');await page.waitForFunction(()=>document.querySelectorAll('[data-of-vault-item]').length===2);assert.equal(lastQuery.get('folderId'),'7');
  await page.locator('[data-of-vault-folder-filter]').selectOption('');await page.locator('[data-of-vault-item="24"]').waitFor();
  await page.getByLabel('Search your media').fill('landscape 50');await page.locator('[data-of-vault-search]').click();await page.locator('[data-of-vault-item="50"]').waitFor();assert.equal(await page.locator('[data-of-vault-item]').count(),1);

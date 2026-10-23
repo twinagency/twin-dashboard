@@ -39,15 +39,15 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
         <div className="min-w-0">
           <div className="of-account-name">{account.binding.creatorName}</div>
-          <div className="mt-0.5 truncate text-xs text-muted">@{account.binding.handle}</div>
+          <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans</span>
         </div>
-        <HealthPill health={account.health} />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <ModePill mode={account.automationMode} />
-        <FreshnessLine freshness={account.syncFreshness} />
-      </div>
+      <dl className="of-account-status">
+        <div><dt>Connection</dt><dd><HealthPill health={account.health} /></dd></div>
+        <div><dt>Replies</dt><dd><ModePill mode={account.automationMode} /></dd></div>
+        <div><dt>Last sync</dt><dd><FreshnessLine freshness={account.syncFreshness} /></dd></div>
+      </dl>
 
       {account.healthReason ? (
         <p className="mt-3 text-xs leading-5 text-[#8a5f06]" data-of-health-reason>
@@ -55,7 +55,8 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         </p>
       ) : null}
 
-      <dl className="mt-4 space-y-1.5 text-xs">
+      <details className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
+        <summary>Account details</summary>      <dl className="mt-4 space-y-1.5 text-xs">
         <div className="flex items-center justify-between gap-3">
           <dt className="text-muted">Manual send</dt>
           <dd className="font-semibold">{account.capabilities.sendManualMessage}</dd>
@@ -70,8 +71,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         </div>
       </dl>
 
-      <details className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
-        <summary>Account details</summary><p className="break-all">Binding {account.binding.bindingId}</p>
+<p className="break-all">Binding {account.binding.bindingId}</p>
         <p className="mt-1">Synced {formatAge(account.syncFreshness.asOf)}</p>
       </details>
 
@@ -174,7 +174,7 @@ export default function AccountsView({
         label="accounts"
         render={(list) => (
           <>
-            <div className="mb-5 grid grid-cols-2 gap-3 md:grid-cols-3">
+            <div className="of-account-counts">
               <Stat label="Accounts" value={String(list.length)} />
               <Stat label="Connected" value={String(connected)} />
               <Stat label="Need attention" value={String(needsAttention)} />

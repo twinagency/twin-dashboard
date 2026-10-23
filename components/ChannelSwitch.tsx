@@ -52,7 +52,7 @@ export default function ChannelSwitch({
   if (!shouldShowChannelSwitch(allowed)) return null;
 
   if (active === "onlyfans") return <details className="of-channel-menu" data-channel-switch={active}>
-    <summary><span className="of-channel-symbol" aria-hidden="true">OF</span><span>OnlyFans<small>Workspace</small></span><span aria-hidden="true">⌄</span></summary>
+    <summary><img className="of-channel-logo" src="/brand/platforms/onlyfans.svg" width="30" height="30" alt="" /><span>OnlyFans<small>Workspace</small></span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg></summary>
     <div role="group" aria-label="Channel workspace">{offered.map(channel => <Link key={channel.channel} href={channel.href} aria-current={channel.channel === active ? "page" : undefined} title={channel.summary}>{channel.label}</Link>)}</div>
   </details>;
 

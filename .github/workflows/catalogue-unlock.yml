@@ -6,6 +6,7 @@ on:
       - 'app/catalogue/**'
       - 'lib/catalogue-*.ts'
       - 'scripts/check-catalogue*'
+      - 'scripts/install-ci-video-tools.sh'
       - 'package*.json'
       - '.github/workflows/catalogue-unlock.yml'
   pull_request:
@@ -13,6 +14,7 @@ on:
       - 'app/catalogue/**'
       - 'lib/catalogue-*.ts'
       - 'scripts/check-catalogue*'
+      - 'scripts/install-ci-video-tools.sh'
       - 'package*.json'
       - '.github/workflows/catalogue-unlock.yml'
 
@@ -34,14 +36,31 @@ jobs:
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
+      - name: Install video tools
+        timeout-minutes: 7
+        run: bash scripts/install-ci-video-tools.sh
       - name: Install mobile browsers
+        timeout-minutes: 10
         run: |
           sudo mkdir -p /tmp/ci-unused-chrome-feed
           while IFS= read -r source; do
             sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
-          sudo apt-get update && sudo apt-get install -y ffmpeg
-          npx playwright install --with-deps chromium webkit
+          # The video helper can return early when encoders already exist;
+          # browser dependencies still need reliable, bounded APT access.
+          for mirror_list in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_list" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$mirror_list"
+            fi
+          done
+          sudo tee /etc/apt/apt.conf.d/99-ci-browser-timeouts > /dev/null <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          DPkg::Lock::Timeout "30";
+          APT
+          sudo timeout --kill-after=10s 300s "$(command -v node)" node_modules/playwright/cli.js install-deps chromium webkit
+          timeout --kill-after=10s 240s npx playwright install chromium webkit
       - name: Catalogue, pricing, ownership and tip API checks
         run: npm run test:catalogue
       - name: Unlock cards and Stars tips in Chromium and WebKit

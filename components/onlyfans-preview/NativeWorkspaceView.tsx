@@ -6,8 +6,8 @@ import type { OfAccount } from "@/lib/onlyfans-preview/types";
 import { CONFIG_ISSUES, formatRecordedMoney, type NativeSection, type WorkspaceRead } from "@/lib/onlyfans/workspace";
 import ConfigurationEditor from "./ConfigurationEditor";
 import ContentEditor from "./ContentEditor";
-import VaultManager from "./VaultManager";
 import OfferImportPanel from "./OfferImportPanel";
+import ContentLibrary from "./ContentLibrary";
 import SalesView from "./SalesView";
 import CreatorPortrait from "./CreatorPortrait";
 import { StudioTabs, StudioTabPanel, StudioTabSection } from "./StudioTabs";
@@ -27,20 +27,17 @@ export default function NativeWorkspaceView({ section, account, accounts, data, 
   const href = workspaceHref(path, { creatorId, accountId: account.accountId });
   return <div className="dashboard-page min-w-0 text-ink" data-of-native-section={section}>
     <CreatorPlatformHeading title={title} description={description} />
-    <nav aria-label={`${title} account`} className="my-5 flex flex-wrap gap-2">
+    <nav aria-label={`${title} account`} className="of-native-accounts">
       {accounts.map(item => <Link key={item.accountId} aria-current={item.accountId === account.accountId ? "page" : undefined}
         className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}
         href={workspaceHref(path, { creatorId, accountId: item.accountId })}>{item.binding.creatorName} · @{item.binding.handle}</Link>)}
     </nav>
-    {section !== "content" ? <div className="mb-5 rounded-xl border border-line p-4 text-sm" role="status" data-of-native-freshness>
-      <p>{data.historyRecoveryRequired ? "Your account history is still syncing." : "Your account history is synced."}</p>
-      <p className="mt-1 text-xs text-muted">Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
-    </div> : null}
-    {section === "content" ? <StudioTabs label="Content library" tabs={[{ value: "vault", label: "Vault" }, { value: "offers", label: "Offers" }]}>
-      <StudioTabPanel value="vault">{contentConfigured ? <VaultManager key={account.accountId} accountId={account.accountId} readOnly={!canManage} /> : <p className="of-notice">The media library is not configured for this environment.</p>}</StudioTabPanel>
-      <StudioTabPanel value="offers">{contentConfigured ? <OfferImportPanel key={`import:${account.accountId}`} accountId={account.accountId} readOnly={!canManage} /> : null}<WorkspaceBody data={data} contentEditable={canManage && contentConfigured} /></StudioTabPanel>
-    </StudioTabs> : null}
-    {data.section === "sales" ? <SalesView data={data} creatorName={account.binding.creatorName} /> : null}
+    {section !== "content" ? <details className="of-history-status" data-of-native-freshness>
+      <summary>{data.historyRecoveryRequired ? "Your account history is still syncing." : "Your account history is synced."}</summary>
+      <p>Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
+    </details> : null}
+    {section === "content" ? <ContentLibrary accountId={account.accountId} readOnly={!canManage} configured={contentConfigured} offers={<>{contentConfigured ? <OfferImportPanel key={`import:${account.accountId}`} accountId={account.accountId} readOnly={!canManage} /> : null}<WorkspaceBody data={data} contentEditable={canManage && contentConfigured} /></>} /> : null}
+    {data.section === "sales" ? <SalesView data={data} creatorName={account.binding.creatorName} creatorId={account.binding.creatorId} /> : null}
     {section === "settings" ? <StudioTabs label="Creator settings" tabs={[{ value: "personality", label: "Personality" }, { value: "replies", label: "Reply settings" }, { value: "account", label: "Account" }]}>
       <div className="of-settings-layout"><aside className="of-identity-card"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large /><h2>{account.binding.creatorName}</h2><p>@{account.binding.handle}</p><span className="of-platform-tag">OnlyFans</span></aside><div className="of-settings-content">
         <StudioTabSection value={["personality", "replies"]}>{canManage && configurationConfigured ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : <><StudioTabPanel value="personality"><WorkspaceBody data={data} settingsSection="personality" /></StudioTabPanel><StudioTabPanel value="replies"><WorkspaceBody data={data} settingsSection="replies" /></StudioTabPanel></>}</StudioTabSection>
@@ -64,7 +61,7 @@ function WorkspaceBody({ data, contentEditable = false, settingsSection }: { dat
       <p className="mt-3 text-xs text-muted">{item.kind}. {item.readiness === "terms_checked" ? "Catalogue terms passed the current media checks. Sale permission also depends on the conversation and account." : "Saved catalogue metadata."}</p>
       {contentEditable ? <ContentEditor key={`${data.accountId}:${item.itemId}`} accountId={data.accountId} itemId={item.itemId} /> : null}
     </Card>)}
-    {!data.items.length ? <p className="text-sm text-muted">No items prepared for sale yet. Choose media above, then open Create an item for sale.</p> : null}
+    {!data.items.length ? <p className="text-sm text-muted">No items prepared for sale yet. Use Create offer to choose media and prepare an item for sale.</p> : null}
   </div></section>;
   if (data.section === "sales") return null;
   const cfg = data.configuration;
@@ -79,4 +76,3 @@ function WorkspaceBody({ data, contentEditable = false, settingsSection }: { dat
     </> : <Card className="p-4 text-sm text-muted">No creator configuration is saved.</Card>}
   </div>;
 }
-
