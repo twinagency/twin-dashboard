@@ -115,6 +115,7 @@ const moxyDestinations = [
   ["Overview", "/revenue"],
   ["Creators", "/clones"],
   ["Creator onboarding", "/agency/creators"],
+  ["Payouts", "/payouts"],
   ["Content", `/clones/${clone}?tab=ppvs`],
   ["Telegram Stories", "/business"],
   ["Flows", "/flows"],
@@ -129,7 +130,7 @@ const renderedLinks = (html: string) => Array.from(html.matchAll(/<a\b([^>]*)>([
 }));
 function checkMoxyLayout(html: string) {
   const links = renderedLinks(html).filter(link => link.label && !/aria-label=/.test(link.attributes));
-  assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all ten Moxy destinations in the approved shared order");
+  assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all eleven Moxy destinations in the approved shared order");
   assert.equal((html.match(/href="\/agency\/creator-invites"/g) || []).length, 1, "Invite creator appears once, as the prominent top action");
   assert.match(links[0].attributes, /class="[^"]*\bmoxy-invite-button\b/);
   assert.match(html, /<h2[^>]*>Workspace<\/h2>/, "Workspace is an always-visible heading");
@@ -224,7 +225,7 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/users"'), "Live Telegram is reachable on desktop and mobile");
   assert.doesNotMatch(admin, /href="\/(?:fans|inbox|campaigns|content-library)"|Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Overview", "Earnings", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  const orderedLabels = ["Overview", "Earnings", "Payouts", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
   assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
   const { JSDOM } = nativeRequire("jsdom");
   const document = new JSDOM(admin).window.document;
