@@ -31,11 +31,13 @@ try{
  const writes=[];
  page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/')&&!['GET','HEAD'].includes(r.method()))writes.push(r.url());});
  for(const route of ['overview','accounts','inbox','campaigns','content','sales','settings','operations']){
-  await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'domcontentloaded'});
+  // The real workspace polls for updates. Readiness is rendered content,
+  // not a quiet network, and the dev fixture may compile a route on first use.
+  await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'domcontentloaded',timeout:60000});
   await page.getByRole('heading',{name:route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
   await page.evaluate(()=>document.fonts.ready);
   if(route==='campaigns')await waitForCampaigns(page);
-  if(route==='content')await page.locator('[data-of-vault-grid]').waitFor();
+  if(route==='content'){await page.locator('[data-of-vault-grid]').waitFor();await page.locator('[data-of-vault-item]').first().waitFor();}
   for(const width of [390,430,768,1440,1920]){
    await page.setViewportSize({width,height:1000});
    const sizes=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:innerWidth,main:document.querySelector('main.dashboard-main')?.scrollWidth,client:document.querySelector('main.dashboard-main')?.clientWidth}));
@@ -48,6 +50,7 @@ try{
    await page.locator('[data-of-vault-item]').first().waitFor();
    const thumb=await page.locator('.of-media-cover').first().boundingBox();
    assert(thumb && thumb.y<500 && thumb.height>180,'The media grid must appear in the first desktop viewport');
+   assert(thumb && thumb.y>=0 && thumb.y+thumb.height<=page.viewportSize().height && thumb.height>180,`The first portrait must be fully visible in the desktop viewport: ${JSON.stringify(thumb)}`);
    const logo=page.locator('.dashboard-sidebar .of-channel-logo');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
    await page.getByRole('button',{name:'Create offer',exact:true}).click();
    await page.locator('[data-of-vault-product-label]').fill('Unsaved visual test');
