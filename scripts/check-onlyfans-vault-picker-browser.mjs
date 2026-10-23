@@ -31,8 +31,10 @@ try{
  });
  await page.goto(origin+'/vault-fixture',{waitUntil:'networkidle'});
  await page.locator('[data-of-vault-item="24"]').waitFor();
- assert(await page.locator('[data-of-vault-folder-create]').isVisible(),'Create folder is visible without expanding Manage folders');
- await page.locator('summary').filter({hasText:'Create an item for sale'}).click();
+ await page.locator('.of-folder-tools > summary').click();
+ await page.getByRole('button',{name:'New folder / add to folder',exact:true}).click();
+ assert(await page.locator('[data-of-vault-folder-create]').isVisible(),'Create folder remains available in the compact folder tools');
+ await page.getByRole('button',{name:'Create offer',exact:true}).click();
  await page.locator('[data-of-vault-product-label]').fill('Draft landscape');await page.locator('[data-of-vault-product-price]').fill('3');await page.locator('[data-of-vault-product-description]').fill('A landscape photo');
  for(const enabled of [false,true]){await page.locator('[data-of-vault-product-enabled]').setChecked(enabled);assert(await page.locator('[data-of-vault-create]').isDisabled());assert.match(await page.locator('[data-of-product-issues]').innerText(),/Add at least one photo or video/);}
  await page.locator('[data-of-add-media]').click();const picker=page.locator('[data-of-media-picker]');await picker.locator('[data-of-picker-item="24"]').waitFor();
