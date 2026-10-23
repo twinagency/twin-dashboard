@@ -35,7 +35,7 @@ try{
    await page.setViewportSize({width:1440,height:1000});
    await page.locator('[data-of-vault-item]').first().waitFor();
    const thumb=await page.locator('.of-media-cover').first().boundingBox();
-   assert(thumb && thumb.y<500 && thumb.height>180,'The media grid must appear in the first desktop viewport');
+   assert(thumb && thumb.y>=0 && thumb.y+thumb.height<=page.viewportSize().height && thumb.height>180,`The first portrait must be fully visible in the desktop viewport: ${JSON.stringify(thumb)}`);
    const logo=page.locator('.dashboard-sidebar .of-channel-logo');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
    await page.getByRole('button',{name:'Create offer',exact:true}).click();
    await page.locator('[data-of-vault-product-label]').fill('Unsaved visual test');
