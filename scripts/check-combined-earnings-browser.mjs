@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import path from "node:path";
 export async function checkCombinedEarnings(page,context,origin){
- await page.goto(origin+"/overview",{waitUntil:"networkidle"});
+ await page.goto(origin+"/revenue",{waitUntil:"networkidle"});   // combined earnings lives on Earnings since cded7ea
  await page.locator("[data-combined-telegram]").waitFor();
  assert.match(await page.locator("[data-combined-telegram]").innerText(),/Unavailable/);
  assert.match(await page.locator("[data-combined-onlyfans]").innerText(),/Unavailable/);
