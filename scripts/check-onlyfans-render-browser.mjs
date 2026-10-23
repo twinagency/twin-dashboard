@@ -19,8 +19,11 @@ try{
  const writes=[];
  page.on('request',r=>{if(new URL(r.url()).pathname.startsWith('/api/')&&!['GET','HEAD'].includes(r.method()))writes.push(r.url());});
  for(const route of ['overview','accounts','inbox','campaigns','content','sales','settings','operations']){
-  await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'networkidle'});
+  // The real workspace polls for updates. Readiness is the rendered heading,
+  // not a quiet network, and the dev fixture may compile a route on first use.
+  await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'domcontentloaded',timeout:60000});
   await page.getByRole('heading',{name:route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
+  if(route==='content')await page.locator('[data-of-vault-item]').first().waitFor();
   for(const width of [390,430,768,1440,1920]){
    await page.setViewportSize({width,height:1000});
    const sizes=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:innerWidth,main:document.querySelector('main.dashboard-main')?.scrollWidth,client:document.querySelector('main.dashboard-main')?.clientWidth}));
