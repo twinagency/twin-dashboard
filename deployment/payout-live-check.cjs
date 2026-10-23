@@ -27,6 +27,11 @@ async function main() {
   payoutStage='admin page';
   const page=await request('/payouts',adminCookie);const html=await page.text();
   report.checks.adminPage=page.status===200&&html.includes('Withdrawals / Payouts');
+  payoutStage='deployed conversion bundle';
+  const chunks=[...new Set(Array.from(html.matchAll(/src="([^"]+\\.js[^"]*)"/g),m=>m[1]))];
+  const scripts=await Promise.all(chunks.filter(path=>path.startsWith('/_next/')).map(async path=>(await request(path)).text()));
+  report.checks.currencyConversionShipped=scripts.some(source=>source.includes('Originally paid ')&&source.includes('Converted amounts are estimates'));
+
   payoutStage='invalid payment rejection';
   if(data.creators.length){
     const invalid=await request('/api/payouts',adminCookie,{method:'POST',headers:{origin:publicOrigin,'content-type':'application/json'},body:JSON.stringify({cloneId:data.creators[0].id,amount:'0',currency:'USD',paidOn:'',requestId:crypto.randomUUID()})});

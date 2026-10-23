@@ -14,10 +14,10 @@ jobs:
         include:
           - brand: flirt
             container: flirt-dashboard
-            sha: bd079ae3caf2b32e8b01da259a8ace460580860c
+            sha: 72aa4cb4b552d6dc0d1a3de72a14bec475cab8cf
           - brand: twin-moxy
             container: next-app
-            sha: a1e96b8e6a4fa562fbd2bea9ddb8e5329748ae25
+            sha: f61aaea609a2cb391c066fb48c98ca2584d17e9e
     name: Verify ${{ matrix.brand }} payout permissions
     steps:
       - uses: actions/checkout@v4
