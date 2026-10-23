@@ -49,6 +49,9 @@ export async function checkVaultOrganization(page,context,origin){
  await page.waitForFunction(()=>document.querySelector('[data-of-vault-folder]')?.value==="");
  await page.setViewportSize({width:1440,height:1000});
  await page.locator('[data-of-vault-edit="11"]').click();
+ // The editor loads the asset on mount (twice under React strict mode in the dev harness). Let both reads settle
+ // so a late response cannot overwrite the description typed next.
+ await editor.waitFor();await page.waitForLoadState("networkidle");
  await editor.locator('[data-of-vault-asset-description]').fill("Must not persist after session loss");await context.clearCookies();await editor.locator('[data-of-vault-asset-save]').click();
  await dialog.getByText("Your session cannot edit this asset.",{exact:false}).waitFor();
  assert.equal(await editor.count(),0);
