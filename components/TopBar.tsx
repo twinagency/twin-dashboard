@@ -140,7 +140,7 @@ export default function TopBar({
           centre control pill stays dead-centre. Below sm this column is
           display:none; the mobile drawer carries the same switch. */}
       <div className="hidden min-w-0 flex-col items-start gap-1.5 sm:flex">
-        {audience !== "admin" ? <ChannelSwitch channels={channels} /> : null}
+        {audience !== "admin" && channel !== "onlyfans" ? <ChannelSwitch channels={channels} /> : null}
         <h1 className="min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink">
           <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
           {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
@@ -167,7 +167,7 @@ export default function TopBar({
             <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
           </>
         ) : null}
-        <CurrencyToggle compact />
+        {channel === "onlyfans" ? <span className="of-currency-label" title="OnlyFans amounts retain their recorded currency. Summary earnings are in USD.">USD</span> : <CurrencyToggle compact />}
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
         {/* Agency and creator portals sign out through their own route so the

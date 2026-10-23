@@ -20,6 +20,7 @@ import { FreshnessLine } from "./PreviewChrome";
 import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
 import ConnectionEditor, { RegisterConnection } from "./ConnectionEditor";
+import CreatorPortrait from "./CreatorPortrait";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -34,9 +35,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; showPreviewChrome: boolean }) {
   return (
     <Card className="flex h-full flex-col p-4" data-of-account-id={account.accountId}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="of-account-identity">
+        <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
         <div className="min-w-0">
-          <div className="truncate font-semibold">{account.binding.creatorName}</div>
+          <div className="of-account-name">{account.binding.creatorName}</div>
           <div className="mt-0.5 truncate text-xs text-muted">@{account.binding.handle}</div>
         </div>
         <HealthPill health={account.health} />
@@ -88,7 +90,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
           // leaving the operator on Accounts after clicking "Open inbox".
           onClick={(event) => event.stopPropagation()}
           data-of-open-inbox={account.accountId}
-          className="text-sm font-semibold text-accent"
+          className="of-primary"
         >
           Open inbox →
         </Link>
@@ -188,7 +190,7 @@ export default function AccountsView({
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {list.map((account) => (
-                  <div key={account.accountId} onClick={() => onSelectAccount(account.accountId)}>
+                  <div key={account.accountId} data-of-selected={activeAccountId === account.accountId || undefined} role="group" tabIndex={0} aria-label={`Select ${account.binding.creatorName} account`} onKeyDown={event => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onSelectAccount(account.accountId); } }} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
                       connectionEditable={connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>

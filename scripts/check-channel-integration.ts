@@ -356,7 +356,7 @@ group("5. Telegram's routes and the agency policy are unchanged");
   // Channel definitions stay coherent: `all` is the existing dashboard, and each
   // channel's landing href belongs to that channel.
   check("All channels lands on /overview", ALL_CHANNELS.href === "/overview");
-  check("the OnlyFans channel lands in its own inbox", ONLYFANS_CHANNEL.href === "/onlyfans/accounts");
+  check("the OnlyFans channel lands on its dedicated Overview", ONLYFANS_CHANNEL.href === "/onlyfans/overview");
   check("the Telegram channel lands on its own route", TELEGRAM_CHANNEL.href === "/telegram");
   for (const channel of CHANNELS) {
     check(

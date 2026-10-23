@@ -9,8 +9,9 @@ import { channelForPath } from "@/lib/channel-nav";
 import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 import workspaceStyles from "./WorkspaceStudio.module.css";
 import creatorPlatformStyles from "./onlyfans-preview/OnlyFansStudio.module.css";
+import { OnlyFansPortraitProvider, type PortraitCreator } from "./onlyfans-preview/CreatorPortrait";
 
-export default function WorkspaceShell({ activeCloneId, children }: { activeCloneId: string | null; children: React.ReactNode }) {
+export default function WorkspaceShell({ activeCloneId, children, creators = [] }: { activeCloneId: string | null; children: React.ReactNode; creators?: PortraitCreator[] }) {
   const { audience, agencyName } = useDashboardAccess();
   const pathname = usePathname();
   const query = useSearchParams();
@@ -19,6 +20,6 @@ export default function WorkspaceShell({ activeCloneId, children }: { activeClon
   const creatorPlatform = audience !== "creator" && channelForPath(pathname) === "onlyfans";
   const creatorBrand = agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin";
   const unbranded = audience === "admin" && isBriannaWorkspaceRoute(pathname, query.get("creator"), activeCloneId);
-  return <div className={operator ? `${workspaceStyles.workspace}${creatorPlatform ? ` ${creatorPlatformStyles.platform}` : ""}` : "flex h-screen"} data-twin-agency-refresh={usesTwinAgencyRefresh(audience, agencyName, pathname) || undefined} data-compact-workspace={usesCompactWorkspace(audience, agencyName) || undefined} data-workspace-theme={operator ? "dark" : undefined} data-creator-platform={creatorPlatform || undefined} data-creator-studio={creatorPlatform ? creatorBrand : undefined} data-studio-workspace={studio || undefined} data-workspace-brand={agencyName?.trim().toLowerCase() || "twin"} data-workspace-unbranded={unbranded || undefined}>{children}</div>;
+  return <div className={operator || creatorPlatform ? `${workspaceStyles.workspace}${creatorPlatform ? ` ${creatorPlatformStyles.platform}` : ""}` : "flex h-screen"} data-twin-agency-refresh={usesTwinAgencyRefresh(audience, agencyName, pathname) || undefined} data-compact-workspace={usesCompactWorkspace(audience, agencyName) || undefined} data-workspace-theme={operator ? "dark" : undefined} data-onlyfans-ui={creatorPlatform || undefined} data-creator-platform={creatorPlatform || undefined} data-creator-studio={creatorPlatform ? creatorBrand : undefined} data-studio-workspace={studio || undefined} data-workspace-brand={agencyName?.trim().toLowerCase() || "twin"} data-workspace-unbranded={unbranded || undefined}>{creatorPlatform ? <OnlyFansPortraitProvider creators={creators}>{children}</OnlyFansPortraitProvider> : children}</div>;
 }
 
