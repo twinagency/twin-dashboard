@@ -9,10 +9,13 @@ import { StudioAvatar } from "./CreatorStudioShell";
 import { fmtMoney, fmtNum, STAR_USD } from "@/lib/money";
 import { readStudioPerformance, STUDIO_PERIODS, type CreatorStudioBrand, type CreatorStudioStatus, type StudioPerformance, type StudioPeriod } from "@/lib/creator-studio-model";
 import styles from "./CreatorStudio.module.css";
+import MoxyCreatorOverview from "./MoxyCreatorOverview";
+import type { CreatorPreparation } from "@/lib/creator-preparation-model";
 
-export default function CreatorStudioHome({ brand, name, cloneId, photoUrl, status, contentHref, readOnly = false }: {
-  brand: CreatorStudioBrand; name: string; cloneId: string | null; photoUrl?: string; status: CreatorStudioStatus; contentHref: string; readOnly?: boolean;
+export default function CreatorStudioHome({ brand, name, cloneId, photoUrl, status, contentHref, preparation, readOnly = false }: {
+  brand: CreatorStudioBrand; name: string; cloneId: string | null; photoUrl?: string; status: CreatorStudioStatus; contentHref: string; preparation?: CreatorPreparation; readOnly?: boolean;
 }) {
+  if (brand === "moxy") return <MoxyCreatorOverview name={name} cloneId={cloneId} status={status} contentHref={contentHref} preparation={preparation} readOnly={readOnly}>{cloneId && <StudioPerformanceOverview cloneId={cloneId} />}</MoxyCreatorOverview>;
   const firstName = name.trim().split(/\s+/)[0] || "creator";
   const draft = status.phase === "draft";
   const needsHelp = status.phase === "changes" || status.phase === "withdrawn";
@@ -27,7 +30,7 @@ export default function CreatorStudioHome({ brand, name, cloneId, photoUrl, stat
         <div className={styles.decoration} aria-hidden="true" />
         <span className={styles.miniLabel}>{draft ? <Sparkles size={16} /> : <CheckCircle2 size={16} />}{status.label}</span>
         <h2>{draft ? <>Let’s make this<br />feel like <em>you.</em></> : needsHelp ? <>Let’s take the<br /><em>next step.</em></> : <>You’re in.<br />Let’s make it <em>yours.</em></>}</h2>
-        <p>{draft ? "Bring your content and personality together. Complete your setup whenever you’re ready." : status.phase === "reviewing" ? "Your details are being reviewed. You can keep adding content while your creator profile takes shape." : status.phase === "approved" ? "Your onboarding is approved. Your performance overview will appear here when your AI profile is connected." : needsHelp ? "Check your onboarding status and contact your agency team for the next steps." : `Thanks for joining ${brand === "moxy" ? "Moxy" : "Flirt"}. Your onboarding has been received. Your next chapter starts here.`}</p>
+        <p>{draft ? "Bring your content and personality together. Complete your setup whenever you’re ready." : status.phase === "reviewing" ? "Your details are being reviewed. You can keep adding content while your creator profile takes shape." : status.phase === "approved" ? "Your onboarding is approved. Your performance overview will appear here when your AI profile is connected." : needsHelp ? "Check your onboarding status and contact your agency team for the next steps." : "Thanks for joining Flirt. Your onboarding has been received. Your next chapter starts here."}</p>
         <Link className={styles.primaryButton} href={draft ? "/creator/onboarding" : needsHelp ? "/creator/help" : contentHref} data-return-to-onboarding={draft ? "true" : undefined} data-finish-onboarding={draft ? "true" : undefined}>{draft ? "Continue setup" : needsHelp ? "Help & support" : "Explore your content"}<ArrowRight size={16} /></Link>
       </section>
       <section className={styles.timelineCard}><h2>{draft ? "Two steps. All you." : "Your next chapter"}</h2>

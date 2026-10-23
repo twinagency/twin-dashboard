@@ -21,6 +21,20 @@
 .navLink:hover { background: #ffffff0b; color: #fff; }
 .navLink[aria-current="page"] { background: var(--studio-accent); color: #fff; }
 .sidebarBottom { margin-top: auto; padding-top: 35px; }
+.sidebarHelp { display: inline-flex; align-items: center; gap: 10px; padding: 10px; font-size: 12px; color: #d6d6d6; }
+.accountMenu { position: relative; }
+.accountMenu summary { display: flex; align-items: center; justify-content: center; cursor: pointer; min-height: 44px; min-width: 44px; list-style: none; border-radius: 50%; }
+.accountMenu summary::-webkit-details-marker { display: none; }
+.accountMenu summary:focus-visible { outline: 3px solid var(--studio-accent); outline-offset: 3px; }
+.accountMenu > div { position: absolute; top: calc(100% + 10px); right: 0; z-index: 45; min-width: 185px; padding: 7px; border: 1px solid var(--studio-line); border-radius: 10px; background: var(--studio-panel); box-shadow: 0 8px 28px #00000012; }
+.accountMenu > div > a, .accountMenu button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 44px; padding: 11px; border: 0; border-radius: 7px; background: transparent; font-size: 12px; color: var(--studio-ink); text-align: left; }
+.accountMenu > div > a:hover, .accountMenu button:hover { background: var(--studio-bg); }
+.root[data-creator-studio="moxy"] .brandCaption { color: #a5a5a5; }
+.root[data-creator-studio="moxy"] .navCaption { color: #a5a5a5; }
+.root[data-creator-studio="moxy"] .sidebar .navLink { color: #d6d6d6; }
+.root[data-creator-studio="moxy"] .sidebar .navLink[aria-current="page"] { color: #fff; }
+.root[data-creator-studio="moxy"] .sidebarProfile small { color: #a5a5a5; }
+.root[data-creator-studio="moxy"] .topActions > .status { display: none; }
 .helpNote { padding: 18px 15px; border: 1px solid #ffffff12; border-radius: 14px; background: #ffffff05; }
 .helpNote h2 { font-size: 13px; font-weight: 600; }
 .helpNote p { margin-top: 8px; font-size: 12px; line-height: 1.7; color: #bda9b7; }

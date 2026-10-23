@@ -19,7 +19,8 @@ const p=new URLSearchParams(location.search);const phase=p.get('phase')||'submit
 const linked=['ready','paused','connected'].includes(phase);const labels={draft:'Draft / unfinished',submitted:'Submitted',reviewing:'Under review',approved:'Approved',changes:'Changes required',withdrawn:'Withdrawn'};
 const status=creatorStudioStatus(linked,labels[phase]||'Approved',phase==='ready'?'active':phase==='paused'?'paused':null);
 const contentHref='/creator/onboarding?step=content';
-createRoot(document.getElementById('app')).render(phase==='setup'?<Setup brand={brand} logoSrc={brand==='moxy'?'/moxy/moxy-ai-light.svg':'/brand/flirt-logo.webp'} activeSection='content' applicationStatus='Draft / unfinished'><section data-creator-setup-panel><h1 data-setup-heading>Start with a little you.</h1><p>Add your photos and videos. You can always come back later.</p><label style={{display:'block',marginTop:30}}>Folder link<input aria-label='Folder link' style={{display:'block',width:'100%',marginTop:10,padding:12}} placeholder='https://…'/></label></section></Setup>:<Shell brand={brand} creatorName='Fixture Creator' status={status} contentHref={contentHref}><Home brand={brand} name='Fixture Creator' cloneId={linked?'own':null} status={status} contentHref={contentHref} /></Shell>);
+const preparation=p.has('unavailable')?{profile:{answered:null,total:22},content:{photos:null,videos:null,pending:null,folders:null},consentSaved:null}:p.has('empty')?{profile:{answered:0,total:22},content:{photos:0,videos:0,pending:0,folders:0},consentSaved:false}:{profile:{answered:22,total:22},content:{photos:24,videos:6,pending:0,folders:0},consentSaved:true};
+createRoot(document.getElementById('app')).render(phase==='setup'?<Setup brand={brand} logoSrc={brand==='moxy'?'/moxy/moxy-ai-light.svg':'/brand/flirt-logo.webp'} activeSection='content' applicationStatus='Draft / unfinished'><section data-creator-setup-panel><h1 data-setup-heading>Start with a little you.</h1><p>Add your photos and videos. You can always come back later.</p><label style={{display:'block',marginTop:30}}>Folder link<input aria-label='Folder link' style={{display:'block',width:'100%',marginTop:10,padding:12}} placeholder='https://…'/></label></section></Setup>:<Shell brand={brand} creatorName='Fixture Creator' status={status} contentHref={contentHref}><Home brand={brand} name='Fixture Creator' cloneId={linked?'own':null} status={status} contentHref={contentHref} preparation={preparation} /></Shell>);
 ` }, bundle: true, platform: 'browser', format: 'iife', jsx: 'automatic', outfile: resolve(output, 'app.js'),
   plugins: [{ name: 'studio-browser-fixtures', setup(b) {
     b.onResolve({ filter: /^(next\/link|next\/navigation)$|\/CurrencyProvider$|\/CreatorContentUploadProvider$/ }, args => ({ path: args.path, namespace: 'fixture' }));
@@ -59,9 +60,9 @@ try {
   });
   for (const [device, viewport] of [['desktop', { width: 1440, height: 1050 }], ['mobile', { width: 390, height: 844 }]]) {
     await page.setViewportSize(viewport);
-    for (const phase of ['draft', 'submitted', 'ready', 'paused', 'setup']) {
+    for (const phase of ['draft', 'submitted', 'reviewing', 'approved', 'changes', 'withdrawn', 'ready', 'paused', 'connected', 'setup']) {
       await page.goto(`${origin}/creator?phase=${phase}`);
-      await page.getByRole('heading', { name: phase === 'setup' ? 'Start with a little you.' : /Your studio,|Looking good,/ }).waitFor();
+      await page.getByRole('heading', { name: phase === 'setup' ? 'Start with a little you.' : brand === 'moxy' ? /Your overview|Welcome, Fixture/ : /Your studio,|Looking good,/ }).waitFor();
       if (phase === 'ready' || phase === 'paused') {
         await page.getByText('A$0.98', { exact: true }).waitFor();
         await page.getByRole('button', { name: '7 days', exact: true }).click();
@@ -74,12 +75,31 @@ try {
       if (phase !== 'setup') {
         const nav = page.getByRole('navigation', { name: device === 'mobile' ? 'Mobile creator navigation' : 'Creator navigation', exact: true });
         assert(await nav.isVisible());
-        assert.equal(await nav.getByRole('link').count(), 5);
-        assert.equal(await nav.getByRole('link', { name: 'Earnings', exact: true }).getAttribute('href'), '/creator/earnings');
-        assert.equal(await page.locator('[data-creator-clone-building]').count(), phase === 'submitted' ? 1 : 0);
+        assert.equal(await nav.getByRole('link').count(), brand === 'moxy' && device === 'mobile' ? 4 : 6);
+        if (brand === 'moxy') {
+          if (device === 'mobile') {
+            await page.getByLabel('Account menu', { exact: true }).click();
+            await page.locator('details[open]').getByRole('link', { name: 'Earnings', exact: true }).waitFor();
+            assert.equal(await page.locator('details[open]').getByRole('link', { name: 'Payouts', exact: true }).getAttribute('href'), '/creator/payouts');
+            await page.getByLabel('Account menu', { exact: true }).click();
+          } else assert.equal(await nav.getByRole('link', { name: 'Earnings', exact: true }).getAttribute('href'), '/creator/earnings');
+          assert.equal(await page.locator('[data-moxy-creator-setup]').count(), phase === 'draft' ? 1 : 0);
+          assert.equal(await page.locator('[data-moxy-submission-confirmed]').count(), ['submitted', 'reviewing', 'approved'].includes(phase) ? 1 : 0);
+          assert.equal(await page.getByText('Two steps. All you.', { exact: true }).count(), 0);
+          assert.equal(await page.getByText('Make yourself at home.', { exact: true }).count(), 0);
+          if (phase !== 'draft') assert.equal(await page.getByRole('link', { name: 'Continue setup', exact: true }).count(), 0);
+        }
+        assert.equal(await page.locator('[data-creator-clone-building]').count(), ['submitted', 'reviewing', 'approved'].includes(phase) ? 1 : 0);
       }
       await page.screenshot({ path: resolve(screenshots, `${brand}-${device}-${phase}.png`), fullPage: true });
     }
+  }
+  if (brand === 'moxy') for (const data of ['empty', 'unavailable']) {
+    await page.goto(`${origin}/creator?phase=submitted&${data}=1`);
+    await page.getByRole('heading', { name: 'Your profile has been submitted', exact: true }).waitFor();
+    assert.equal(await page.locator('[data-moxy-creator-setup]').count(), 0, 'Optional or unavailable intake cannot reopen submitted setup');
+    assert.equal(await page.getByText('Permissions recorded', { exact: true }).count(), 0);
+    assert.equal(await page.getByText('Content received', { exact: true }).count(), 0);
   }
   failRevenue = true;
   await page.goto(`${origin}/creator?phase=ready`);
