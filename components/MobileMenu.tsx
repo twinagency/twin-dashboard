@@ -10,6 +10,7 @@ import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { usesCompactWorkspace } from "@/lib/compact-workspace";
 import ChannelSwitch from "@/components/ChannelSwitch";
 import workspaceStyles from "./WorkspaceStudio.module.css";
+import onlyfansStyles from "./onlyfans-preview/OnlyFansStudio.module.css";
 import type { DashboardChannel } from "@/lib/channel-nav";
 
 // The phone menu is the desktop sidebar's real content in a touch-friendly
@@ -32,6 +33,7 @@ export default function MobileMenu({
   const pathname = usePathname();
   const { audience, agencyName } = useDashboardAccess();
   const operator = audience === "admin";
+  const onlyfans = pathname === "/onlyfans" || pathname.startsWith("/onlyfans/");
   const studio = operator || audience !== "creator" && isDashboardWorkspaceRoute(pathname);
   const creatorBrand = agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin";
   const [open, setOpen] = useState(false);
@@ -100,12 +102,12 @@ export default function MobileMenu({
             ref={drawer}
             data-compact-workspace={usesCompactWorkspace(audience, agencyName) || undefined}
             data-workspace-theme={operator ? "dark" : undefined}
-            data-creator-studio={operator ? creatorBrand : undefined}
+            data-creator-studio={operator || onlyfans ? creatorBrand : undefined}
             data-studio-sidebar={studio || undefined}
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation"
-            className={`dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200${operator ? ` ${workspaceStyles.drawer}` : ""}`}
+            className={`dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200${operator || onlyfans ? ` ${workspaceStyles.drawer}` : ""}${onlyfans ? ` ${onlyfansStyles.platform}` : ""}`}
           >
             <SidebarContent
               activeCloneId={activeCloneId}
