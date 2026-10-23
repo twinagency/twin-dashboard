@@ -135,3 +135,30 @@
   .telegram-history-badge { padding: 6px 8px; font-size: 10px; }
   .telegram-live-heading h1 { font-size: 26px; }
 }
+
+/* Keep the conversation, rather than repeated status panels, in the phone viewport. */
+@media (max-width: 1023px) {
+  [data-compact-workspace][data-compact-workspace] .users-workspace.telegram-live-page,
+  .users-workspace.telegram-live-page { min-height: 0; padding: 8px; gap: 8px; }
+  .telegram-live-page:has([data-live-panel="chat"]) .telegram-live-heading { display: none; }
+  .telegram-live-heading { gap: 8px; flex-wrap: wrap; padding: 4px; }
+  .telegram-live-heading h1 { font-size: 24px; }
+  .telegram-live-heading p { display: none; }
+  .telegram-inbox-totals { flex-direction: row; gap: 10px; font-size: 10px; }
+  .telegram-panel-switch { margin-bottom: 8px; padding: 3px; }
+  .telegram-panel-switch button { min-height: 38px; }
+  .telegram-chat-header { min-height: 60px; padding: 9px 10px; gap: 8px; }
+  .telegram-chat-header .telegram-fan-avatar { width: 34px; height: 34px; font-size: 12px; }
+  .telegram-chat-header > div.min-w-0 > div:first-child > span:first-child { font-size: 15px; }
+  .telegram-chat-actions { flex-basis: auto; gap: 5px; }
+  .telegram-chat-actions:has(form) { flex-basis: 100%; }
+  .telegram-history-badge { padding: 5px 7px; font-size: 10px; }
+  .telegram-history-badge svg { width: 12px; height: 12px; }
+  .telegram-live-page .telegram-history-nav { padding: 5px 8px; gap: 5px 8px; }
+  .telegram-history-nav > span:not([role="status"]) { display: none; }
+  .telegram-history-nav a { padding: 5px 8px; }
+  .telegram-live-page .tg-thread { padding: 12px; overscroll-behavior-y: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+  .telegram-live-page [data-thread-status],
+  .telegram-live-composer:has(.telegram-composer-status) { display: none; }
+  .telegram-live-composer { padding: 8px; }
+}

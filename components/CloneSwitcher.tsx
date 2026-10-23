@@ -197,14 +197,14 @@ export default function CloneSwitcher({
       </button>
 
       <DialogContent
-        className="top-[12vh] flex max-h-[75vh] w-full max-w-lg translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
+        className="top-[8dvh] flex h-[80dvh] max-h-[44rem] min-h-0 w-full max-w-lg translate-y-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
         initialFocus={inputRef}
       >
-        <DialogHeader className="border-b border-line px-4 py-3">
+        <DialogHeader className="shrink-0 border-b border-line px-4 py-3">
           <DialogTitle>Switch creator</DialogTitle>
         </DialogHeader>
 
-        <div className="border-b border-line p-3">
+        <div className="shrink-0 border-b border-line p-3">
           {switchError && <p role="alert" className="mb-2 text-sm text-crit">{switchError}</p>}
           <Input
             ref={inputRef}
@@ -217,7 +217,7 @@ export default function CloneSwitcher({
           />
         </div>
 
-        <div className="overflow-y-auto p-3">
+        <div data-creator-list-scroll role="region" aria-label="Creators" tabIndex={0} className="min-h-0 flex-1 touch-pan-y overflow-y-auto overscroll-contain p-3" style={{ WebkitOverflowScrolling: "touch" }}>
           <button
             type="button"
             onClick={() => pick(null)}
