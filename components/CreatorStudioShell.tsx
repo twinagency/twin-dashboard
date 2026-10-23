@@ -3,7 +3,7 @@
 import Link from "@/components/NavigationLink";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { ArrowRight, ChevronRight, Home, Images, Sparkles, Wallet, CircleHelp, LogOut } from "lucide-react";
+import { ArrowRight, ChevronRight, Home, Images, Sparkles, Wallet, CreditCard, CircleHelp, LogOut } from "lucide-react";
 import TwinWordmark from "./TwinWordmark";
 import { useCurrency } from "./CurrencyProvider";
 import type { CreatorStudioBrand, CreatorStudioStatus } from "@/lib/creator-studio-model";
@@ -24,6 +24,7 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
     { href: contentHref, label: "My Content", icon: Images },
     { href: status.linked ? "/creator/edit" : "/creator/onboarding?step=questionnaire", label: "My AI", icon: Sparkles },
     { href: "/creator/earnings", label: "Earnings", icon: Wallet },
+    { href: "/creator/payouts", label: "Payouts", icon: CreditCard },
     { href: "/creator/help", label: "Help", icon: CircleHelp },
   ];
   // A creator who leaves Home open sees server-side linking and review updates automatically.
@@ -60,6 +61,7 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
       </header>
       <main id="creator-studio-main" className={styles.main} tabIndex={-1}>{children}<footer className={styles.footer}><span>Made for you. Powered by {brand === "moxy" ? "Moxy" : "Flirt"}.</span><span>Your space to grow ♡</span></footer></main>
     </div>
-    <nav className={styles.mobileNav} aria-label="Mobile creator navigation">{navigation(true)}</nav>
+    <nav className={styles.mobileNav} style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }} aria-label="Mobile creator navigation">{navigation(true)}</nav>
   </div>;
 }
+

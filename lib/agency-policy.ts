@@ -26,9 +26,10 @@ export function agencyDashboardPath(path: string, agencyName?: string, canManage
   if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path) || /^\/clones\/[0-9a-f-]{36}$/i.test(path);
   if (isMoxy(agencyName) && (path === "/api/models" || path === "/crm" || path.startsWith("/crm/"))) return false;
   if (canManage && (Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,path) || ["/api/caption","/api/compile"].includes(path))) return true;
-  if (["/", "/revenue", "/analytics", "/sales-health", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/messages", "/logs", "/business", "/agency/creators", "/agency/creator-invites"].includes(path)) return true;
+  if (["/", "/revenue", "/payouts", "/api/payouts", "/analytics", "/sales-health", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/messages", "/logs", "/business", "/agency/creators", "/agency/creator-invites"].includes(path)) return true;
   if (/^\/clones\/[0-9a-f-]{36}(\/fans\/[0-9a-f-]{36})?$/i.test(path)) return true;
   if (/^\/sequences\/[0-9a-f-]{36}$/i.test(path)) return true;
   return ["/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/media-sign", "/api/fx", "/api/models", "/api/avatar", "/api/voice", "/api/business-account", "/api/business-connection"].includes(path);
 }
+
 

@@ -121,14 +121,15 @@ async function main() {
     assert.notEqual(accessCacheKey(identity), accessCacheKey({ ...identity, id: "another-creator" }));
     assert.deepEqual(CREATOR_DASHBOARD_NAV, [
       { href: "/creator", label: "Earnings", icon: "EarningsCombo" },
+      { href: "/creator/payouts", label: "Payouts", icon: "Payouts" },
       { href: "/creator/ppvs", label: "Pay Per View", icon: "Media" },
       { href: "/creator/business", label: "Business", icon: "Bot" },
       { href: "/creator/info", label: "Info", icon: "Info" },
       { href: "/creator/logs", label: "Logs", icon: "Logs" },
       { href: "/creator/edit", label: "Edit", icon: "Dials" },
     ]);
-    assert.equal(CREATOR_DASHBOARD_NAV.length, 6);
-    assert.equal(new Set(CREATOR_DASHBOARD_NAV.map(item => item.href)).size, 6);
+    assert.equal(CREATOR_DASHBOARD_NAV.length, 7);
+    assert.equal(new Set(CREATOR_DASHBOARD_NAV.map(item => item.href)).size, 7);
     for (const item of CREATOR_DASHBOARD_NAV) {
       const response = await middleware(request(item.href));
       assert.equal(response.status, 200, item.href);
@@ -137,8 +138,8 @@ async function main() {
     for (const path of ["/creator/edit?tab=config", "/creator/edit?tab=identity&tab=money", "/creator/edit?sub=advanced", `/creator?clone=${other}`, `/api/dashboard?clone=${own}&clone=${other}`, "/users", "/settings", "/agency-admin", "/crm/inbox", `/clones/${other}?tab=identity`, "/api/models", "/api/compile"]) {
       assert.equal((await middleware(request(path))).status, 403, path);
     }
-    for (const path of ["/creator", "/creator/edit", "/api/dashboard", "/clones/" + own]) assert.equal((await middleware(request(path, "POST", { origin, "next-action": "forged-action" }))).status, 403, path);
-    for (const path of ["/api/dashboard?clone=" + own, "/api/dashboard/day-insight?clone=" + own, "/api/media-sign?path=" + own + "/fixture.jpg", "/api/fx", "/api/business-account?cloneId=" + own]) {
+    for (const path of ["/creator", "/creator/edit", "/api/payouts", "/api/dashboard", "/clones/" + own]) assert.equal((await middleware(request(path, "POST", { origin, "next-action": "forged-action" }))).status, 403, path);
+    for (const path of ["/api/payouts?cloneId=" + own, "/api/dashboard?clone=" + own, "/api/dashboard/day-insight?clone=" + own, "/api/media-sign?path=" + own + "/fixture.jpg", "/api/fx", "/api/business-account?cloneId=" + own]) {
       const response = await middleware(request(path));
       assert.equal(response.status, 200, path);
       assert.equal(response.headers.get(`x-middleware-request-${CREATOR_AUDIENCE_HEADER}`), "creator");
