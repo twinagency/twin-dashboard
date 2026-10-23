@@ -38,7 +38,9 @@ jobs:
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - name: Telegram creator payout amounts, access and empty forms
-        run: node scripts/check-payouts.cjs
+        run: |
+          node scripts/check-payouts.cjs
+          npx tsx scripts/check-creator-workspace.ts
       - name: Default agency homepage, scoped navigation feedback and creator navigation
         run: |
           node scripts/check-navigation-feedback.cjs
