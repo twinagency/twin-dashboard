@@ -1,0 +1,35 @@
+name: Telegram payouts
+on:
+  push:
+    paths:
+      - 'lib/payouts/**'
+      - 'components/PayoutDashboard*'
+      - 'app/payouts/**'
+      - 'app/creator/payouts/**'
+      - 'app/api/payouts/**'
+      - 'scripts/check-payouts.cjs'
+      - '.github/workflows/telegram-payouts.yml'
+  pull_request:
+    paths:
+      - 'lib/payouts/**'
+      - 'components/PayoutDashboard*'
+      - 'app/payouts/**'
+      - 'app/creator/payouts/**'
+      - 'app/api/payouts/**'
+      - 'scripts/check-payouts.cjs'
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Amounts, dates, creator scope, duplicate saves and actual React forms
+        run: node scripts/check-payouts.cjs
+      - name: Full application types
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
