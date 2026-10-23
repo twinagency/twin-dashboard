@@ -17,7 +17,7 @@ jobs:
             sha: bd079ae3caf2b32e8b01da259a8ace460580860c
           - brand: twin-moxy
             container: next-app
-            sha: 9af5892c891813b1f12a5b82026184d88a60510c
+            sha: a1e96b8e6a4fa562fbd2bea9ddb8e5329748ae25
     name: Verify ${{ matrix.brand }} payout permissions
     steps:
       - uses: actions/checkout@v4
