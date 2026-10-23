@@ -95,6 +95,10 @@ function backend() {
 }
 
 export async function checkOfferImport(page, context, origin, options = {}) {
+  const showOffers = async (targetPage = page) => {
+    const tab = targetPage.getByRole("tab", { name: "Offers", exact: true });
+    if (await tab.count()) await tab.click();
+  };
   const target = options.path ?? "/onlyfans/content?account=acc-a";
   const { state, handle } = backend();
   const external = [];
@@ -105,7 +109,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(origin + target, { waitUntil: "networkidle" });
-    if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
+    await showOffers();
     const panel = page.locator("[data-offer-import]");
     await panel.getByRole("heading", { name: "Import existing OnlyFans offers" }).waitFor({ timeout: 15000 });
     const scan = panel.getByRole("button", { name: "Scan imported history", exact: true });
@@ -209,6 +213,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
 
     // Reload: nothing private is invented, a fresh scan shows the created draft.
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     await panel.getByRole("heading", { name: "Import existing OnlyFans offers" }).waitFor();
     assert.equal(await panel.locator("[data-import-job]").count(), 0);
     await panel.getByRole("button", { name: "Scan imported history", exact: true }).click();
@@ -244,13 +249,14 @@ export async function checkOfferImport(page, context, origin, options = {}) {
 
     // Account switching: an in-flight reply for one account is never shown under another.
     await page.goto(origin + target, { waitUntil: "networkidle" });
-    if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
+    await showOffers();
     const others = page.locator('nav[aria-label$="account"] a');
     if (await others.count() > 1) {
       state.delay = 1500;
       await panel.getByRole("button", { name: "Scan imported history", exact: true }).click();
       await others.nth(1).click();
       await page.waitForTimeout(2500); state.delay = 0;
+      await showOffers();
       assert.equal(await page.locator("[data-offer-import] [data-import-review]").count(), 0, "a stale reply must not appear for the new account");
     } else console.log("Offer import browser: account switching skipped (fixture exposes one account)");
 
@@ -263,7 +269,7 @@ export async function checkOfferImport(page, context, origin, options = {}) {
       const readPage = await viewer.newPage();
       await readPage.route("**/api/onlyfans-content/accounts/*/imports/**", handle);
       await readPage.goto(origin + target, { waitUntil: "networkidle" });
-      if (await readPage.getByRole("tab", { name: "Offers", exact: true }).count()) await readPage.getByRole("tab", { name: "Offers", exact: true }).click();
+      await showOffers(readPage);
       const readPanel = readPage.locator("[data-offer-import]");
       assert(await readPanel.getByRole("button", { name: "Scan imported history", exact: true }).isDisabled(), "read-only team access cannot start a scan");
       assert.equal(await readPanel.getByRole("button", { name: "Create selected drafts" }).count(), 0);

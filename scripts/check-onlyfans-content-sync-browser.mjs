@@ -115,6 +115,10 @@ function backend() {
 }
 
 export async function checkContentSync(page, context, origin, options = {}) {
+  const showOffers = async (targetPage = page) => {
+    const tab = targetPage.getByRole("tab", { name: "Offers", exact: true });
+    if (await tab.count()) await tab.click();
+  };
   const target = options.path ?? "/onlyfans/content?account=acc-a";
   const { state, handle, status } = backend();
   const external = [];
@@ -122,7 +126,11 @@ export async function checkContentSync(page, context, origin, options = {}) {
   page.on("request", watch);
   await page.route("**/api/onlyfans-content/accounts/*/sync/**", handle);
   await page.route("**/api/onlyfans-content/accounts/*/imports/**", route => route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, outcome: "refused", error: "Offer import is not configured." }) }));
-  const open = async () => { await page.goto(origin + target, { waitUntil: "networkidle" }); await page.locator("[data-content-sync-status]").waitFor({ timeout: 15000 }); };
+  const open = async () => {
+    await page.goto(origin + target, { waitUntil: "networkidle" });
+    await showOffers();
+    await page.locator("[data-content-sync-status]").waitFor({ timeout: 15000 });
+  };
   try {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await open();
@@ -173,6 +181,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // Conflict review: side by side, three explicit decisions, expected revision and fingerprint, no hashes on screen.
     state.conflicts = [conflict("cf-1", 2)]; state.status = { ...state.status, openConflicts: 1 };
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     const review = page.locator("[data-content-sync-conflicts]");
     await review.locator("[data-sync-conflict]").waitFor({ timeout: 15000 });
     const boxes = review.locator("[data-conflict-terms]");
@@ -207,6 +216,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // A stale decision is refused and the refreshed terms are read again.
     state.conflicts = [conflict("cf-2", 5)]; state.status = { ...state.status, openConflicts: 1 }; state.refuseNext = { key: "resolve", status: 409, code: "revision_conflict" };
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     await review.locator("[data-sync-conflict]").waitFor({ timeout: 15000 });
     await review.locator('[data-conflict-choice="accept_source"]').check();
     await review.locator("[data-conflict-apply]").click();
@@ -273,6 +283,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     state.ops = [{ ...{ operationId: "op-retry-1", kind: "upload", status: "failed", createdAt: STAMP, updatedAt: STAMP, completedAt: STAMP, coverage: {}, result: {}, lastError: "auth_required", retryable: true, draftId: "dr-conn", assetId: "as-c" } }];
     state.draft = null; state.hold = true;
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     await sync.locator("[data-sync-connection]").waitFor({ timeout: 15000 });
     assert((await sync.locator("[data-sync-connection] a").getAttribute("href")).includes("/onlyfans/accounts?account=acc-a"));
     assert((await sync.innerText()).includes("Connection required"));
@@ -303,7 +314,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // The editor never offers to switch on an item whose media is not fully synced.
     const editor = page.locator("[data-of-content-editor]").first();
     if (await editor.count()) {
-      if (await page.getByRole("tab", { name: "Offers", exact: true }).count()) await page.getByRole("tab", { name: "Offers", exact: true }).click();
+      await showOffers();
       const itemId = await editor.getAttribute("data-of-content-editor");
       state.extraDrafts.push({ ...state.extraDrafts[1], draftId: "dr-item", itemId, label: "Synthetic item draft" });
       await editor.locator("[data-of-edit-content-open]").click();
@@ -320,6 +331,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // Empty, unavailable and session-loss states.
     state.status = status("acc-a"); state.extraDrafts = []; state.ops = []; state.unavailable = true;
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     await sync.locator("[data-sync-unavailable]").waitFor({ timeout: 15000 });
     assert((await sync.innerText()).includes("Nothing here is confirmed."));
     assert.equal(await page.locator("[data-content-sync-save] [data-sync-save-submit]").count(), 0);
@@ -336,6 +348,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
     // Mobile: no horizontal overflow with conflict review and the save form open.
     state.conflicts = [conflict("cf-3", 7)]; state.status = { ...state.status, openConflicts: 1 };
     await page.reload({ waitUntil: "networkidle" });
+    await showOffers();
     await review.locator("[data-sync-conflict]").waitFor({ timeout: 15000 });
     await page.setViewportSize({ width: 390, height: 844 });
     await review.scrollIntoViewIfNeeded();
@@ -354,8 +367,10 @@ export async function checkContentSync(page, context, origin, options = {}) {
     if (await links.count() > 1) {
       state.delay = 2000;
       await page.reload({ waitUntil: "domcontentloaded" });
+      await showOffers();
       await links.nth(1).click();
       await page.waitForTimeout(3500); state.delay = 0;
+      await showOffers();
       assert.equal(await page.getByText("Synthetic media for acc-a", { exact: false }).count() === 0 || (await page.url()).includes("acc-a"), true);
     } else console.log("Content sync browser: account switching skipped (fixture exposes one account)");
 
@@ -369,6 +384,7 @@ export async function checkContentSync(page, context, origin, options = {}) {
       await readPage.route("**/api/onlyfans-content/accounts/*/sync/**", handle);
       state.conflicts = [conflict("cf-4", 1)]; state.status = { ...state.status, openConflicts: 1 };
       await readPage.goto(origin + target, { waitUntil: "networkidle" });
+      await showOffers(readPage);
       await readPage.locator("[data-content-sync-status] [data-sync-state]").waitFor({ timeout: 15000 });
       assert.equal(await readPage.locator("[data-sync-toggle]").count(), 0); assert.equal(await readPage.locator("[data-sync-now]").count(), 0);
       assert.equal(await readPage.locator("[data-sync-save-submit]").count(), 0);

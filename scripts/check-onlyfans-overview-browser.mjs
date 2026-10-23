@@ -7,6 +7,11 @@ export async function checkOnlyFansOverview(page, origin) {
   const consoleError = message => { if (message.type() === "error") errors.push(message.text()); };
   const pageError = error => errors.push(String(error));
   const observe = request => {
+    const url = new URL(request.url());
+    // Next's development overlay resolves logged error frames through this
+    // reserved diagnostic route. Every application/API write stays monitored.
+    if (request.method() === "POST" && url.origin === origin &&
+        url.pathname === "/__nextjs_original-stack-frames" && !url.search) return;
     if (request.url().startsWith(origin + "/") && !["GET", "HEAD"].includes(request.method())) {
       writes.push({ method: request.method(), url: request.url() });
     }
