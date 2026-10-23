@@ -179,8 +179,12 @@ export async function checkContentSync(page, context, origin, options = {}) {
     assert.equal(await boxes.count(), 2);
     assert((await boxes.nth(0).innerText()).includes("Current CRM terms") && (await boxes.nth(0).innerText()).includes("USD 19.99"));
     assert((await boxes.nth(1).innerText()).includes("Changed source terms") && (await boxes.nth(1).innerText()).includes("USD 25.00"));
-    const [left, right] = [await boxes.nth(0).boundingBox(), await boxes.nth(1).boundingBox()];
-    assert(right.x > left.x + left.width - 2 && Math.abs(right.y - left.y) < 4, "terms are shown side by side on desktop");
+    // Measure after layout settles; the status panel above can still be filling in.
+    const sideBySide = await page.waitForFunction(() => {
+      const [a, b] = [...document.querySelectorAll("[data-content-sync-conflicts] [data-conflict-terms]")].map(n => n.getBoundingClientRect());
+      return a && b && b.x > a.x + a.width - 2 && Math.abs(b.y - a.y) < 4;
+    }, undefined, { timeout: 5000 }).then(() => true, () => false);
+    assert(sideBySide, "terms are shown side by side on desktop");
     assert.deepEqual(await review.locator("[data-conflict-choice]").evaluateAll(nodes => nodes.map(node => node.dataset.conflictChoice)), ["accept_source", "keep_crm", "disable"]);
     for (const label of ["Use new source terms", "Keep CRM terms", "Disable item"]) assert(await review.getByText(label, { exact: true }).count());
     assert(await review.locator("[data-conflict-apply]").isDisabled(), "no decision is assumed");

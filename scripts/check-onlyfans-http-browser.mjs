@@ -44,6 +44,15 @@ try {
   });
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   const page = await context.newPage();
+  if (process.env.ONLYFANS_TEST_ONLY_OFFER_IMPORT === "1") {
+    // Focused run of the import and content-sync checks on the real harness.
+    await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "networkidle", timeout: 45000 });
+    await checkOfferImport(page, context, origin);
+    await checkContentSync(page, context, origin);
+    assert.equal(external.length, 0, "UI attempted an external request");
+    await browser.close();
+    process.exit(0);
+  }
   await checkCombinedEarnings(page,context,origin);
   await page.goto(origin + "/onlyfans/inbox?creator=creator-acc-a&account=acc-a", { waitUntil: "networkidle", timeout: 45000 });
   // Selecting the real conversation causes the detail handler to run.

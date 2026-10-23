@@ -117,6 +117,6 @@ export default function ContentSyncStatus({ accountId, readOnly = false }: { acc
     </> : null}
     {operation ? <p className="mt-2 text-sm" role="status" data-sync-operation={operation.status}>{OPERATION_LABELS[operation.status]}.</p> : null}
     {notice ? <p className="mt-2 text-sm" role="status" data-sync-notice>{notice}{needsConnection ? <> <Link className="font-semibold text-accent underline" href={connectionHref(accountId)}>Reconnect this account</Link></> : null}</p> : null}
-    {sync && sync.openConflicts > 0 ? <ContentSyncConflict accountId={accountId} readOnly={readOnly} onResolved={() => { void readStatus(); router.refresh(); }} /> : null}
+    {sync ? <ContentSyncConflict accountId={accountId} readOnly={readOnly} onResolved={() => { void readStatus(); router.refresh(); }} /> : null}
   </section>;
 }

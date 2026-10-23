@@ -29,7 +29,9 @@ export async function syncCall<T = unknown>(accountId: string, path: string, opt
   if (response.ok && value?.ok === true && "data" in value) return { kind: "ok", data: value.data as T };
   if (response.status === 502 || value?.outcome === "unconfirmed" || !value || response.status >= 500 && response.status !== 503) return { kind: "unconfirmed", error: UNCONFIRMED };
   const code = (SYNC_FAILURE_CODES as readonly unknown[]).includes(value.code) ? value.code as SyncFailureCode : "invalid_sync_request";
-  return { kind: "refused", status: response.status, code, error: typeof value.error === "string" && value.error.length <= 300 ? value.error : FAILURE_MESSAGES[code] };
+  // Known refusals get the fixed plain-word message; only input errors keep the route's own text.
+  const own = code === "invalid_sync_request" && typeof value.error === "string" && value.error.length <= 300 ? value.error : null;
+  return { kind: "refused", status: response.status, code, error: own ?? FAILURE_MESSAGES[code] };
 }
 
 export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
