@@ -1299,7 +1299,6 @@ export default async function FansPage({
                   )}
                 </div>
                 <div className="telegram-chat-actions">
-                  <span className="telegram-history-badge"><Sparkles size={14} aria-hidden="true" />{selected.paused ? "Paused" : "Live history"}</span>
                   {!selectedV2 && isStoredFan(selected.id) && <MutationForm action={setPaused}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="paused" value={selected.paused ? "false" : "true"} />

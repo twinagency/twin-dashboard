@@ -21,7 +21,7 @@
 //     evidence path and never a resend.
 
 import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, MessageCircle, Send, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, CheckCircle2, MessageCircle, Send } from "lucide-react";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
@@ -327,6 +327,7 @@ function Composer({
   }, [account.accountId, account.capabilities.sendManualMessage, simulated]);
   useEffect(() => { catalogueActive.current = true; void loadCatalogue(); return () => { catalogueActive.current = false; }; }, [loadCatalogue]);
   const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason && !pending;
+  const sendBlockedReason = disabledReason ?? actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason;
   useEffect(() => {
     if (result && !result.simulated && result.outcome === "recorded" && result.intentId &&
         result.request.payload.kind === "manual_message") { setText(""); setCatalogItemId(""); }
@@ -361,7 +362,6 @@ function Composer({
           {catalogItemId ? <p className="text-[11px] text-muted">This reply will include the saved item at its catalogue price and previews.</p> : null}
         </div> : null}
         <div className="flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
-          <Sparkles className="mt-1 size-4 shrink-0 text-love" />
           <label className="min-w-0 flex-1">
             <span className="sr-only">Manual message</span>
             <textarea
@@ -370,7 +370,9 @@ function Composer({
               onChange={(event) => setText(event.target.value)}
               disabled={!canSend}
               rows={1}
-              placeholder={canSend ? "Write a reply as the creator…" : "Sending is not available"}
+              placeholder={canSend ? "Write a reply as the creator…" : pending ? "Submitting…"
+                : sendBlockedReason === "Take over this conversation before sending a manual reply."
+                  ? "Take over to reply" : "Reply unavailable — see reason below"}
               className="w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:cursor-not-allowed"
             />
           </label>
