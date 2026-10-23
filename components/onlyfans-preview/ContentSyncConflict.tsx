@@ -13,6 +13,7 @@ const CHOICES: Record<Resolution, { label: string; help: string }> = {
   disable: { label: "Disable item", help: "Switch this item off so it cannot be offered." },
 };
 const DONE: Record<Resolution, string> = { accept_source: "Now using the new source terms.", keep_crm: "Keeping the CRM terms.", disable: "This item is switched off." };
+const ISSUES: Record<string,string> = {post_deleted:"The source post was deleted.",post_no_longer_paid:"The source post is no longer paid.",source_retracted:"The source message was retracted.",source_terms_unusable:"The current source terms are unusable."};
 type Pending = { conflictId: string; resolution: Resolution; body: { requestId: string; resolution: Resolution; expectedRevision: number; expectedItemFingerprint: string } };
 
 function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflict["current"]; lockedText?: boolean | null }) {
@@ -67,11 +68,13 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
     {error ? <p className="mt-2 text-sm" role="status">{error} <button type="button" className="font-semibold text-accent underline" onClick={() => void read()}>Try again</button></p> : null}
     {items && !items.length && !error ? <p className="mt-2 text-sm" data-conflicts-empty>No item has changed terms to review.</p> : null}
     {items?.map(conflict => { const selected = choice[conflict.conflictId];
-      const submit = () => { if (selected) void apply({ conflictId: conflict.conflictId, resolution: selected, body: { requestId: crypto.randomUUID(), resolution: selected,
+      const sourceUnavailable = conflict.sourceIssue != null;
+      const submit = () => { if (selected && !(selected === "accept_source" && sourceUnavailable)) void apply({ conflictId: conflict.conflictId, resolution: selected, body: { requestId: crypto.randomUUID(), resolution: selected,
         expectedRevision: conflict.revision, expectedItemFingerprint: conflict.itemFingerprint } }); };
       return <form key={conflict.conflictId} className="mt-3 min-w-0 rounded-xl border border-warn/40 p-3" data-sync-conflict={conflict.itemId}
         onSubmit={event => { event.preventDefault(); if (!retry) submit(); }}>
         <p className="text-sm font-semibold">Item {conflict.itemId}: selling is paused until you decide.</p>
+        {sourceUnavailable ? <p role="note" className="mt-2 text-sm">{ISSUES[conflict.sourceIssue!]} New source terms cannot be accepted while this issue remains. Keeping CRM terms does not make unavailable provider content usable.</p> : null}
         <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">
           <Terms title="Current CRM terms" terms={conflict.current} />
           <Terms title="Changed source terms" terms={conflict.source} lockedText={conflict.source.lockedText} />
@@ -80,12 +83,13 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
           <legend className="text-sm font-semibold">Your decision</legend>
           {RESOLUTIONS.map(resolution => <label key={resolution} className="mt-2 flex min-w-0 items-start gap-2 text-sm">
             <input type="radio" name={`resolution-${conflict.conflictId}`} className="mt-1" checked={selected === resolution} data-conflict-choice={resolution}
+              disabled={resolution === "accept_source" && sourceUnavailable}
               onChange={() => setChoice(previous => ({ ...previous, [conflict.conflictId]: resolution }))} />
             <span className="min-w-0"><span className="font-semibold">{CHOICES[resolution].label}</span><span className="block text-xs text-muted">{CHOICES[resolution].help}</span></span>
           </label>)}
         </fieldset>
         {readOnly ? <p className="mt-2 text-xs text-muted">Read-only team access</p> : <div className="mt-3 flex flex-wrap gap-2">
-          <button type="submit" className={buttonClass} disabled={!selected || busy || !!retry} data-conflict-apply>Apply decision</button>
+          <button type="submit" className={buttonClass} disabled={!selected || busy || !!retry || selected === "accept_source" && sourceUnavailable} data-conflict-apply>Apply decision</button>
           {retry && retry.conflictId === conflict.conflictId ? <button type="button" className={buttonClass} disabled={busy} data-conflict-retry onClick={() => void apply(retry)}>Retry the same request</button> : null}
         </div>}
       </form>; })}

@@ -41,7 +41,7 @@
     "key:issue": "tsx scripts/issue-api-key.ts issue",
     "key:list": "tsx scripts/issue-api-key.ts list",
     "key:revoke": "tsx scripts/issue-api-key.ts revoke",
-    "test:onlyfans-offer-import": "tsx scripts/check-onlyfans-offer-import.ts",
+    "test:onlyfans-offer-import": "node --import tsx scripts/check-onlyfans-offer-import.ts && node --import tsx --test scripts/check-onlyfans-offer-import-posts.ts",
     "test:onlyfans-content-sync": "tsx scripts/check-onlyfans-content-sync.ts",
     "test:onlyfans-browser-syntax": "node --check scripts/check-onlyfans-offer-import-browser.mjs && node --check scripts/check-onlyfans-content-sync-browser.mjs && node --check scripts/check-onlyfans-http-browser.mjs && node --check scripts/check-onlyfans-launch-browser.mjs && node --check scripts/check-onlyfans-launch-b-browser.mjs",
     "test:callsites": "tsx scripts/check-paged-call-sites.ts",
@@ -102,7 +102,7 @@
     "test:onlyfans-agency-http": "node --import tsx scripts/check-onlyfans-agency-http.ts",
     "test:catalogue-audit": "node scripts/check-catalogue-preview-audit.cjs",
     "test:onlyfans-launch": "node --import tsx scripts/check-onlyfans-launch.ts",
-    "test:onlyfans-launch-b": "node --import tsx scripts/check-onlyfans-launch-b.ts",
+    "test:onlyfans-launch-b": "node --import tsx --test scripts/check-onlyfans-launch-b.ts scripts/check-onlyfans-native-memory.ts && node --import tsx scripts/check-onlyfans-upload-permission.ts",
     "test:onlyfans-launch-access": "node --import tsx scripts/check-onlyfans-launch-access.ts"
   },
   "dependencies": {

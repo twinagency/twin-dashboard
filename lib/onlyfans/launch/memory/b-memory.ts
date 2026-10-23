@@ -1,46 +1,90 @@
-/** Section D. Browser-side shapes for the memory BFF (history recovery progress, fan memory, corrections). Every answer comes from a delivered backend route. */
-import { rec } from "../live/shared";
-import { FACT_FIELDS, PROFILE_FIELDS, limitFor, validCorrection, type Correction, type Fact, type FanMemory, type MemoryProgress, type Recovery } from "../live/memory-model";
-export { FACT_FIELDS, PROFILE_FIELDS, limitFor, validCorrection, FIELD_LABEL } from "../live/memory-model";
-export type { Fact, FanMemory, MemoryProgress, Recovery, Correction };
+/** Legacy design fixtures retained for historical review. Native operational memory uses native.ts and b-memory-client.ts. */
+import { bId } from "../b-common";
 
-export const FACT_SOURCE_TEXT: Record<Fact["source"], string> = { canonical: "Saved on the fan record", operator: "Corrected by an operator", history: "Found in chat history (quoted below)" };
-const int = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 0;
-const nstr = (v: unknown) => v === null || typeof v === "string";
+export const COVERAGE_STATES = ["complete", "partial", "not_started", "unsupported"] as const;
+export type CoverageState = typeof COVERAGE_STATES[number];
+export const COVERAGE_TEXT: Record<CoverageState, string> = { complete: "Complete", partial: "Partial", not_started: "Not started", unsupported: "Not supported by the provider" };
+export const FACT_SOURCES = ["history", "operator", "inferred"] as const;
+export type FactSource = typeof FACT_SOURCES[number];
+export const SOURCE_TEXT: Record<FactSource, string> = { history: "From chat history", operator: "Entered by an operator", inferred: "Inferred by the AI (unverified)" };
 
-export type FanReply = { fanId: string; recovery: Recovery; progress: MemoryProgress; memory: FanMemory };
-/** The BFF already validated the backend answer; the browser re-checks the shape it relies on and the account/fan it belongs to. */
-export function parseRecoveryReply(value: unknown, accountId: string): Recovery | null {
-  const d = rec(value) && value.accountId === accountId && rec(value.data) ? value.data.recovery : null;
-  return isRecovery(d, null) ? d : null;
+export type BFact = { factId: string; field: string; label: string; value: string; source: FactSource; updatedAt: string | null; editable: boolean };
+export type BCoverage = { state: CoverageState; messagesImported: number | null; messagesKnownTotal: number | null; oldestAt: string | null; newestAt: string | null; memoryBuiltAt: string | null };
+export type BFanMemory = { fanId: string; displayName: string; revision: number; summary: { text: string; updatedAt: string | null; source: FactSource } | null; facts: BFact[]; coverage: BCoverage };
+export type BFanRow = { fanId: string; displayName: string; coverage: CoverageState; factCount: number };
+export type BAccountCoverage = { coverage: BCoverage; fansTotal: number | null; fansWithMemory: number | null; fans: BFanRow[]; nextCursor: string | null };
+
+export const MAX_FACT_VALUE = 500;
+const rec = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+const stamp = (v: unknown) => v === null || (typeof v === "string" && Number.isFinite(Date.parse(v)));
+const count = (v: unknown) => v === null || (Number.isSafeInteger(v) && (v as number) >= 0);
+
+export function parseCoverage(v: unknown): BCoverage | null {
+  if (!rec(v) || !(COVERAGE_STATES as readonly unknown[]).includes(v.state) || !count(v.messagesImported) || !count(v.messagesKnownTotal) ||
+    !stamp(v.oldestAt) || !stamp(v.newestAt) || !stamp(v.memoryBuiltAt)) return null;
+  if (typeof v.messagesImported === "number" && typeof v.messagesKnownTotal === "number" && v.messagesImported > v.messagesKnownTotal) return null;
+  return v as BCoverage;
 }
-function isRecovery(d: unknown, fanId: string | null): d is Recovery {
-  return rec(d) && ["complete", "incomplete"].includes(d.status as string) && typeof d.discoveryComplete === "boolean" && typeof d.recentRecoveryNeeded === "boolean" &&
-    ["conversationsDiscovered", "conversationsComplete", "conversationsRetrying", "conversationsDeferredForLiveInput", "pagesCommitted", "messagesObserved", "messagesAdded"].every(k => int(d[k])) && (d.fanId ?? null) === fanId;
+export function parseAccountCoverage(value: unknown, accountId: string): BAccountCoverage | null {
+  if (!rec(value) || value.accountId !== accountId) return null;
+  const coverage = parseCoverage(value.coverage);
+  if (!coverage || !count(value.fansTotal) || !count(value.fansWithMemory) || !Array.isArray(value.fans) || value.fans.length > 200 ||
+    !(value.nextCursor === null || typeof value.nextCursor === "string")) return null;
+  const fans: BFanRow[] = [];
+  for (const f of value.fans) {
+    if (!rec(f) || !bId(f.fanId) || typeof f.displayName !== "string" || f.displayName.length > 160 || !(COVERAGE_STATES as readonly unknown[]).includes(f.coverage) || !count(f.factCount)) return null;
+    fans.push(f as unknown as BFanRow);
+  }
+  return new Set(fans.map(f => f.fanId)).size === fans.length ? { coverage, fansTotal: value.fansTotal as number | null, fansWithMemory: value.fansWithMemory as number | null, fans, nextCursor: value.nextCursor as string | null } : null;
 }
-export function parseFanReply(value: unknown, accountId: string, fanId: string): FanReply | null {
-  const d = rec(value) && value.accountId === accountId && rec(value.data) ? value.data : null;
-  if (!d || d.fanId !== fanId || !isRecovery(d.recovery, fanId) || !rec(d.progress) || !["storedMessages", "processedCurrentMessages", "pendingMessages", "revision"].every(k => int((d.progress as Record<string, unknown>)[k])) ||
-    typeof (d.progress as Record<string, unknown>).storedMemoryComplete !== "boolean" || !rec(d.memory) || typeof d.memory.version !== "string" || !/^[a-f0-9]{64}$/.test(d.memory.version) ||
-    !Array.isArray(d.memory.facts) || !rec(d.memory.summaries) || !Array.isArray(d.memory.interactions)) return null;
-  return d as unknown as FanReply;
+export function parseFanMemory(value: unknown, accountId: string, fanId: string): BFanMemory | null {
+  if (!rec(value) || value.accountId !== accountId || value.fanId !== fanId || typeof value.displayName !== "string" || value.displayName.length > 160 ||
+    !Number.isInteger(value.revision) || (value.revision as number) < 0 || !Array.isArray(value.facts) || value.facts.length > 200) return null;
+  const coverage = parseCoverage(value.coverage);
+  if (!coverage) return null;
+  let summary: BFanMemory["summary"] = null;
+  if (value.summary !== null) {
+    const s = value.summary;
+    if (!rec(s) || typeof s.text !== "string" || s.text.length > 4000 || !stamp(s.updatedAt) || !(FACT_SOURCES as readonly unknown[]).includes(s.source)) return null;
+    summary = s as unknown as BFanMemory["summary"];
+  }
+  const facts: BFact[] = [];
+  for (const f of value.facts) {
+    if (!rec(f) || !bId(f.factId) || !bId(f.field) || typeof f.label !== "string" || f.label.length > 160 || typeof f.value !== "string" || f.value.length > 2000 ||
+      !(FACT_SOURCES as readonly unknown[]).includes(f.source) || !stamp(f.updatedAt) || typeof f.editable !== "boolean") return null;
+    facts.push(f as unknown as BFact);
+  }
+  return new Set(facts.map(f => f.factId)).size === facts.length ? { fanId, displayName: value.displayName, revision: value.revision as number, summary, facts, coverage } : null;
 }
-/** Fan id carried by a conversation id. A conversation of another account is never a fan of this one. */
-export function fanOfConversation(accountId: string, conversationId: string): string | null {
-  const prefix = `${accountId}:`;
-  return conversationId.startsWith(prefix) && /^[1-9][0-9]{0,17}$/.test(conversationId.slice(prefix.length)) ? conversationId.slice(prefix.length) : null;
+
+/** Local validation of a correction. The server contract must repeat this; the UI never trusts only itself. */
+export function validateCorrection(value: string): string | null {
+  const t = value.trim();
+  if (!t) return "Enter a value, or use Clear to remove the fact.";
+  if (t.length > MAX_FACT_VALUE) return `Keep it under ${MAX_FACT_VALUE} characters.`;
+  if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(value)) return "Remove control characters.";
+  return null;
 }
-/** Human text for recovery. Counts are observed coverage; the provider reports no total, so there is no percentage. */
-export function recoveryLines(r: Recovery): string[] {
-  const out = [r.status === "complete" ? "All discovered conversations are recovered." : "Recovery is not complete.",
-    `${r.conversationsComplete} of ${r.conversationsDiscovered} discovered conversations complete`,
-    `${r.messagesObserved} messages read, ${r.messagesAdded} new, over ${r.pagesCommitted} pages`];
-  if (!r.discoveryComplete) out.push("Conversation discovery is still running, so more conversations may exist.");
-  if (r.conversationsRetrying) out.push(`${r.conversationsRetrying} retrying after an error`);
-  if (r.conversationsDeferredForLiveInput) out.push(`${r.conversationsDeferredForLiveInput} waiting for live messages first`);
-  if (r.recentRecoveryNeeded) out.push("Recent messages still need recovery.");
-  return out;
+export const coveragePercent = (c: BCoverage): number | null =>
+  c.messagesImported !== null && c.messagesKnownTotal ? Math.min(100, Math.floor(c.messagesImported * 100 / c.messagesKnownTotal)) : null;
+
+/** FIXTURE-ONLY data. Names are labelled so a screenshot can never pass for a real fan. */
+export function fixtureAccountCoverage(accountId: string): BAccountCoverage {
+  return { coverage: { state: "partial", messagesImported: 4200, messagesKnownTotal: 9000, oldestAt: "2026-03-01T00:00:00Z", newestAt: "2026-10-22T00:00:00Z", memoryBuiltAt: "2026-10-22T06:00:00Z" },
+    fansTotal: 3, fansWithMemory: 2, nextCursor: null, fans: [
+      { fanId: "9001", displayName: "FIXTURE fan A", coverage: "complete", factCount: 3 },
+      { fanId: "9002", displayName: "FIXTURE fan B", coverage: "partial", factCount: 1 },
+      { fanId: "9003", displayName: "FIXTURE fan C (no memory)", coverage: "not_started", factCount: 0 }] };
 }
-export const nonEmpty = (v: string | null | undefined) => typeof v === "string" && v.length > 0;
-export const stringOrNull = nstr;
-export { FACT_FIELDS as MEMORY_FACT_FIELDS };
+export function fixtureFanMemory(accountId: string, fanId: string): BFanMemory | null {
+  const cov = (state: CoverageState, imported: number, total: number): BCoverage => ({ state, messagesImported: imported, messagesKnownTotal: total, oldestAt: "2026-03-01T00:00:00Z", newestAt: "2026-10-22T00:00:00Z", memoryBuiltAt: "2026-10-22T06:00:00Z" });
+  if (fanId === "9001") return { fanId, displayName: "FIXTURE fan A", revision: 4, coverage: cov("complete", 120, 120),
+    summary: { text: "FIXTURE summary: chats most evenings, likes short replies, bought twice.", updatedAt: "2026-10-22T06:00:00Z", source: "inferred" },
+    facts: [{ factId: "f1", field: "preferred_name", label: "Preferred name", value: "Alex", source: "history", updatedAt: "2026-10-01T00:00:00Z", editable: true },
+      { factId: "f2", field: "timezone", label: "Timezone", value: "US Eastern", source: "operator", updatedAt: "2026-10-05T00:00:00Z", editable: true },
+      { factId: "f3", field: "spend_tier", label: "Spend tier", value: "Repeat buyer", source: "inferred", updatedAt: "2026-10-22T00:00:00Z", editable: false }] };
+  if (fanId === "9002") return { fanId, displayName: "FIXTURE fan B", revision: 1, coverage: cov("partial", 10, 60), summary: null,
+    facts: [{ factId: "g1", field: "preferred_name", label: "Preferred name", value: "Sam", source: "history", updatedAt: null, editable: true }] };
+  if (fanId === "9003") return { fanId, displayName: "FIXTURE fan C (no memory)", revision: 0, coverage: cov("not_started", 0, 0), summary: null, facts: [] };
+  return null;
+}

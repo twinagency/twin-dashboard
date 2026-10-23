@@ -1,1 +1,1 @@
-export {default, dynamic} from "@/app/revenue/page";
+export { default } from "@/app/revenue/page";

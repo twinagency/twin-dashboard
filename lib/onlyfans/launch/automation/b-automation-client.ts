@@ -2,7 +2,8 @@
 import { bFetch, type BReply } from "../b-common";
 import { parseControlAck, type ControlAction } from "@/lib/onlyfans/controls";
 import { parseAccounts, parseConversations, parseRuntime, type BAccount, type BConversation, type BRuntime } from "./b-automation";
-import { parseEngagementReply, type EngagementView } from "./b-engagement";
+import { parseFollowUps, type BFollowUp } from "./b-follow-ups";
+import { hash, object, parseEngagementAction, parseNativeReadiness } from "../native";
 
 const enc = encodeURIComponent;
 function shaped<T>(reply: BReply<unknown>, parse: (v: unknown) => T | null): BReply<T> {
@@ -12,12 +13,12 @@ function shaped<T>(reply: BReply<unknown>, parse: (v: unknown) => T | null): BRe
 }
 export const readAccounts = async (signal?: AbortSignal): Promise<BReply<BAccount[]>> =>
   shaped(await bFetch("/api/onlyfans/accounts", { signal }), parseAccounts);
-export const readConversations = async (accountId: string, cursor: string | null = null, signal?: AbortSignal): Promise<BReply<{ items: BConversation[]; more: boolean; cursor: string | null }>> =>
-  shaped(await bFetch(`/api/onlyfans/accounts/${enc(accountId)}/conversations${cursor ? `?cursor=${enc(cursor)}` : ""}`, { signal }), v => parseConversations(v, accountId));
+export const readConversations = async (accountId: string, signal?: AbortSignal): Promise<BReply<{ items: BConversation[]; more: boolean }>> =>
+  shaped(await bFetch(`/api/onlyfans/accounts/${enc(accountId)}/conversations`, { signal }), v => parseConversations(v, accountId));
 export const readRuntime = async (accountId: string, signal?: AbortSignal): Promise<BReply<BRuntime>> =>
   shaped(await bFetch(`/api/onlyfans/accounts/${enc(accountId)}/workspace/settings`, { signal }), v => parseRuntime(v, accountId));
-export const readEngagement = async (accountId: string, signal?: AbortSignal): Promise<BReply<EngagementView>> =>
-  shaped(await bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { signal }), v => parseEngagementReply(v, accountId));
+export const readFollowUps = async (accountId: string, signal?: AbortSignal): Promise<BReply<BFollowUp[]>> =>
+  shaped(await bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { signal }), v => parseFollowUps(v, accountId));
 
 /** The ack proves a recorded event, not current state; callers must re-read the conversation. */
 export async function sendControl(accountId: string, conversationId: string, action: Exclude<ControlAction, "manual_message">, expectedRevision: number, signal?: AbortSignal): Promise<BReply<{ recordedRevision: number }>> {
@@ -26,9 +27,10 @@ export async function sendControl(accountId: string, conversationId: string, act
   const ack = parseControlAck(reply.data, { accountId, conversationId, action, expectedRevision });
   return ack ? { kind: "ok", data: { recordedRevision: ack.recordedRevision } } : { kind: "unconfirmed", error: "The acknowledgement did not match the request. Refresh before trying again." };
 }
-/** Success means the backend returned the recorded action. Whether it is really cancelled is in data.outcome. */
-export const cancelAction = async (accountId: string, actionId: string, signal?: AbortSignal) =>
-  bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { method: "POST", body: { actionId }, signal });
-/** scope "engagement" stops proactive messages; "account" pauses the connection (operator only). Success only when data.outcome is "recorded". */
-export const stopAutomation = async (accountId: string, scope: "engagement" | "account", signal?: AbortSignal) =>
-  bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/emergency-stop`, { method: "POST", body: { scope }, signal });
+export const cancelFollowUp = async (accountId: string, followUpId: string, signal?: AbortSignal) =>
+  bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { method: "POST", body: { action: "cancel", actionId: followUpId }, signal });
+/** Account commands require the authoritative state fingerprint and a reason. */
+export const emergencyStop = async (accountId: string, expectedFingerprint: string, reason: string, signal?: AbortSignal) => {
+  if (!hash(expectedFingerprint) || !reason.trim() || reason.length > 512) return { kind: "refused" as const, status: 400, error: "Refresh account state and provide a reason." };
+  return bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/emergency-stop`, { method: "POST", body: { action: "emergency_stop", expectedFingerprint, reason }, signal });
+};

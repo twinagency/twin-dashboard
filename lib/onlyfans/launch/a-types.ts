@@ -1,28 +1,139 @@
-/** Launch dashboard response schema and the readiness checklist types. Everything shown is read from a delivered backend contract. */
-export const LAUNCH_SCHEMA = "of-launch-b.v1";
-
-export type Status = "ok" | "warn" | "blocked" | "unknown";
-export type Blocker = { id: string; area: string; status: Status; title: string; detail: string; evidence: string | null; action: { label: string; href: string } | null };
-export type Readiness = { asOf: string | null; blockers: Blocker[] };
-
-const o = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
-const s = (v: unknown): v is string => typeof v === "string";
-const sn = (v: unknown): v is string | null => v === null || typeof v === "string";
-const isBlocker = (b: unknown): b is Blocker => o(b) && s(b.id) && s(b.area) && ["ok", "warn", "blocked", "unknown"].includes(b.status as string) && s(b.title) && s(b.detail) && sn(b.evidence) &&
-  (b.action === null || (o(b.action) && s(b.action.label) && s(b.action.href) && b.action.href.startsWith("/")));
-/** Returns null on any shape violation: an unparseable answer is an error, never "empty". */
-export const parseReadiness = (v: unknown): Readiness | null =>
-  o(v) && sn(v.asOf) && Array.isArray(v.blockers) && v.blockers.length <= 50 && v.blockers.every(isBlocker) ? { asOf: v.asOf, blockers: v.blockers } : null;
-export const parseAccess = (v: unknown): { canManage: boolean; accountPause: boolean } | null =>
-  o(v) && typeof v.canManage === "boolean" && typeof v.accountPause === "boolean" ? { canManage: v.canManage, accountPause: v.accountPause } : null;
-
-export { ID } from "./live/shared";
-export type Screen = "readiness" | "ledger" | "personality";
-export const SCREENS: Screen[] = ["readiness", "ledger", "personality"];
-export const SCREEN_LABELS: Record<Screen, string> = { readiness: "A. Readiness", ledger: "B. Purchases", personality: "C. Personality and AI" };
-/** What each screen is wired to. Every screen reads delivered contracts; a failed read shows as unavailable, never as a pass. */
-export const WIRING: Record<Screen, string> = {
-  readiness: "Built from live reads of connection, history, ledger, personality and engagement. A read that fails shows as Not verified.",
-  ledger: "Reads the ledger status contract (of-ledger.v1). Retry only queues a held scan; it never marks anything reconciled.",
-  personality: "Import, review, approval and history use the personality contract. Readiness comes from the backend credential check.",
+/** Browser wrapper over the native, purpose-separated launch contracts. */
+import {
+  hash,
+  object,
+  text,
+  validReview,
+  parseNativeReadiness,
+  parseNativeLedger,
+  parseNativePersonality,
+  type PersonalityReview,
+} from "./native";
+import { parseLedger } from "./ledger-model";
+export const LAUNCH_SCHEMA = "of-launch.v1";
+export const LAUNCH_HEADER = "X-OnlyFans-Launch-Version";
+export type Screen = "readiness" | "purchases" | "personality";
+export const SCREENS: Screen[] = ["readiness", "purchases", "personality"];
+export const SCREEN_LABELS: Record<Screen, string> = {
+  readiness: "A. Readiness",
+  purchases: "B. Purchases",
+  personality: "C. Personality and AI",
+};
+export type Wiring = "connected" | "partial" | "backend-pending";
+/** Update only after the actual combined dashboard/backend rehearsal succeeds. */
+export const WIRING: Record<Screen, { wiring: Wiring; note: string }> = {
+  readiness: {
+    wiring: "connected",
+    note: "Reads account prerequisites, coverage and runtime state. Each account must satisfy its current checks before activation.",
+  },
+  purchases: {
+    wiring: "connected",
+    note: "Reads canonical scan status and transaction evidence. A queued retry does not establish recovery completion.",
+  },
+  personality: {
+    wiring: "connected",
+    note: "History import, complete review, approval and audit use the current creator binding. AI settings and readiness remain separate from approval.",
+  },
+};
+export {
+  parseNativeReadiness as parseReadiness,
+  parseNativeLedger as parsePurchaseEvidence,
+  parseNativePersonality as parsePersonality,
+};
+export type {
+  NativeReadiness as Readiness,
+  NativeLedger as PurchaseEvidence,
+  Personality as PersonalitySettings,
+} from "./native";
+export const PARSERS = {
+  readiness: parseNativeReadiness,
+  purchases: parseLedger,
+  personality: parseNativePersonality,
+} as const;
+export const ID = /^[A-Za-z0-9._:-]{1,64}$/;
+export type LaunchCommand =
+  | {
+      path: "ledger/retry";
+      id: null;
+      body: { expectedConnectionRevision: number; expectedScanFingerprint: string };
+    }
+  | {
+      path: "ledger/resolve";
+      id: null;
+      body: {
+        expectedFingerprint: string;
+        reason: string;
+        evidenceHash: string;
+      };
+    }
+  | { path: "personality/import"; id: null; body: { expectedRevision: number; expectedBindingId: string } }
+  | {
+      path: "personality/review";
+      id: null;
+      body: { expectedRevision: number; expectedBindingId: string; review: PersonalityReview };
+    }
+  | {
+      path: "personality/approve";
+      id: null;
+      body: {
+        expectedRevision: number;
+        expectedBindingId: string;
+        acknowledgements: {
+          mixedAuthorship: true;
+          runtimeRules: true;
+          factsVerified: true;
+        };
+      };
+    };
+const keys = (v: Record<string, unknown>, k: string[]) =>
+  Object.keys(v).sort().join(",") === [...k].sort().join(",");
+const revision = (v: unknown) =>
+  Number.isInteger(v) && Number(v) >= 0 && Number(v) < 2 ** 31 - 1;
+export function validCommand(c: unknown): c is LaunchCommand {
+  if (
+    !object(c) ||
+    !keys(c, ["path", "id", "body"]) ||
+    c.id !== null ||
+    !object(c.body) ||
+    !text(c.path, 64)
+  )
+    return false;
+  const b = c.body;
+  if (c.path === "ledger/retry") return revision(b.expectedConnectionRevision) && hash(b.expectedScanFingerprint) && keys(b, ["expectedConnectionRevision", "expectedScanFingerprint"]);
+  if (c.path === "ledger/resolve")
+    return (
+      hash(b.expectedFingerprint) &&
+      text(b.reason, 512) &&
+      !!b.reason.trim() &&
+      keys(
+        b,
+        ["expectedFingerprint", "reason", "evidenceHash"],
+      ) &&
+      hash(b.evidenceHash)
+    );
+  if (!revision(b.expectedRevision) || typeof b.expectedBindingId !== "string" || !ID.test(b.expectedBindingId)) return false;
+  switch (c.path) {
+    case "personality/import":
+      return keys(b, ["expectedRevision", "expectedBindingId"]);
+    case "personality/review":
+      return keys(b, ["expectedRevision", "expectedBindingId", "review"]) && validReview(b.review);
+    case "personality/approve":
+      return (
+        keys(b, ["expectedRevision", "expectedBindingId", "acknowledgements"]) &&
+        object(b.acknowledgements) &&
+        keys(b.acknowledgements, [
+          "mixedAuthorship",
+          "runtimeRules",
+          "factsVerified",
+        ]) &&
+        Object.values(b.acknowledgements).every((x) => x === true)
+      );
+    default:
+      return false;
+  }
+}
+export const READ_PATHS: Record<Screen, string> = {
+  readiness: "readiness",
+  purchases: "purchases",
+  personality: "personality",
 };

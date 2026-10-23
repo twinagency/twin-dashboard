@@ -5,188 +5,622 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-
-/**
- * Browser check for launch screens A, B and C. The real components are bundled with esbuild and served from a
- * local static server; every /api request is answered by a synthetic backend through page.route, so nothing
- * leaves the machine and no production system is touched. Screenshots go to ./screenshots/.
- * Run: node scripts/check-onlyfans-launch-browser.mjs   (PREVIEW_CHROME overrides the browser binary)
- */
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const require = createRequire(path.join(root, "package.json"));
-const { build } = require("esbuild"), { chromium } = require("playwright");
-const postcss = require("postcss"), tailwind = require("@tailwindcss/postcss");
-const work = fs.mkdtempSync(path.join(os.tmpdir(), "launch-browser-"));
-const shots = path.join(root, "screenshots"); fs.mkdirSync(shots, { recursive: true });
-let checks = 0; const ok = (cond, msg) => { assert(cond, msg); checks++; };
-
-fs.writeFileSync(path.join(work, "entry.tsx"), `import { createRoot } from "react-dom/client";
-import AbcWorkspace from "@/components/onlyfans-launch/AbcWorkspace";
-createRoot(document.getElementById("root")!).render(<AbcWorkspace />);`);
-fs.writeFileSync(path.join(work, "nav.ts"), `export const useRouter = () => ({ refresh() {}, push() {}, replace() {} }); export const usePathname = () => "/"; export const useSearchParams = () => new URLSearchParams();`);
-await build({ entryPoints: [path.join(work, "entry.tsx")], bundle: true, outfile: path.join(work, "app.js"), jsx: "automatic", format: "iife", minify: false,
-  define: { "process.env.NODE_ENV": '"development"' }, logLevel: "error", nodePaths: [path.join(root, "node_modules")], absWorkingDir: root,
-  alias: { "@": root, "next/navigation": path.join(work, "nav.ts") }, loader: { ".css": "empty" } });
-const css = fs.readFileSync(path.join(root, "app/globals.css"), "utf8");
-let styles = "";
-try { styles = (await postcss([tailwind({ base: root })]).process(css, { from: path.join(root, "app/globals.css") })).css; } catch (e) { console.warn("tailwind unavailable, unstyled run:", e.message); }
-fs.writeFileSync(path.join(work, "app.css"), styles);
-const server = http.createServer((req, res) => {
-  const file = req.url === "/app.js" ? "app.js" : req.url === "/app.css" ? "app.css" : null;
-  if (file) { res.setHeader("content-type", file.endsWith("js") ? "text/javascript" : "text/css"); return res.end(fs.readFileSync(path.join(work, file))); }
-  res.setHeader("content-type", "text/html");
-  res.end(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script src="/app.js"></script></body></html>`);
+/** Real native components with synthetic BFF responses. This is not integrated/live acceptance. */
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."),
+  require = createRequire(path.join(root, "package.json"));
+const { build } = require("esbuild"),
+  { chromium } = require("playwright"),
+  work = fs.mkdtempSync(path.join(os.tmpdir(), "native-launch-browser-"));
+let checks = 0;
+const ok = (v, msg) => {
+  assert(v, msg);
+  checks++;
+};
+const stamp = "2026-10-23T05:00:00Z",
+  hash = "a".repeat(64),
+  binding = "binding-b";
+const empty = {
+  version: "of-personality.v1",
+  state: "empty",
+  revision: 0,
+  bindingId: binding,
+  document: null,
+};
+const draft = {
+  version: "of-personality.v1",
+  state: "draft",
+  revision: 1,
+  bindingId: binding,
+  document: {
+    source: "canonical_history",
+    review: {},
+    draft: {
+      creatorFacts: [],
+      writingStyle: [],
+      operationalInstructions: [],
+      suggestedPersona: {
+        text: "Short, warm replies.",
+        attribution: "unknown",
+        evidenceIds: [],
+        selected: false,
+        requiresReview: true,
+        basis: "observed_account_style",
+        warning: "Account authorship may be mixed.",
+      },
+      evidence: [],
+      coverage: {
+        inputMessages: 20,
+        uniqueMessages: 20,
+        sampledMessages: 20,
+        authorship: { creator: 0, agency: 0, unknown: 20, automation: 0 },
+        method: "bounded sample",
+        limitations: ["Not full provider history."],
+      },
+    },
+  },
+  configurationRevision: 3,
+  configurationCurrent: true,
+  configurationFingerprint: hash,
+  conflicts: [],
+  requiresFactResolution: [],
+  factComparisons: [],
+  readiness: {
+    ready: false,
+    reviewRequired: true,
+    blockers: ["credential_missing"],
+    model: {
+      state: "ready",
+      modelId: "deepseek-chat",
+      provider: "deepseek",
+      reasoningEffort: { state: "default", saved: null, resolved: null },
+    },
+    credential: {
+      state: "missing",
+      configured: false,
+      metadataAvailable: true,
+    },
+    budget: { state: "ready", dailyCostCapCents: 100 },
+    tone: { state: "ready", conflicts: [], reviewRequired: true },
+  },
+  createdAt: stamp,
+  actor: "op:1",
+  commandKey: hash,
+};
+const readiness = {
+  readinessVersion: "of-launch-readiness.v1",
+  observedAt: stamp,
+  schemaRevision: "0091_launch_operations",
+  readyToEnable: false,
+  checks: [
+    {
+      key: "schema",
+      status: "ready",
+      blocking: true,
+      observedAt: stamp,
+      blocker: null,
+      action: null,
+    },
+    {
+      key: "ledger",
+      status: "blocked",
+      blocking: true,
+      observedAt: stamp,
+      blocker: "ledger_held_or_stale",
+      action: "ledger",
+    },
+  ],
+  accountControl: {
+    enabled: false,
+    bindingId: binding,
+    revision: 0,
+    unresolvedOutgoing: 1,
+    fingerprint: hash,
+  },
+  coverage: {
+    storedMessages: 120,
+    processedMessages: 100,
+    providerTotalMessages: null,
+    archiveComplete: false,
+    pendingArchiveConversations: 2,
+  },
+  catalogue: { usableInspectedItems: 1, inspectedItems: 2, hasMore: false },
+  autonomy: {
+    accountEnabled: false,
+    deliveryEnabled: false,
+    existingAutomatedConversations: 0,
+    automateNewConversations: false,
+    engagementEnabled: false,
+    workerCapabilities: { engagement: false },
+  },
+  limits: [
+    "English-pattern historical facts and lexical source retrieval.",
+    "Provider history total remains unknown.",
+  ],
+};
+const ledger = {
+  ledgerVersion: "of-ledger.v1",
+  observedAt: stamp,
+  bindingCurrent: true,
+  status: "running",
+  windowStart: stamp,
+  windowEnd: stamp,
+  pageOffset: 40,
+  lastCompleteAt: null,
+  lastFullAt: null,
+  leaseUntil: stamp,
+  activeLease: false,
+  nextPollAt: stamp,
+  lastError: "invalid_page",
+  updatedAt: stamp,
+  fresh: false,
+  unresolvedTransactions: 1,
+  conflictingEvidence: 1,
+  commerceHold: true,
+  fingerprint: hash,
+  evidence: [
+    {
+      evidenceHash: hash,
+      providerTransactionId: "provider-tx",
+      fanId: "9007199254740993",
+      transactionId: "12",
+      messageId: "4",
+      amountCents: 1999,
+      currency: "USD",
+      status: "cleared",
+      outcome: "conflict",
+      resolved: false,
+      recordedAt: stamp,
+      supportedAction: "reconcile_evidence",
+      blocker: null,
+    },
+  ],
+  nextCursor: null,
+};
+const canonicalLedger = {
+  schemaVersion: "of-ledger.v1", accountId: "acc-b", status: "held",
+  windowStart: stamp, windowEnd: stamp, pageOffset: 40, lastCompleteAt: null,
+  lastFullAt: null, nextPollAt: stamp, lastError: "ledger_read_failed",
+  leaseActive: false, connectionCurrent: true, connectionRevision: 4,
+  conflictCount: 1, unlinkedPaidCount: 1, requiresInvestigation: true,
+  commerceHeld: true, scanFingerprint: hash,
+};
+const state = {
+  delayA: 1000,
+  manage: false,
+  deny: false,
+  personality: structuredClone(empty),
+  posts: [],
+  lost: false,
+  commands: new Set(),
+};
+const env = (accountId, data) => ({
+  schemaVersion: "of-launch.v1",
+  ok: true,
+  accountId,
+  data,
 });
-await new Promise(r => server.listen(0, "127.0.0.1", r));
-const origin = `http://127.0.0.1:${server.address().port}`;
-
-const S = "of-launch.v1", ISO = "2026-10-23T05:00:00Z";
-const env = (account, data) => ({ schemaVersion: S, ok: true, accountId: account, data });
-const state = { delayA: 0, posts: [], accessB: false, deny: false };
-const evidence = { id: "e-9", source: "ledger page", ref: "offset 7, row 2", observedAt: ISO };
-const purchasesB = { scan: { state: "complete", offset: null, error: null, appliedOwnershipRows: 10, messagesMarkedPaid: 4 }, nextCursor: null, items: [
-  { id: "p-9", kind: "unmatched", status: "open", revision: 2, fanId: "77", messageId: null, amountCents: 1999, currency: "USD", reason: "No message matches", evidence: [evidence], audit: [] },
-  { id: "p-8", kind: "reversal", status: "open", revision: 1, fanId: "78", messageId: "5", amountCents: 500, currency: "USD", reason: "Reversed", evidence: [], audit: [] }] };
-const readinessB = { asOf: ISO, blockers: [{ id: "b1", area: "Catalogue", status: "ok", title: "Catalogue ready", detail: "12 items priced.", evidence: "catalogue read", action: null }] };
-const personalityB = { drafts: [{ id: "d-1", revision: 1, field: "Persona", imported: "Imported persona text", edited: null, source: "chat import", approved: false }], configApproved: false, configRevision: 3, model: "m/x", dailyBudgetCents: 300, behaviour: { maxRepliesPerHour: 10, allowSales: false } };
-
-async function mock(route) {
-  const url = new URL(route.request().url()), p = url.pathname, method = route.request().method();
-  const json = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
-  if (state.deny && p.startsWith("/api/onlyfans-launch/")) return json({ ok: false, error: "Sign in again." }, 401);
-  if (p === "/api/onlyfans/accounts") {
-    const acct = id => ({ accountId: id, binding: { creatorName: `Creator ${id}`, handle: `@${id}` }, health: id === "acc-a" ? "expired_session" : "connected", healthReason: id === "acc-a" ? "Session expired" : null, automationMode: "paused", capabilities: { sendManualMessage: "available" } });
-    const only = url.searchParams.get("account");
-    return json({ accounts: only ? [acct(only)] : [acct("acc-a"), acct("acc-b")] });
+async function main() {
+  fs.writeFileSync(
+    path.join(work, "entry.tsx"),
+    'import{createRoot}from"react-dom/client";import{StrictMode}from"react";import AbcWorkspace from"@/components/onlyfans-launch/AbcWorkspace";createRoot(document.getElementById("root")!).render(<StrictMode><AbcWorkspace/></StrictMode>);',
+  );
+  fs.writeFileSync(
+    path.join(work, "nav.ts"),
+    'export const useRouter=()=>({refresh(){},push(){},replace(){}});export const usePathname=()=>"/";export const useSearchParams=()=>new URLSearchParams();',
+  );
+  await build({
+    entryPoints: [path.join(work, "entry.tsx")],
+    bundle: true,
+    outfile: path.join(work, "app.js"),
+    jsx: "automatic",
+    format: "iife",
+    define: { "process.env.NODE_ENV": '"development"' },
+    logLevel: "error",
+    nodePaths: [path.join(root, "node_modules")],
+    absWorkingDir: root,
+    alias: { "@": root, "next/navigation": path.join(work, "nav.ts") },
+    loader: { ".css": "empty" },
+  });
+  let css = "";
+  try {
+    const postcss = require("postcss"),
+      tailwind = require("@tailwindcss/postcss");
+    css = (
+      await postcss([tailwind({ base: root })]).process(
+        fs.readFileSync(path.join(root, "app/globals.css"), "utf8"),
+        { from: path.join(root, "app/globals.css") },
+      )
+    ).css;
+  } catch (e) {
+    console.warn("CSS unavailable", e.message);
   }
-  const cfg = p.match(/^\/api\/onlyfans-configuration\/accounts\/([^/]+)$/);
-  if (cfg) return json({ ok: false, error: "Configuration editing is not configured." }, 503);
-  const m = p.match(/^\/api\/onlyfans-launch\/abc\/accounts\/([^/]+)\/(.+)$/);
-  if (!m) return route.fulfill({ status: 404, body: "" });
-  const [, acc, rest] = m, B = acc === "acc-b";
-  if (rest === "access") return json(env(acc, { canManage: B ? state.accessB : true }));
-  if (method === "POST") { state.posts.push({ acc, body: route.request().postDataJSON() }); return json(env(acc, null)); }
-  if (acc === "acc-a" && state.delayA) await new Promise(r => setTimeout(r, state.delayA));
-  if (!B) return json({ schemaVersion: S, ok: false, outcome: "unavailable", error: "The backend contract for this screen is not available yet." }, 503);
-  return json(env(acc, rest === "readiness" ? readinessB : rest === "purchases" ? purchasesB : personalityB));
+  fs.writeFileSync(path.join(work, "app.css"), css);
+  const server = http.createServer((req, res) => {
+    if (req.url === "/app.js" || req.url === "/app.css") {
+      res.setHeader(
+        "content-type",
+        req.url.endsWith("js") ? "text/javascript" : "text/css",
+      );
+      return res.end(fs.readFileSync(path.join(work, req.url.slice(1))));
+    }
+    res.end(
+      '<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/app.css"><div id="root"></div><script src="/app.js"></script>',
+    );
+  });
+  await new Promise((r) => server.listen(0, "127.0.0.1", r));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+    ...(process.env.PREVIEW_CHROME
+      ? { executablePath: process.env.PREVIEW_CHROME }
+      : {}),
+  });
+  try {
+    const context = await browser.newContext({
+        viewport: { width: 1280, height: 900 },
+      }),
+      external = [],
+      errors = [];
+    await context.route("**/*", async (route) => {
+      const u = new URL(route.request().url());
+      if (!u.href.startsWith(origin)) {
+        external.push(u.href);
+        return route.abort();
+      }
+      if (!u.pathname.startsWith("/api/")) return route.continue();
+      const json = (body, status = 200) =>
+        route.fulfill({
+          status,
+          contentType: "application/json",
+          body: JSON.stringify(body),
+        });
+      if (u.pathname === "/api/onlyfans/accounts")
+        return json({
+          accounts: ["acc-a", "acc-b"].map((accountId) => ({
+            accountId,
+            binding: { creatorName: accountId, handle: accountId },
+            health: "connected",
+            automationMode: "paused",
+          })),
+        });
+      const m = u.pathname.match(
+        /^\/api\/onlyfans-launch\/abc\/accounts\/([^/]+)\/(.+)$/,
+      );
+      if (!m)
+        return json(
+          {
+            ok: false,
+            error:
+              "Configuration not available in this synthetic transport test.",
+          },
+          503,
+        );
+      const [, account, resource] = m;
+      if (state.deny) return json({ ok: false, error: "Session denied" }, 401);
+      if (resource === "access")
+        return json(env(account, { canManage: state.manage }));
+      if (account === "acc-a") {
+        await new Promise((r) => setTimeout(r, state.delayA));
+        return json(
+          {
+            ok: false,
+            outcome: "unavailable",
+            error: "Account backend unavailable",
+          },
+          503,
+        );
+      }
+      if (route.request().method() === "POST") {
+        const command = route.request().postDataJSON();
+        state.posts.push(command);
+        const commandKey = JSON.stringify(command),
+          replay = state.commands.has(commandKey);
+        if (!replay) {
+          if (command.path === "personality/import")
+            state.personality = {
+              ...structuredClone(draft),
+              revision: state.personality.revision + 1,
+            };
+          if (command.path === "personality/review")
+            state.personality = {
+              ...state.personality,
+              revision: state.personality.revision + 1,
+              document: {
+                ...state.personality.document,
+                review: command.body.review,
+              },
+            };
+          if (command.path === "personality/approve")
+            state.personality = {
+              ...state.personality,
+              revision: state.personality.revision + 1,
+              state: "approved",
+              document: { ...state.personality.document, approval: { acknowledgements: command.body.acknowledgements, configurationCommandKey: hash, appliedConfigurationRevision: 4 } },
+            };
+          if (command.path === "ledger/resolve")
+            ledger.evidence[0].resolved = true;
+          state.commands.add(commandKey);
+        }
+        if (state.lost) {
+          state.lost = false;
+          return json(
+            {
+              ok: false,
+              outcome: "unconfirmed",
+              error: "Lost acknowledgement, read current state.",
+            },
+            502,
+          );
+        }
+        return json(env(account, {}));
+      }
+      if (resource === "personality/history")
+        return json(
+          env(account, {
+            revisions: state.personality.revision
+              ? [
+                  {
+                    revision: state.personality.revision,
+                    state: state.personality.state,
+                    actor: "op:1",
+                    createdAt: stamp,
+                  },
+                ]
+              : [],
+            nextBefore: null,
+          }),
+        );
+      if (resource.startsWith("personality/revisions/"))
+        return json(env(account, state.personality));
+      return json(
+        env(
+          account,
+          resource === "readiness"
+            ? readiness
+            : resource === "purchases"
+              ? canonicalLedger
+              : resource === "purchases/evidence" ? ledger : state.personality,
+        ),
+      );
+    });
+    const page = await context.newPage();
+    page.on("pageerror", (e) => errors.push(String(e)));
+    const shots =
+      process.env.ONLYFANS_LAUNCH_A_ARTIFACT_DIR ??
+      path.join(root, "test-results", "onlyfans-native-a");
+    fs.mkdirSync(shots, { recursive: true });
+    await page.goto(origin, { waitUntil: "domcontentloaded" });
+    await page.locator("#launch-account").waitFor();
+    await page.locator("#launch-account").selectOption("acc-b");
+    await page.locator('[data-blocker="schema"]').waitFor();
+    await page.waitForTimeout(1200);
+    ok(
+      (await page.locator('[data-blocker="schema"]').count()) === 1,
+      "stale account response ignored",
+    );
+    ok(
+      (await page
+        .getByText("Provider history total", { exact: true })
+        .count()) === 1,
+      "provider total remains separate",
+    );
+    ok(
+      (await page.getByText("Account runtime", { exact: true }).count()) === 1,
+      "actual runtime state visible",
+    );
+    await page.locator("#launch-account").selectOption("acc-a");
+    await page.getByRole("alert").first().waitFor();
+    ok(
+      (await page.locator("[data-launch-fixture]").count()) === 0,
+      "unavailable backend has no sample fallback",
+    );
+    state.delayA = 0;
+    state.manage = true;
+    await page.locator("#launch-account").selectOption("acc-b");
+    await page.getByRole("tab", { name: /A\. Readiness/ }).focus();
+    await page.keyboard.press("ArrowRight");
+    await page
+      .getByText("Purchase ledger and recovery", { exact: true })
+      .waitFor();
+    ok(
+      (await page.getByText("19.99 USD", { exact: true }).count()) === 1,
+      "exact cents retained",
+    );
+    await page
+      .getByLabel("Investigation reason")
+      .fill("Verified provider transaction matches canonical message");
+    await page
+      .getByRole("button", { name: "Reconcile verified transaction evidence" })
+      .click();
+    await page.getByText(/provider-tx.*reconciled/).waitFor();
+    ok(
+      state.posts.at(-1).path === "ledger/resolve" &&
+        !("resolution" in state.posts.at(-1).body),
+      "no arbitrary ownership write",
+    );
+    await page.getByRole("tab", { name: /C\. Personality/ }).click();
+    await page
+      .getByRole("button", { name: "Import a review draft from history" })
+      .waitFor();
+    await page
+      .getByRole("button", { name: "Import a review draft from history" })
+      .click();
+    await page.getByLabel("Reviewed tone", { exact: true }).waitFor();
+    await page
+      .getByLabel("Reviewed tone", { exact: true })
+      .fill("Warm, concise replies, grounded in approved facts.");
+    await page
+      .getByRole("button", { name: "Save complete review as a new draft" })
+      .click();
+    await page
+      .getByRole("button", { name: "Approve saved personality revision 2" })
+      .waitFor();
+    ok(
+      await page
+        .getByRole("button", { name: "Approve saved personality revision 2" })
+        .isDisabled(),
+      "approval requires acknowledgements",
+    );
+    await page.getByLabel(/I reviewed mixed and unknown authorship/).check();
+    await page.getByLabel(/I reviewed the tone/).check();
+    await page.getByLabel(/I verified the creator facts/).check();
+    await page
+      .getByRole("button", { name: "Approve saved personality revision 2" })
+      .click();
+    await page.getByText(/Personality revision 3: approved/).waitFor();
+    ok(
+      state.posts.at(-1).body.expectedRevision === 2,
+      "personality revision, not configuration revision",
+    );
+    ok(
+      (await page.getByText(/This document ready: no/).count()) === 1,
+      "approval does not imply launch ready",
+    );
+    await page.getByRole("button", { name: "Revision 3, approved" }).click();
+    await page.getByText("Historical revision 3", { exact: true }).waitFor();
+    ok(true, "native audit revision detail view");
+    state.lost = true;
+    await page
+      .getByRole("button", { name: "Create a new import draft" })
+      .click();
+    await page
+      .getByRole("button", { name: "Retry identical personality command" })
+      .waitFor();
+    await page.getByText(/Personality revision 4: draft/).waitFor();
+    ok(
+      await page
+        .getByRole("button", { name: "Save complete review as a new draft" })
+        .isDisabled(),
+      "uncertain command blocks a new conflicting personality write",
+    );
+    const uncertain = JSON.stringify(state.posts.at(-1));
+    await page
+      .getByRole("button", { name: "Retry identical personality command" })
+      .click();
+    await page.getByText(/Command recorded. Current personality/).waitFor();
+    ok(
+      JSON.stringify(state.posts.at(-1)) === uncertain &&
+        state.personality.revision === 4,
+      "lost acknowledgement retries exact command without replacing newer current state",
+    );
+    for (const width of [1280, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      for (const tab of [/A\. Readiness/, /B\. Purchases/, /C\. Personality/]) {
+        await page.getByRole("tab", { name: tab }).click();
+        await page.waitForTimeout(150);
+        ok(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth,
+          ),
+          `screen fits ${width}`,
+        );
+      }
+      await page.screenshot({
+        path: path.join(shots, `native-launch-${width}.png`),
+        fullPage: true,
+      });
+    }
+    state.deny = true;
+    await page.getByRole("tab", { name: /B\. Purchases/ }).click();
+    await page.locator('[data-launch-state="denied"]').first().waitFor();
+    ok(
+      (await page.getByText("provider-tx", { exact: true }).count()) === 0,
+      "session denial removes private ledger data",
+    );
+    ok(external.length === 0, "no external requests");
+    ok(errors.length === 0, errors.join(" | "));
+    await context.close();
+    console.log(`Native launch A synthetic browser: ${checks} passed,0 failed`);
+  } finally {
+    await browser.close();
+    await new Promise((r) => server.close(r));
+    fs.rmSync(work, { recursive: true, force: true });
+  }
 }
-
-const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"],
-  ...(process.env.PREVIEW_CHROME ? { executablePath: process.env.PREVIEW_CHROME } : {}) });
-try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
-  const external = [];
-  await context.route("**/*", route => { const u = route.request().url(); if (!u.startsWith(origin)) { external.push(u); return route.abort(); } return u.includes("/api/") ? mock(route) : route.continue(); });
-  const page = await context.newPage();
-  const errors = []; page.on("pageerror", e => errors.push(String(e)));
-  const shot = name => page.screenshot({ path: path.join(shots, name), fullPage: true });
-  const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
-
-  // Slow first account: the stale-response check starts while acc-a is still loading.
-  state.delayA = 1200;
-  await page.goto(origin);
+/** Invoked by the real paired Next/API disposable rehearsal, with no route interception. */
+export async function checkNativeLaunchA(page, context, origin) {
+  const errors = [];
+  const watch = (e) => errors.push(String(e));
+  page.on("pageerror", watch);
+  const get = async (path) => {
+    const r = await context.request.get(origin + path);
+    assert.equal(r.status(), 200, path);
+    const j = await r.json();
+    assert.equal(j.ok, true, path);
+    return j;
+  };
+  const base = "/api/onlyfans-launch/abc/accounts/acc-a";
+  const ready = await get(`${base}/readiness`);
+  assert.equal(ready.data.readinessVersion, "of-launch-readiness.v1");
+  assert.equal(ready.data.coverage.providerTotalMessages, null);
+  await page.goto(origin + "/onlyfans/launch", {
+    waitUntil: "domcontentloaded",
+  });
   await page.locator("#launch-account").waitFor();
-  ok(await page.locator('[data-launch-state="loading"]').count() > 0, "loading state is shown");
-  await page.locator("#launch-account").selectOption("acc-b");
-  await page.locator('[data-blocker="b1"]').waitFor();
-  await page.waitForTimeout(1500);
-  ok(await page.locator('[data-blocker="b1"]').count() === 1 && await page.locator('[data-launch-state="pending"]').count() === 0, "late acc-a answer did not overwrite acc-b");
-  state.delayA = 0;
-
-  // Screen A on acc-a: live account check is real, full readiness is pending and not claimed.
   await page.locator("#launch-account").selectOption("acc-a");
-  await page.locator('[data-launch-state="pending"]').first().waitFor();
-  ok(await page.locator('[data-blocker="live-connection"]').count() === 1, "live connection row shows");
-  ok((await page.locator('[data-blocker="live-connection"]').innerText()).includes("expired session"), "expired session is a blocker");
-  ok(await page.locator("[data-launch-fixture]").count() === 0, "no fixture before the click");
-  await shot("A-readiness-pending.png");
-  await page.getByRole("button", { name: "Show FIXTURE-ONLY sample" }).click();
-  await page.locator("[data-launch-fixture]").waitFor();
-  ok(await page.locator('[data-blocker="ledger"]').innerText().then(t => t.includes("offset 40")), "ledger blocker is honest");
-  ok(await page.locator('[data-blocker="catalogue"]').count() === 1, "known blockers listed");
-  await shot("A-readiness-fixture.png");
-
-  // Keyboard: arrow keys move between tabs.
-  await page.getByRole("tab", { name: /A\. Readiness/ }).focus();
-  await page.keyboard.press("ArrowRight");
-  ok(await page.getByRole("tab", { name: /B\. Purchases/ }).getAttribute("aria-selected") === "true", "arrow key selects next tab");
-
-  // Screen B on acc-a: pending, fixture sample cannot act.
-  await page.locator('[data-launch-state="pending"]').first().waitFor();
-  await page.getByRole("button", { name: "Show FIXTURE-ONLY sample" }).click();
-  await page.locator('[data-purchase="p-1"]').waitFor();
-  ok(await page.getByRole("button", { name: "Record resolution" }).first().isDisabled(), "fixture resolution is disabled");
-  ok(await page.locator('[data-scan="held"]').count() === 1, "held scan is visible");
-  ok(await page.locator('[data-launch-state="no-evidence"]').count() >= 1, "missing evidence is stated");
-  await shot("B-purchases-fixture.png");
-
-  // Screen B on acc-b with manage rights: audited resolution, evidence required for ownership.
-  state.accessB = true;
-  await page.locator("#launch-account").selectOption("acc-b");
-  await page.locator('[data-purchase="p-9"]').waitFor();
-  const card = page.locator('[data-purchase="p-9"]');
-  await card.getByLabel("Resolution").selectOption("confirmed_owned");
-  await card.getByLabel(/Reason/).fill("Ledger row matches payment");
-  ok(await card.getByRole("button", { name: "Record resolution" }).isDisabled(), "ownership needs evidence");
-  await card.getByLabel(/Evidence/).selectOption("e-9");
-  await card.getByRole("button", { name: "Record resolution" }).click();
-  await page.waitForFunction(() => true); await page.waitForTimeout(300);
-  const post = state.posts.at(-1);
-  ok(post && post.body.path === "purchases/resolve" && post.body.body.evidenceId === "e-9" && !("actor" in post.body.body) && !("commandKey" in post.body.body), "resolution posts evidence id and no identity");
-  const noEv = page.locator('[data-purchase="p-8"]');
-  await noEv.getByLabel("Resolution").selectOption("confirmed_owned");
-  await noEv.getByLabel(/Reason/).fill("x");
-  ok(await noEv.getByRole("button", { name: "Record resolution" }).isDisabled(), "no evidence, no ownership");
-  await shot("B-purchases-live-manage.png");
-
-  // Read-only permission on acc-b.
-  state.accessB = false;
-  await page.locator("#launch-account").selectOption("acc-a"); await page.locator("#launch-account").selectOption("acc-b");
-  await page.locator('[data-purchase="p-9"]').waitFor();
-  ok(await page.locator('[data-launch-state="readonly"]').count() >= 1, "read-only notice");
-  ok(await page.locator('[data-purchase="p-9"]').getByRole("button", { name: "Record resolution" }).isDisabled(), "read-only disables resolution");
-  await shot("B-purchases-readonly.png");
-
-  // Screen C.
+  await page.locator('[data-blocker="schema"]').waitFor();
+  await page.getByRole("tab", { name: /B\. Purchases/ }).click();
+  await page
+    .getByText("Purchase ledger and recovery", { exact: true })
+    .waitFor();
+  assert.equal((await get(`${base}/purchases`)).data.schemaVersion, "of-ledger.v1");
+  assert.equal((await get(`${base}/purchases/evidence`)).data.ledgerVersion, "of-ledger.v1");
   await page.getByRole("tab", { name: /C\. Personality/ }).click();
-  await page.locator('[data-draft="d-1"]').waitFor();
-  ok(await page.locator('[data-draft="d-1"] textarea').isDisabled(), "read-only drafts are not editable");
-  state.accessB = true;
-  await page.locator("#launch-account").selectOption("acc-a"); await page.locator("#launch-account").selectOption("acc-b");
-  await page.locator('[data-draft="d-1"] textarea').waitFor();
-  await page.waitForFunction(() => !document.querySelector('[data-draft="d-1"] textarea')?.disabled);
-  await page.locator('[data-draft="d-1"] textarea').fill("Edited persona");
-  await page.getByRole("button", { name: "Save edit" }).click(); await page.waitForTimeout(300);
-  ok(state.posts.at(-1).body.path === "personality/draft" && state.posts.at(-1).body.body.edited === "Edited persona", "draft edit posted");
-  await page.getByRole("button", { name: "Approve configuration" }).click();
-  ok(await page.getByRole("alertdialog").count() === 1, "approval needs confirmation");
-  await page.getByRole("button", { name: "Cancel" }).click();
-  await shot("C-personality-live.png");
-  await page.locator("#launch-account").selectOption("acc-a");
-  await page.getByRole("button", { name: "Show FIXTURE-ONLY sample" }).click();
-  ok(await page.locator("[data-launch-fixture]").count() >= 1, "personality fixture labelled");
-  ok(await page.locator('[data-draft="d-1"] textarea').isDisabled(), "fixture drafts cannot be edited");
-  await shot("C-personality-pending-fixture.png");
-
-  // Session loss clears private data.
-  state.deny = true; state.accessB = true;
-  await page.locator("#launch-account").selectOption("acc-b"); await page.getByRole("tab", { name: /B\. Purchases/ }).click();
-  await page.locator('[data-launch-state="denied"]').first().waitFor();
-  ok(await page.locator("[data-purchase]").count() === 0, "denied session shows no purchases");
-  state.deny = false;
-
-  // Mobile 390px.
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("tab", { name: /A\. Readiness/ }).click();
-  await page.locator('[data-blocker="b1"]').waitFor();
-  ok(await fits(), "readiness fits 390px");
-  await shot("mobile-A-readiness.png");
-  await page.getByRole("tab", { name: /B\. Purchases/ }).click(); await page.locator('[data-purchase="p-9"]').waitFor();
-  ok(await fits(), "purchases fit 390px"); await shot("mobile-B-purchases.png");
-  await page.getByRole("tab", { name: /C\. Personality/ }).click(); await page.locator('[data-draft="d-1"]').waitFor();
-  ok(await fits(), "personality fits 390px"); await shot("mobile-C-personality.png");
-
-  ok(external.length === 0, "no external requests: " + external.join(","));
-  ok(errors.length === 0, "no page errors: " + errors.join(" | "));
-  console.log(`check-onlyfans-launch-browser: ${checks} passed, 0 failed (styled: ${styles ? "yes" : "no"})`);
-} finally { await browser.close(); server.close(); fs.rmSync(work, { recursive: true, force: true }); }
+  const current = await get(`${base}/personality`),
+    revision = current.data.revision;
+  const importButton = page.getByRole("button", {
+    name: /Import a review draft from history|Create a new import draft/,
+  });
+  await importButton.waitFor();
+  await importButton.click();
+  await page
+    .getByText(new RegExp(`Personality revision ${revision + 1}: draft`))
+    .waitFor();
+  await page.getByLabel("Reviewed tone", { exact: true }).waitFor();
+  await page
+    .getByLabel("Reviewed tone", { exact: true })
+    .fill(
+      "Approved synthetic creator. Warm, concise replies with honest AI disclosure when asked.",
+    );
+  await page
+    .getByRole("button", { name: "Save complete review as a new draft" })
+    .click();
+  const expected = revision + 2;
+  await page
+    .getByRole("button", {
+      name: `Approve saved personality revision ${expected}`,
+    })
+    .waitFor();
+  await page.getByLabel(/I reviewed mixed and unknown authorship/).check();
+  await page.getByLabel(/I reviewed the tone/).check();
+  await page.getByLabel(/I verified the creator facts/).check();
+  await page
+    .getByRole("button", {
+      name: `Approve saved personality revision ${expected}`,
+    })
+    .click();
+  await page
+    .getByText(new RegExp(`Personality revision ${revision + 3}: approved`))
+    .waitFor();
+  const approved = await get(`${base}/personality`);
+  assert.equal(approved.data.state, "approved");
+  assert.equal(approved.data.revision, revision + 3);
+  await get(`${base}/personality/history`);
+  await get(`${base}/personality/revisions/${approved.data.revision}`);
+  assert.equal(errors.length, 0, errors.join(" | "));
+  page.off("pageerror", watch);
+  return {
+    checks: 12,
+    scope: "actual paired dashboard+backend on disposable acc-a",
+    personalityRevision: approved.data.revision,
+  };
+}
+if (
+  process.argv[1] &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+)
+  main().catch((e) => {
+    console.error(e);
+    process.exitCode = 1;
+  });

@@ -1,163 +1,564 @@
 "use client";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import ConfigurationEditor from "@/components/onlyfans-preview/ConfigurationEditor";
-import { bFetch, bTime } from "@/lib/onlyfans/launch/b-common";
-import { FACT_KEYS, parseHistory, parsePersonality, type FactKey, type History, type Personality, type Review } from "@/lib/onlyfans/launch/live/personality-model";
-import { Section, StateLine, Unavailable, buttonClass, useAccess, useJsonResource } from "../a-shared";
+import { FACT_KEYS, type FactKey } from "@/lib/onlyfans/configuration";
+import {
+  parseNativePersonality,
+  parsePersonalityHistory,
+  type Personality,
+  type PersonalityReview,
+} from "@/lib/onlyfans/launch/native";
+import {
+  Section,
+  StateLine,
+  buttonClass,
+  postCommand,
+  useCanManage,
+  useLaunchResource,
+  type Post,
+} from "../a-shared";
 
-const field = "min-h-11 w-full rounded-lg border border-line bg-white px-2 text-sm disabled:opacity-60";
-const FACT_LABEL: Record<FactKey, string> = { age: "Age", job: "Job", home_city: "Home city", relationship: "Relationship", kids: "Kids", family: "Family", tattoos: "Tattoos", kinks: "Interests", limits: "Limits" };
-type Mode = "keep" | "set" | "clear";
-const base = (accountId: string) => `/api/onlyfans-launch/personality/accounts/${encodeURIComponent(accountId)}`;
-
-function ReadinessCard({ p }: { p: Personality }) {
-  const r = p.readiness;
-  if (!r) return <p data-personality-readiness="none" className="text-sm text-muted">Not ready: no personality has been imported yet, so readiness is not verified.</p>;
-  const ready = r.ready && p.state === "approved" && p.configurationCurrent === true;
-  return <div data-personality-readiness={ready ? "ready" : "not-ready"} className="space-y-1 text-sm">
-    <p className="font-semibold text-ink">{ready ? "Ready: approved personality, verified credential, positive budget" : "Not ready"}</p>
-    {r.blockers.length ? <ul className="list-disc pl-5 text-xs text-muted">{r.blockers.map(b => <li key={b}>{b.replace(/_/g, " ")}</li>)}</ul> : null}
-    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-xs">
-      <dt className="text-muted">Model</dt><dd>{r.model.modelId ?? "none saved"} ({r.model.state.replace(/_/g, " ")})</dd>
-      <dt className="text-muted">Credential</dt><dd>{r.credential.metadataAvailable ? (r.credential.configured ? "Verified and unexpired" : "Not usable: " + r.credential.state.replace(/_/g, " ")) : "Not verified by the backend"}</dd>
-      <dt className="text-muted">Daily budget</dt><dd>{r.budget.dailyCostCapCents === null ? "none" : `${(r.budget.dailyCostCapCents / 100).toFixed(2)} USD`} ({r.budget.state.replace(/_/g, " ")})</dd>
-      <dt className="text-muted">Tone check</dt><dd>{r.tone.state.replace(/_/g, " ")}</dd></dl>
-    <p className="text-xs text-muted">A saved model name does not make an account ready. This does not allow sending or confirm a live provider call.</p>
-  </div>;
+const field =
+  "min-h-11 w-full rounded-lg border border-line bg-white px-2 text-sm disabled:opacity-60";
+const label = (key: string) => key.replaceAll("_", " ");
+function EvidenceView({ p }: { p: Personality }) {
+  if (!p.document) return null;
+  const d = p.document.draft;
+  return (
+    <div className="space-y-3">
+      <dl className="grid grid-cols-2 gap-2 text-sm">
+        <dt>Source</dt>
+        <dd>{p.document.source}</dd>
+        <dt>Sampled outgoing messages</dt>
+        <dd>
+          {d.coverage.sampledMessages} of {d.coverage.uniqueMessages} in bounded
+          input
+        </dd>
+        <dt>Authorship</dt>
+        <dd>
+          {Object.entries(d.coverage.authorship)
+            .map(([k, v]) => `${k}: ${v}`)
+            .join(", ")}
+        </dd>
+      </dl>
+      <ul className="list-disc pl-5 text-sm">
+        {d.coverage.limitations.map((s, i) => (
+          <li key={i}>{s}</li>
+        ))}
+      </ul>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold">
+          Imported facts and writing observations
+        </summary>
+        <ul className="mt-2 space-y-2 text-sm">
+          {[...d.creatorFacts, ...d.writingStyle].map((o, i) => (
+            <li key={i}>
+              <strong>{label(o.key)}</strong>: {o.value} ({o.attribution});
+              evidence {o.evidenceIds.join(", ")}
+            </li>
+          ))}
+        </ul>
+      </details>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold">
+          Source excerpts ({d.evidence.length})
+        </summary>
+        <ul className="mt-2 space-y-2 text-sm">
+          {d.evidence.map((e) => (
+            <li
+              key={e.id}
+              className="break-words rounded-lg border border-line p-2"
+            >
+              <strong>{e.author}</strong> · {e.sourceId}
+              <blockquote>
+                {e.excerpt}
+                {e.truncated ? "…" : ""}
+              </blockquote>
+              <span className="text-xs">Evidence {e.id}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold">
+          Excluded operational instructions ({d.operationalInstructions.length})
+        </summary>
+        <ul className="mt-2 space-y-2 text-sm">
+          {d.operationalInstructions.map((o, i) => (
+            <li key={i}>
+              {o.text}
+              <span className="block text-xs">
+                {o.attribution}. Excluded from configuration.{" "}
+                {o.conflicts.map((c) => c.message).join(" ")}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
 }
-
-function ReviewForm({ p, accountId, onChanged, setNote, disabled }: { p: Personality; accountId: string; onChanged: () => void; setNote: (s: string) => void; disabled: boolean }) {
-  const doc = p.document!, saved = doc.review;
-  const [persona, setPersona] = useState(saved.persona ?? doc.draft.suggestedPersona.text);
-  const [defaultModel, setDefaultModel] = useState(saved.defaultModel ?? ""), [override, setOverride] = useState(typeof saved.replyModelOverride === "string" ? saved.replyModelOverride : ""), [removeOverride, setRemoveOverride] = useState(saved.replyModelOverride === null);
-  const need = new Set(p.requiresFactResolution);
-  const [modes, setModes] = useState<Record<string, Mode>>(() => Object.fromEntries(p.factComparisons.map(c => {
-    const s = saved.creatorFacts?.[c.key as FactKey];
-    return [c.key, s === undefined ? (need.has(c.key) ? (c.proposed ? "set" : "clear") : "keep") : s === null ? "clear" : "set"] as [string, Mode]; })));
-  const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(p.factComparisons.map(c => [c.key, (saved.creatorFacts?.[c.key as FactKey] as string | null | undefined) ?? c.proposed ?? ""])));
-  const [acks, setAcks] = useState({ mixedAuthorship: false, runtimeRules: false, factsVerified: false });
-  const [busy, setBusy] = useState(false);
-
-  const factsReview = Object.fromEntries(p.factComparisons.filter(c => modes[c.key] !== "keep").map(c => [c.key, modes[c.key] === "clear" ? null : vals[c.key].trim()]));
-  const review: Review = { persona: persona.trim(), ...(Object.keys(factsReview).length ? { creatorFacts: factsReview as Review["creatorFacts"] } : {}),
-    ...(defaultModel.trim() ? { defaultModel: defaultModel.trim() } : {}), ...(removeOverride ? { replyModelOverride: null } : override.trim() ? { replyModelOverride: override.trim() } : {}) };
-  const factsBad = p.factComparisons.some(c => modes[c.key] === "set" && (!vals[c.key].trim() || vals[c.key].length > 240));
-  const unresolved = [...need].filter(k => modes[k] === "keep");
-  const valid = persona.trim().length > 0 && persona.length <= 4096 && !factsBad;
-  const savedMatches = JSON.stringify(saved) === JSON.stringify(review);
-  const canApprove = !disabled && !busy && p.state === "draft" && savedMatches && saved.persona !== undefined && p.conflicts.length === 0 && unresolved.length === 0 && acks.mixedAuthorship && acks.runtimeRules && acks.factsVerified;
-
-  async function post(kind: "review" | "approve") {
-    setBusy(true); setNote("");
-    const body = kind === "review" ? { expectedRevision: p.revision, bindingId: p.bindingId, review } : { expectedRevision: p.revision, bindingId: p.bindingId, acknowledgements: { mixedAuthorship: true, runtimeRules: true, factsVerified: true } };
-    const r = await bFetch(`${base(accountId)}/${kind}`, { method: "POST", body });
+function ReviewEditor({
+  p,
+  enabled,
+  submit,
+}: {
+  p: Personality;
+  enabled: boolean;
+  submit: (command: unknown) => Promise<Post>;
+}) {
+  const review = p.document?.review ?? {};
+  const [persona, setPersona] = useState(
+    review.persona ?? p.document?.draft.suggestedPersona.text ?? "",
+  );
+  const [selected, setSelected] = useState<Partial<Record<FactKey, boolean>>>(
+    Object.fromEntries(
+      Object.keys(review.creatorFacts ?? {}).map((k) => [k, true]),
+    ),
+  );
+  const [values, setValues] = useState<Partial<Record<FactKey, string>>>(
+    Object.fromEntries(
+      Object.entries(review.creatorFacts ?? {}).map(([k, v]) => [k, v ?? ""]),
+    ),
+  );
+  const [acks, setAcks] = useState({
+    mixedAuthorship: false,
+    runtimeRules: false,
+    factsVerified: false,
+  });
+  const [busy, setBusy] = useState(false),
+    [result, setResult] = useState<Post | null>(null);
+  async function command(path: string, body: Record<string, unknown> = {}) {
+    if (busy || !enabled) return;
+    setBusy(true);
+    setResult(null);
+    const r = await submit({
+      path,
+      id: null,
+      body: { expectedRevision: p.revision, expectedBindingId: p.bindingId, ...body },
+    });
+    setResult(r);
     setBusy(false);
-    if (r.kind === "ok" && (r.data as { outcome?: string }).outcome === "recorded") setNote(kind === "review" ? "Review saved as a new draft revision. Reloading." : "Approval recorded and applied to the saved configuration. Reloading. This does not turn on sending.");
-    else if (r.kind === "ok") setNote("The answer was not understood. Reload before trying again.");
-    else if (r.kind === "unconfirmed") setNote("Unknown whether this was saved. Reload to see the current state; repeating the same request is safe.");
-    else if (r.kind === "refused" && r.status === 409) setNote("The personality or configuration changed since you loaded it. It was reloaded; review it again.");
-    else if (r.kind === "readonly" || r.kind === "denied") setNote("Your access does not allow this change.");
-    else setNote(r.kind === "unavailable" || r.kind === "refused" ? r.error : "The change was not accepted.");
-    onChanged();
+    // The parent preserves uncertain commands and refreshes only authoritative current state.
   }
-  return <div className="space-y-4" data-personality-review>
-    <div><label htmlFor="pr-persona" className="text-sm font-semibold text-ink">Tone (the persona the AI will use)</label>
-      <p className="text-xs text-muted">Edit freely. Nothing here is used until you save and approve. Suggestion basis: {doc.draft.suggestedPersona.warning ?? "observed account style"}.</p>
-      <textarea id="pr-persona" className={`${field} mt-1 min-h-32 p-2`} maxLength={4096} disabled={disabled || busy} value={persona} onChange={e => setPersona(e.target.value)} /></div>
-    {p.factComparisons.length ? <fieldset className="space-y-2"><legend className="text-sm font-semibold text-ink">Creator facts</legend>
-      {p.factComparisons.map(c => <div key={c.key} data-fact={c.key} className="rounded-lg border border-line p-2">
-        <p className="text-sm font-semibold text-ink">{FACT_LABEL[c.key as FactKey] ?? c.key}{need.has(c.key) ? <span className="ml-2 text-xs font-normal text-[#9b1c31]">must be replaced or cleared</span> : null}</p>
-        <p className="text-xs text-muted">Current: {c.current ?? "none"} · Proposed: {c.proposed ?? "none"}</p>
-        <label className="sr-only" htmlFor={`m-${c.key}`}>Action for {c.key}</label>
-        <select id={`m-${c.key}`} className={`${field} mt-1`} disabled={disabled || busy} value={modes[c.key]} onChange={e => setModes(m => ({ ...m, [c.key]: e.target.value as Mode }))}>
-          <option value="keep">Keep current</option><option value="set">Use this value</option><option value="clear">Clear it</option></select>
-        {modes[c.key] === "set" ? <input aria-label={`Value for ${c.key}`} className={`${field} mt-1`} maxLength={240} disabled={disabled || busy} value={vals[c.key]} onChange={e => setVals(v => ({ ...v, [c.key]: e.target.value }))} /> : null}
-      </div>)}</fieldset> : null}
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div><label htmlFor="pr-model" className="block text-xs text-muted">Default model (empty = keep)</label><input id="pr-model" className={field} maxLength={160} disabled={disabled || busy} value={defaultModel} onChange={e => setDefaultModel(e.target.value)} /></div>
-      <div><label htmlFor="pr-override" className="block text-xs text-muted">Reply model override (empty = keep)</label><input id="pr-override" className={field} maxLength={160} disabled={disabled || busy || removeOverride} value={override} onChange={e => setOverride(e.target.value)} />
-        <label className="mt-1 flex min-h-11 items-center gap-2 text-xs text-ink"><input type="checkbox" checked={removeOverride} disabled={disabled || busy} onChange={e => setRemoveOverride(e.target.checked)} /> Remove the override</label></div></div>
-    {unresolved.length ? <p className="text-xs text-[#9b1c31]">Resolve before approval: {unresolved.join(", ")}.</p> : null}
-    {p.conflicts.length ? <ul className="list-disc pl-5 text-xs text-[#9b1c31]">{p.conflicts.map(c => <li key={c.code}>{c.message}</li>)}</ul> : null}
-    <button type="button" className={buttonClass} disabled={disabled || busy || !valid || savedMatches} onClick={() => void post("review")}>{busy ? "Working…" : "Save review"}</button>
-    {!savedMatches && !disabled ? <p className="text-xs text-muted">Save the review before approving so the approved text is exactly what you see.</p> : null}
-    {p.state === "draft" ? <fieldset className="space-y-1 border-t border-line pt-3"><legend className="text-sm font-semibold text-ink">Approve</legend>
-      {([["mixedAuthorship", "I understand the history mixes the creator, staff and automation."], ["runtimeRules", "I understand platform rules and sales limits still apply at run time."], ["factsVerified", "I checked every fact above."]] as const).map(([k, t]) =>
-        <label key={k} className="flex min-h-11 items-center gap-2 text-sm text-ink"><input type="checkbox" checked={acks[k]} disabled={disabled || busy} onChange={e => setAcks(a => ({ ...a, [k]: e.target.checked }))} /> {t}</label>)}
-      <button type="button" className={buttonClass} disabled={!canApprove} onClick={() => void post("approve")}>Approve and apply to configuration</button>
-      <p className="text-xs text-muted">Approval saves this tone and these facts to the account configuration. It does not turn on sending.</p></fieldset> : null}
-  </div>;
+  const save = () => {
+    const creatorFacts = Object.fromEntries(
+      FACT_KEYS.filter((k) => selected[k]).map((k) => [
+        k,
+        values[k]?.trim() || null,
+      ]),
+    );
+    const next: PersonalityReview = { ...review, persona: persona.trim() };
+    if (Object.keys(creatorFacts).length) next.creatorFacts = creatorFacts;
+    else delete next.creatorFacts;
+    return command("personality/review", { review: next });
+  };
+  return (
+    <div className="space-y-3">
+      <p className="text-sm">
+        Personality revision {p.revision}: {p.state}.{" "}
+        {p.configurationCurrent === false
+          ? "Saved AI configuration has changed since this revision."
+          : ""}
+      </p>
+      <button
+        className={buttonClass}
+        disabled={!enabled || busy}
+        onClick={() => void command("personality/import")}
+      >
+        {p.state === "empty"
+          ? "Import a review draft from history"
+          : "Create a new import draft"}
+      </button>
+      {p.document ? (
+        <>
+          {p.state === "draft" ? (
+            <p role="note" className="text-sm">
+              This review has not been applied. The prior saved configuration
+              remains effective until approval.
+            </p>
+          ) : null}
+          <label
+            className="block text-sm font-semibold"
+            htmlFor="personality-tone"
+          >
+            Reviewed tone
+          </label>
+          <textarea
+            id="personality-tone"
+            className={`${field} min-h-40 p-2`}
+            maxLength={4096}
+            value={persona}
+            disabled={!enabled || busy}
+            onChange={(e) => setPersona(e.target.value)}
+          />
+          {p.document.draft.suggestedPersona.warning ? (
+            <p className="text-sm" role="note">
+              {p.document.draft.suggestedPersona.warning}
+            </p>
+          ) : null}
+          <fieldset disabled={!enabled || busy} className="space-y-2">
+            <legend className="text-sm font-semibold">
+              Verified creator facts to include in this replacement review
+            </legend>
+            {FACT_KEYS.map((k) => (
+              <div key={k} className="grid gap-1 sm:grid-cols-[12rem_1fr]">
+                <label className="flex min-h-11 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={selected[k] === true}
+                    onChange={(e) =>
+                      setSelected((s) => ({ ...s, [k]: e.target.checked }))
+                    }
+                  />
+                  {label(k)}
+                </label>
+                <input
+                  aria-label={`Reviewed ${label(k)}`}
+                  className={field}
+                  disabled={!selected[k]}
+                  maxLength={240}
+                  value={values[k] ?? ""}
+                  onChange={(e) =>
+                    setValues((s) => ({ ...s, [k]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+          </fieldset>
+          <p className="text-xs text-muted">
+            A selected empty fact explicitly clears that saved fact. Unselected
+            facts remain outside this review.
+          </p>
+          <button
+            className={buttonClass}
+            disabled={!enabled || busy || !persona.trim()}
+            onClick={() => void save()}
+          >
+            Save complete review as a new draft
+          </button>
+          {p.factComparisons?.length ? (
+            <ul className="text-sm">
+              {p.factComparisons.map((f) => (
+                <li key={f.key}>
+                  {label(f.key)}: {f.current ?? "empty"} →{" "}
+                  {f.proposed ?? "clear"}
+                  {f.changed ? " (change)" : " (unchanged)"}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {p.requiresFactResolution?.length ? (
+            <p role="alert" className="text-sm">
+              Verify facts from the prior creator before approval:{" "}
+              {p.requiresFactResolution.join(", ")}
+            </p>
+          ) : null}
+          {p.conflicts?.length ? (
+            <ul role="alert" className="text-sm">
+              {p.conflicts.map((c) => (
+                <li key={c.code}>{c.message}</li>
+              ))}
+            </ul>
+          ) : null}
+          <fieldset
+            disabled={!enabled || busy || p.state !== "draft"}
+            className="space-y-2"
+          >
+            <legend className="text-sm font-semibold">
+              Approval acknowledgements
+            </legend>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={acks.mixedAuthorship}
+                onChange={(e) =>
+                  setAcks((s) => ({ ...s, mixedAuthorship: e.target.checked }))
+                }
+              />
+              I reviewed mixed and unknown authorship. Account messages are not
+              automatically the creator's own words.
+            </label>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={acks.runtimeRules}
+                onChange={(e) =>
+                  setAcks((s) => ({ ...s, runtimeRules: e.target.checked }))
+                }
+              />
+              I reviewed the tone and excluded conflicting operational
+              instructions.
+            </label>
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={acks.factsVerified}
+                onChange={(e) =>
+                  setAcks((s) => ({ ...s, factsVerified: e.target.checked }))
+                }
+              />
+              I verified the creator facts in the saved review.
+            </label>
+          </fieldset>
+          <button
+            className={buttonClass}
+            disabled={
+              !enabled ||
+              busy ||
+              p.state !== "draft" ||
+              !review.persona?.trim() ||
+              !Object.values(acks).every(Boolean)
+            }
+            onClick={() =>
+              void command("personality/approve", { acknowledgements: acks })
+            }
+          >
+            Approve saved personality revision {p.revision}
+          </button>
+          <p className="text-xs text-muted">
+            Approval applies the saved review. Unsaved edits above are not
+            approved. Approval does not enable autonomous handling.
+          </p>
+        </>
+      ) : null}
+      {result ? (
+        <p role="status" className="text-sm">
+          {result.ok
+            ? "Command recorded. Reading the current revision."
+            : result.error}
+        </p>
+      ) : null}
+    </div>
+  );
 }
-
-function HistoryList({ accountId }: { accountId: string }) {
-  const [pages, setPages] = useState<History["revisions"]>([]), [next, setNext] = useState<number | null | undefined>(undefined), [err, setErr] = useState(""), [busy, setBusy] = useState(false);
-  async function load(before: number | null) {
-    setBusy(true); setErr("");
-    const r = await bFetch(`${base(accountId)}/history${before ? `?before=${before}` : ""}`);
-    setBusy(false);
-    const h = r.kind === "ok" ? parseHistory((r.data as { data?: unknown }).data) : null;
-    if (!h) { setErr(r.kind === "unavailable" || r.kind === "refused" ? r.error : "History could not be read."); return; }
-    setPages(p => before ? [...p, ...h.revisions] : h.revisions); setNext(h.nextBefore);
-  }
-  return <div className="space-y-2">
-    {next === undefined ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void load(null)}>Show revision history</button> : null}
-    {err ? <p role="alert" className="text-xs text-[#9b1c31]">{err}</p> : null}
-    {next !== undefined && !pages.length ? <p data-launch-state="empty" className="text-sm text-muted">No revisions have been recorded.</p> : null}
-    {pages.length ? <ul className="space-y-1 text-sm">{pages.map(h => <li key={h.revision} data-revision={h.revision} className="rounded-lg border border-line p-2">Revision {h.revision}: {h.state} by <span className="break-all">{h.actor}</span>, {bTime(h.createdAt)}</li>)}</ul> : null}
-    {next ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void load(next)}>Load older revisions</button> : null}
-  </div>;
+function History({ accountId }: { accountId: string }) {
+  const [before, setBefore] = useState<number | null>(null),
+    [revision, setRevision] = useState<number | null>(null);
+  const history = useLaunchResource(
+    accountId,
+    `personality/history${before === null ? "" : `?before=${before}`}`,
+    parsePersonalityHistory,
+  );
+  return (
+    <div className="space-y-3">
+      <StateLine
+        state={history.state}
+        retry={history.reload}
+        label="personality history"
+      />
+      {history.state.kind === "pending" ? (
+        <p role="alert">{history.state.error}</p>
+      ) : null}
+      {history.state.kind === "ok" ? (
+        <>
+          <ul className="space-y-2 text-sm">
+            {history.state.data.revisions.map((r) => (
+              <li key={r.revision}>
+                <button
+                  className={buttonClass}
+                  onClick={() => setRevision(r.revision)}
+                >
+                  Revision {r.revision}, {r.state}
+                </button>{" "}
+                · {r.actor} · {new Date(r.createdAt).toLocaleString()}
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2">
+            <button
+              className={buttonClass}
+              disabled={before === null}
+              onClick={() => setBefore(null)}
+            >
+              Newest revisions
+            </button>
+            <button
+              className={buttonClass}
+              disabled={history.state.data.nextBefore === null}
+              onClick={() =>
+                history.state.kind === "ok" &&
+                setBefore(history.state.data.nextBefore)
+              }
+            >
+              Older revisions
+            </button>
+          </div>
+        </>
+      ) : null}
+      {revision !== null ? (
+        <Revision key={revision} accountId={accountId} revision={revision} />
+      ) : null}
+    </div>
+  );
 }
-
-export default function PersonalityScreen({ accountId }: { accountId: string }) {
-  const parse = useRef((v: unknown) => parsePersonality(v)).current;
-  const { state, reload } = useJsonResource(`${base(accountId)}`, parse);
-  const access = useAccess(accountId);
-  const [note, setNote] = useState(""), [busy, setBusy] = useState(false);
-  const manage = access?.canManage === true;
-  const p = state.kind === "ok" ? state.data : null;
-
-  async function importDraft(cur: Personality) {
-    setBusy(true); setNote("");
-    const r = await bFetch(`${base(accountId)}/import`, { method: "POST", body: { expectedRevision: cur.revision, bindingId: cur.bindingId } });
-    setBusy(false);
-    if (r.kind === "ok" && (r.data as { outcome?: string }).outcome === "recorded") setNote("A draft was built from the chat history already stored for this account. Review it before approving. Reloading.");
-    else if (r.kind === "unconfirmed") setNote("Unknown whether the import ran. Reload to see the current state; repeating the same request is safe.");
-    else if (r.kind === "refused" && r.status === 409) setNote("The personality changed since you loaded it. It was reloaded.");
-    else if (r.kind === "readonly" || r.kind === "denied") setNote("Your access does not allow this change.");
-    else setNote(r.kind === "unavailable" || r.kind === "refused" ? r.error : "The import was not confirmed.");
+function Revision({
+  accountId,
+  revision,
+}: {
+  accountId: string;
+  revision: number;
+}) {
+  const r = useLaunchResource(
+    accountId,
+    `personality/revisions/${revision}`,
+    parseNativePersonality,
+  );
+  return (
+    <div className="rounded-lg border border-line p-3">
+      <StateLine
+        state={r.state}
+        retry={r.reload}
+        label={`revision ${revision}`}
+      />
+      {r.state.kind === "ok" ? (
+        <>
+          <h3 className="font-semibold">
+            Historical revision {r.state.data.revision}
+          </h3>
+          <pre className="whitespace-pre-wrap break-words text-xs">
+            {JSON.stringify(r.state.data.document?.review ?? {}, null, 2)}
+          </pre>
+          <EvidenceView p={r.state.data} />
+        </>
+      ) : null}
+    </div>
+  );
+}
+export default function PersonalityScreen({
+  accountId,
+}: {
+  accountId: string;
+}) {
+  const { state, reload } = useLaunchResource(
+    accountId,
+    "personality",
+    parseNativePersonality,
+  );
+  const manage = useCanManage(accountId);
+  const [retry, setRetry] = useState<unknown | null>(null),
+    [notice, setNotice] = useState(""),
+    [sending, setSending] = useState(false);
+  async function submit(command: unknown): Promise<Post> {
+    setSending(true);
+    const r = await postCommand(accountId, command);
+    setSending(false);
+    setRetry(!r.ok && r.outcome === "unconfirmed" ? command : null);
+    setNotice(
+      r.ok
+        ? "Command recorded. Current personality is read again; a historical replay never replaces it."
+        : r.error,
+    );
     reload();
+    return r;
   }
-  return <div className="space-y-4">
-    <StateLine state={state} retry={reload} label="personality" />
-    {state.kind === "unavailable" ? <Unavailable screen="Personality" error={state.error} /> : null}
-    {p ? <>
-      <Section title="Readiness" id="personality-readiness"><ReadinessCard p={p} /></Section>
-      <Section title={p.state === "empty" ? "Import" : p.state === "draft" ? `Draft (revision ${p.revision})` : `Approved (revision ${p.revision})`} id="personality-flow">
-        <p aria-live="polite" role="status" data-personality-note className="min-h-5 text-sm text-ink">{note}</p>
-        {p.state === "empty" ? <>
-          <p data-launch-state="empty" className="text-sm text-muted">No personality has been imported for this account. Import reads the chat history already stored here (no provider call, no model call) and proposes a tone to review.</p>
-          <button type="button" className={buttonClass} disabled={!manage || busy} onClick={() => void importDraft(p)}>{busy ? "Importing…" : "Import from chat history"}</button>
-          {access && !manage ? <p data-launch-state="readonly" className="text-xs text-muted">Your team access is read-only.</p> : null}</> : null}
-        {p.document ? <>
-          {p.state === "approved" ? <p className="text-sm text-ink">Approved{p.document.approval ? ` and applied as configuration revision ${p.document.approval.appliedConfigurationRevision}` : ""}. {p.configurationCurrent ? "The saved configuration still matches." : "The configuration changed after approval, so this is not current. Import or review again."}</p> : null}
-          <details className="rounded-lg border border-line p-2"><summary className="cursor-pointer text-sm font-semibold text-ink">What the draft was built from</summary>
-            <p className="mt-1 text-xs text-muted">Source: {p.document.source.replace(/_/g, " ")}. Messages examined: {String(p.document.draft.coverage.inputMessages ?? "unknown")}, sampled: {String(p.document.draft.coverage.sampledMessages ?? "unknown")}.</p>
-            {Array.isArray(p.document.draft.coverage.limitations) ? <ul className="list-disc pl-5 text-xs text-muted">{(p.document.draft.coverage.limitations as unknown[]).filter((x): x is string => typeof x === "string").map(x => <li key={x}>{x}</li>)}</ul> : null}
-            <p className="mt-2 text-xs font-semibold text-ink">Writing style observed</p>
-            {p.document.draft.writingStyle.length ? <ul className="list-disc pl-5 text-xs text-muted">{p.document.draft.writingStyle.map((o, i) => <li key={`${o.key}-${i}`}>{o.key.replace(/_/g, " ")}: {o.value} ({o.attribution})</li>)}</ul> : <p className="text-xs text-muted">None.</p>}
-            <p className="mt-2 text-xs font-semibold text-ink">Excluded sales instructions (never added to the tone)</p>
-            {p.document.draft.operationalInstructions.length ? <ul className="list-disc pl-5 text-xs text-muted">{p.document.draft.operationalInstructions.map((o, i) => <li key={i}>{o.text} ({o.attribution}){o.conflicts.length ? ` - conflicts: ${o.conflicts.map(c => c.code).join(", ")}` : ""}</li>)}</ul> : <p className="text-xs text-muted">None.</p>}
-            <p className="mt-2 text-xs font-semibold text-ink">Evidence excerpts (plain text)</p>
-            {p.document.draft.evidence.length ? <ul className="space-y-1 text-xs text-muted">{p.document.draft.evidence.map(e => <li key={e.id} className="break-words">{e.author}: {e.excerpt}{e.truncated ? " [shortened]" : ""}</li>)}</ul> : <p className="text-xs text-muted">None.</p>}
-          </details>
-          <ReviewForm key={`${accountId}-${p.revision}`} p={p} accountId={accountId} onChanged={reload} setNote={setNote} disabled={!manage} />
-          {access && !manage ? <p data-launch-state="readonly" className="text-xs text-muted">Your team access is read-only, so the review is view-only.</p> : null}
-          {manage && p.state === "approved" ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void importDraft(p)}>Import a fresh draft from history</button> : null}</> : null}
+  return (
+    <div className="space-y-4">
+      <Section title="AI configuration">
+        {manage === true ? (
+          <fieldset disabled={retry !== null || sending}>
+            <ConfigurationEditor key={accountId} accountId={accountId} />
+          </fieldset>
+        ) : (
+          <p className="text-sm">
+            {manage === false
+              ? "Your team access is read-only. Model and budget state appear in AI readiness below."
+              : "Checking management access…"}
+          </p>
+        )}
       </Section>
-      <Section title="Revision history" id="personality-history"><HistoryList key={`${accountId}-${p.revision}`} accountId={accountId} /></Section></> : null}
-    <Section title="Budget, sales switch and other settings" id="live-config">
-      <p className="text-xs text-muted">The existing configuration editor. Credentials stay on the server; none is shown here.</p>
-      {access && !manage ? <p data-launch-state="readonly" className="text-xs text-muted">Your team access is read-only, so the editor is hidden.</p> : <ConfigurationEditor key={accountId} accountId={accountId} />}
-    </Section>
-  </div>;
+      <Section title="Personality import, review and approval">
+        <StateLine state={state} retry={reload} label="personality" />
+        {state.kind === "pending" ? (
+          <p role="alert" className="text-sm">
+            {state.error}
+            <button className={buttonClass} onClick={reload}>
+              Retry
+            </button>
+          </p>
+        ) : null}
+        {manage === false ? (
+          <p data-launch-state="readonly" className="text-sm">
+            Your team access is read-only.
+          </p>
+        ) : null}
+        {state.kind === "ok" ? (
+          <ReviewEditor
+            key={`${accountId}-${state.data.bindingId}-${state.data.revision}`}
+            p={state.data}
+            enabled={manage === true && retry === null && !sending}
+            submit={submit}
+          />
+        ) : null}
+        {notice ? (
+          <p role="status" className="text-sm">
+            {notice}
+          </p>
+        ) : null}
+        {retry !== null ? (
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={buttonClass}
+              disabled={manage !== true || sending}
+              onClick={() => void submit(retry)}
+            >
+              Retry identical personality command
+            </button>
+            <button
+              className={buttonClass}
+              disabled={sending}
+              onClick={() => {
+                setRetry(null);
+                setNotice(
+                  "Review the current saved personality before making another change.",
+                );
+              }}
+            >
+              Use current saved view
+            </button>
+          </div>
+        ) : null}
+      </Section>
+      {state.kind === "ok" && state.data.document ? (
+        <>
+          <Section title="Source attribution and coverage">
+            <EvidenceView p={state.data} />
+          </Section>
+          <Section title="AI readiness">
+            <p className="text-sm">
+              These checks describe this document. Overall account readiness
+              uses the currently effective approved configuration.
+            </p>
+            <p className="text-sm">
+              Approved: {state.data.state === "approved" ? "yes" : "no"}. Saved
+              configuration snapshot match:{" "}
+              {state.data.configurationCurrent ? "yes" : "no"}. This document
+              ready: {state.data.readiness?.ready ? "yes" : "no"}.
+            </p>
+            <dl className="grid grid-cols-2 gap-2 text-sm">
+              <dt>Model</dt>
+              <dd>{state.data.readiness?.model.modelId ?? "unset"}</dd>
+              <dt>Credential</dt>
+              <dd>{state.data.readiness?.credential.state ?? "unknown"}</dd>
+              <dt>Budget (cents/day)</dt>
+              <dd>
+                {state.data.readiness?.budget.dailyCostCapCents ?? "unknown"}
+              </dd>
+            </dl>
+            <ul className="text-sm">
+              {state.data.readiness?.blockers.map((b) => (
+                <li key={b}>{label(b)}</li>
+              ))}
+            </ul>
+          </Section>
+        </>
+      ) : null}
+      <Section title="Revision history">
+        <History
+          key={`${accountId}-${state.kind === "ok" ? state.data.revision : "loading"}`}
+          accountId={accountId}
+        />
+      </Section>
+    </div>
+  );
 }

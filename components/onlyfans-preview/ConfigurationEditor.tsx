@@ -21,6 +21,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
   const [onRequestSales, setOnRequestSales] = useState(false);
+  const [dailyBudget, setDailyBudget] = useState("0"), [effort, setEffort] = useState("");
   const [busy, setBusy] = useState(true);
   const [denied, setDenied] = useState(false);
   const [notice, setNotice] = useState("Loading editable configuration…");
@@ -46,6 +47,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
       setOnRequestSales(next.onRequestSalesEnabled);
+      setDailyBudget(String(next.dailyCostCapCents)); setEffort(next.reasoningEffort ?? "");
       return true;
     } catch { if (active.current) { setData(null); setNotice("Configuration could not be refreshed. Try again."); } return false; }
   }, [accountId, endpoint, router]);
@@ -67,6 +69,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
     if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
+    if (Number(dailyBudget) !== data.dailyCostCapCents || !dailyBudget.trim()) patch.dailyCostCapCents = dailyBudget.trim() ? Number(dailyBudget) : NaN;
+    if (effort !== (data.reasoningEffort ?? "")) patch.reasoningEffort = effort || null;
   }
   const command: ConfigurationRequest | null = data && Object.keys(patch).length ? {
     patch, expectedRevision: data.configurationRevision, expectedFingerprint: data.fingerprint,
@@ -160,6 +164,14 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </select></label>
         </div>
         <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+          <label className="min-w-0 text-sm">Daily model budget (USD cents)<input data-of-edit-budget type="number" min={0} max={1_000_000} step={1} className={inputClass} value={dailyBudget} onChange={event => setDailyBudget(event.target.value)} /></label>
+          <label className="min-w-0 text-sm">Reasoning effort<select data-of-edit-reasoning className={inputClass} value={effort} onChange={event => setEffort(event.target.value)}>
+            <option value="">Use model default</option>
+            {effort && !(data.reasoningOptions[override || defaultModel] ?? []).includes(effort) ? <option value={effort} disabled>Saved effort needs review</option> : null}
+            {(data.reasoningOptions[override || defaultModel] ?? []).map(e => <option key={e} value={e}>{e}</option>)}
+          </select></label>
+        </div>
         <div className="rounded-lg border border-line p-3">
           <label className="flex items-start gap-2 text-sm font-medium">
             <input type="checkbox" data-of-edit-request-sales checked={onRequestSales}

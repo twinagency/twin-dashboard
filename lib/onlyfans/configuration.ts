@@ -12,9 +12,10 @@ export type Configuration = {
   defaultModel: string | null; replyModelOverride: string | null; replyOverridePresent: boolean;
   resolvedReplyModel: string | null; modelOptions: string[];
   salesConfigurationValid: boolean; onRequestSalesEnabled: boolean;
+  dailyCostCapCents: number; reasoningEffort: string | null; reasoningOptions: Record<string, string[]>;
 };
 export type ConfigurationPatch = { persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
-  defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean };
+  defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean; dailyCostCapCents?: number; reasoningEffort?: string | null };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
   accountId: string; commandKey: string; recordedRevision: number; recordedFingerprint: string };
@@ -29,7 +30,9 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if ("dailyCostCapCents" in patch && (!Number.isInteger(patch.dailyCostCapCents) || Number(patch.dailyCostCapCents) < 0 || Number(patch.dailyCostCapCents) > 1_000_000)) return false;
+  if ("reasoningEffort" in patch && patch.reasoningEffort !== null && (!text(patch.reasoningEffort, 40) || !patch.reasoningEffort.trim())) return false;
   if ("onRequestSalesEnabled" in patch && typeof patch.onRequestSalesEnabled !== "boolean") return false;
   if ("inheritCreatorFacts" in patch && (!Array.isArray(patch.inheritCreatorFacts) || !patch.inheritCreatorFacts.length ||
     new Set(patch.inheritCreatorFacts).size !== patch.inheritCreatorFacts.length || patch.inheritCreatorFacts.some(key =>
@@ -45,7 +48,7 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "configuration"]) ||
     value.schemaVersion !== CONFIGURATION_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.configuration)) return null;
   const c = value.configuration;
-  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled"]) ||
+  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled", "dailyCostCapCents", "reasoningEffort", "reasoningOptions"]) ||
     !revision(c.configurationRevision) || !configurationHash(c.fingerprint) || !optionalText(c.persona, 4096) ||
     typeof c.personaTruncated !== "boolean" || (c.personaTruncated ? c.persona !== null : typeof c.persona !== "string") ||
     !object(c.creatorFacts) || !exact(c.creatorFacts, [...FACT_KEYS]) || Object.values(c.creatorFacts).some(value => !optionalText(value, 16000)) ||
@@ -58,7 +61,9 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
     !optionalText(c.defaultModel, 160) || !optionalText(c.replyModelOverride, 160) || !optionalText(c.resolvedReplyModel, 160) ||
     !Array.isArray(c.modelOptions) || !c.modelOptions.length || c.modelOptions.length > 500 ||
     new Set(c.modelOptions).size !== c.modelOptions.length || c.modelOptions.some(model => !text(model, 160) || !model) ||
-    (c.resolvedReplyModel !== null && !c.modelOptions.includes(c.resolvedReplyModel))) return null;
+    (c.resolvedReplyModel !== null && !c.modelOptions.includes(c.resolvedReplyModel)) ||
+    !Number.isInteger(c.dailyCostCapCents) || Number(c.dailyCostCapCents) < 0 || Number(c.dailyCostCapCents) > 1_000_000 || !optionalText(c.reasoningEffort, 40) || !object(c.reasoningOptions) ||
+    Object.entries(c.reasoningOptions).some(([model, options]) => !Array.isArray(c.modelOptions) || !c.modelOptions.includes(model) || !Array.isArray(options) || options.length > 20 || options.some(e => !text(e, 40) || !e))) return null;
   const source = c.sharedFacts;
   const stamp = (value: unknown) => value === null || typeof value === "string" && /Z$/.test(value) && Number.isFinite(Date.parse(value));
   if (!object(source) || !exact(source, ["state", "checkedAt", "sourceUpdatedAt", "overrideKeys"]) ||

@@ -1,12 +1,12 @@
 import type { NextRequest } from "next/server";
-import { liveRoute } from "@/lib/onlyfans/launch/b-route";
-import { engagementCancel, engagementRead } from "@/lib/onlyfans/launch/live/engagement";
+import { engagementActions } from "@/lib/onlyfans/launch/b-native-routes";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-type Ctx = { params: Promise<{ accountId: string }> };
-export async function GET(request: NextRequest, context: Ctx) {
-  return liveRoute(request, (await context.params).accountId, false, env => engagementRead(env));
+export async function GET(request: NextRequest, context: { params: Promise<{ accountId: string }> }) {
+  const p = await context.params;
+  return engagementActions(request, p.accountId);
 }
-export async function POST(request: NextRequest, context: Ctx) {
-  return liveRoute(request, (await context.params).accountId, true, (env, body) => engagementCancel(env, body));
+export async function POST(request: NextRequest, context: { params: Promise<{ accountId: string }> }) {
+  const p = await context.params;
+  return engagementActions(request, p.accountId, true);
 }

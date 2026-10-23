@@ -57,6 +57,10 @@ async function main() {
   assert.equal(parseOperationsPage(envelope({ items: Array(51).fill(operation), nextCursor: null }, false), ACCOUNT), null);
 
   assert(parseConflict(conflict) && parseConflictsResponse(envelope({ items: [conflict] }, false), ACCOUNT));
+  for (const [kind, sourceIssue] of [["source_changed", null], ["source_unusable", "source_terms_unusable"], ["post_deleted", "post_deleted"], ["post_free", "post_no_longer_paid"], ["source_retracted", "source_retracted"]])
+    assert(parseConflict({ ...conflict, kind, sourceIssue }), `${kind} remains visible for operator review`);
+  for (const change of [{ kind: "post_deleted" }, { sourceIssue: "post_deleted" }, { kind: "deleted", sourceIssue: null }, { kind: "post_free", sourceIssue: "unknown" }])
+    assert.equal(parseConflict({ ...conflict, ...change }), null, "new conflict metadata must be a supported complete pair");
   for (const change of [{ status: "pending" }, { itemFingerprint: "bad" }, { resolution: "merge" }, { itemId: "07" }, { current: { ...terms, lockedText: true } }, { source: terms }, { extra: 1 }])
     assert.equal(parseConflict({ ...conflict, ...change }), null, JSON.stringify(change));
   assert(parseResolveResponse(envelope({ conflict: { ...conflict, status: "resolved", resolution: "keep_crm", resolvedAt: stamp }, itemId: "7" }, false), ACCOUNT));

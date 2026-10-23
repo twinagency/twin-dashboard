@@ -23,10 +23,12 @@ export type Observation = {
   mediaIds: string[]; previewIds: string[] | null; lockedText: boolean | null; priceCents: number; currency: "USD";
   attachments: Attachment[]; reasons: string[]; ready: boolean;
 };
-export type Variant = { key: string; priceCents: number | null; mediaIds: string[] | null; count: number;
-  latest: { fanId: string; messageId: number; priceCents: number; sentAt: string | null } | null };
+/** Legacy message samples omit sourceKind. Parsed messages normalize it to message. */
+export type SourceSample = { messageId: number; priceCents: number; sentAt: string | null } &
+  ({ sourceKind?: "message"; fanId: string } | { sourceKind: "post"; fanId: null });
+export type Variant = { key: string; priceCents: number | null; mediaIds: string[] | null; count: number; latest: SourceSample | null };
 export type CandidateDetail = CandidateSummary & {
-  variants: Variant[]; samples: { fanId: string; messageId: number; priceCents: number; sentAt: string | null }[];
+  variants: Variant[]; samples: SourceSample[];
   observations: Observation[]; assetReasons: string[];
   existingItem: { itemId: string; priceCents: number; enabled: boolean; pricingMode: string; importedBy: string | null } | null;
 };
@@ -74,13 +76,43 @@ function summary(value: unknown): CandidateSummary | null {
 
 function observation(value: unknown): Observation | null {
   if (!object(value) || !uuid(value.observationId) || !hash(value.fingerprint) || !["message", "post"].includes(value.sourceKind as string) ||
-    !decimal(value.sourceId) || !(value.fanId === null || decimal(value.fanId)) || !["direct", "queue", "unknown"].includes(value.sourceContext as string) ||
+    !decimal(value.sourceId) || !(value.sourceKind === "post" ? value.fanId === null : decimal(value.fanId)) || !["direct", "queue", "unknown"].includes(value.sourceContext as string) ||
     !date(value.sourceAt) || !date(value.observedAt) || !Array.isArray(value.mediaIds) || !value.mediaIds.every(decimal) ||
     !(value.previewIds === null || (Array.isArray(value.previewIds) && value.previewIds.every(decimal))) ||
     !(value.lockedText === null || typeof value.lockedText === "boolean") || !int(value.priceCents, 100_000_000) || value.currency !== "USD" ||
     !Array.isArray(value.attachments) || !value.attachments.every(a => object(a) && decimal(a.mediaId) && typeof a.freePreview === "boolean" &&
       (a.kind === null || text(a.kind, 32))) || !Array.isArray(value.reasons) || !value.reasons.every(r => text(r, 64)) || typeof value.ready !== "boolean") return null;
+  if (value.ready !== (value.reasons.length === 0)) return null;
   return value as Observation;
+}
+
+export function parseSourceSample(value: unknown): SourceSample | null {
+  if (!object(value) || !exact(value, ["fanId", "messageId", "priceCents", "sentAt", ...("sourceKind" in value ? ["sourceKind"] : [])]) ||
+    !(Number.isSafeInteger(value.messageId) && (value.messageId as number) > 0) || !int(value.priceCents, 100_000_000) ||
+    !(value.sentAt === null || typeof value.sentAt === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{1,6})?Z$/.test(value.sentAt) && Number.isFinite(Date.parse(value.sentAt)))) return null;
+  const sourceKind = "sourceKind" in value ? value.sourceKind : "message";
+  if (!(sourceKind === "post" ? value.fanId === null : sourceKind === "message" && decimal(value.fanId))) return null;
+  return { ...value, sourceKind } as SourceSample;
+}
+function variant(value: unknown): Variant | null {
+  if (!object(value) || !exact(value, ["key", "priceCents", "mediaIds", "count", "latest"]) || !text(value.key, 2400) || !value.key ||
+    !(value.priceCents === null || int(value.priceCents, 100_000_000)) ||
+    !(value.mediaIds === null || Array.isArray(value.mediaIds) && value.mediaIds.length <= 100 && value.mediaIds.every(decimal)) || !int(value.count)) return null;
+  const latest = value.latest === null ? null : parseSourceSample(value.latest);
+  if (value.latest !== null && (!latest || value.priceCents !== null && latest.priceCents !== value.priceCents)) return null;
+  return { ...value, latest } as Variant;
+}
+/** Only message sources can enter the existing fan/message refresh API. */
+export function messageRefreshSources(samples: readonly unknown[]): { fanId: string; messageId: string }[] {
+  const sources = new Map<string, { fanId: string; messageId: string }>();
+  for (const value of samples) {
+    const source = parseSourceSample(value);
+    if (!source || source.sourceKind === "post" || source.fanId === null) continue;
+    const key = `${source.fanId}:${source.messageId}`;
+    if (!sources.has(key)) sources.set(key, { fanId: source.fanId, messageId: String(source.messageId) });
+    if (sources.size === MAX_REFRESH_SOURCES) break;
+  }
+  return [...sources.values()];
 }
 
 export function parseJobResponse(value: unknown, accountId: string): ImportJob | null {
@@ -100,12 +132,13 @@ export function parseCandidate(value: unknown, accountId: string): CandidateDeta
   const body = envelope(value, accountId, ["candidate"]);
   if (!body || !object(body.candidate)) return null;
   const c = body.candidate;
-  if (!summary(c) || !Array.isArray(c.variants) || !Array.isArray(c.samples) || !Array.isArray(c.observations) ||
+  if (!summary(c) || !Array.isArray(c.variants) || c.variants.length > 25 || !Array.isArray(c.samples) || c.samples.length > 10 || !Array.isArray(c.observations) ||
     !Array.isArray(c.assetReasons) || !c.assetReasons.every(r => text(r, 64)) ||
     !(c.existingItem === null || (object(c.existingItem) && decimal(c.existingItem.itemId) && int(c.existingItem.priceCents)))) return null;
   const observations = c.observations.map(observation);
-  if (observations.some(o => o === null)) return null;
-  return { ...(c as CandidateDetail), observations: observations as Observation[] };
+  const variants = c.variants.map(variant), samples = c.samples.map(parseSourceSample);
+  if (observations.some(o => o === null) || variants.some(v => v === null) || samples.some(s => s === null)) return null;
+  return { ...(c as CandidateDetail), variants: variants as Variant[], samples: samples as SourceSample[], observations: observations as Observation[] };
 }
 
 export function parseDraftResults(value: unknown, accountId: string, keys: string[]): DraftResult[] | null {
@@ -158,6 +191,7 @@ export const REASON_LABELS: Record<string, string> = {
   asset_unverified_owner: "Sync the vault to verify attachments.",
   asset_readiness_unknown: "Attachment readiness unknown.",
   asset_not_ready: "An attachment is still processing.",
+  superseded_source: "This source changed or was removed on OnlyFans. This older observation cannot be used to create a draft.",
 };
 export const STATUS_LABELS: Record<CandidateSummary["status"] | string, string> = {
   ready_for_review: "Ready for review", source_details_needed: "Source details needed", blocked: "Blocked",

@@ -125,12 +125,10 @@ jobs:
       - name: Checks
         run: npm run test:offline
 
-  # NOT gated on `test` — Ronan's call 2026-08-18. The checks still run and go
-  # red in the Actions tab, but they do not hold the deploy. Reinstate with
-  # `needs: test` once the suite is green; a gate you routinely override is
-  # worse than no gate.
+  # Final OnlyFans integration requires the complete candidate checks before
+  # promotion. A cancelled, skipped or failed test job cannot release an image.
   build-and-deploy:
-    needs: creator-uploads
+    needs: [creator-uploads, test]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

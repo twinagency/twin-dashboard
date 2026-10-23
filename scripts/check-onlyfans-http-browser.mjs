@@ -10,6 +10,8 @@ import { checkOperator } from "./check-onlyfans-operator-browser.mjs";
 import { checkConnections } from "./check-onlyfans-connections-browser.mjs";
 import { checkOfferImport } from "./check-onlyfans-offer-import-browser.mjs";
 import { checkContentSync } from "./check-onlyfans-content-sync-browser.mjs";
+import { checkNativeLaunchA } from "./check-onlyfans-launch-browser.mjs";
+import { checkNativeLaunchB } from "./check-onlyfans-launch-b-browser.mjs";
 
 const require = createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
   ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "package.json") : new URL("../preview/onlyfans-integration/package.json", import.meta.url));
@@ -46,7 +48,7 @@ try {
   const page = await context.newPage();
   if (process.env.ONLYFANS_TEST_ONLY_OFFER_IMPORT === "1") {
     // Focused run of the import and content-sync checks on the real harness.
-    await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "networkidle", timeout: 45000 });
+    await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "domcontentloaded", timeout: 45000 });
     await checkOfferImport(page, context, origin);
     await checkContentSync(page, context, origin);
     assert.equal(external.length, 0, "UI attempted an external request");
@@ -54,7 +56,7 @@ try {
     process.exit(0);
   }
   await checkCombinedEarnings(page,context,origin);
-  await page.goto(origin + "/onlyfans/inbox?creator=creator-acc-a&account=acc-a", { waitUntil: "networkidle", timeout: 45000 });
+  await page.goto(origin + "/onlyfans/inbox?creator=creator-acc-a&account=acc-a", { waitUntil: "domcontentloaded", timeout: 45000 });
   // Selecting the real conversation causes the detail handler to run.
   await page.locator('[data-of-conversation-id="acc-a:101"]').click();
   await page.getByText("Synthetic PostgreSQL message through the real read path", { exact: true }).waitFor({ timeout: 15000 });
@@ -121,7 +123,7 @@ try {
   assert.equal(await page.locator("[data-of-actions] button").count(), 0);
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   for (const section of ["settings", "content", "sales"]) {
-    await page.goto(origin + `/onlyfans/${section}?account=acc-a`, { waitUntil: "networkidle" });
+    await page.goto(origin + `/onlyfans/${section}?account=acc-a`, { waitUntil: "domcontentloaded" });
     await page.locator(`[data-of-native-section="${section}"]`).waitFor();
     assert.equal(await page.getByText("private transaction source", { exact: false }).count(), 0);
     assert.equal(await page.getByText("private creator config field", { exact: false }).count(), 0);
@@ -130,7 +132,7 @@ try {
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
       if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultPreviews(page, context, origin); await checkVaultOrganization(page, context, origin); }
-      if (process.env.ONLYFANS_TEST_OFFER_IMPORT === "1") { await checkOfferImport(page, context, origin); await checkContentSync(page, context, origin); await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "networkidle" }); }
+      if (process.env.ONLYFANS_TEST_OFFER_IMPORT === "1") { await checkOfferImport(page, context, origin); await checkContentSync(page, context, origin); await page.goto(origin + "/onlyfans/content?account=acc-a", { waitUntil: "domcontentloaded" }); }
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
       await page.waitForFunction(() => document.querySelectorAll("[data-of-catalog-item]").length === 7, undefined, { timeout: 15000 });
@@ -146,7 +148,6 @@ try {
       assert((await page.locator("[data-of-open-offers]").innerText()).includes("USD 8.00"));
     }
     if (section === "settings") {
-      // Account details sit behind "Advanced account details" since f6eda7e; open it as an operator would.
       await page.getByText("Advanced account details", { exact: true }).click();
       await page.locator("[data-of-settings]").getByText("Saved synthetic creator persona for settings.", { exact: true }).waitFor();
       await page.getByText("Synthetic Harbor", { exact: true }).waitFor();
@@ -159,24 +160,24 @@ try {
   }
   // Each native screen re-verifies the real session on its next request.
   await context.clearCookies();
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   assert.equal(await page.locator("[data-of-native-section]").count(), 0);
   assert.equal(await page.getByText("Synthetic Harbor", { exact: true }).count(), 0);
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   if (process.env.ONLYFANS_TEST_OPERATOR === "1") await checkOperator(page, context, origin);
   if (process.env.ONLYFANS_TEST_WORKER === "1") {
-    await page.goto(origin + "/onlyfans/inbox?account=acc-worker", { waitUntil: "networkidle" });
+    await page.goto(origin + "/onlyfans/inbox?account=acc-worker", { waitUntil: "domcontentloaded" });
     await page.locator('[data-of-conversation-id="acc-worker:101"]').click();
     await page.getByText("Synthetic inbound processed by the native worker loop", { exact: true }).waitFor();
     const generated = page.locator('[data-of-message-id="9001"]');
     await generated.getByText("Thanks for asking. How has your day been?", { exact: true }).waitFor();
     assert.equal(await generated.getAttribute("data-of-message-delivery"), "sent");
-    await page.goto(origin + "/onlyfans/operations?account=acc-worker", { waitUntil: "networkidle" });
+    await page.goto(origin + "/onlyfans/operations?account=acc-worker", { waitUntil: "domcontentloaded" });
     assert.equal(await page.locator("[data-of-cap]").innerText(), "1 / 3");
     assert.equal(await page.locator("[data-of-model-cost]").innerText(), "USD 0.0007");
     console.log("Worker browser PASS: durable fresh input, native one-call reply, local HTTP acceptance and canonical cost/allowance projection");
   }
-  await page.goto(origin + "/onlyfans/operations?account=acc-a", { waitUntil: "networkidle" });
+  await page.goto(origin + "/onlyfans/operations?account=acc-a", { waitUntil: "domcontentloaded" });
   await page.locator('[data-of-surface="onlyfans-operations"]').waitFor();
   assert.equal(await page.locator('[data-of-metric="Unknown deliveries"]').innerText(), "1");
   assert.equal(await page.locator('[data-of-cap]').innerText(), "2 / 5");
@@ -190,7 +191,7 @@ try {
   assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), "operations overflows a mobile viewport");
   if (process.env.ONLYFANS_TEST_EVIDENCE) await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "operations-mobile.png"), fullPage: true });
   await context.clearCookies();
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload({ waitUntil: "domcontentloaded" });
   assert.equal(await page.locator('[data-of-cap]').count(), 0, "session loss leaves private operations visible");
   assert.equal(await page.locator('[data-of-model-cost]').count(), 0, "session loss leaves private model costs visible");
   assert.equal(await page.getByText("Retracted synthetic message", { exact: false }).count(), 0);
@@ -200,6 +201,12 @@ try {
     await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
     await checkConnections(page, context, origin);
     assert.equal(external.length, 0, "Connection UI attempted an external request");
+  }
+  if (process.env.ONLYFANS_TEST_DISPOSABLE === "1") {
+    await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
+    await checkNativeLaunchA(page, context, origin);
+    await checkNativeLaunchB(page, context, origin);
+    assert.equal(external.length, 0, "Native launch screens attempted an external request");
   }
   console.log("Browser PASS: all scoped controls and identical lost-ack retry; canonical refresh and session loss; native catalogue paging, original-currency sales and saved settings; mobile no overflow; accepted media and payment conflict; private operations; external requests=0");
 } finally { await browser.close(); }

@@ -47,12 +47,9 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
   // Launch routes have a section before /accounts. Whitelist delivered routes
   // and their methods explicitly; future launch endpoints remain default-deny.
-  const acct = "[A-Za-z0-9._:-]{1,64}";
-  const launchRead = new RegExp(`^/api/onlyfans-launch/(?:abc/accounts/${acct}/(?:access|readiness|ledger)|memory/accounts/${acct}/fans(?:/${acct})?|automation/accounts/${acct}/follow-ups` +
-    `|personality/accounts/${acct}(?:/history|/revisions/[1-9][0-9]{0,9})?)/?$`).test(path);
-  const launchPost = new RegExp(`^/api/onlyfans-launch/(?:abc/accounts/${acct}/command|automation/accounts/${acct}/(?:follow-ups|emergency-stop)` +
-    `|memory/accounts/${acct}/backfill|personality/accounts/${acct}/(?:import|review|approve))/?$`).test(path);
-  const launchPatch = new RegExp(`^/api/onlyfans-launch/memory/accounts/${acct}/fans/${acct}/?$`).test(path);
+  const launchRead = /^\/api\/onlyfans-launch\/(?:abc\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:access|readiness|purchases(?:\/evidence)?|personality(?:\/history|\/revisions\/[1-9][0-9]{0,9})?)|memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans(?:\/[1-9][0-9]{0,17})?|automation\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:follow-ups(?:\/[a-f0-9-]{36})?|settings|emergency-stop))\/?$/.test(path);
+  const launchPost = /^\/api\/onlyfans-launch\/(?:abc\/accounts\/[A-Za-z0-9._:-]{1,64}\/command|automation\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:follow-ups|settings|emergency-stop)|memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/(?:fans\/[1-9][0-9]{0,17}\/)?backfill)\/?$/.test(path);
+  const launchPatch = /^\/api\/onlyfans-launch\/memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans\/[A-Za-z0-9._:-]{1,64}\/?$/.test(path);
   if ((launchRead && ["GET", "HEAD"].includes(method)) ||
       (canManage && ((launchPost && method === "POST") || (launchPatch && method === "PATCH")))) return true;
   return (api && ["GET", "HEAD"].includes(method)) || (purpose && (["GET", "HEAD"].includes(method) || (method === "POST" && canManage)));

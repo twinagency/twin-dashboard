@@ -58,7 +58,8 @@ export async function checkConfiguration(page, context, origin) {
   assert.equal(await page.locator("[data-of-edit-persona]").count(), 0);
   assert.equal(await page.getByText("Concurrent Synthetic Harbor", { exact: true }).count(), 0);
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
-  await page.goto(origin + "/onlyfans/settings?account=acc-a", { waitUntil: "networkidle" });
+  await page.goto(origin + "/onlyfans/settings?account=acc-a", { waitUntil: "domcontentloaded" });
+  await page.getByText("Advanced account details", { exact: true }).click();
   await page.locator("[data-of-settings]").waitFor();
   console.log("Configuration browser PASS: shared Twin inheritance, partial persona/facts, saved model, one-event lost-ack retry, concurrent conflict refresh, session-loss clearing and mobile layout");
 }

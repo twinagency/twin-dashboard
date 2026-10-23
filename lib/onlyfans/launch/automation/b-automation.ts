@@ -29,7 +29,7 @@ export function parseAccounts(value: unknown): BAccount[] | null {
   return new Set(out.map(a => a.accountId)).size === out.length ? out : null;
 }
 
-export function parseConversations(value: unknown, accountId: string): { items: BConversation[]; more: boolean; cursor: string | null } | null {
+export function parseConversations(value: unknown, accountId: string): { items: BConversation[]; more: boolean } | null {
   if (!rec(value) || value.accountId !== accountId || !rec(value.page) || !Array.isArray(value.page.items) || value.page.items.length > 200) return null;
   const items: BConversation[] = [];
   for (const row of value.page.items) {
@@ -40,9 +40,7 @@ export function parseConversations(value: unknown, accountId: string): { items: 
       lastActivityAt: str(row.lastActivityAt, 40) ? String(row.lastActivityAt) : "", requiresAttention: row.requiresAttention === true });
   }
   if (new Set(items.map(i => i.conversationId)).size !== items.length) return null;
-  const cursor = typeof value.page.nextCursor === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(value.page.nextCursor) ? value.page.nextCursor : null;
-  if (value.page.nextCursor !== null && value.page.nextCursor !== undefined && cursor === null) return null;
-  return { items, more: cursor !== null, cursor };
+  return { items, more: value.page.nextCursor !== null && value.page.nextCursor !== undefined };
 }
 
 export function parseRuntime(value: unknown, accountId: string): BRuntime | null {

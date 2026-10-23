@@ -5,8 +5,10 @@ import { Card } from "@/components/ui/card";
 import { inputCls } from "@/components/clone/fields";
 import { useRouter } from "next/navigation";
 import ContentSyncStatus from "./ContentSyncStatus";
-import { MAX_DRAFTS, MAX_REFRESH_SOURCES, REASON_LABELS, STATUS_LABELS, usd,
+import { MAX_DRAFTS, REASON_LABELS, STATUS_LABELS, importJobId, messageRefreshSources, usd,
   type CandidateDetail, type CandidateSummary, type DraftInput, type DraftResult, type ImportJob, type Observation } from "@/lib/onlyfans/offer-import";
+import { parseSyncState } from "@/lib/onlyfans/content-sync";
+import { syncCall } from "@/lib/onlyfans/content-sync-client";
 
 const buttonClass = "min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
@@ -45,10 +47,11 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
 
   const loadCandidates = useCallback(async (jobId: string, after: string | null) => {
     const result = await call(`/jobs/${jobId}/candidates` + (after ? `?after=${after}` : ""));
-    if (!result) return;
+    if (!result) return false;
     const data = result.value?.data as { job: ImportJob; items: CandidateSummary[]; nextCursor: string | null } | undefined;
-    if (!result.value?.ok || !data) { setNotice("Candidates could not be read. Try again."); return; }
+    if (!result.value?.ok || !data) { setNotice("Candidates could not be read. Try again."); return false; }
     setJob(data.job); setItems(after ? previous => [...previous, ...data.items] : data.items); setNext(data.nextCursor);
+    return true;
   }, [call]);
 
   const pollJob = useCallback(async (current: ImportJob, set: (job: ImportJob) => void) => {
@@ -118,6 +121,23 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
   }
   const scan = () => run("/jobs", { requestId: crypto.randomUUID(), mode: "inventory", sources: null });
 
+  async function reviewSyncedOffers() {
+    if (busy) return;
+    const mine = generation.current; setBusy(true); setNotice("");
+    try {
+      const reply = await syncCall(accountId, "/status");
+      if (!active.current || mine !== generation.current || reply.kind === "stale") return;
+      if (reply.kind === "denied") { setDenied(true); setJob(null); setRefreshJob(null); setDetail(null); setItems([]); setNext(null); setQueue([]); setResults([]); setRetry(null); router.refresh(); return; }
+      const sync = reply.kind === "ok" ? parseSyncState(reply.data) : null;
+      if (!sync?.initial?.jobId || !importJobId(sync.initial.jobId)) { setNotice("Synced offer groups are not available yet. Check automatic sync coverage above."); return; }
+      if (!await loadCandidates(sync.initial.jobId, null)) return;
+      setDetail(null); setChoice(null);
+      setNotice("Showing stored message and post observations from automatic sync. This does not request a new provider post scan.");
+    } catch {
+      if (active.current && mine === generation.current) setNotice("Synced offer groups could not be read. Try again.");
+    } finally { if (active.current && mine === generation.current) setBusy(false); }
+  }
+
   async function open(candidate: string) {
     if (!job) return;
     const result = await call(`/jobs/${job.jobId}/candidates/${candidate}`);
@@ -128,7 +148,8 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
 
   async function refreshSources() {
     if (!detail) return;
-    const sources = detail.samples.slice(0, MAX_REFRESH_SOURCES).map(s => ({ fanId: s.fanId, messageId: String(s.messageId) }));
+    const sources = messageRefreshSources(detail.samples);
+    if (!sources.length) { setNotice("This group has no message sources to refresh. Post observations are checked by automatic sync; reload the review or inspect synced offer groups."); return; }
     await run("/jobs", { requestId: crypto.randomUUID(), mode: "refresh", sources });
   }
 
@@ -137,6 +158,8 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
   }
 
   const selected: Observation | undefined = detail?.observations.find(o => o.observationId === choice);
+  const refreshableSources = detail ? messageRefreshSources(detail.samples) : [];
+  const hasPostSources = !!detail && (detail.samples.some(s => s.sourceKind === "post") || detail.observations.some(o => o.sourceKind === "post"));
   function addToQueue() {
     if (!detail || !selected || !selected.ready || !reusable || !approved || !label.trim() || !description.trim()) return;
     if (queue.length >= MAX_DRAFTS) { setNotice(`Create at most ${MAX_DRAFTS} drafts at a time.`); return; }
@@ -159,6 +182,7 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
     <ContentSyncStatus accountId={accountId} readOnly={readOnly} />
     <div className="mt-3 flex flex-wrap gap-2">
       <button type="button" className={buttonClass} disabled={readOnly || busy || !!retry || (!!job && ["pending", "running"].includes(job.status))} onClick={scan}>Scan imported history</button>
+      <button type="button" className={buttonClass} disabled={busy || !!retry} onClick={() => void reviewSyncedOffers()}>Review synced offers</button>
       {job && ["pending", "running"].includes(job.status) && !readOnly ? <button type="button" className={buttonClass} disabled={busy} onClick={() => cancel(job)}>Cancel scan</button> : null}
       {retry ? <button type="button" className={buttonClass} disabled={busy} onClick={() => run(retry.path, retry.body)}>Retry the same request</button> : null}
     </div>
@@ -174,7 +198,7 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
         <button type="button" className="w-full min-w-0 rounded-lg border border-line p-3 text-left text-sm" onClick={() => open(item.candidateId)}
           aria-pressed={detail?.candidateId === item.candidateId}>
           <span className="font-semibold">{item.attachmentCount} attachment{item.attachmentCount === 1 ? "" : "s"}</span>
-          {" · "}{item.observedPrices.map(usd).join(", ") || "no price"}{" · "}{item.sourceCount} sends
+          {" · "}{item.observedPrices.map(usd).join(", ") || "no price"}{" · "}{item.sourceCount} sources
           {" · "}<span data-status={item.status}>{STATUS_LABELS[item.status]}</span>
           {item.observedPrices.length > 1 ? <span className="ml-1 font-semibold">Several prices</span> : null}
         </button>
@@ -187,8 +211,12 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
       {detail.existingItem ? <p className="mt-2 text-sm" data-import-conflict>A catalogue item already holds these attachments at {usd(detail.existingItem.priceCents)} ({detail.existingItem.enabled ? "enabled" : "draft"}). It will not be overwritten.</p> : null}
       {detail.assetReasons.map(r => <p key={r} className="mt-1 text-sm">{REASON_LABELS[r] ?? r}</p>)}
       <p className="mt-2 text-sm">Observed variants:</p>
-      <ul className="text-sm">{detail.variants.map(v => <li key={v.key}>{v.priceCents === null ? "Other variants" : usd(v.priceCents)} · {v.count} sends{v.mediaIds ? ` · order ${v.mediaIds.join(", ")}` : ""}</li>)}</ul>
-      {!readOnly ? <button type="button" className={`${buttonClass} mt-2`} disabled={busy || !!retry || (!!refreshJob && ["pending", "running"].includes(refreshJob.status))} onClick={refreshSources}>Refresh selected source details</button> : null}
+      <ul className="text-sm">{detail.variants.map(v => <li key={v.key}>{v.priceCents === null ? "Other variants" : usd(v.priceCents)} · {v.count} sources{v.mediaIds ? ` · order ${v.mediaIds.join(", ")}` : ""}{v.latest ? ` · latest ${v.latest.sourceKind === "post" ? "post" : "message"} ${v.latest.messageId}` : ""}</li>)}</ul>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {!readOnly ? <button type="button" className={buttonClass} disabled={busy || !!retry || !refreshableSources.length || (!!refreshJob && ["pending", "running"].includes(refreshJob.status))} onClick={refreshSources}>Refresh selected source details</button> : null}
+        <button type="button" className={buttonClass} disabled={busy} onClick={() => void open(detail.candidateId)}>Reload source review</button>
+      </div>
+      {hasPostSources ? <p role="note" className="mt-2 text-sm">Post sources use automatic sync checks. The refresh button requests message sources only. Check paid-post coverage above; reloading this review reads stored observations.</p> : null}
       {refreshJob ? <p className="mt-1 text-sm">{STATUS_LABELS[refreshJob.status] ?? refreshJob.status}: {refreshJob.targetsDone} of {refreshJob.targetsTotal} sources found.
         {refreshJob && ["pending", "running"].includes(refreshJob.status) && !readOnly ? <button type="button" className="ml-2 underline" onClick={() => cancel(refreshJob)}>Cancel</button> : null}</p> : null}
 
@@ -197,7 +225,8 @@ export default function OfferImportPanel({ accountId, readOnly = false }: { acco
         {detail.observations.map(o => <label key={o.observationId} className="mt-2 flex min-w-0 gap-2 rounded-lg border border-line p-2 text-sm">
           <input type="radio" name="source" disabled={readOnly || !o.ready} checked={choice === o.observationId} onChange={() => setChoice(o.observationId)} />
           <span className="min-w-0">
-            <span className="font-semibold">Price from selected OnlyFans offer: {usd(o.priceCents)}</span>, sent {when(o.sourceAt)}
+            <span className="font-semibold">Price from selected OnlyFans offer: {usd(o.priceCents)}</span>, {o.sourceKind === "post" ? "posted" : "sent"} {when(o.sourceAt)}
+            <span className="block" data-import-source-kind={o.sourceKind}>{o.sourceKind === "post" ? `Post ${o.sourceId}` : `Message ${o.sourceId} for fan ${o.fanId}`}</span>
             {o.sourceContext === "queue" ? ", mass message" : ""}
             <span className="mt-1 flex flex-wrap gap-1">{o.attachments.map((a, i) => <span key={a.mediaId} className="rounded border border-line px-1">
               {i + 1}. {a.kind ?? "file"} {a.mediaId}{a.freePreview ? " · free preview" : ""}</span>)}</span>

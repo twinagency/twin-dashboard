@@ -1,38 +1,35 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAccess } from "../a-shared";
 import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccount, type BConversation, type BRuntime } from "@/lib/onlyfans/launch/automation/b-automation";
-import { cancelAction, readAccounts, readConversations, readEngagement, readRuntime, sendControl, stopAutomation } from "@/lib/onlyfans/launch/automation/b-automation-client";
-import { KIND_TEXT, STATUS_TEXT, canCancel, type EngagementView } from "@/lib/onlyfans/launch/automation/b-engagement";
+import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
+import EngagementPanel from "./EngagementPanel";
+import AccountControls from "./AccountControls";
 import { bTime, type BReply } from "@/lib/onlyfans/launch/b-common";
-import { BAccountSwitcher, BError, BLoading, BSourceList, bButton, bDanger } from "../b-shared/BShared";
+import { BAccountSwitcher, BError, BLoading, BPending, bButton, bDanger } from "../b-shared/BShared";
 
-type Load<T> = { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string } | { state: "denied" };
+type Load<T> = { state: "loading" } | { state: "ok"; data: T } | { state: "error"; message: string } | { state: "denied" } | { state: "pending"; contract: string };
 const loading = { state: "loading" } as const;
 function toLoad<T>(r: BReply<T>): Load<T> | null {
   switch (r.kind) {
     case "stale": return null;
     case "ok": return { state: "ok", data: r.data };
     case "denied": case "readonly": return { state: "denied" };
+    case "contract_pending": return { state: "pending", contract: r.contract };
     case "unavailable": return { state: "error", message: r.error };
     default: return { state: "error", message: "error" in r ? r.error : "Unavailable." };
   }
 }
 
-/** Launch section E. Accounts, conversation modes, takeover/pause/resume/no-contact, scheduled proactive messages, and the stop controls. Account-mode write has no backend route and is not offered. */
+/** Current account controls, conversation handling and native proactive engagement. */
 export default function BAutomationPanel({ canManage = false }: { canManage?: boolean }) {
   const [manage, setManage] = useState(canManage);
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading);
   const [accountId, setAccountId] = useState("");
-  const [convs, setConvs] = useState<Load<{ items: BConversation[]; more: boolean; cursor: string | null }>>(loading);
+  const [convs, setConvs] = useState<Load<{ items: BConversation[]; more: boolean }>>(loading);
   const [runtime, setRuntime] = useState<Load<BRuntime>>(loading);
-  const [engagement, setEngagement] = useState<Load<EngagementView>>(loading);
-  const access = useAccess(accountId);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
-  const [stopNote, setStopNote] = useState("");
-  const [stopConfirm, setStopConfirm] = useState<"engagement" | "account" | null>(null);
   const epoch = useRef(0), ctl = useRef<AbortController | null>(null), convCtl = useRef<AbortController | null>(null), current = useRef("");
   current.current = accountId;
 
@@ -52,17 +49,17 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
     if (only) { convCtl.current?.abort(); c = new AbortController(); convCtl.current = c; mine = epoch.current; }
     else { ctl.current?.abort(); convCtl.current?.abort(); c = new AbortController(); ctl.current = c; mine = ++epoch.current; }
     const live = () => mine === epoch.current && !c.signal.aborted;
-    if (!only) { setConvs(loading); setRuntime(loading); setEngagement(loading); }
-    const jobs: Promise<void>[] = [readConversations(id, null, c.signal).then(r => { const l = toLoad(r); if (l && live()) setConvs(l); })];
+    if (!only) { setConvs(loading); setRuntime(loading); }
+    const jobs: Promise<void>[] = [readConversations(id, c.signal).then(r => { const l = toLoad(r); if (l && live()) setConvs(l); })];
     if (!only) {
       jobs.push(readRuntime(id, c.signal).then(r => { const l = toLoad(r); if (l && live()) setRuntime(l); }));
-      jobs.push(readEngagement(id, c.signal).then(r => { const l = toLoad(r); if (l && live()) setEngagement(l); }));
+
     }
     await Promise.all(jobs);
   }, []);
   useEffect(() => {
     // Account switch: drop everything shown for the old account before the new reads land.
-    setNotice(""); setConfirming(null); setBusy(null); setStopNote(""); setStopConfirm(null);
+    setNotice(""); setConfirming(null); setBusy(null);
     if (accountId) void loadAccountData(accountId); else { ctl.current?.abort(); convCtl.current?.abort(); epoch.current++; }
     return () => { ctl.current?.abort(); convCtl.current?.abort(); };
   }, [accountId, loadAccountData]);
@@ -80,31 +77,6 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
     else if (r.kind === "unavailable") setNotice(`${c.fanName}: ${r.error}`);
     void loadAccountData(forAccount, "convs");
   }
-  async function stop(scope: "engagement" | "account") {
-    if (!manage) return;
-    const forAccount = accountId; setStopConfirm(null); setBusy("stop"); setStopNote("");
-    const r = await stopAutomation(forAccount, scope);
-    if (current.current !== forAccount) return;
-    setBusy(null);
-    const out = r.kind === "ok" ? (r.data as { outcome?: string; data?: { reason?: string } }) : null;
-    setStopNote(out?.outcome === "recorded" ? (scope === "account" ? "Pause recorded by the backend. Outgoing messages for this account are off; the runtime line above shows the current state." : "Stop recorded by the backend. No new proactive messages will be scheduled; already-queued ones were cancelled where possible. Check the list below.")
-      : out?.outcome === "no_change" ? (out.data?.reason ?? "No change was needed. Nothing new was recorded.")
-      : r.kind === "ok" ? "The answer was not understood. Nothing is assumed stopped; check the state below."
-      : r.kind === "readonly" || r.kind === "denied" ? "Your access does not allow this." : r.kind === "unconfirmed" ? "Unknown whether the stop was recorded. Nothing is assumed stopped. Refresh and check before relying on it."
-      : r.kind === "refused" && r.code === "operator_only" ? r.error : r.kind === "refused" || r.kind === "unavailable" ? `Nothing was changed. ${r.error}` : "The stop was not confirmed. Nothing is assumed stopped.");
-    void loadAccountData(forAccount);
-  }
-  async function cancel(id: string) {
-    if (!manage || busy) return;
-    const forAccount = accountId; setBusy(id); setNotice("");
-    const r = await cancelAction(forAccount, id);
-    if (current.current !== forAccount) return;
-    setBusy(null);
-    const out = r.kind === "ok" ? (r.data as { outcome?: string }).outcome : undefined;
-    setNotice(out === "cancelled" ? "Cancelled. The backend shows it as cancelled." : out === "cancel_requested" ? "Cancel requested, but it is not cancelled yet. It may still be delivered; check its status." : out === "not_cancellable" ? "It can no longer be cancelled; it was already past scheduling."
-      : r.kind === "ok" ? "The answer was not understood. Refresh the list." : r.kind === "readonly" || r.kind === "denied" ? "Your access does not allow this." : r.kind === "unconfirmed" ? "Unknown whether the cancel was recorded. Refresh the list before relying on it." : "The cancel was not accepted.");
-    void loadAccountData(forAccount);
-  }
 
   const account = accounts.state === "ok" ? accounts.data.find(a => a.accountId === accountId) : undefined;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-auto-h" data-b-automation>
@@ -113,6 +85,7 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
     {accounts.state === "loading" ? <BLoading label="Loading accounts…" /> : null}
     {accounts.state === "error" ? <BError message={accounts.message} onRetry={() => void loadAccounts()} /> : null}
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
+    {accounts.state === "pending" ? <BPending title="Accounts" contract={accounts.contract} /> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
     {accounts.state === "ok" && account ? <>
       <BAccountSwitcher id="b-auto-acct" accounts={accounts.data} value={accountId} onChange={setAccountId} />
@@ -130,19 +103,7 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
         </dl>
         {runtime.state === "loading" ? <BLoading label="Loading runtime…" /> : null}
         {runtime.state === "error" ? <BError message={runtime.message} onRetry={() => void loadAccountData(accountId)} /> : null}
-        <p className="mt-2 text-sm text-muted">Changing the account-wide handling mode is not available: the backend has no route for it.</p>
-        <div className="mt-3 grid gap-2" data-b-card="stop">
-          <h4 className="text-sm font-semibold">Stop controls</h4>
-          {stopConfirm === null ? <div className="flex flex-wrap gap-2">
-            <button type="button" className={bDanger} disabled={!manage || busy !== null || access === null} onClick={() => setStopConfirm("engagement")} data-b-stop-engagement>Stop proactive messages</button>
-            <button type="button" className={bDanger} disabled={!manage || busy !== null || access?.accountPause !== true} onClick={() => setStopConfirm("account")} data-b-emergency
-              aria-describedby={access && !access.accountPause ? "pause-why" : undefined}>Pause all outgoing messages</button></div> :
-            <div role="group" aria-label="Confirm stop" className="grid gap-2"><p className="text-sm">{stopConfirm === "account" ? `Pause the whole ${account.handle} connection? Every outgoing message stops until the operator activates it again.` : `Turn off scheduled offers, follow-ups and re-engagement for ${account.handle}?`}</p>
-              <div className="flex flex-wrap gap-2"><button type="button" className={bDanger} onClick={() => void stop(stopConfirm)} autoFocus>Confirm</button>
-                <button type="button" className={bButton} onClick={() => setStopConfirm(null)}>Cancel</button></div></div>}
-          {access && !access.accountPause ? <p id="pause-why" className="text-xs text-muted" data-b-pause-note>Pausing the whole account is available to the Twin operator only. You can stop proactive messages or pause conversations below.</p> : null}
-          <div aria-live="polite" className="text-sm" data-b-stop-note>{stopNote}</div>
-        </div>
+        <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)} />
       </div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="conversations">
@@ -171,27 +132,8 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
         {convs.state === "ok" && convs.data.more ? <p className="mt-2 text-xs text-muted" data-b-more>Only the most recent conversations are shown. More exist.</p> : null}
       </div>
 
-      <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="follow-ups">
-        <h3 className="font-semibold">Scheduled proactive messages</h3>
-        {engagement.state === "loading" ? <BLoading label="Checking scheduled messages…" /> : null}
-        {engagement.state === "error" ? <BError message={engagement.message} onRetry={() => void loadAccountData(accountId)} /> : null}
-        {engagement.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read scheduled messages.</p> : null}
-        {engagement.state === "ok" ? <>
-          <p className="mt-1 text-sm" data-b-engagement={engagement.data.settings.settings.enabled ? "on" : "off"}>Proactive messages are {engagement.data.settings.settings.enabled ? "ON" : "off"} for this account{engagement.data.settings.bindingCurrent ? "" : " (saved settings belong to a previous connection and are not in force)"}.</p>
-          <ActionList rows={engagement.data.actions} names={convs.state === "ok" ? convs.data.items : []} accountId={accountId} manage={manage} busy={busy} onCancel={id => void cancel(id)} /></> : null}
-      </div>
-      <BSourceList prefix="automation" />
+      <EngagementPanel key={accountId} accountId={accountId} manage={manage} />
+
     </> : null}
   </section>;
-}
-
-function ActionList({ rows, names, accountId, manage, busy, onCancel }: { rows: EngagementView["actions"]; names: BConversation[]; accountId: string; manage: boolean; busy: string | null; onCancel: (id: string) => void }) {
-  if (rows.length === 0) return <p className="mt-2 text-sm" data-b-state="empty">No proactive messages are scheduled.</p>;
-  const nameOf = (fanId: string) => names.find(c => c.conversationId === `${accountId}:${fanId}`)?.fanName ?? `Fan ${fanId}`;
-  return <ul className="mt-2 grid min-w-0 gap-2">{rows.map(a => <li key={a.actionId} data-b-followup={a.status} className="min-w-0 rounded-lg border border-line p-2 text-sm">
-    <p className="break-words font-semibold">{nameOf(a.fanId)} · {KIND_TEXT[a.kind]}</p>
-    <p>{STATUS_TEXT[a.status]}. Due {bTime(a.dueAt)}, expires {bTime(a.expiresAt)}.</p>
-    {a.cancelRequested && a.status !== "cancelled" ? <p className="text-warn">A cancel was requested but it is not cancelled. It may still be delivered.</p> : null}
-    {a.reason ? <p className="text-xs text-muted">Reason: {a.reason.replace(/_/g, " ")}</p> : null}
-    {canCancel(a.status) ? <button type="button" className={`${bButton} mt-2`} disabled={!manage || busy !== null} onClick={() => onCancel(a.actionId)}>Cancel this message</button> : null}</li>)}</ul>;
 }

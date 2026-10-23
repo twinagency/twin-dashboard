@@ -7,6 +7,7 @@ async function main() {
   const configuration = { configurationRevision: 7, fingerprint: "a".repeat(64), persona: "Approved synthetic persona.", personaTruncated: false,
     creatorFacts: Object.fromEntries(FACT_KEYS.map(key => [key, null])), factFields: FACT_KEYS.map(key => ({ key, label: key })),
     factsValid: true, readOnlyFacts: [], modelsValid: true, salesConfigurationValid: true, onRequestSalesEnabled: false,
+    dailyCostCapCents: 100, reasoningEffort: null, reasoningOptions: { "synthetic/model": ["low", "high"] },
     sharedFacts: { state: "unconfigured", checkedAt: null, sourceUpdatedAt: null, overrideKeys: [] },
     defaultModel: "synthetic/model", replyModelOverride: null,
     replyOverridePresent: true, resolvedReplyModel: null, modelOptions: ["synthetic/model"] };
@@ -16,7 +17,7 @@ async function main() {
     { creatorFacts: { unknown: "private" } }, { factFields: [] }, { readOnlyFacts: ["unknown"] }, { modelOptions: ["a", "a"] }, { sharedFacts: { ...configuration.sharedFacts, state: "current" } },
     { sharedFacts: { ...configuration.sharedFacts, overrideKeys: ["unknown"] } }, { unexpected: true },
     { salesConfigurationValid: "true" }, { onRequestSalesEnabled: 1 },
-    { salesConfigurationValid: false, onRequestSalesEnabled: true }]) {
+    { salesConfigurationValid: false, onRequestSalesEnabled: true }, {dailyCostCapCents:1.5}, {dailyCostCapCents:-1}, {reasoningEffort:17}, {reasoningOptions:{bad:["low"]}}]) {
     assert.equal(parseConfiguration({ ...read, configuration: { ...configuration, ...changed } }, "acc-a"), null);
   }
   assert.equal(parseConfiguration(read, "acc-b"), null);

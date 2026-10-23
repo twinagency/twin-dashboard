@@ -18,6 +18,8 @@ export const DRAFT_STATES = ["draft", "queued", "uploading", "verifying", "synce
 export const OPERATION_KINDS = ["initial", "incremental", "reconcile", "sync_now", "upload", "retry"] as const;
 export const OPERATION_STATUSES = ["queued", "running", "complete", "partial", "failed", "cancelled", "outcome_unconfirmed"] as const;
 export const RESOLUTIONS = ["accept_source", "keep_crm", "disable"] as const;
+export const SOURCE_ISSUES = ["post_deleted", "post_no_longer_paid", "source_retracted", "source_terms_unusable"] as const;
+export const CONFLICT_KINDS = ["source_changed", "source_unusable", "post_deleted", "post_free", "source_retracted"] as const;
 export const SYNC_FAILURE_CODES = ["invalid_sync_request", "unsupported_schema", "unauthorized", "not_available", "connection_unavailable",
   "revision_conflict", "idempotency_conflict", "sync_conflict", "outcome_unconfirmed", "sync_unavailable"] as const;
 
@@ -47,6 +49,7 @@ export type SyncConflict = {
   conflictId: string; itemId: string; revision: number; status: "open" | "resolved"; createdAt: string | null;
   current: ConflictTerms; source: ConflictTerms & { lockedText: boolean | null };
   itemFingerprint: string; resolution: Resolution | null; resolvedAt: string | null;
+  kind?: typeof CONFLICT_KINDS[number]; sourceIssue?: typeof SOURCE_ISSUES[number] | null;
 };
 export type DraftAsset = { assetId: string; fileId: string; name: string; kind: "photo" | "video"; order: number;
   freePreview: boolean; state: DraftState; attempts: number; lastError: string | null };
@@ -145,10 +148,11 @@ function terms(value: unknown, source: boolean): (ConflictTerms & { lockedText?:
   return value as ConflictTerms;
 }
 export function parseConflict(value: unknown): SyncConflict | null {
-  if (!object(value) || !exact(value, ["conflictId", "itemId", "revision", "status", "createdAt", "current", "source", "itemFingerprint", "resolution", "resolvedAt"]) ||
+  if (!object(value) || !exact(value, ["conflictId", "itemId", "revision", "status", "createdAt", "current", "source", "itemFingerprint", "resolution", "resolvedAt", ...("kind" in value ? ["kind", "sourceIssue"] : [])]) ||
     !syncId(value.conflictId) || !decimal(value.itemId) || !int(value.revision) || !["open", "resolved"].includes(value.status as string) ||
     !maybeStamp(value.createdAt) || !terms(value.current, false) || !terms(value.source, true) || !hash(value.itemFingerprint) ||
-    !(value.resolution === null || oneOf(RESOLUTIONS, value.resolution)) || !maybeStamp(value.resolvedAt)) return null;
+    !(value.resolution === null || oneOf(RESOLUTIONS, value.resolution)) || !maybeStamp(value.resolvedAt) ||
+    ("kind" in value && (!oneOf(CONFLICT_KINDS,value.kind) || !(value.sourceIssue === null || oneOf(SOURCE_ISSUES,value.sourceIssue))))) return null;
   return value as SyncConflict;
 }
 export function parseConflictsResponse(value: unknown, accountId: string): SyncConflict[] | null {
