@@ -232,7 +232,7 @@ export function createHttpOnlyFansBackend(options: {
 
     getEarnings(window) {
       if(!validEarningsWindow(window))return Promise.resolve({ok:false,status:400,code:"invalid_earnings_window",error:"That reporting window is not supported."});
-      return read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null);
+      return read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}&includePending=true`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null).then(result=>!result.ok&&result.status===400?read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null):result);
     },
     getOperations(accountId) {
       if (!ID_PATTERN.test(accountId)) {

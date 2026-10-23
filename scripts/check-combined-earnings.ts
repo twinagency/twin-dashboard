@@ -16,7 +16,7 @@ async function main(){
  assert.equal(parseCombinedEarnings({...combined,totalRevenueUsd:8.7},"1M"),null,"no invented sum of unlike accounting bases");
  assert.equal(parseCombinedEarnings({...combined,telegram:{...combined.telegram,status:"unavailable"}},"1M"),null);
  const backend=createHttpOnlyFansBackend({baseUrl:"http://127.0.0.1:1",token:"synthetic-read-only",fetchImpl:async(url,init)=>{
-  assert.equal(String(url),"http://127.0.0.1:1/onlyfans/api/v1/earnings?start="+encodeURIComponent(window.start)+"&end="+encodeURIComponent(window.end));
+  assert.equal(String(url),"http://127.0.0.1:1/onlyfans/api/v1/earnings?start="+encodeURIComponent(window.start)+"&end="+encodeURIComponent(window.end)+"&includePending=true");
   assert.equal(init?.method,"GET");assert.equal(init?.credentials,"omit");assert.equal(init?.cache,"no-store");
   const headers=new Headers(init?.headers);assert.equal(headers.get(ONLYFANS_SCHEMA_VERSION_HEADER),ONLYFANS_PREVIEW_SCHEMA_VERSION);assert.equal(headers.get("cookie"),null);
   return Response.json({schemaVersion:ONLYFANS_PREVIEW_SCHEMA_VERSION,earnings:native});

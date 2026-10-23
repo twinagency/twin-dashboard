@@ -11,12 +11,16 @@ import { workspaceHref } from "@/lib/onlyfans-preview/scope";
 
 export default function OverviewView({ data }: { data: OverviewData }) {
   const earnings = data.earnings?.status === "current" ? data.earnings : null;
+  const recorded = data.earnings?.recorded;
   const money = (value: number | null | undefined) => value == null ? "Unavailable" : formatRecordedMoney(value, "USD");
   const count = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString("en-US");
   const connected = data.accounts.filter(account => account.health === "connected").length;
   const metrics = [
+    { label: "Recorded net earnings", value: money(recorded ? recorded.netCents : earnings?.clearedNetCents), Icon: Wallet, period: true },
+    { label: "Recorded gross earnings", value: money(recorded ? recorded.grossCents : earnings?.clearedGrossCents), Icon: Banknote, period: true },
+    { label: "Pending net", value: money(recorded?.pendingNetCents), Icon: Wallet, period: true },
+    { label: "Pending gross", value: money(recorded?.pendingGrossCents), Icon: Banknote, period: true },
     { label: "Cleared net", value: money(earnings?.clearedNetCents), Icon: Wallet, period: true },
-    { label: "Cleared gross", value: money(earnings?.clearedGrossCents), Icon: Banknote, period: true },
     { label: "Cleared payments", value: count(earnings?.clearedCount), Icon: CheckCheck, period: true },
     { label: "Refunded payments", value: count(earnings?.refundedCount), Icon: RotateCcw, period: true },
     { label: "Connected accounts", value: data.accountsError ? "Unavailable" : count(connected), Icon: Users, period: false },
@@ -42,7 +46,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
       <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? "Selected period" : "Current account state"}</small>
     </article>)}</section>
-    {reasons ? <p className="of-notice" role="status">{reasons}</p> : null}
+    {reasons ? <p className="of-notice" role="status">{recorded ? "Sync delayed. Showing recorded payments; newer activity may be missing. " : ""}{reasons}</p> : null}
     <div className="of-overview-panels">
       <section className="of-panel"><div className="of-section-heading"><h2>Account activity</h2><Link href="/onlyfans/accounts" className="of-text-link">View all <ArrowUpRight size={16} /></Link></div>
         {data.accounts.slice(0, 6).map(account => <Link className="of-activity-row" key={account.accountId} href={workspaceHref("/onlyfans/accounts", { creatorId: account.binding.creatorId, accountId: account.accountId })}>
@@ -57,6 +61,6 @@ export default function OverviewView({ data }: { data: OverviewData }) {
         {data.sales ? <p className="of-panel-footnote">Activity is account-specific and independent of the summary period. {data.sales.nextCursor ? "More records are available in Sales." : ""}</p> : null}
       </section>
     </div>
-    <p className="of-panel-footnote">{data.earnings ? `Earnings checked ${recordedTime(data.earnings.asOf)} UTC. ${data.earnings.coveredAccountCount} of ${data.earnings.accountCount} accounts covered.` : "Earnings freshness is unavailable."} Cleared amounts are recorded payments, not a withdrawable balance.</p>
+    <p className="of-panel-footnote">{data.earnings ? `Earnings checked ${recordedTime(data.earnings.asOf)} UTC. ${data.earnings.coveredAccountCount} of ${data.earnings.accountCount} accounts covered.` : "Earnings freshness is unavailable."} Recorded earnings include cleared and pending payments. Refunds, chargebacks and payments with a pending reversal are excluded. Pending earnings are not available to withdraw.{recorded ? ` Last successful payment sync: ${recordedTime(recorded.lastSuccessfulSyncAt)} UTC.` : ""}</p>
   </div>;
 }
