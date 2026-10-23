@@ -14,7 +14,7 @@ jobs:
         include:
           - brand: flirt
             container: flirt-dashboard
-            sha: 72aa4cb4b552d6dc0d1a3de72a14bec475cab8cf
+            sha: 654d42461940d68412d929d42680fcc7b3d6fc32
           - brand: twin-moxy
             container: next-app
             sha: f61aaea609a2cb391c066fb48c98ca2584d17e9e
