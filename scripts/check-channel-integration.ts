@@ -335,8 +335,8 @@ group("5. Telegram's routes and the agency policy are unchanged");
     !/app\/users/.test(telegramPage) && !/from "@\/app\//.test(telegramPage),
   );
   check(
-    "the Telegram channel nav reuses existing tools and its live roster",
-    TELEGRAM_CHANNEL.nav.every((item) => item.availability === "existing" || item.href === "/telegram"),
+    "the Telegram channel nav reuses existing tools, its live roster and creator payouts",
+    TELEGRAM_CHANNEL.nav.every((item) => item.availability === "existing" || item.href === "/telegram" || item.href === "/payouts"),
   );
 
   // The new workspace routes must not have widened agency access: the existing
