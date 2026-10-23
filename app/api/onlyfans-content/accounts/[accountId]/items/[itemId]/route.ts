@@ -5,6 +5,7 @@ import { configuredContentBackend } from "@/lib/onlyfans/content-backend";
 import { CONTENT_SCHEMA, canonicalContent, contentItemId, validContentRequest } from "@/lib/onlyfans/content";
 import { CONTENT_V2_SCHEMA, validContentRequestV2 } from "@/lib/onlyfans/content-v2";
 import { readCommandJson } from "@/lib/onlyfans/command-json";
+import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -30,8 +31,7 @@ export async function GET(request: NextRequest, context: Context) {
 export async function POST(request: NextRequest, context: Context) {
   const ctx = await requireOnlyFansRead({ agency: true, write: true }); if (ctx instanceof NextResponse) return ctx;
   if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
-  const expectedOrigin = `${request.nextUrl.protocol}//${request.headers.get("host")}`;
-  if (request.headers.get("origin") !== expectedOrigin || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
+  if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
     request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json") return refuse(403, "Save changes from this dashboard.");
   const params = await context.params; const accountId = requestId(params.accountId), itemId = params.itemId;
   if (!accountId || !contentItemId(itemId)) return refuse(400, "That catalogue reference is invalid.");
