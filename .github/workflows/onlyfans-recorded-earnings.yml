@@ -1,0 +1,71 @@
+name: Deploy recorded OnlyFans earnings
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/onlyfans-recorded-earnings.yml]
+concurrency:
+  group: deploy-dashboard
+  cancel-in-progress: false
+permissions:
+  contents: read
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+jobs:
+  earnings:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Verify earnings contracts and rendered pending amounts
+        run: |
+          node --import tsx scripts/check-recorded-earnings.ts
+          node --import tsx scripts/check-recorded-earnings-view.tsx
+          node --import tsx scripts/check-combined-earnings.ts
+          node --import tsx scripts/check-onlyfans-ui.tsx
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and push tested dashboard
+        id: build
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$ECR_REPO:$GITHUB_SHA" .
+          docker push "$ECR_REPO:$GITHUB_SHA"
+          echo "digest=$(docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+      - name: Wait for active creator uploads
+        run: python3 deployment/creator-upload-idle.py --brand=moxy
+      - name: Deploy and verify exact running revision
+        env:
+          IMAGE: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,os,subprocess
+          sha=os.environ['GITHUB_SHA']; image=os.environ['IMAGE']
+          command=f'''set -eu
+          current=$(docker exec next-app printenv GIT_SHA)
+          test "$current" = f61aaea609a2cb391c066fb48c98ca2584d17e9e || test "$current" = {sha}
+          sudo /usr/local/bin/twin-pull.sh '{image}' next-app /home/ubuntu/allieai2-dashboard -p 127.0.0.1:3001:3001 -e PORT=3001 --network twin-onlyfans_default
+          test "$(docker exec next-app printenv GIT_SHA)" = {sha}
+          docker inspect --format '{{{{.State.Running}}}}' next-app
+          '''
+          payload={'DocumentName':'AWS-RunShellScript','InstanceIds':['i-09a9dd3bd749643a5'],'Comment':'Publish recorded OnlyFans earnings '+sha,'Parameters':{'commands':[command],'executionTimeout':['240']}}
+          open('/tmp/earnings-deploy.json','w').write(json.dumps(payload))
+          PY
+          ID=$(aws ssm send-command --cli-input-json file:///tmp/earnings-deploy.json --query Command.CommandId --output text)
+          for attempt in $(seq 1 48); do
+            STATUS=$(aws ssm get-command-invocation --command-id "$ID" --instance-id i-09a9dd3bd749643a5 --query Status --output text)
+            case "$STATUS" in Success|Failed|TimedOut|Cancelled) break;; esac
+            sleep 5
+          done
+          aws ssm get-command-invocation --command-id "$ID" --instance-id i-09a9dd3bd749643a5 --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
+          test "$STATUS" = Success
