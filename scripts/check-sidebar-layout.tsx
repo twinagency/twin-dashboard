@@ -225,7 +225,7 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/users"'), "Live Telegram is reachable on desktop and mobile");
   assert.doesNotMatch(admin, /href="\/(?:fans|inbox|campaigns|content-library)"|Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Overview", "Earnings", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  const orderedLabels = ["Overview", "Earnings", "Payouts", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
   assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
   const { JSDOM } = nativeRequire("jsdom");
   const document = new JSDOM(admin).window.document;
