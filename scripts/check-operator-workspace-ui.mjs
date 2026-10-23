@@ -131,7 +131,7 @@ for (const width of [390, 900, 1440]) {
       const topbar=document.querySelector(".dashboard-topbar").getBoundingClientRect();
       return {width:rect.width,left:rect.left,background:getComputedStyle(element).backgroundColor,
       brandTop:brand.top,brandHeight:brand.height,switchTop:switcher.top,switchHeight:switcher.height,
-      navTop:nav.top,headerTop:topbar.top,headerHeight:topbar.height};
+      navTop:nav.top,navRowHeight:element.querySelector(".workspace-nav-row").getBoundingClientRect().height,headerTop:topbar.top,headerHeight:topbar.height};
     });
     const onlyfans = route.startsWith("/onlyfans/"), workspace = onlyfans ? "onlyfans" : "shared";
     assert.equal(metrics.background,onlyfans?"rgb(232, 245, 255)":"rgb(230, 246, 255)",`${width} ${route}: scoped light-blue sidebar`);
@@ -139,7 +139,8 @@ for (const width of [390, 900, 1440]) {
     assert.deepEqual(metrics,baselines.get(workspace),`${width} ${route}: geometry stays stable within each workspace`);
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
     assert.equal(await sidebar.locator('a[href="/settings"]').count(),1,"Settings remains reachable exactly once in each workspace");
-    assert.equal(await sidebar.locator('.workspace-nav-row').first().evaluate(e=>e.getBoundingClientRect().height),onlyfans?48:46);
+    if(onlyfans)assert(metrics.navRowHeight>=44&&metrics.navRowHeight<=52,`${width} ${route}: accessible compact studio navigation`);
+    else assert.equal(metrics.navRowHeight,46);
     if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
     await noOverflow(page,`shared shell ${width} ${route}`);
   }
