@@ -30,7 +30,7 @@ const account = "11111111-1111-4111-8111-111111111111";
 const user = "22222222-2222-4222-8222-222222222222";
 const own = "33333333-3333-4333-8333-333333333333";
 const other = "44444444-4444-4444-8444-444444444444";
-const origin = "https://dashboard.tgaiclone.xyz";
+const origin = "https://dashboard.example.test";
 
 function jpegWithDimensions(input: Uint8Array, width: number, height: number) {
   const result = Buffer.from(input);
@@ -47,7 +47,7 @@ function jpegWithDimensions(input: Uint8Array, width: number, height: number) {
 async function main() {
   for (const status of ["applicant", "approved", "active"]) assert.equal(creatorAccountStatusAllowsAccess(status), true);
   for (const status of ["paused", "rejected", "archived", "unexpected", null]) assert.equal(creatorAccountStatusAllowsAccess(status), false);
-  Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_PUBLIC_ORIGIN: origin, SUPABASE_URL: "https://creator-offline.supabase.co", SUPABASE_SERVICE_KEY: "offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
+  Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_PUBLIC_ORIGIN: origin, FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "aaaaaaaaaaaaaaaaaaaa", DASHBOARD_SESSION_SECRET: "offline-operator-session-secret-not-for-production", SUPABASE_URL: "https://aaaaaaaaaaaaaaaaaaaa.supabase.co", SUPABASE_SERVICE_KEY: "sb_secret_offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
   const oldFetch = globalThis.fetch;
   let accountExists = true, accountStatus = "active", accountSource = "twin", mismatched = false, onboarded = true, linked = true, databaseError = false;
   let assignmentExists = true, agencyId: string = TETHER_PORTAL.id, agencyName: string = TETHER_PORTAL.name, agencyActive = true;
@@ -55,7 +55,7 @@ async function main() {
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    if (url.hostname !== "creator-offline.supabase.co") throw new Error("No live requests in offline creator tests");
+    if (url.hostname !== "aaaaaaaaaaaaaaaaaaaa.supabase.co") throw new Error("No live requests in offline creator tests");
     if (databaseError) return new Response(JSON.stringify({ message: "offline database unavailable" }), { status: 503, headers: { "content-type": "application/json" } });
     if (!["GET", "HEAD"].includes(request.method)) {
       writes.push({ method: request.method, path: url.pathname, body: await request.clone().text() });
@@ -155,7 +155,7 @@ async function main() {
     assert.equal((await middleware(request("/creator-auth/identity", "POST", { origin: "https://evil.example" }))).status, 403);
     assert.equal((await middleware(request("/creator-auth/identity", "POST", { origin }))).status, 200);
     for (const table of ["clones", "photos", "videos", "photo_bundles", "users", "star_transactions", "system_logs"]) {
-      const result = scopeReadUrl(new URL(`https://creator-offline.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`), identity);
+      const result = scopeReadUrl(new URL(`https://aaaaaaaaaaaaaaaaaaaa.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`), identity);
       assert.ok(result.url.searchParams.get("and")?.includes(own), table);
     }
     await withDashboardAccess(identity, async () => {
@@ -217,7 +217,7 @@ async function main() {
     assert.equal((redactAgencyData({ bot_token: "not-public" }) as any).bot_token, null);
     linked = false;
     const empty = await creatorDashboardIdentity(token); assert.ok(empty); assert.deepEqual(empty.cloneIds, []);
-    assert.ok(scopeReadUrl(new URL("https://creator-offline.supabase.co/rest/v1/clones"), empty).url.searchParams.get("and")?.includes("00000000-0000-0000-0000-000000000000"));
+    assert.ok(scopeReadUrl(new URL("https://aaaaaaaaaaaaaaaaaaaa.supabase.co/rest/v1/clones"), empty).url.searchParams.get("and")?.includes("00000000-0000-0000-0000-000000000000"));
     assert.equal((await middleware(request("/api/dashboard?clone=" + own))).status, 403);
     // A creator already linked to a live clone is onboarded by definition: the
     // twin exists and its intake is done, so the questionnaire must not reappear.
