@@ -1,3 +1,5 @@
+<p align="center"><img src="archive/twin-logo.png" alt="Twin." width="260"></p>
+
 # twin-dashboard
 
 Next.js operator dashboard for the Twin fleet of AI companion clones. Reads and writes the same Supabase project as [twin-bot](https://github.com/ronan-com/twin-bot): the two repos are halves of one system.
