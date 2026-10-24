@@ -255,14 +255,22 @@ export async function checkContentSync(page, context, origin, options = {}) {
     assert((await form.locator("[data-sync-save-notice]").innerText()).includes("Transfer not confirmed. Retry sends the same part again."));
     const lostChunk = state.chunksSeen.at(-1);
     assert.equal(lostChunk.index, 1); assert.equal(lostChunk.size, 5); assert.equal(lostChunk.contentType, "application/octet-stream");
+    const retryPath = `/api/onlyfans-content/accounts/acc-a/sync/drafts/dr-new/files/${encodeURIComponent(lostChunk.file)}/chunks/${lostChunk.index}`;
+    const isRetriedChunk = request => request.method() === "POST" && new URL(request.url()).pathname === retryPath;
+    const retryRequest = page.waitForRequest(isRetriedChunk, { timeout: 30000 });
+    const retryResponse = page.waitForResponse(response => isRetriedChunk(response.request()), { timeout: 30000 });
     await form.locator("[data-sync-save-retry]").click();
-    await form.locator('[data-sync-draft="dr-new"]').waitFor({ timeout: 30000 });
+    const [repeatedChunk, confirmedChunk] = await Promise.all([retryRequest, retryResponse]);
+    assert.equal(confirmedChunk.status(), 200, "the repeated part is confirmed before checking the upload");
+    assert.deepEqual([repeatedChunk.postDataBuffer().length, sha(repeatedChunk.postDataBuffer())], [lostChunk.size, lostChunk.digest], "the actual retry request carries the same bytes");
+    const card = form.locator('[data-sync-draft="dr-new"]');
+    // The draft card already exists before upload begins. Its queued state,
+    // reached after commit, proves the retry finished rather than merely started.
+    await card.locator('[data-state="queued"]').first().waitFor({ timeout: 30000 });
     const retried = state.chunksSeen.at(-1);
     assert.deepEqual([retried.index, retried.size, retried.digest], [lostChunk.index, lostChunk.size, lostChunk.digest], "only the unconfirmed part is sent again, unchanged");
     assert.deepEqual(state.chunksSeen.map(c => [c.index, c.size]), [[0, 10], [0, CHUNK], [1, 5], [1, 5]]);
     assert.equal(state.requests.filter(r => r.path === "drafts" && r.method === "POST").length, 1, "one draft, however many retries");
-    const card = form.locator('[data-sync-draft="dr-new"]');
-    await card.locator('[data-state="queued"]').first().waitFor({ timeout: 10000 });
     const queuedText = await card.innerText();
     assert(queuedText.includes("Price for future messages: USD 12.50 (fixed)") && queuedText.includes("Queued"));
     assert(!queuedText.includes("Media synced to OnlyFans") || queuedText.includes("only means"), "a queued upload is not shown as synced");
