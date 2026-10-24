@@ -11,11 +11,26 @@ const uuid=(v:unknown):v is string=>typeof v==='string'&&/^[a-f0-9-]{36}$/.test(
 export class SignInBackendError extends Error{
   constructor(readonly status:number,message:string){super(message);this.name='SignInBackendError';}
 }
+/** The sign-in service has three different 429s. Say which one, and when to retry. */
+export function busyMessage(body:unknown):string{
+  const b=(body&&typeof body==='object'?body:{}) as {error?:unknown;retryAfter?:unknown};
+  const seconds=typeof b.retryAfter==='number'&&Number.isFinite(b.retryAfter)?Math.min(3600,Math.max(1,Math.ceil(b.retryAfter))):null;
+  const minutes=seconds===null?null:Math.max(1,Math.ceil(seconds/60));
+  const wait=minutes===null?'shortly':`in about ${minutes} minute${minutes===1?'':'s'}`;
+  if(b.error==='capacity')return `All sign-in screens are in use right now. Please try again ${wait}.`;
+  if(b.error==='start_limit')return `You have started sign-in several times in the last hour. Please try again ${wait}.`;
+  if(b.error==='frame_limit')return 'Your sign-in screen is updating. One moment.';
+  return 'Sign-in is busy. Please try again shortly.';
+}
 export function createSignInBackend({baseUrl,token,fetchImpl}:{baseUrl:string;token:string;fetchImpl?:typeof fetch}){
   const transport=createBackendTransport(fetchImpl),root=baseUrl.replace(/\/+$/,'')+'/v1/attempts';
   const call=async(scope:SignInScope,path:string,body?:unknown)=>{
     const r=await transport(root+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token,'X-Twin-Creator':scope.creatorId,'X-Twin-Actor':scope.actor,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)}),timeoutMs:10000});
-    if(!r.ok)throw new SignInBackendError([404,410].includes(r.status)?410:r.status===429?429:503,[404,410].includes(r.status)?'Your sign-in expired. Start again.':r.status===429?'Sign-in is busy. Please try again shortly.':'Sign-in could not be confirmed. Please try again.');
+    if(!r.ok){
+      if([404,410].includes(r.status))throw new SignInBackendError(410,'Your sign-in expired. Start again.');
+      if(r.status===429)throw new SignInBackendError(429,busyMessage(await r.json().catch(()=>null)));
+      throw new SignInBackendError(503,'Sign-in could not be confirmed. Please try again.');
+    }
     return r;
   };
   const attempt=async(response:Response)=>{const body=await response.json();const value=body?.ok===true?parseSignInAttempt(body.attempt):null;if(!value)throw new Error('Your sign-in status could not be confirmed.');return value;};
