@@ -1,0 +1,50 @@
+name: Publish pinned FASTT readiness image
+on:
+  push:
+    branches: ['codex/fastt-backend-image-20261025']
+    paths: ['.github/workflows/fastt-backend-image.yml']
+permissions:
+  contents: read
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: AWS credentials for existing image registry
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Fetch pinned source and verify content
+        run: |
+          set -euo pipefail
+          mkdir context
+          aws s3 cp s3://twin-worker-transfer-38e051d1/codex/fastt-readiness/262827519d58483f90379b723378b796c9635cf6/source.tar.gz source.tar.gz --no-progress
+          echo '2036187cade51530f5aeb0bab873c13e1f12fa8b3016cdb24d58ae2f48c58a89  source.tar.gz' | sha256sum -c -
+          python3 - <<'PY'
+          import pathlib,tarfile
+          root=pathlib.Path('context')
+          with tarfile.open('source.tar.gz') as t:
+            for m in t:
+              if m.isdir(): continue
+              p=pathlib.PurePosixPath(m.name)
+              assert m.isfile() and p.parts[0]=='service' and '..' not in p.parts and not p.is_absolute()
+              dest=root/p
+              dest.parent.mkdir(parents=True,exist_ok=True)
+              dest.write_bytes(t.extractfile(m).read().replace(bytes([13,10]),bytes([10])))
+          (root/'Dockerfile').write_text('FROM 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-onlyfans@sha256:2ec266af8b1e6c84e823bf19ca2a9d5a375bef66743a82e8f15e8db2e3bc0141\nCOPY service/ /app/service/\nLABEL org.opencontainers.image.revision="262827519d58483f90379b723378b796c9635cf6"\n')
+          PY
+      - name: Publish candidate only
+        run: |
+          set -euo pipefail
+          IMAGE=323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-onlyfans:fastt-readiness-2628275
+          docker build --network=none -t "$IMAGE" context
+          docker push "$IMAGE"
+          docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE" > candidate-backend-image.txt
+          cat candidate-backend-image.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-backend-image
+          path: candidate-backend-image.txt
