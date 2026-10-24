@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: AWS credentials for existing image registry
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -21,7 +24,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir context
-          aws s3 cp s3://twin-worker-transfer-38e051d1/codex/fastt-readiness/262827519d58483f90379b723378b796c9635cf6/source.tar.gz source.tar.gz --no-progress
+          cp .github/release-artifacts/backend-2628275.tar.gz source.tar.gz
           echo '2036187cade51530f5aeb0bab873c13e1f12fa8b3016cdb24d58ae2f48c58a89  source.tar.gz' | sha256sum -c -
           python3 - <<'PY'
           import pathlib,tarfile
