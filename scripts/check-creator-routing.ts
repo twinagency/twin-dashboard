@@ -158,6 +158,24 @@ async function main() {
     assert.equal(shouldRedirectAuthenticatedCreatorEntry(LINK_CREATOR_LOGIN_PATH, { name: "LYNQ" }), true);
     assert.equal(shouldRedirectAuthenticatedCreatorEntry(LINK_CREATOR_SIGNUP_PATH, { name: "LYNQ" }), true);
 
+    agencyName = "Moxy";
+    for (const signupPath of ["/creator/signup?code=OFFLINE-INVITE", "/creator/moxy/signup?code=OFFLINE-INVITE"]) {
+      const inviteRequest = (cookie = "") => new NextRequest("https://dashboard.lynqai.co" + signupPath, {
+        headers: { host: "dashboard.lynqai.co", ...(cookie ? { cookie } : {}) },
+      });
+      const inviteEntry = await middleware(inviteRequest(`${CREATOR_SESSION_COOKIE}=${token}`));
+      assert.equal(inviteEntry.status, 200, "an explicit Moxy invitation stays on signup with an existing creator session");
+      assert.equal(inviteEntry.headers.get("location"), null);
+      assert.equal(inviteEntry.cookies.get(CREATOR_SESSION_COOKIE), undefined, "opening signup does not sign out the current creator");
+      assert.equal(inviteEntry.headers.get("x-middleware-request-x-creator-audience"), null, "public signup does not grant workspace access");
+      const freshInviteEntry = await middleware(inviteRequest());
+      assert.equal(freshInviteEntry.status, 200, "fresh browsers can open the same invitation");
+    }
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry("/creator/signup", { name: "Twin" }), true, "ordinary same-portal signup behavior is retained");
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry("/creator/signup", { name: "Twin" }, "OFFLINE-INVITE"), false);
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry("/creator/moxy/signup", { name: "Twin" }), false);
+    assert.equal(isCreatorPublicPath("/creator/moxy/signup"), true);
+    assert.equal(safeCreatorNext("/creator/moxy/signup?code=OFFLINE-INVITE"), "/creator", "signup cannot become a protected redirect target");
     agencyName = "Twin";
     assert.equal(creatorLoginPath({ name: "Twin", agencyId: "74b03b70-397e-49ab-841f-8adb8241d87d" }, "twin"), LINK_CREATOR_LOGIN_PATH, "verified LYNQ agency id wins over display branding");
     assert.equal(creatorPortalForIdentity({ name: "LYNQ", agencyId: "fixture-agency" }, "tether"), "link", "verified LYNQ database identity wins over a stale presentation cookie");

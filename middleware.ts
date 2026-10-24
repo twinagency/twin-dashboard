@@ -169,7 +169,7 @@ async function routeMiddleware(req: NextRequest) {
     const creator = (await creatorDashboardIdentity(creatorToken)) ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     const requestedPortal = creatorPublicPortal(pathname);
     const switchingPortal = !!creator && requestedPortal !== creatorPortalForIdentity(creator, null);
-    const response = shouldRedirectAuthenticatedCreatorEntry(pathname, creator)
+    const response = shouldRedirectAuthenticatedCreatorEntry(pathname, creator, req.nextUrl.searchParams.get("code"))
       ? privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))))
       : privateResponse(withPathname(req));
     // The explicit public route refreshes only a presentation choice. A stale
