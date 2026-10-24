@@ -3,7 +3,7 @@ import path from "node:path";
 
 /** Real authenticated overview with the PostgreSQL rehearsal's recorded sales. */
 export async function checkOnlyFansOverview(page, origin) {
-  const writes = [], errors = [];
+  const writes = [], errors = [], failedResources = [];
   const consoleError = message => { if (message.type() === "error") errors.push(message.text()); };
   const pageError = error => errors.push(String(error));
   const observe = request => {
@@ -16,6 +16,13 @@ export async function checkOnlyFansOverview(page, origin) {
       writes.push({ method: request.method(), url: request.url() });
     }
   };
+  const responseError = response => {
+    if (response.status() >= 400) {
+      const url = new URL(response.url());
+      failedResources.push({ status: response.status(), origin: url.origin, path: url.pathname });
+    }
+  };
+  page.on("response", responseError);
   page.on("request", observe);
   page.on("console", consoleError);
   page.on("pageerror", pageError);
@@ -24,7 +31,10 @@ export async function checkOnlyFansOverview(page, origin) {
     const overview = page.locator('[data-of-surface="onlyfans-overview"]');
     await overview.waitFor({ timeout: 60000 });
     await overview.getByRole("heading", { name: "Overview", exact: true }).waitFor();
-    assert.equal(await overview.locator("[data-of-overview-metric]").count(), 6);
+    assert.deepEqual(await overview.locator("[data-of-overview-metric]").evaluateAll(elements => elements.map(element => element.getAttribute("data-of-overview-metric"))), [
+      "Recorded net earnings", "Recorded gross earnings", "Pending net", "Pending gross",
+      "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts", "Need attention",
+    ]);
     assert.match(await overview.locator(".of-scope-line").innerText(), /Workspace totals · All authorised OnlyFans accounts/);
     assert.equal(await overview.locator('.of-creator-strip-items a[aria-current="true"]').getAttribute("href"), "/onlyfans/overview?period=7d&account=acc-a");
     const sales = overview.locator(".of-sale-row");
@@ -51,9 +61,10 @@ export async function checkOnlyFansOverview(page, origin) {
     await page.getByText("That account is not available to this session.", { exact: true }).waitFor({ timeout: 15000 });
     assert.equal(await page.locator(".of-sale-row").count(), 0, "An unlisted account must not expose sales activity");
     assert.deepEqual(writes, [], "Overview and its reporting-period refresh must remain read-only");
-    assert.deepEqual(errors, [], "Overview must not log hydration or application errors");
+    assert.deepEqual(errors, [], `Overview must not log hydration or application errors; failed resources: ${JSON.stringify(failedResources)}`);
     console.log("OnlyFans Overview browser PASS: actual account/sales reads, original currencies and payment states, scoped period refresh, unavailable out-of-scope activity, no writes");
   } finally {
+    page.off("response", responseError);
     page.off("request", observe);
     page.off("console", consoleError);
     page.off("pageerror", pageError);
