@@ -15,7 +15,7 @@ import type { CreatorPreparation } from "@/lib/creator-preparation-model";
 export default function CreatorStudioHome({ brand, name, cloneId, photoUrl, status, contentHref, preparation, readOnly = false }: {
   brand: CreatorStudioBrand; name: string; cloneId: string | null; photoUrl?: string; status: CreatorStudioStatus; contentHref: string; preparation?: CreatorPreparation; readOnly?: boolean;
 }) {
-  if (brand === "moxy") return <MoxyCreatorOverview name={name} cloneId={cloneId} status={status} contentHref={contentHref} preparation={preparation} readOnly={readOnly}>{cloneId && <StudioPerformanceOverview cloneId={cloneId} />}</MoxyCreatorOverview>;
+  if (brand === "moxy") return <MoxyCreatorOverview photoUrl={photoUrl} name={name} cloneId={cloneId} status={status} contentHref={contentHref} preparation={preparation} readOnly={readOnly}>{cloneId && <StudioPerformanceOverview cloneId={cloneId} />}</MoxyCreatorOverview>;
   const firstName = name.trim().split(/\s+/)[0] || "creator";
   const draft = status.phase === "draft";
   const needsHelp = status.phase === "changes" || status.phase === "withdrawn";

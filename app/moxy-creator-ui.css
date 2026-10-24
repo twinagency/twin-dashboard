@@ -1,0 +1,94 @@
+/* One Moxy creator language. Scope excludes agency/admin and other brands. */
+[data-creator-studio="moxy"], [data-creator-setup-brand="moxy"], .moxy-auth {
+  --moxy-ui-accent:#752638; --moxy-ui-deep:#572030; --moxy-ui-tint:#f4e9ec;
+  --color-accent:#752638; --color-accent-2:#8d394d; --color-accent-deep:#572030;
+  --color-accent-tint:#f4e9ec; --color-bg:#f6f6f6; --color-panel:#fff;
+  --color-ink:#181818; --color-muted:#686868; --color-line:#e4e4e4;
+  --primary:#752638; --primary-foreground:#fff; --ring:#752638;
+  --background:#f6f6f6; --foreground:#181818; --card:#fff; --card-foreground:#181818;
+  --input:#e4e4e4; --border:#e4e4e4; --muted:#f0eeee; --muted-foreground:#686868;
+  --secondary:#f4e9ec; --secondary-foreground:#572030;
+  font-family:var(--font-sans), Inter, Arial, sans-serif; color:#181818;
+  -webkit-font-smoothing:antialiased; font-feature-settings:"cv11","ss01";
+}
+[data-creator-setup-brand="moxy"] [data-profile-flow] h2 { font-size:28px; font-weight:700; letter-spacing:-.04em; line-height:1.18; }
+[data-creator-studio="moxy"] h1, [data-creator-setup-brand="moxy"] h1, .moxy-auth h1 {
+  font-family:var(--font-display),var(--font-sans),Arial,sans-serif;
+  font-weight:750; letter-spacing:-.045em; line-height:1.12;
+}
+[data-creator-studio="moxy"] main > :is(.dashboard-page,[data-moxy-profile]) > div:first-child h1 { font-size:clamp(28px,3vw,38px); }
+[data-creator-studio="moxy"] main :is([data-slot="card"],.users-panel) { border-radius:20px; border-color:#e4e4e4; box-shadow:0 2px 12px #18181803; }
+[data-creator-studio="moxy"] main :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="hidden"]),textarea,select), .moxy-auth input {
+  border-radius:12px; min-height:46px; background:#fff; color:#181818; border-color:#ded9dc; font-size:16px;
+}
+[data-creator-studio="moxy"] main [data-slot="button"] { min-height:44px; border-radius:999px; padding-inline:20px; font-size:14px; }
+[data-creator-studio="moxy"] main [data-slot="card-title"] { font-family:var(--font-sans),Arial,sans-serif; }
+[data-creator-studio="moxy"] [data-moxy-profile] { max-width:1000px; margin-inline:auto; }
+[data-creator-studio="moxy"] [data-moxy-profile] > div[aria-label="Creator settings"] { width:fit-content; border:0; padding:0; background:transparent; }
+[data-creator-studio="moxy"] [data-moxy-profile] form > .sticky { bottom:0; border-radius:16px; box-shadow:0 -5px 25px #18181808; }
+[data-creator-studio="moxy"] .revenue-page-heading { padding:24px; }
+[data-creator-studio="moxy"] .revenue-page-heading > div > div:first-child { display:none; }
+[data-creator-studio="moxy"] .revenue-page-heading h2 { font-family:var(--font-display),var(--font-sans),Arial,sans-serif; font-size:30px; font-weight:750; letter-spacing:-.04em; }
+[data-creator-studio="moxy"] .revenue-command, [data-creator-studio="moxy"] .revenue-summary { border-radius:20px; }
+[data-creator-studio="moxy"] .revenue-toolbar { padding:12px 20px; gap:8px; }
+[data-creator-studio="moxy"] .revenue-toolbar button { min-height:40px; border-radius:999px; }
+[data-creator-studio="moxy"] .money-value { font-variant-numeric:tabular-nums; }
+[data-creator-studio="moxy"] [data-creator-platforms] > header { padding:0 0 28px; }
+[data-creator-studio="moxy"] [data-creator-platforms] > header h1 { font-size:34px; }
+[data-creator-studio="moxy"] [data-creator-platforms] > header p:nth-of-type(2) { font-size:16px; font-weight:400; letter-spacing:0; margin-top:12px; }
+[data-creator-studio="moxy"] [data-creator-platforms] > header p:nth-of-type(3) { display:none; }
+[data-creator-studio="moxy"] [data-creator-platforms] > header > span { display:none; }
+[data-creator-studio="moxy"] [data-platform-onlyfans], [data-creator-studio="moxy"] [data-platform-telegram] { border-radius:22px; background:#fff; padding:26px; }
+[data-creator-studio="moxy"] [data-creator-platforms] :is(button,a):not([class*="textLink"]):not([class*="closeButton"]) { border-radius:999px; }
+[data-creator-studio="moxy"] label:has(> input[type="file"]) { background-color:#752638; border-radius:999px; font-weight:600; }
+/* Account history reflows without changing currency, totals or table data. */
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] { --payout-accent:#752638; --payout-soft:#f4e9ec; --payout-border:#e4e4e4; }
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] h1 { font-size:34px; font-weight:750; }
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] article { border-radius:20px; background:#fff; }
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] article strong { color:#181818; }
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] section { border-radius:20px; }
+/* Shared authentication. Brand colour is used for actions; the mark sits on black. */
+.moxy-auth { min-height:100dvh; display:grid; grid-template-columns:minmax(300px,.9fr) minmax(0,1.1fr); background:#f6f6f6; }
+.moxy-auth-brand { background:#080808; color:#fff; padding:48px; display:flex; flex-direction:column; justify-content:space-between; gap:60px; }
+.moxy-auth-brand > img { width:180px; max-height:100px; object-fit:contain; object-position:left; }
+.moxy-auth-brand > div { margin-block:auto; }
+.moxy-auth-brand p { font-size:12px; letter-spacing:.16em; color:#d2b5bd; }
+.moxy-auth-brand h2 { margin:24px 0; font-family:var(--font-display),var(--font-sans),Arial,sans-serif; font-size:clamp(42px,5vw,72px); line-height:1.02; letter-spacing:-.05em; font-weight:750; }
+.moxy-auth-brand span { font-size:16px; line-height:1.7; color:#bcb8ba; }
+.moxy-auth-brand small { color:#aaa; font-size:12px; }
+.moxy-auth-content { display:flex; align-items:center; justify-content:center; padding:48px 28px; }
+.moxy-auth-content > div { width:100%; max-width:420px; padding:32px; background:#fff; border:1px solid #e4e4e4; border-radius:24px; }
+.moxy-auth-eyebrow { font-size:11px; letter-spacing:.14em; font-weight:650; color:#752638; margin-bottom:12px; text-transform:uppercase; }
+.moxy-auth h1 { font-size:34px; margin-bottom:12px; }
+.moxy-auth-description { color:#686868; font-size:14px; line-height:1.7; margin-bottom:28px; }
+.moxy-auth label > span { color:#383238!important; font-size:14px; }
+.moxy-auth input.tether-auth-input { background:#fff; border:1px solid #ded9dc; color:#181818; min-height:48px; border-radius:12px; box-shadow:none; }
+.moxy-auth input[readonly] { background:#f7f3f4; opacity:1; color:#752638; }
+.moxy-auth form button[type="submit"] { background:#752638; color:#fff; border:1px solid #752638; border-radius:999px; min-height:48px; box-shadow:none; }
+.moxy-auth a { color:#752638; }
+.moxy-auth-content footer { margin-top:24px; padding-top:22px; border-top:1px solid #eee; text-align:center; font-size:14px; color:#686868; }
+.moxy-auth :is(input,button,a):focus-visible { outline:3px solid #752638; outline-offset:3px; }
+@media(max-width:900px) {
+  [data-creator-studio="moxy"] [data-moxy-profile] form > .sticky { bottom:calc(78px + env(safe-area-inset-bottom)); }
+  .moxy-auth { grid-template-columns:1fr; }
+  .moxy-auth-brand { padding:22px 24px; gap:0; }
+  .moxy-auth-brand > img { width:125px; max-height:58px; }
+  .moxy-auth-brand > div,.moxy-auth-brand > small { display:none; }
+  .moxy-auth-content { padding:30px 20px; align-items:flex-start; }
+  .moxy-auth-content > div { padding:26px; }
+}
+@media(max-width:640px) {
+  [data-creator-studio="moxy"] [data-creator-platforms] > header h1, [data-creator-studio="moxy"] [data-payout-dashboard="creator"] h1 { font-size:30px; }
+  [data-creator-studio="moxy"] .revenue-page-heading { padding:20px; }
+  [data-creator-studio="moxy"] .revenue-page-heading h2 { font-size:27px; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] table { min-width:0; display:block; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] thead { display:none; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] tbody { display:block; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] tr { display:block; padding:12px 20px; border-top:1px solid #e4e4e4; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] td { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; border:0; max-width:none; white-space:normal; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] td[data-label]::before { content:attr(data-label); font-size:12px; font-weight:400; color:#686868; margin-right:auto; }
+  [data-creator-studio="moxy"] [data-payout-dashboard="creator"] td[colspan] { display:block; }
+}
+
+[data-creator-studio="moxy"] [data-payout-dashboard="creator"] label[hidden] { display:none; }
+@media(max-width:900px){.moxy-auth{grid-template-rows:auto 1fr;align-content:start}.moxy-auth-brand{align-self:start}}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isMoxy } from "@/lib/agency-brand";
 import CreatorPpvUploads from "./CreatorPpvUploads";
 import { supabaseAdmin } from "@/lib/supabase";
 import { withDashboardAccess } from "@/lib/dashboard-access";
@@ -32,5 +33,5 @@ export default async function CreatorPpvsPage() {
     : { data: [] };
   const urls = new Map((signed.data ?? []).filter((s) => s.signedUrl && s.path).map((s) => [s.path as string, s.signedUrl]));
   const withUrl = (rows: { id: string; storage_path: string }[] | null) => (rows ?? []).map((r) => ({ ...r, url: urls.get(r.storage_path) ?? null }));
-  return <CreatorPpvUploads cloneId={id} photos={withUrl(photos.data)} videos={withUrl(videos.data)} />;
+  return <CreatorPpvUploads moxy={isMoxy(creator.name)} cloneId={id} photos={withUrl(photos.data)} videos={withUrl(videos.data)} />;
 }

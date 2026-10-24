@@ -156,3 +156,27 @@
 }
 @media (max-width: 360px) { .main { padding-inline: 15px; } .statsGrid { grid-template-columns: 1fr; } .statCard { display: grid; grid-template-columns: 1fr auto; gap: 8px; } .statCard strong { margin: 0; grid-column: 2; grid-row: 1 / 3; } .statCard p { margin: 0; } }
 @media (prefers-reduced-motion: reduce) { .navLink, .actionCard { transition: none; } .actionCard:hover { transform: none; } }
+
+
+/* Moxy creator presentation, shared across all dashboard destinations. */
+.root[data-creator-studio="moxy"] { --studio-bg:#f6f6f6; font-family:var(--font-sans),Inter,Arial,sans-serif; }
+.root[data-creator-studio="moxy"] .sidebar { padding:26px 18px 22px; }
+.root[data-creator-studio="moxy"] .navLink { font-size:14px; min-height:48px; }
+.root[data-creator-studio="moxy"] .sidebar .navLink[aria-current="page"] { background:#752638; box-shadow:0 4px 15px #75263826; }
+.root[data-creator-studio="moxy"] .main { max-width:1280px; padding:34px 36px; }
+.root[data-creator-studio="moxy"] .topbar { min-height:76px; padding:14px 36px; background:#fff; }
+.root[data-creator-studio="moxy"] .heading h1 { font-weight:750; letter-spacing:-.045em; }
+.root[data-creator-studio="moxy"] :is(.statCard,.chartPanel,.profileStrip,.faq details) { border-radius:20px; background:#fff; }
+.root[data-creator-studio="moxy"] .statCard { padding:24px; }
+.root[data-creator-studio="moxy"] .statCard strong { font-weight:750; letter-spacing:-.045em; }
+.root[data-creator-studio="moxy"] .primaryButton { border-radius:999px; min-height:48px; }
+.root[data-creator-studio="moxy"] .secondaryButton { border-radius:999px; font-size:13px; }
+.root[data-creator-studio="moxy"] .footer { margin-top:30px; font-size:12px; }
+.root[data-creator-studio="moxy"] .currency[hidden] { display:none; }
+@media(max-width:900px) {
+  .root[data-creator-studio="moxy"] .main { padding:26px 22px calc(108px + env(safe-area-inset-bottom)); }
+  .root[data-creator-studio="moxy"] .topbar { min-height:74px; padding:14px 22px; }
+  .root[data-creator-studio="moxy"] .mobileNav { padding:8px 12px calc(8px + env(safe-area-inset-bottom)); }
+  .root[data-creator-studio="moxy"] .mobileNav .navLink { font-size:11px; min-height:54px; border-radius:14px; }
+}
+@media(max-width:360px) { .root[data-creator-studio="moxy"] .main { padding-inline:16px; } }

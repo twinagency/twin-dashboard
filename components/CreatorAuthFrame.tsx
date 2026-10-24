@@ -41,6 +41,14 @@ export default function CreatorAuthFrame({
   // A dark-brand agency invite gets that agency's actual look (same shape as
   // its own /<slug> sign-in screen), not Twin's light two-panel layout with a
   // logo swapped in. Only reachable via brand === "twin" today.
+  if (agencyBrand?.slug === "moxy") return <main data-creator-auth-brand="moxy" className="moxy-auth">
+    <aside className="moxy-auth-brand">
+      {agencyBrand.logo && <img src={agencyBrand.logo} alt="Moxy" />}
+      <div><p>YOUR CREATOR STUDIO</p><h2>Your world.<br />A little closer.</h2><span>Your content, your personality, your next chapter.</span></div>
+      <small>Moxy Creator Studio</small>
+    </aside>
+    <section className="moxy-auth-content"><div><p className="moxy-auth-eyebrow">{eyebrow}</p><h1>{title}</h1>{description && <p className="moxy-auth-description">{description}</p>}{children}{footer && <footer>{footer}</footer>}</div></section>
+  </main>;
   if (agencyBrand?.dark) {
     return (
       // data-creator-auth-brand carries the agency's own slug (not "twin"), so

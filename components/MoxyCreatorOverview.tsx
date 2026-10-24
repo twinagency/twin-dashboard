@@ -8,8 +8,8 @@ import type { CreatorPreparation } from "@/lib/creator-preparation-model";
 import styles from "./MoxyCreatorOverview.module.css";
 
 /** Application submission is authoritative. Optional intake counts never reopen a submitted setup. */
-export default function MoxyCreatorOverview({ name, cloneId, status, contentHref, preparation, readOnly, children }: {
-  name: string; cloneId: string | null; status: CreatorStudioStatus; contentHref: string;
+export default function MoxyCreatorOverview({ name, photoUrl, cloneId, status, contentHref, preparation, readOnly, children }: {
+  name: string; photoUrl?: string; cloneId: string | null; status: CreatorStudioStatus; contentHref: string;
   preparation?: CreatorPreparation; readOnly: boolean; children?: ReactNode;
 }) {
   const draft = !cloneId && status.phase === "draft";
@@ -40,6 +40,10 @@ export default function MoxyCreatorOverview({ name, cloneId, status, contentHref
       <span className={styles.status} data-phase={status.phase}><Clock3 size={15} aria-hidden="true" />{draft ? "Setup incomplete" : status.label}</span>
     </header>
 
+    {!draft && <section className={styles.creatorHero} aria-label="Your creator profile">
+      <div><p>YOUR CREATOR STUDIO</p><h2>{name}</h2><Link href={profileHref}>View profile<ArrowRight size={18} /></Link></div>
+      {photoUrl ? <img src={photoUrl} alt={name} /> : <span className={styles.heroMonogram} aria-hidden="true">{name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("")}</span>}
+    </section>}
     {draft ? <section className={styles.setup} aria-label="Creator setup" data-moxy-creator-setup>
       <div className={styles.setupHeading}><h2>Your setup</h2><p>Your saved progress, all in one place.</p></div>
       <div className={styles.steps}>{steps.map(({ title, icon: Icon, href, copy, saved, known }) => <Link key={title} href={href} className={styles.step} data-saved={saved}>

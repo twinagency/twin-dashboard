@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { useDashboardAccess } from "@/components/DashboardAccessProvider";
+import { isMoxy } from "@/lib/agency-brand";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronRight, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import BrowserConnect from "./BrowserConnect";
@@ -11,6 +13,7 @@ import ConnectionSyncStatus from "@/components/onlyfans-preview/ConnectionSyncSt
 import { activePlatformEnrollment, parseCreatorPlatforms, platformConnectionState, type CreatorPlatforms as Snapshot, type PlatformChannel } from "@/lib/creator-platforms/model";
 
 export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
+  const moxy = isMoxy(useDashboardAccess().agencyName);
   const [data,setData]=useState(initial),[busy,setBusy]=useState<PlatformChannel|null>(null);
   const [notice,setNotice]=useState(""),[connecting,setConnecting]=useState(false);
   const [statusFresh,setStatusFresh]=useState(true),[now,setNow]=useState(()=>Date.now()),[refreshing,setRefreshing]=useState(false);
@@ -118,7 +121,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
           {statusFresh&&retrying&&<span className={styles.badge} data-state="attention">Retrying connection</span>}
           {statusFresh&&paused&&<span className={styles.badge} data-state="attention">Paused</span>}
         </div>
-        <div className={styles.cardCopy}><h3>{!statusFresh?"Let’s check your connection.":retrying?"Your connection is being checked.":paused?"Your OnlyFans is paused.":verified.length>0&&!needsReconnect?"Your OnlyFans is connected.":needsReconnect?"Let’s reconnect your account.":"Your OnlyFans, in your space."}</h3><p>{retrying?"Twin is checking the saved login automatically.":paused?"Your account is linked. Your agency controls when replies resume.":verified.length>0&&!needsReconnect?"Your account is linked to your existing Twin profile.":"Bring your account into your Twin space."}</p></div>
+        <div className={styles.cardCopy}><h3>{!statusFresh?"Let’s check your connection.":retrying?"Your connection is being checked.":paused?"Your OnlyFans is paused.":verified.length>0&&!needsReconnect?"Your OnlyFans is connected.":needsReconnect?"Let’s reconnect your account.":"Your OnlyFans, in your space."}</h3><p>{retrying?moxy ? "Your saved connection is being checked automatically." : "Twin is checking the saved login automatically.":paused?"Your account is linked. Your agency controls when replies resume.":verified.length>0&&!needsReconnect?(moxy ? "Your account is linked to your Moxy profile." : "Your account is linked to your existing Twin profile."):(moxy ? "Connect your account to your Moxy creator studio." : "Bring your account into your Twin space.")}</p></div>
         {data.onlyfans.status==="unavailable"&&<p role="status" className={styles.inlineNotice}>{data.onlyfans.error}</p>}
         {data.onlyfans.enrollments.slice(0,1).filter(row=>row.status!=="accepted").map(row=><p key={row.id} role="status" className={styles.inlineNotice} data-connection-request={row.status}>
           {activePlatformEnrollment(row,now)?<><LoaderCircle size={16} className={styles.spinner}/>Checking your account…</>:["expired","pending","checking"].includes(row.status)?"Your connection attempt expired. Try connecting again.":"We couldn’t verify your account. Please try again."}
