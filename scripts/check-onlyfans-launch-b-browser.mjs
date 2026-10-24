@@ -151,10 +151,21 @@ export async function checkNativeLaunchB(page, context, origin) {
       request.method() === "PATCH" &&
       request.url() === `${memoryBase}/fans/${fanId}`,
   );
+  const saveResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "PATCH" &&
+      response.url() === `${memoryBase}/fans/${fanId}`,
+  );
   await page.getByRole("button", { name: "Save value", exact: true }).click();
   const savedCommand = (await saveRequest).postDataJSON();
+  const savedResponse = await saveResponse;
+  eq(savedResponse.status(), 200, "native memory correction acknowledgement");
+  const saved = await savedResponse.json();
+  eq(saved.correction.replayed, false, "new correction must be recorded");
+  // The controlled textarea also contains the draft text before the PATCH commits.
+  // Observe the saved read-only value, then verify the authoritative backend below.
   await page
-    .locator('[data-b-fact="home_city"]')
+    .locator('[data-b-fact="home_city"] > p')
     .getByText("Synthetic launch city", { exact: true })
     .waitFor({ timeout: 20000 });
   const after = await (
@@ -241,10 +252,21 @@ export async function checkNativeLaunchB(page, context, origin) {
   });
   await controlReason.fill("Disposable launch emergency-stop acceptance");
   await page.locator("[data-b-emergency]").click();
+  const stopResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url() === `${automationBase}/emergency-stop`,
+  );
   await page
     .getByRole("button", { name: "Confirm emergency stop", exact: true })
     .click();
-  await page.getByText(/Account runtime stopped/).waitFor({ timeout: 20000 });
+  const stoppedResponse = await stopResponse;
+  eq(stoppedResponse.status(), 200, "native emergency-stop acknowledgement");
+  eq((await stoppedResponse.json()).command.recorded, true);
+  await page
+    .locator("[data-b-runtime]")
+    .getByText(/Account runtime stopped/)
+    .waitFor({ timeout: 20000 });
   const stopped = await (
     await context.request.get(`${automationBase}/emergency-stop`)
   ).json();

@@ -12,33 +12,38 @@ export default function VaultMetadataEditor({ accountId, mediaId, onClose, onCha
 }) {
   const resource = `assets/${mediaId}`;
   const url = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/vault/manage/${resource}`;
-  const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
+  const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false), readGeneration = useRef(0);
   const [asset, setAsset] = useState<AssetMetadata | null>(null);
   const [description, setDescription] = useState(""), [tags, setTags] = useState("");
   const [busy, setBusy] = useState(true), [denied, setDenied] = useState(false);
   const [notice, setNotice] = useState("Loading description and tags…");
   const [pending, setPending] = useState<VaultEditRequest | null>(null);
   const load = useCallback(async () => {
+    const generation = ++readGeneration.current;
+    const current = () => active.current && generation === readGeneration.current;
     try {
       const response = await fetch(url, { cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(15000) });
-      if (!active.current) return false;
+      if (!current()) return false;
       if ([401, 403].includes(response.status)) {
         setAsset(null); setDescription(""); setTags(""); setPending(null); setDenied(true); sessionDenied.current = true;
         setNotice("Your session cannot edit this asset. Sign in again."); return false;
       }
       const next = response.ok ? parseVaultResource(await response.json(), accountId, resource) as AssetMetadata | null : null;
-      if (!active.current) return false;
+      if (!current()) return false;
       if (!next) throw new Error("Unavailable");
       setAsset(next); setDescription(next.description ?? ""); setTags(next.tags?.join(", ") ?? ""); return true;
     } catch {
-      if (active.current) { setAsset(null); setNotice("The description and tags could not be loaded. Try again."); }
+      if (current()) { setAsset(null); setNotice("The description and tags could not be loaded. Try again."); }
       return false;
     }
   }, [url, accountId, resource]);
   useEffect(() => {
     active.current = true;
-    void load().then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } });
-    return () => { active.current = false; };
+    // StrictMode can replay this effect while its first read is still pending.
+    // Only the current mount/read may expose the editor or replace a draft.
+    let mounted = true;
+    void load().then(ok => { if (mounted && active.current) { setBusy(false); if (ok) setNotice(""); } });
+    return () => { mounted = false; active.current = false; readGeneration.current++; };
   }, [load]);
   async function save(body: VaultEditRequest) {
     if (submitting.current || !validVaultEdit(resource, body)) return;
