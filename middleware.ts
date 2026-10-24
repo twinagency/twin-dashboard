@@ -265,6 +265,8 @@ async function routeMiddleware(req: NextRequest) {
     const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
+  // Retired fan-presentation links: app/users/loading.tsx streams the page, so a redirect() inside it would answer 200 with a client refresh. Answer 307 here.
+  if (pathname === "/users" && ["GET", "HEAD"].includes(req.method) && req.nextUrl.searchParams.has("relationship")) return privateResponse(NextResponse.redirect(new URL("/users", dashboardOrigin(req))));
   return withPathname(req);
 }
 // Only the exact upload route bypasses body buffering; it enforces origin, creator auth and view-as itself.

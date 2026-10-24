@@ -6,7 +6,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.resolve(process.env.OVERVIEW_CHECK_SCRIPT || 'deployment/live-overview-check.cjs'), 'utf8');
 const creators = ['creator-a', 'creator-b'];
 const shortcuts = ids => ids.map(id => `<button data-overview-creator="${id}"></button>`).join('');
-const shared = '<div data-shared-overview="twin" data-live-overview="true"><a href="/revenue">Earnings</a><a href="/users?workspace=telegram">Messages</a><div data-channel-switch="telegram"></div>';
+const shared = '<div data-shared-overview="twin" data-live-overview="true"><a href="/revenue">Earnings</a><a href="/users">Live Telegram</a><div data-channel-switch="telegram"></div>';
 const overview = ids => `<div data-all-channels-dashboard>${shared}${shortcuts(ids)}</div></div>`;
 async function probe(change = {}) {
   const process = { env: { GIT_SHA: 'fixture-release', EXPECTED_DASHBOARD_SHA: 'fixture-release', DASHBOARD_SESSION_SECRET: 'fixture-secret' }, exitCode: 0 };
@@ -17,8 +17,9 @@ async function probe(change = {}) {
     assert.equal(init.method || 'GET', 'GET');
     assert.match(init.headers.cookie, /^allie_admin_session=/);
     const remembered = init.headers.cookie.includes('clone_scope=');
+    if (url.pathname === '/users' && !url.search) return change.chatWrongWorkspace ? new Response('<main>Users</main>') : new Response(shared);
     if (url.pathname === '/dashboard') {
-      if (url.searchParams.get('workspace') === 'telegram') return new Response(shared);
+      if (url.searchParams.get('workspace') === 'telegram') return change.missingChatLink ? new Response(shared.replace('<a href="/users">Live Telegram</a>', '')) : new Response(shared);
       return new Response(change.missingOverview ? '<main>Wrong page</main>' : overview(remembered && change.scopedHomepage ? ['creator-a'] : change.duplicate ? ['creator-a', 'creator-a'] : creators));
     }
     if (url.pathname === '/revenue') return change.earningsRedirect ? new Response(null, { status: 307, headers: { location: '/dashboard' } }) : new Response('<div data-detailed-earnings><div data-combined-earnings></div></div>');
@@ -40,7 +41,7 @@ async function probe(change = {}) {
   assert.equal(good.code, 0, good.errors.join('\n'));
   assert.equal(JSON.parse(good.output[0]).overviewCreators, 2);
   assert(!good.requests.some(url => /onlyfans|channel-roster/.test(url)), 'Overview probe does not depend on a live OnlyFans connection');
-  for (const change of [{ missingOverview: true }, { duplicate: true }, { missingCreator: true }, { scopedHomepage: true }, { earningsRedirect: true }, { apiFailure: true }]) {
+  for (const change of [{ missingOverview: true }, { duplicate: true }, { missingCreator: true }, { scopedHomepage: true }, { earningsRedirect: true }, { apiFailure: true }, { chatWrongWorkspace: true }, { missingChatLink: true }]) {
     const result = await probe(change);
     assert.equal(result.code, 1, 'Probe must reject ' + JSON.stringify(change));
     assert.equal(result.output.length, 0);

@@ -25,7 +25,10 @@ const crypto = require('node:crypto');
   assert(html.includes('href="/revenue"'), 'Detailed Earnings remains directly accessible');
   assert(!html.includes('briana-ledger-'), 'No demo ledger in overview');
   for (const route of ['/inbox', '/fans', '/campaigns', '/content-library']) assert(!html.includes(`href="${route}"`), `No retired ${route} navigation`);
-  assert(html.includes('href="/users?workspace=telegram"') && html.includes('data-channel-switch="telegram"'), 'Live Telegram is directly accessible in its own workspace');
+  // Admin Telegram navigation is the operator nav (2465b0b): "Live Telegram" links to plain /users, which the app itself resolves to the Telegram workspace.
+  assert(html.includes('href="/users"') && html.includes('Live Telegram') && html.includes('data-channel-switch="telegram"'), 'Live Telegram is directly accessible in its own workspace');
+  const chat = await read('/users'); assert.equal(chat.status, 200, 'Live Telegram route');
+  assert((await chat.text()).includes('data-channel-switch="telegram"'), 'Live Telegram route opens in the Telegram workspace');
   for (const [path, destination] of [['/inbox', '/users'], ['/inbox?presentation=movie-night', '/users'], ['/fans', '/users'], ['/campaigns', '/dashboard'], ['/content-library', '/media'], ['/users?relationship=briana-ben', '/users']]) {
     const retired = await read(path); assert.equal(retired.status, 307, path); assert(retired.headers.get('location').endsWith(destination), path);
   }

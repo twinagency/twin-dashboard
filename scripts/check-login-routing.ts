@@ -48,6 +48,10 @@ async function main() {
     const protectedPage = await middleware(new NextRequest(origin + "/settings", {headers:{cookie:`${SESSION_COOKIE}=${admin}`}}));
     assert.equal(protectedPage.status,200);
     assert.equal(protectedPage.headers.get("location"),null,"Do not force authenticated backend pages into /twin/*");
+    const retiredFans = await middleware(new NextRequest(origin + "/users?relationship=fixture", {headers:{cookie:`${SESSION_COOKIE}=${admin}`}}));
+    assert.equal(retiredFans.status,307); assert.equal(retiredFans.headers.get("location"),origin + "/users");
+    assert.equal((await middleware(new NextRequest(origin + "/users?relationship=fixture"))).headers.get("location"),origin + "/twin?next=%2Fusers","Signed-out retired links still go to sign-in");
+    assert.equal((await middleware(new NextRequest(origin + "/users?q=fixture", {headers:{cookie:`${SESSION_COOKIE}=${admin}`}}))).status,200,"Ordinary fan queries are not redirected");
     assert.equal((await middleware(new NextRequest(origin + "/brand/twin-blue-texture.png"))).status,200);
     assert.equal((await middleware(new NextRequest(origin + "/brand/twin-blue-texture.png", {method:"POST",headers:{"next-action":"known-action"}}))).status,403);
     for (const value of [undefined,"/","/twin","/login","//evil.example","/\\evil.example","/\t/evil.example","https://evil.example"]) assert.equal(safeAdminNext(value),"/dashboard");
