@@ -14,6 +14,7 @@ type CreatorSetupLayoutProps = {
   activeSection: "questionnaire" | "content";
   applicationStatus?: string;
   children: ReactNode;
+  creatorName?: string;
 };
 function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = false, push?: (href: string) => void) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -21,7 +22,7 @@ function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = 
   event.currentTarget.closest("header")?.querySelector("details[open]")?.removeAttribute("open");
   if (!current) navigateCreatorSetup(href, push);
 }
-export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children }: CreatorSetupLayoutProps) {
+export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children, creatorName }: CreatorSetupLayoutProps) {
   const router = useContext(AppRouterContext);
   const brandName = brand === "moxy" ? "Moxy AI" : brand === "twin" ? "Twin" : "FLIRT";
   return <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand} data-creator-setup-section={activeSection} data-studio-setup={brand !== "twin" ? "true" : undefined}>
@@ -34,7 +35,7 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
       <div className={styles.headerInner}>
         {brand === "twin" ? <span className={styles.twinWordmark} aria-label="Twin Technologies"><strong>Twin</strong><span>TECHNOLOGIES</span></span> : <img src={logoSrc} alt={brandName} className={styles.logo} />}
         <span className={styles.headerTitle}>{brand === "twin" ? "Creator setup" : "Your creator studio"}</span>
-        {brand !== "twin" && <a className={styles.saveExit} href="/creator" onClick={event => navigate(event, "/creator", false, router?.push)}>Save &amp; exit <ArrowUpRight size={15} /></a>}
+        {brand !== "twin" && <a className={styles.saveExit} href="/creator" onClick={event => navigate(event, "/creator", false, router?.push)}>{brand === "moxy" ? "Back to overview" : "Save & exit"} <ArrowUpRight size={15} /></a>}
         <details className={styles.menu} onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); } }}>
           <summary aria-label="Setup menu"><MoreHorizontal size={24} /></summary>
           <div className={styles.menuPanel}>
@@ -47,9 +48,10 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
           </div>
         </details>
       </div>
+      {brand === "moxy" && <div className={styles.editorIntro}><p>{creatorName ? `${creatorName}’s creator studio` : "YOUR CREATOR STUDIO"}</p><h1>{activeSection === "content" ? "Your content" : "Your profile"}</h1><span>{applicationStatus === "Draft / unfinished" ? "Your progress saves as you go." : "Your saved information, ready whenever you need it."}</span></div>}
       <nav className={styles.steps} aria-label="Creator setup sections">
         <a href="/creator/onboarding?step=content" data-creator-setup-tab="content" aria-current={activeSection === "content" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=content", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">1</span>Content</a>
-        <a href="/creator/onboarding?step=questionnaire" data-creator-setup-tab="questionnaire" aria-current={activeSection === "questionnaire" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=questionnaire", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">2</span>Questionnaire</a>
+        <a href="/creator/onboarding?step=questionnaire" data-creator-setup-tab="questionnaire" aria-current={activeSection === "questionnaire" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=questionnaire", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">2</span>{brand === "moxy" ? "Profile" : "Questionnaire"}</a>
       </nav>
     </header>
     <main className={styles.main}>
@@ -57,4 +59,3 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
     </main>
   </div>;
 }
-

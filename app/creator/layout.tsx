@@ -41,7 +41,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       usdPerStar={usdPerStar}
     >
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
-      {pathname !== "/creator/platforms" && pathname !== "/creator" && <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink" data-creator-platform-access>My platforms</Link></div>}
+      {!studioBrand && pathname !== "/creator/platforms" && pathname !== "/creator" && <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink" data-creator-platform-access>My platforms</Link></div>}
       {children}
     </CreatorWorkspaceShell>
   );

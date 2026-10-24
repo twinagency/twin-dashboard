@@ -18,8 +18,8 @@ function Thumbnail({ item }: { item: ContentUploadItem }) {
     {url ? video ? <video src={url} muted playsInline preload="metadata" className="size-full object-cover" aria-label={item.name} /> : <img src={url} alt={item.name} className="size-full object-cover" /> : video ? <Film aria-hidden="true" /> : <ImageIcon aria-hidden="true" />}
   </div>;
 }
-export default function CreatorContentIntake({ locked, loginPath, savedPhotos, savedVideos, initialFolders = [] }: {
-  locked: boolean; loginPath: string; savedPhotos: number; savedVideos: number; initialFolders?: ContentFolder[];
+export default function CreatorContentIntake({ locked, loginPath, savedPhotos, savedVideos, initialFolders = [], moxy = false, submitted = false }: {
+  locked: boolean; loginPath: string; savedPhotos: number; savedVideos: number; initialFolders?: ContentFolder[]; moxy?: boolean; submitted?: boolean;
 }) {
   const queue = useContentUploads();
   const router = useContext(AppRouterContext);
@@ -53,9 +53,9 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     </label>);
   return <div className={styles.root} data-combined-content-intake>
     <header className={styles.heading}>
-      <h1 data-setup-heading>Follow these two simple steps to create your AI clone.</h1>
-      <p>Upload at least {CREATOR_CONTENT_TARGET} photos and videos combined.</p>
-      <p className={styles.hint}>Include everyday content, plus explicit content if applicable.</p>
+      {moxy ? <h2 data-content-title>{submitted ? "Your content library" : "Start with a little you."}</h2> : <h1 data-setup-heading>Follow these two simple steps to create your AI clone.</h1>}
+      <p>{moxy && submitted ? "Your saved photos and videos. Add more whenever you’re ready." : <>Upload at least {CREATOR_CONTENT_TARGET} photos and videos combined.</>}</p>
+      {!submitted && <p className={styles.hint}>Include everyday content, plus explicit content if applicable.</p>}
     </header>
     <section className={`${styles.contentCard} ${!selected ? styles.emptyCard : ""}`} aria-label="Your content">
       {selected && <div className={styles.uploadStatus} role="status">
@@ -84,10 +84,10 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
       {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{folder.provider} folder</a><span className="ml-2">Awaiting import</span></li>)}</ul>}
     </details>
     <div className={styles.handoff} data-content-questionnaire-handoff>
-      <p>You can answer the questions while your files upload.</p>
+      <p>{moxy && submitted ? "Your profile stays available while your content uploads." : "You can answer the questions while your files upload."}</p>
       {queue.working && <p className={styles.hint}>Keep this browser open. Your uploads continue while you answer.</p>}
       {attention && <p className={styles.hint}>Some files need attention. Open Upload details below to retry.</p>}
-      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
+      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>{moxy ? "Go to profile →" : "Continue to questions →"}</Button>
     </div>
     {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label="Upload queue"><summary>Upload details{attention ? ", action needed" : ""}</summary>
       <ul className="max-h-96 space-y-3 overflow-y-auto">

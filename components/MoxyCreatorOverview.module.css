@@ -85,3 +85,44 @@
 }
 @media (max-width: 360px) { .stepStatus { display: none; } }
 @media (prefers-reduced-motion: reduce) { .accountCard { transition: none; } }
+
+
+/* Personal creator hero, with existing profile imagery only. */
+.creatorHero { display:flex; align-items:center; justify-content:space-between; gap:28px; padding:30px; min-height:220px; border-radius:24px; background:linear-gradient(120deg,#f8f0f2,#efdee3); margin-bottom:24px; overflow:hidden; }
+.creatorHero > div { min-width:0; }
+.creatorHero p { font-size:11px; font-weight:650; letter-spacing:.14em; color:#752638; }
+.creatorHero h2 { font-family:var(--font-display),var(--font-sans),Arial,sans-serif; font-size:clamp(30px,3.6vw,48px); line-height:1.05; font-weight:800; letter-spacing:-.05em; overflow-wrap:anywhere; margin:16px 0 24px; }
+.creatorHero a { display:inline-flex; align-items:center; gap:20px; padding:12px 20px; min-height:46px; border-radius:999px; background:#752638; color:#fff; font-size:14px; font-weight:600; box-shadow:0 5px 18px #75263818; }
+.creatorHero img { width:200px; height:210px; flex-shrink:0; object-fit:cover; border-radius:18px; }
+.heroMonogram { display:grid; place-items:center; flex-shrink:0; width:150px; height:150px; border-radius:40px; background:#7526380d; color:#752638; font-size:54px; font-weight:750; letter-spacing:-.06em; }
+.heading h1 { font-family:var(--font-display),var(--font-sans),Arial,sans-serif; font-size:32px; font-weight:750; letter-spacing:-.045em; }
+.confirmation,.setup,.accountCard,.performancePending,.connection,.notice { border-radius:20px; }
+.confirmation h2 { font-weight:700; }
+.accountCard { min-height:140px; align-items:flex-start; flex-wrap:wrap; padding:24px; }
+.accountCard > div { flex-basis:calc(100% - 64px); }
+.accountCard h2 { font-size:18px; font-weight:700; letter-spacing:-.025em; }
+.accountCard p { font-size:14px; }
+.cardAction { margin-left:62px; font-size:13px; }
+.icon { background:#f4e9ec; color:#752638; border-radius:14px; }
+.primaryButton { border-radius:999px; min-height:48px; }
+.step p,.setupHeading p,.setupFooter p,.support { font-size:13px; }
+.step h3 { font-size:16px; }
+.status { border-radius:999px; }
+@media(max-width:640px) {
+  .heading h1 { font-size:28px; }
+  .creatorHero { padding:22px; gap:16px; min-height:190px; margin-bottom:18px; border-radius:22px; }
+  .creatorHero h2 { font-size:32px; margin-block:12px 20px; }
+  .creatorHero img { width:40%; height:180px; border-radius:16px; }
+  .heroMonogram { width:90px; height:110px; font-size:38px; border-radius:26px; }
+  .creatorHero p { font-size:10px; letter-spacing:.1em; }
+  .creatorHero a { padding:11px 17px; gap:12px; font-size:13px; }
+  .accountCards { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+  .accountCard { padding:18px; display:flex; flex-direction:column; gap:12px; }
+  .accountCard > div { flex:1; }
+  .accountCard h2 { font-size:16px; }
+  .accountCard p { font-size:12px; }
+  .cardAction { margin-left:0; font-size:12px; gap:6px; white-space:normal; }
+  .confirmation h2 { font-size:19px; }
+  .confirmationHeading p,.performancePending p { font-size:13px; }
+}
+@media(max-width:360px) { .accountCards { grid-template-columns:1fr; } .creatorHero { padding:20px; } .heroMonogram { width:62px; height:90px; font-size:28px; } }

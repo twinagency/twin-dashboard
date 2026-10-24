@@ -289,8 +289,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
 
   if (optionalIntake) return (
-    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/moxy-ai-light.svg" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
-      <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="text-sm font-semibold text-ink underline underline-offset-4">My platforms</Link></div>
+    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/moxy-ai-light.svg" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label} creatorName={moxy ? account.display_name : undefined}>
+      {!moxy && <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="text-sm font-semibold text-ink underline underline-offset-4">My platforms</Link></div>}
       {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
       {completionView ? <section data-creator-setup-panel data-setup-complete>
         <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>
@@ -303,7 +303,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         <Link href="/creator" className={buttonVariants({ size: "lg", className: "min-h-14 w-full" })}>Go to dashboard <ChevronRight size={18} /></Link>
         <Link href="/creator/onboarding?step=questionnaire" data-review-entry>Edit my information</Link>
       </section> : activeStep === "questionnaire" ? <section data-creator-setup-panel>
-        <CreatorQuestionnaireWizard
+        <CreatorQuestionnaireWizard moxy={moxy} submitted={submitted}
           page={questionnairePage}
           initialAnswers={Object.fromEntries(CREATOR_PROFILE_QUESTIONNAIRE.map((question) => {
             const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
@@ -332,7 +332,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           </CreatorOnboardingActionForm>
           {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
       </section> : <section data-creator-setup-panel>
-        <CreatorContentIntake locked={uploadsLocked} loginPath={loginPath}
+        <CreatorContentIntake moxy={moxy} submitted={submitted} locked={uploadsLocked} loginPath={loginPath}
           savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
           savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
           initialFolders={contentFolders(answers)} />

@@ -17,7 +17,7 @@ const { renderToStaticMarkup } = require('react-dom/server');
       b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => {
         const common = { resolveDir: process.cwd() };
         const source = args.path === 'next/link' ? 'import React from "react";export const useLinkStatus=()=>({pending:false});export default ({children,...p})=>React.createElement("a",p,children);'
-          : args.path === 'next/navigation' ? 'export const usePathname=()=>"/creator";export const useRouter=()=>({refresh(){}});'
+          : args.path === 'next/navigation' ? 'export const useSearchParams=()=>new URLSearchParams();export const usePathname=()=>"/creator";export const useRouter=()=>({refresh(){}});'
           : args.path.endsWith('/CurrencyProvider') ? 'export const useCurrency=()=>({currency:"AUD",rate:1.4,usdPerStar:0.01});'
           : args.path.endsWith('/creator-dashboard') ? 'export const requireCreatorWorkspace=async()=>globalThis.__overviewIdentity;'
           : args.path.endsWith('/creator-preparation') ? 'export const getCreatorPreparation=async()=>globalThis.__overviewPreparation;'

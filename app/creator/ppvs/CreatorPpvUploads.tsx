@@ -133,12 +133,12 @@ function VideoPlayer({ path, onClose }: { path: string; onClose: () => void }) {
   );
 }
 
-export default function CreatorPpvUploads({ photos, videos }: { cloneId: string; photos: Item[]; videos: Item[] }) {
+export default function CreatorPpvUploads({ photos, videos, moxy = false }: { cloneId: string; photos: Item[]; videos: Item[]; moxy?: boolean }) {
   const [playing, setPlaying] = useState<string | null>(null);
   return (
     <div className="dashboard-page grid gap-8">
       <div>
-        <h1 className="text-2xl font-semibold text-ink">Pay Per View</h1>
+        <h1 className="text-2xl font-semibold text-ink">{moxy ? "Your content" : "Pay Per View"}</h1>
         <p className="mt-1 text-sm text-muted">Your photos and videos. Upload new content below.</p>
       </div>
       <section className="grid gap-3">
