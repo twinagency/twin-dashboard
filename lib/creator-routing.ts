@@ -28,6 +28,7 @@ export function isCreatorPublicPath(pathname: string | null | undefined): boolea
     // still authenticate through the plain Twin portal underneath (unlike
     // Tether/LYNQ, which are full separate portals below). Presentation only.
     "/creator/moxy/login",
+    "/creator/moxy/signup",
     "/creator/forgot-password",
     "/creator/reset-password",
     LINK_CREATOR_LOGIN_PATH,
@@ -82,7 +83,12 @@ export function creatorPortalForIdentity(
 export function shouldRedirectAuthenticatedCreatorEntry(
   pathname: string | null | undefined,
   identity: CreatorPortalIdentity | null | undefined,
+  invitationCode?: string | null,
 ): boolean {
+  // Explicit invitations start signup even in a previously used browser.
+  // This public form grants no access: the existing signup action still
+  // validates the invitation and credentials before creating any account.
+  if (pathname === "/creator/moxy/signup" || (pathname === "/creator/signup" && invitationCode?.trim())) return false;
   if (!identity || (!pathname?.endsWith("/login") && !pathname?.endsWith("/signup"))) return false;
   return creatorPublicPortal(pathname) === creatorPortalForIdentity(identity, null);
 }
