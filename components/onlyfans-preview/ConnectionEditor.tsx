@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { connectionState, CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
+import { normalizeProxyInput, PROXY_RULE } from "@/lib/onlyfans-connections/proxy";
 import ConnectionSyncStatus from "./ConnectionSyncStatus";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
@@ -25,6 +26,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
   const [automateNew, setAutomateNew] = useState(false);
   const [hasRetry, setHasRetry] = useState(false);
+  const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -93,7 +95,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
           : command.action === "pause" ? "Pause recorded. Check the refreshed outgoing state."
           : "Activation recorded. Check the refreshed outgoing state and limits.";
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
-        uncertain = false; message = "Command refused. Review the refreshed account, credentials and limits before trying again.";
+        uncertain = false; message = command.action === "save" ? "Save refused. Check the owner ID, that messages are not queued or sending right now, and that the proxy and capture are valid, then review the refreshed account." : "Command refused. Review the refreshed account, credentials and limits before trying again.";
       }
     } catch { /* Keep the exact retry in memory only, with no persistent browser storage. */ }
     finally {
@@ -108,8 +110,9 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
   function saveCapture() {
     const ownerId = connectionOwner(owner);
     if (!data || !ownerId || !capture.current) return;
+    if (!proxyEntry.ok) { setNotice(proxyEntry.message); return; }
     const command: ConnectionRequest = { action: "save", expectedRevision: data.revision, payload: { ownerId, capture: capture.current,
-      xHash, proxyUrl: proxy || null, expiresAt: new Date(Date.now() + Number(hours) * 3_600_000).toISOString(), model: modelEnabled ? { modelId, apiKey } : null } };
+      xHash, proxyUrl: proxyEntry.url, expiresAt: new Date(Date.now() + Number(hours) * 3_600_000).toISOString(), model: modelEnabled ? { modelId, apiKey } : null } };
     if (!validConnectionRequest(command)) { setNotice("Review the owner, capture, hash, proxy and selected model details."); return; }
     void send(command);
   }
@@ -147,7 +150,9 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
             <label className="block text-xs">OnlyFans owner ID<input data-of-connection-owner className={inputClass} inputMode="numeric" value={owner} disabled={data.ownerId !== null} onChange={event => setOwner(event.target.value)} required /></label>
             <label className="block text-xs">Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>
             <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} onChange={event => setXHash(event.target.value)} required /></label>
-            <label className="block text-xs">Fixed proxy URL (optional)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" value={proxy} onChange={event => setProxy(event.target.value)} /></label>
+            <label className="block text-xs">Fixed proxy (residential, same country as the creator)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" placeholder="user:pass@host:port" value={proxy} onChange={event => setProxy(event.target.value)} />
+              <span className="mt-1 block text-xs text-muted" data-of-connection-proxy-preview title={PROXY_RULE}>{proxyEntry.ok ? `Will be saved as: ${proxyEntry.masked}` : proxyEntry.message}</span></label>
+            <p className="text-xs text-muted" data-of-connection-proxy-rule>{PROXY_RULE} Leaving the proxy empty saves the account with no proxy.</p>
             <label className="block text-xs">Initial verification window<select data-of-connection-expiry className={inputClass} value={hours} onChange={event => setHours(event.target.value)}>{[1, 6, 12, 24].map(value => <option key={value} value={value}>{value} {value === 1 ? "hour" : "hours"}</option>)}</select></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-model-enabled type="checkbox" checked={modelEnabled} onChange={event => setModelEnabled(event.target.checked)} /><span>Attach a model credential for automated replies</span></label>
             {modelEnabled ? <>
@@ -156,7 +161,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
               <p className="text-xs text-muted">Use the exact model saved in <Link className="text-accent" href={`/onlyfans/settings?account=${encodeURIComponent(accountId)}`}>creator settings</Link>.</p>
             </> : null}
             <p className="text-xs text-muted">The capture is encrypted by the backend. Saving stages identity verification with outgoing messages disabled.</p>
-            <button type="submit" data-of-connection-save className={buttonClass} disabled={!captureReady || !xHash || !connectionOwner(owner)}>Save credentials</button>
+            <button type="submit" data-of-connection-save className={buttonClass} disabled={!captureReady || !xHash || !connectionOwner(owner) || !proxyEntry.ok}>Save credentials</button>
           </fieldset>
         </form>
         <form className="mt-5" onSubmit={event => { event.preventDefault(); activate(); }}>

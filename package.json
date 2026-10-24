@@ -9,6 +9,7 @@
     "lint": "next lint",
     "test:history": "tsx scripts/check-chat-history-window.ts && tsx scripts/check-live-telegram.ts",
     "test:api": "tsx scripts/check-admin-api.ts",
+    "test:onlyfans-proxy": "tsx --tsconfig scripts/tsconfig.json scripts/check-onlyfans-proxy.ts",
     "test:sign-in-busy": "tsx --tsconfig scripts/tsconfig.json scripts/check-sign-in-busy.ts",
     "test:ai-live": "tsx --tsconfig scripts/tsconfig.json scripts/check-onlyfans-ai-live.ts",
     "test:posting": "tsx scripts/check-posting.ts",
