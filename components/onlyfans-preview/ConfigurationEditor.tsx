@@ -22,6 +22,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
   const [onRequestSales, setOnRequestSales] = useState(false);
+  const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
   const [dailyBudget, setDailyBudget] = useState("0"), [effort, setEffort] = useState("");
   const [busy, setBusy] = useState(true);
   const [denied, setDenied] = useState(false);
@@ -48,6 +49,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
       setOnRequestSales(next.onRequestSalesEnabled);
+      setDiscountResend(next.fasttDiscountResend); setPostBuyUpsell(next.fasttPostBuyUpsell);
       setDailyBudget(String(next.dailyCostCapCents)); setEffort(next.reasoningEffort ?? "");
       return true;
     } catch { if (active.current) { setData(null); setNotice("Configuration could not be refreshed. Try again."); } return false; }
@@ -70,6 +72,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
     if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
+    if (data.salesConfigurationValid && discountResend !== data.fasttDiscountResend) patch.fasttDiscountResend = discountResend;
+    if (data.salesConfigurationValid && postBuyUpsell !== data.fasttPostBuyUpsell) patch.fasttPostBuyUpsell = postBuyUpsell;
     if (Number(dailyBudget) !== data.dailyCostCapCents || !dailyBudget.trim()) patch.dailyCostCapCents = dailyBudget.trim() ? Number(dailyBudget) : NaN;
     if (effort !== (data.reasoningEffort ?? "")) patch.reasoningEffort = effort || null;
   }
@@ -181,6 +185,22 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </label>
           <p className="mt-2 text-xs text-muted">Use eligible saved catalogue items for direct content requests. Existing pricing, spending limits and qualification checks apply. Sending also requires a verified active account, paid-media permission and current purchase reconciliation.</p>
           {!data.salesConfigurationValid ? <p className="mt-2 text-xs text-muted">Saved sales settings need review before this option can be changed.</p> : null}
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-discount-resend checked={discountResend}
+              disabled={!data.salesConfigurationValid} onChange={event => setDiscountResend(event.target.checked)} />
+            Discounted resend
+          </label>
+          <p className="mt-2 text-xs text-muted">Off by default. When on: if a fan did not buy a card, voiced a price objection and then messaged again, the same item is resent 90 minutes or more after the original card at 10-20% below the price he saw. It never goes below the $3 minimum, so $3 cards are skipped. Turning this off stops its queued actions.</p>
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-post-buy-upsell checked={postBuyUpsell}
+              disabled={!data.salesConfigurationValid} onChange={event => setPostBuyUpsell(event.target.checked)} />
+            Post-purchase upsell
+          </label>
+          <p className="mt-2 text-xs text-muted">Off by default. When on: one follow-up offer is sent 90-240 seconds after a purchase confirmed by the ledger. Turning this off stops its queued actions.</p>
         </div>
         </StudioTabPanel><button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command)} className={buttonClass}>Save creator settings</button>
       </fieldset>
