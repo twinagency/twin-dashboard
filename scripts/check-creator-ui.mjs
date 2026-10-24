@@ -17,6 +17,7 @@ const own = '33333333-3333-4333-8333-333333333333';
 const creator = { id: own, name: 'Fixture Creator', color: '#148c6b' };
 const expectedNavigation = [
   { label: 'Earnings', href: '/creator' },
+  { label: 'Payouts', href: '/creator/payouts' },
   { label: 'Pay Per View', href: '/creator/ppvs' },
   { label: 'Business', href: '/creator/business' },
   { label: 'Info', href: '/creator/info' },
@@ -309,7 +310,7 @@ try {
         label: (link.textContent || '').trim(),
         href: new URL(link.href).pathname,
       })));
-      assert.deepEqual(navigationItems, expectedNavigation, 'Creator has exactly the six approved destinations');
+      assert.deepEqual(navigationItems, expectedNavigation, 'Creator has exactly the approved creator destinations');
       for (const forbiddenLabel of ['All creators', 'Create new creator', 'CRM', 'More', 'Fans', 'Flows', 'Sequences', 'Agency Access', 'API', 'Settings']) {
         assert.equal(await navigation.getByText(forbiddenLabel, { exact: true }).count(), 0, `Creator navigation excludes ${forbiddenLabel}`);
       }
