@@ -38,3 +38,12 @@ export function connectionSyncLabel(sync: ConnectionSync | undefined, state: Con
     && !sync.conversationsRemaining && !sync.pendingMessages) return "Last import complete";
   return sync.discoveryStatus === "not_started" ? "Waiting for import" : "Importing history";
 }
+/** "AI live" only when the backend proves it. Older backends (no runner field) show nothing. */
+export function connectionAiStatus(connection: Connection | null | undefined): { live: boolean; text: string } | null {
+  const runner = connection?.runner;
+  if (!connection || !runner || typeof connection.aiLive !== "boolean") return null;
+  if (connection.aiLive && runner.state === "running" && !runner.stale) return { live: true, text: "AI live" };
+  const why = runner.stale ? "status out of date" : runner.state === "unknown" ? "status unknown" : runner.state === "running" ? "sending is off"
+    : runner.state === "not_supervised" ? "not started" : runner.state === "held" && runner.reason ? "held: " + runner.reason.replace(/[_:]/g, " ") : runner.state;
+  return { live: false, text: "AI not running (" + why + ")" };
+}

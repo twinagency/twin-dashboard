@@ -6,9 +6,12 @@ export type ConnectionStatus = "unconfigured" | "pending" | "verified" | "failed
 export type ConnectionSync = { discoveryStatus: "not_started" | "needed" | "running" | "complete"; pages: number;
   conversationsComplete: number; conversationsRemaining: number; pendingMessages: number; quarantinedMessages: number;
   recoveryRequired: boolean; lastCompleteSyncAt: string | null };
+export type ConnectionRunnerState = "running" | "held" | "restarting" | "stopping" | "not_supervised" | "unknown";
+export type ConnectionRunner = { state: ConnectionRunnerState; reason: string | null; observedAt: string | null; stale: boolean; restarts: number | null };
 export type Connection = { accountId: string; revision: number; status: ConnectionStatus; ownerId: string | null;
   expiresAt: string | null; verifiedAt: string | null; lastError: string | null; outgoingEnabled: boolean;
-  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync };
+  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync;
+  /** Present only when the backend answered ?runner=1. Connected is not live: see aiLive. */ runner?: ConnectionRunner; aiLive?: boolean };
 export type ConnectionSave = { ownerId: number; capture: Record<string, unknown>; xHash: string; proxyUrl: string | null;
   expiresAt: string; model: { modelId: string; apiKey: string } | null };
 export type ConnectionRequest = { expectedRevision: number } & (
@@ -83,11 +86,24 @@ export function parseConnectionSync(value: unknown): ConnectionSync | null {
     || typeof value.recoveryRequired !== "boolean" || !(value.lastCompleteSyncAt === null || stamp(value.lastCompleteSyncAt))) return null;
   return value as ConnectionSync;
 }
+export function parseConnectionRunner(value: unknown): ConnectionRunner | null {
+  if (!object(value) || !exact(value, ["state", "reason", "observedAt", "stale", "restarts"])
+    || !["running", "held", "restarting", "stopping", "not_supervised", "unknown"].includes(String(value.state))
+    || !(value.reason === null || (typeof value.reason === "string" && /^[A-Za-z0-9:_.-]{1,80}$/.test(value.reason)))
+    || !(value.observedAt === null || stamp(value.observedAt)) || typeof value.stale !== "boolean"
+    || !(value.restarts === null || integer(value.restarts, 0, 999_999_999))) return null;
+  return value as ConnectionRunner;
+}
 export function parseConnection(value: unknown, accountId: string): Connection | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "connection"]) || value.schemaVersion !== CONNECTION_SCHEMA || value.ok !== true || !object(value.connection)) return null;
   const c = value.connection;
-  if (!(exact(c, ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"]) || exact(c, [...["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"], "sync"])) ||
+  const base = ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"];
+  // Optional keys are accepted only as known, valid shapes; runner and aiLive travel together, and aiLive can never contradict the runner.
+  const optional = ["sync", "runner", "aiLive"].filter(key => key in c);
+  if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
+    ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
+      (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
     c.accountId !== accountId || !id(c.accountId) || !integer(c.revision, 0, 2 ** 31 - 1) ||
     !["unconfigured", "pending", "verified", "failed", "expired", "paused"].includes(c.status as string) ||
     !(c.ownerId === null || ownerString(c.ownerId)) || !(c.expiresAt === null || stamp(c.expiresAt)) || !(c.verifiedAt === null || stamp(c.verifiedAt)) ||
