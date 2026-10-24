@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { StudioTabPanel } from "./StudioTabs";
+import { fanSelectionFromText } from "@/lib/onlyfans/activation";
 import { FACT_KEYS, parseConfiguration, parseConfigurationAck, validConfigurationRequest,
   type Configuration, type ConfigurationPatch, type ConfigurationRequest, type FactKey } from "@/lib/onlyfans/configuration";
 
@@ -23,6 +24,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [override, setOverride] = useState("");
   const [onRequestSales, setOnRequestSales] = useState(false);
   const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
+  const [scopeMode, setScopeMode] = useState<"selected" | "all">("selected"), [scopeFans, setScopeFans] = useState("");
   const [dailyBudget, setDailyBudget] = useState("0"), [effort, setEffort] = useState("");
   const [busy, setBusy] = useState(true);
   const [denied, setDenied] = useState(false);
@@ -50,6 +52,10 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
       setOnRequestSales(next.onRequestSalesEnabled);
       setDiscountResend(next.fasttDiscountResend); setPostBuyUpsell(next.fasttPostBuyUpsell);
+      if (next.activation) {
+        setScopeMode(next.activation.selection?.mode === "all" || !next.activation.selection && next.activation.allFansAllowed && !next.activation.allowedFans.length ? "all" : "selected");
+        setScopeFans((next.activation.selection?.fans ?? next.activation.allowedFans).join(", "));
+      }
       setDailyBudget(String(next.dailyCostCapCents)); setEffort(next.reasoningEffort ?? "");
       return true;
     } catch { if (active.current) { setData(null); setNotice("Configuration could not be refreshed. Try again."); } return false; }
@@ -62,7 +68,11 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   }, [read]);
 
   const patch: ConfigurationPatch = {};
+  const selection = fanSelectionFromText(scopeMode, scopeFans);
+  const scopeDirty = !!data?.activation && (scopeMode !== (data.activation.selection?.mode === "all" || !data.activation.selection && data.activation.allFansAllowed && !data.activation.allowedFans.length ? "all" : "selected") ||
+    scopeFans !== (data.activation.selection?.fans ?? data.activation.allowedFans).join(", "));
   if (data) {
+    if (scopeDirty && selection) patch.fasttScope = selection;
     if ((data.personaTruncated && persona.trim()) || (!data.personaTruncated && persona !== data.persona)) patch.persona = persona.trim();
     const changed: Partial<Record<FactKey, string | null>> = {};
     if (data.factsValid) for (const key of FACT_KEYS) {
@@ -202,7 +212,26 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </label>
           <p className="mt-2 text-xs text-muted">Off by default. When on: one follow-up offer is sent 90-240 seconds after a purchase confirmed by the ledger. Turning this off stops its queued actions.</p>
         </div>
-        </StudioTabPanel><button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command)} className={buttonClass}>Save creator settings</button>
+        {data.activation ? <section className="rounded-lg border border-line p-3" data-of-activation-readiness>
+          <h3 className="text-sm font-semibold">Automation readiness and fan scope</h3>
+          <ul className="mt-2 space-y-1 text-xs text-muted">
+            <li>{data.activation.deploymentAllowed ? "Creator is authorized for the FASTT runner." : "This creator needs deployment authorization before the FASTT runner can start."}</li>
+            <li>{data.activation.modelCredentialReady ? "A matching model credential is ready." : "Save and verify a model credential matching this creator’s settings."}</li>
+            <li>{data.activation.proxySaved ? "A proxy is saved for this creator." : "No proxy is saved. Configure this creator’s dedicated proxy before rollout."}</li>
+            <li>{data.activation.automatedConversations} recorded as automated · {data.activation.pausedConversations} paused · {data.activation.takeoverConversations} with human control · {data.activation.noContactConversations} no-contact</li>
+            <li>Send interval: {data.activation.throttleSeconds === null ? "not configured" : `${data.activation.throttleSeconds} seconds`}. Next send window: {data.activation.nextSendAt ? new Date(data.activation.nextSendAt).toLocaleString() : "not waiting"}.</li>
+          </ul>
+          <label className="mt-3 block text-xs">Fan scope<select data-of-edit-fan-scope className={inputClass} value={scopeMode}
+            disabled={!data.activation.deploymentAllowed || !data.activation.selectionValid} onChange={e => setScopeMode(e.target.value as "selected" | "all")}>
+            <option value="selected">Selected fans</option><option value="all" disabled={!data.activation.allFansAllowed}>All eligible fans</option>
+          </select></label>
+          {scopeMode === "selected" ? <label className="mt-2 block text-xs">Fan IDs, separated by commas<input data-of-edit-fan-ids className={inputClass} value={scopeFans}
+            disabled={!data.activation.deploymentAllowed || !data.activation.selectionValid} onChange={e => setScopeFans(e.target.value)} /></label> : null}
+          {scopeDirty && !selection ? <p role="alert" className="mt-2 text-xs">Enter one or more valid numeric fan IDs.</p> : null}
+          {!data.activation.selectionValid ? <p role="alert" className="mt-2 text-xs">The saved fan scope needs review before it can be edited.</p> : null}
+          <p className="mt-2 text-xs text-muted">Scope selection does not resume paused chats or override human control or no-contact. Resume an approved chat in Inbox. New conversations also require “Automatically reply to new conversations” in Manage connection. Changes remain inside this creator’s deployment authorization.</p>
+        </section> : null}
+        </StudioTabPanel><button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command) || scopeDirty && !selection} className={buttonClass}>Save creator settings</button>
       </fieldset>
     </form> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-3">

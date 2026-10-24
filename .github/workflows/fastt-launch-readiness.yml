@@ -1,0 +1,31 @@
+name: FASTT dashboard launch readiness
+on:
+  push:
+    branches: ['codex/fastt-launch-readiness-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Scope and connection regressions
+        run: |
+          npm run test:onlyfans-activation
+          node --import tsx scripts/check-onlyfans-configuration.ts
+          node --import tsx scripts/check-onlyfans-connections.ts
+          npm run test:onlyfans-proxy
+          node --import tsx scripts/check-onlyfans-ai-live.ts
+          npm run test:onlyfans-operations
+          npm run test:onlyfans-ui
+      - name: Type check
+        run: npx tsc --noEmit
