@@ -1,10 +1,12 @@
 import type { Connection } from "@/lib/onlyfans-connections/contract";
-import { connectionSyncLabel, type ConnectionState } from "@/lib/onlyfans-connections/presentation";
+import { connectionAiStatus, connectionSyncLabel, type ConnectionState } from "@/lib/onlyfans-connections/presentation";
 
 export default function ConnectionSyncStatus({ connection, state }: { connection: Connection; state: ConnectionState }) {
-  const sync = connection.sync;
-  if (!sync) return <p className="mt-2 text-xs text-muted">Import progress is not available from this server yet.</p>;
+  const sync = connection.sync, ai = connectionAiStatus(connection);
+  const aiLine = ai ? <p role="status" className="mt-2 text-xs font-semibold text-ink" data-of-ai-live={ai.live ? "live" : "not-running"}>{ai.text}</p> : null;
+  if (!sync) return <>{aiLine}<p className="mt-2 text-xs text-muted">Import progress is not available from this server yet.</p></>;
   return <div className="mt-3 space-y-1 text-xs text-muted" data-of-sync-progress>
+    {aiLine}
     <p role="status" className="font-semibold text-ink">{connectionSyncLabel(sync, state)}</p>
     <p>{sync.pages} conversation pages read · {sync.conversationsComplete} histories completed · {sync.conversationsRemaining} remaining</p>
     {sync.pendingMessages > 0 ? <p>{sync.pendingMessages} messages waiting to be saved</p> : null}
