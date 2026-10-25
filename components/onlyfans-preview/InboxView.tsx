@@ -9,6 +9,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
+import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
 import CreatorPortrait from "./CreatorPortrait";
 import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
@@ -102,7 +103,7 @@ function ConversationList({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "unread" | "attention">("all");
   const matches = (conversation: ConversationSummary) =>
-    (!query.trim() || `${conversation.fan.displayName} ${conversation.fan.shortRef} ${conversation.lastMessagePreview}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
+    (!query.trim() || `${conversation.fan.displayName} ${conversation.fan.shortRef} ${onlyFansMessageText(conversation.lastMessagePreview)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
     (filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
   return (
     <div className="of-list-content">
@@ -245,7 +246,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                       (endsRun ? (inbound ? "tg-tail-in" : "tg-tail-out") : "")
                     }
                   >
-                    <span className="whitespace-pre-wrap">{message.body}</span>
+                    <span className="whitespace-pre-wrap">{onlyFansMessageText(message.body)}</span>
                     <span className="tg-meta">{formatPreviewTime(message.occurredAt)}</span>
                   </div>
                   {!inbound ? (
@@ -557,7 +558,7 @@ function DeliveryLedger({ messages }: { messages: ConversationMessage[] }) {
                 </span>
                 <DeliveryPill outcome={message.delivery} />
               </div>
-              <div className="mt-0.5 truncate text-xs text-ink">{message.body}</div>
+              <div className="mt-0.5 truncate text-xs text-ink">{onlyFansMessageText(message.body)}</div>
               <div className="mt-0.5 text-[10px] text-muted" title={message.evidenceRef ?? undefined}>
                 {message.evidenceRef ? "Receipt recorded" : "No provider reference"}
               </div>

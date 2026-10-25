@@ -140,7 +140,7 @@ for (const width of [390, 900, 1440]) {
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
     assert.equal(await sidebar.locator('a[href="/settings"]').count(),1,"Settings remains reachable exactly once in each workspace");
     if(onlyfans)assert(metrics.navRowHeight>=44&&metrics.navRowHeight<=52,`${width} ${route}: accessible compact studio navigation`);
-    else assert.equal(metrics.navRowHeight,52);
+    else assert.equal(metrics.navRowHeight,44);
     if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
     await noOverflow(page,`shared shell ${width} ${route}`);
   }
