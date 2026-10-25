@@ -16,7 +16,7 @@ async function main(){
  f.scope=scope=>{if(f.actor&&f.actor!==scope.actor)throw new f.Error(404,'Your sign-in expired. Start again.');f.calls.push({kind:'scope',scope})};
  f.Error=class extends Error{constructor(status,message){super(message);this.status=status}};
  f.signin={async start(scope,key,network){f.scope(scope);f.calls.push({kind:'start',key,network});return f.attempt()},async status(scope){f.scope(scope);return f.attempt()},async frame(scope){f.scope(scope);if(f.frameError)throw new f.Error(f.frameError,'Frame unavailable');return new Uint8Array([255,216,255,217]).buffer},async input(scope,attempt,input){f.scope(scope);f.calls.push({kind:'input',input});return f.attempt()},async cancel(scope){f.scope(scope);return {...f.attempt(),phase:'cancelled'}},async capture(scope){f.scope(scope);f.calls.push({kind:'capture'});return f.capture},async acknowledge(scope){f.scope(scope);if(f.ackLost)throw new Error('Fixture lost acknowledgment');return {...f.attempt(),phase:'submitted',enrollmentId:enrollment}}};
- f.native={async captureContext(creator,account){f.calls.push({kind:'network',creator,account});return account&&account!=='of-123'?{ok:false,status:404}:{ok:true,data:account?f.network:{accountId:null,ownerId:null,proxyUrl:null,fingerprint:fingerprint(null)}}},async enroll(command){f.calls.push({kind:'enroll',command});return {ok:true,data:{id:enrollment}}},async enrollments(creator){f.calls.push({kind:'enrollments',creator});return {ok:true,data:[]}}};
+ f.native={async get(account){f.calls.push({kind:'connection-status',account});return {ok:true,data:{status:'verified',verifiedAt:'2026-10-25T12:00:00Z'}}},async captureContext(creator,account){f.calls.push({kind:'network',creator,account});return account&&account!=='of-123'?{ok:false,status:404}:{ok:true,data:account?f.network:{accountId:null,ownerId:null,proxyUrl:null,fingerprint:fingerprint(null)}}},async enroll(command){f.calls.push({kind:'enroll',command});return {ok:true,data:{id:enrollment}}},async enrollments(creator){f.calls.push({kind:'enrollments',creator});return {ok:true,data:[]}}};
  const stubs={
   'next/headers':`export async function cookies(){return {get(){return {value:globalThis.__adminSignInTest.token}}}}`,
   '@/lib/session':`export const SESSION_COOKIE='master_session';export async function verifySessionToken(token){return globalThis.__adminSignInTest.authed&&token==='verified-master-session'}`,
@@ -66,7 +66,7 @@ async function main(){
   const managedStart={...start,connection:managed};
   const previousFingerprint=f.capture.session.networkFingerprint;f.capture.session.networkFingerprint=fingerprint(privateProxy);
   const managedResponse=await post(managedStart);assert.equal(managedResponse.status,200);
-  assert(!JSON.stringify(await managedResponse.json()).includes('private-managed-secret'),'Managed credentials never enter public responses');
+  const visible=await managedResponse.json();assert.deepEqual(visible.proxy,{host:'8.8.4.4',countryCode:'US',status:'assigned',verifiedAt:null});assert(!JSON.stringify(visible).includes('private-managed-secret'),'Managed credentials never enter public responses');
   assert.equal(f.calls.filter(x=>x.kind==='start').at(-1).network.proxyUrl,privateProxy);
   assert.equal((await post({...confirm,connection:managed})).status,200);
   assert.equal(f.calls.filter(x=>x.kind==='enroll').at(-1).command.initialProxyUrl,privateProxy);
@@ -80,7 +80,12 @@ async function main(){
   assert.equal(Object.hasOwn(f.calls.filter(x=>x.kind==='enroll').at(-1).command,'initialProxyUrl'),false,'Reconnect preserves the existing network and model');
   f.capture.session.ownerId=999;assert.equal((await post(reconnect)).status,409);
   assert.equal((await get('?enrollments=1')).status,200);
+  const details=await get('?proxy=1&accountId=of-123');assert.equal(details.status,200);const detailsBody=await details.json();assert.deepEqual(detailsBody.proxy,{host:'proxy.example',countryCode:null,status:'verified',verifiedAt:'2026-10-25T12:00:00Z'});assert(!JSON.stringify(detailsBody).includes('saved:proxy'));
+  const lookups=f.calls.filter(x=>x.kind==='connection-status').length;assert.equal((await get('?proxy=1&accountId=of-foreign')).status,404);assert.equal(f.calls.filter(x=>x.kind==='connection-status').length,lookups,'Foreign account refused before status lookup');
+  assert.equal((await get('?proxy=1')).status,400);
+  f.denied=true;assert.equal((await get('?proxy=1&accountId=of-123')).status,403);f.denied=false;
   console.log('PASS admin sign-in: authenticated operator, origin and creator scope, proxy-bound first login, wrong-account refusal, private frames, single input, frozen retries, and saved-network reconnect.');
  }finally{delete globalThis.__adminSignInTest;rmSync(dir,{recursive:true,force:true});}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
+

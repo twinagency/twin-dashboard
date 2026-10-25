@@ -1,7 +1,7 @@
 name: Managed proxy dashboard
 on:
   push:
-    branches: ['codex/iproyal-managed-proxy-20261025', 'codex/automatic-proxy-onboarding-20261025']
+    branches: ['codex/iproyal-managed-proxy-20261025', 'codex/automatic-proxy-onboarding-20261025', 'codex/visible-agency-proxy-20261025']
   workflow_dispatch:
 permissions:
   contents: read
@@ -20,6 +20,8 @@ jobs:
       - run: node scripts/check-onlyfans-creator-connect.cjs
       - run: node scripts/check-onlyfans-creator-connect-ui.cjs
       - run: node --import tsx scripts/check-onlyfans-agency.ts
+      - run: node scripts/check-agency-proxy-onboarding.cjs
+      - run: node scripts/check-proxy-details-ui.cjs
       - run: npx tsc --noEmit
   image:
     needs: checks

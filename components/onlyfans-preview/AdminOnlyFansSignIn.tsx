@@ -2,6 +2,7 @@
 
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {useRouter} from 'next/navigation';
+import ProxyDetails from '@/components/onlyfans-preview/ProxyDetails';
 import HostedConnect from '@/components/creator-platforms/HostedConnect';
 import {parseEnrollment,type ConnectionCreator} from '@/lib/onlyfans-connections/contract';
 
@@ -67,6 +68,7 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
   const ready=accountId?!!creatorId:mode==='existing'?!!creatorId&&validHandle:!!name.trim()&&validHandle;
   return <>
     <button type="button" className={button} onClick={event=>{event.stopPropagation();setOpen(true);setNotice('');}}>{accountId?'Reconnect OnlyFans':'Add OnlyFans account'}</button>
+    {accountId&&creators.length===1?<ProxyDetails creatorId={creators[0].id} accountId={accountId}/>:null}
     {open?<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={event=>event.stopPropagation()}>
       <section role="dialog" aria-modal="true" aria-label="Admin OnlyFans connection" className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-card p-5 text-ink shadow-xl">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">{accountId?'Reconnect OnlyFans':'Add OnlyFans account'}</h2><button type="button" className={button} onClick={close} aria-label="Close account sign-in">Close</button></div>
@@ -82,3 +84,4 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
     </div>:null}
   </>;
 }
+

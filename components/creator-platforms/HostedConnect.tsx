@@ -2,12 +2,15 @@
 import {useCallback,useEffect,useRef,useState,type FormEvent,type KeyboardEvent,type PointerEvent} from 'react';
 import {ArrowRight,CheckCircle2,LoaderCircle,RefreshCw} from 'lucide-react';
 import {currentSignInAttempt,parseSignInAttempt,type SignInAttempt} from '@/lib/onlyfans-sign-in/model';
+import {parsePublicProxy,type PublicProxy} from '@/lib/onlyfans-managed-proxy/public';
+import {ProxySummary} from '@/components/onlyfans-preview/ProxyDetails';
 import styles from './HostedConnect.module.css';
 
 const creatorRoute='/creator-auth/platforms/onlyfans/sign-in';
 class SignInRequestError extends Error{constructor(readonly status:number,message:string){super(message);}}
 export default function HostedConnect({profileId,accountId,disabled,onChanged,endpoint=creatorRoute,connection,sessionMessage='Sign in to your creator account again.'}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:(enrollmentId?:string|null)=>Promise<boolean>;endpoint?:string;connection?:{accountId:string|null;proxyUrl:string|null;managedProxy?:{countryCode:string;handle:string}};sessionMessage?:string}){
   const route=endpoint;
+  const [proxy,setProxy]=useState<PublicProxy|null>(null),pendingProxy=useRef<PublicProxy|null>(null);
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[statusNotice,setStatusNotice]=useState(''),[busy,setBusy]=useState(false),[sessionLost,setSessionLost]=useState(false),[showScreen,setShowScreen]=useState(false),[screenReady,setScreenReady]=useState(false),[keyboardOpen,setKeyboardOpen]=useState(false);
   const [screenUpdating,setScreenUpdating]=useState(false);
   const screenBlocked=useRef(true),cancelFrame=useRef<(()=>void)|null>(null),paintFrame=useRef<((blob:Blob,version:number,fromInput?:boolean)=>Promise<boolean>)|null>(null);
@@ -20,7 +23,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
   const requestError=useCallback((error:unknown)=>{
     if(!live.current)return;
     if(error instanceof SignInRequestError&&[401,403].includes(error.status)){
-      generation.current++;pendingInputs.current=[];loginForm.current?.reset();keyboard.current?.blur();current.current=null;setAttempt(null);setShowScreen(false);setSessionLost(true);setNotice(sessionMessage);void changed.current();
+      generation.current++;pendingInputs.current=[];loginForm.current?.reset();keyboard.current?.blur();current.current=null;setAttempt(null);setShowScreen(false);setProxy(null);setSessionLost(true);setNotice(sessionMessage);void changed.current();
     }else if(error instanceof SignInRequestError&&[404,410].includes(error.status)){
       generation.current++;pendingInputs.current=[];if(current.current)save({...current.current,phase:'expired',keyboard:null});setShowScreen(false);setNotice('Your sign-in expired. Start again.');setStatusNotice('');
     }
@@ -38,12 +41,12 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
         return value;
       }
       const result=await response.json().catch(()=>null),value=result?.ok===true?parseSignInAttempt(result.attempt):null;
-      if(!response.ok||!value)throw new SignInRequestError(response.status,result?.error||'Your sign-in could not be confirmed. Please try again.');return value;
+      if(!response.ok||!value)throw new SignInRequestError(response.status,result?.error||'Your sign-in could not be confirmed. Please try again.');if(action==='start')pendingProxy.current=parsePublicProxy(result.proxy);return value;
     }finally{commands.current--;}
   },[profileId,route,connection]);
   const start=useCallback(async()=>{
     if(disabled||sessionLost)return;setBusy(true);setNotice('');setStatusNotice('');const version=++generation.current;
-    try{if(!startKey.current)startKey.current=crypto.randomUUID();const result=await command('start',{startKey:startKey.current,accountId});if(live.current&&version===generation.current)save(result);}
+    try{if(!startKey.current)startKey.current=crypto.randomUUID();const result=await command('start',{startKey:startKey.current,accountId});if(live.current&&version===generation.current){setProxy(pendingProxy.current);save(result);}}
     catch(error){if(live.current&&version===generation.current){setNotice(error instanceof Error?error.message:'Sign-in is temporarily unavailable.');requestError(error);}}
     finally{if(live.current)setBusy(false);}
   },[accountId,command,disabled,save,sessionLost,requestError]);
@@ -138,9 +141,10 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
     finally{input.password='';form.reset();if(live.current)setBusy(false);}
   }
   async function confirm(){if(!attempt||busy||sessionLost)return;setBusy(true);setNotice('');inputVersion.current++;const version=generation.current;try{const result=await command('confirm',{attempt:attempt.id});if(live.current&&version===generation.current){save(result);await changed.current(result.enrollmentId);}}catch(error){if(live.current&&version===generation.current){setNotice(error instanceof Error?error.message:'Your connection could not be confirmed. Retry the same confirmation.');requestError(error);}}finally{if(live.current)setBusy(false);}}
-  async function restart(){if(busy||sessionLost)return;setBusy(true);generation.current++;pendingInputs.current=[];setStatusNotice('');loginForm.current?.reset();try{if(current.current){try{await command('cancel',{attempt:current.current.id});}catch(error){if(!(error instanceof SignInRequestError&&[404,410].includes(error.status)))throw error;}}if(!live.current)return;current.current=null;setAttempt(null);setShowScreen(false);startKey.current=crypto.randomUUID();await start();}catch(error){if(live.current){setNotice('Your previous sign-in could not be closed. Please try again.');requestError(error);}}finally{if(live.current)setBusy(false);}}
+  async function restart(){if(busy||sessionLost)return;setBusy(true);generation.current++;pendingInputs.current=[];setStatusNotice('');loginForm.current?.reset();try{if(current.current){try{await command('cancel',{attempt:current.current.id});}catch(error){if(!(error instanceof SignInRequestError&&[404,410].includes(error.status)))throw error;}}if(!live.current)return;current.current=null;setAttempt(null);setProxy(null);setShowScreen(false);startKey.current=crypto.randomUUID();await start();}catch(error){if(live.current){setNotice('Your previous sign-in could not be closed. Please try again.');requestError(error);}}finally{if(live.current)setBusy(false);}}
   const failed=attempt&&['failed','wrong_account','expired','cancelled'].includes(attempt.phase);
   return <section className={styles.root} data-hosted-connect data-stage={showScreen&&attempt?.phase==='waiting'?'verification':'form'}>
+    {proxy&&!sessionLost&&<ProxySummary proxy={proxy}/>}
     {!sessionLost&&((!attempt&&!notice)||attempt?.phase==='opening')&&<div className={styles.loading}><LoaderCircle className={styles.spinner} size={22}/><p>Opening your OnlyFans sign-in…</p></div>}
     {attempt?.phase==='waiting'&&<>
       {!showScreen?<form ref={loginForm} className={styles.loginForm} aria-label="OnlyFans login" onSubmit={event=>void login(event)}>
@@ -170,3 +174,4 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
     {!showScreen&&<p className={styles.privacy}>Your password is used to connect and isn’t saved by Twin.</p>}
   </section>;
 }
+
