@@ -1,9 +1,10 @@
 import {build} from 'esbuild';
-import {readFile,writeFile,mkdir} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,cp} from 'node:fs/promises';
 import path from 'node:path';
 import postcss from 'postcss';
 import tailwind from '@tailwindcss/postcss';
 const root=path.resolve(import.meta.dirname,'../..');const out=process.env.ONLYFANS_UI_OUTPUT||path.join(root,'preview/onlyfans-ui/dist');await mkdir(out,{recursive:true});
+for(const dir of ['brand/platforms','moxy'])await cp(path.join(root,'public',dir),path.join(out,dir),{recursive:true});
 await build({absWorkingDir:root,entryPoints:['preview/onlyfans-ui/App.tsx'],bundle:true,outfile:path.join(out,'app.js'),format:'esm',platform:'browser',jsx:'automatic',minify:true,define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'synthetic-next',setup(b){b.onResolve({filter:/^next\/(navigation|link)$|^@\/app\/actions\/clone-scope$/},()=>({path:path.join(root,'preview/onlyfans-ui/next-shim.tsx')}));}}]});
 const css=await postcss([tailwind({base:root,optimize:true})]).process(await readFile(path.join(root,'app/globals.css'),'utf8'),{from:path.join(root,'app/globals.css')});
 await writeFile(path.join(out,'base.css'),css.css);

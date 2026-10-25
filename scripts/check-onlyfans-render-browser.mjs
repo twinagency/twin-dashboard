@@ -34,7 +34,7 @@ try{
   // The real workspace polls for updates. Readiness is rendered content,
   // not a quiet network, and the dev fixture may compile a route on first use.
   await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'domcontentloaded',timeout:60000});
-  await page.getByRole('heading',{name:route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
+  await page.getByRole('heading',{name:route==='inbox'?'OnlyFans inbox':route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
   await page.evaluate(()=>document.fonts.ready);
   if(route==='campaigns')await waitForCampaigns(page);
   if(route==='content'){await page.locator('[data-of-vault-grid]').waitFor();await page.locator('[data-of-vault-item]').first().waitFor();}

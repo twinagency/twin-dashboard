@@ -224,9 +224,9 @@ async function main() {
   headerAudience.isCreator = false; headerPath = "/onlyfans/inbox";
   const nativeHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
   assert.doesNotMatch(nativeHeader, /LIVE_BALANCE/, "OnlyFans navigation must not present Telegram Stars as account earnings");
-  assert.match(nativeHeader, /of-inbox-topbar/, "Inbox uses its approved compact header");
-  assert.match(nativeHeader, /aria-label="Workspace navigation"/, "Compact header keeps workspace navigation accessible");
-  assert.match(nativeHeader, /data-channel-switch=/, "Inbox retains authorized channel switching in the header menu");
+  assert.match(nativeHeader, /dashboard-topbar/, "Inbox uses the shared dashboard header");
+  assert.doesNotMatch(nativeHeader, /of-inbox-wordmark/, "Full branding belongs in the persistent sidebar");
+  assert.doesNotMatch(nativeHeader, /data-channel-switch=/, "Inbox keeps channel switching in the shared sidebar");
   headerPath = "/onlyfans/accounts";
   const accountHeader = header();
   assert.match(accountHeader, /class="of-currency-label"[^>]*>USD</, "Other OnlyFans pages retain the recorded summary currency");
