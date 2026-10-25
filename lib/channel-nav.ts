@@ -168,7 +168,7 @@ export function workspaceChannel(pathname: string | null | undefined, workspace:
   const path = pathname ?? "";
   if (["/users", "/media", "/flows", "/business"].includes(path)) return "telegram";
   if (workspace !== "telegram") return "all";
-  return ["/users", "/media", "/flows", "/business", "/dashboard", "/clones", "/clones/new"].includes(path) || /^\/clones\/[0-9a-f-]{36}\/?$/i.test(path) ? "telegram" : "all";
+  return ["/users", "/media", "/flows", "/business", "/dashboard", "/revenue", "/clones", "/clones/new"].includes(path) || /^\/clones\/[0-9a-f-]{36}\/?$/i.test(path) ? "telegram" : "all";
 }
 export function telegramWorkspaceHref(path: string): string {
   const [pathname, query = ""] = path.split("?");

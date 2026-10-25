@@ -28,3 +28,18 @@ html[data-agency="moxy"] .workspace-channel-list {
   --studio-channel-active: #F4E9EC; --studio-nav-hover: #fbf5f7;
   --studio-accent: #752638; --studio-accent-deep: #752638;
 }
+
+/* Keep Moxy's mobile wordmark and controls legible in every channel. */
+html[data-agency="moxy"] .dashboard-mobile-header {
+  background: #e8f4ff !important; color: #111; border-color: #d4e8f5;
+}
+html[data-agency="moxy"] .dashboard-mobile-header :is(a, button) {
+  color: #111 !important;
+}
+html[data-agency="moxy"] .dashboard-mobile-header :is(a, button):hover {
+  background-color: #dcefff;
+}
+
+/* The Moxy wordmark is unframed, including drawer autofocus. */
+html[data-agency="moxy"] a:has(> img[alt^="Moxy"]) { border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
+html[data-agency="moxy"] a:has(> img[alt^="Moxy"]):focus-visible { opacity: .65; }
