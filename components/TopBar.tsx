@@ -1,4 +1,7 @@
 "use client";
+import Link from "next/link";
+import { MoreHorizontal } from "lucide-react";
+import { useInboxIdentity } from "./onlyfans-preview/InboxIdentity";
 import { useEffect, useState } from "react";
 import { mergeChannelCreators, type ChannelRoster } from "@/lib/channel-workspace/model";
 import { useDashboardAccess } from "./DashboardAccessProvider";
@@ -73,6 +76,7 @@ export default function TopBar({
   signOutAction?: (formData: FormData) => void | Promise<void>;
 }) {
   const {isAgency,isCreator,agencyName,audience}=useDashboardAccess();
+  const {identity:inboxIdentity}=useInboxIdentity();
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -94,7 +98,7 @@ export default function TopBar({
   }, [audience, channel, lockCreatorScope]);
   const channelScoped = audience === "admin" && channel !== "all" && !lockCreatorScope;
   const channelReady = rosterRead?.channel === channel && rosterRead.status === "ready";
-  const scopedClones = channelScoped ? channelReady ? rosterRead?.creators ?? [] : [] : clones;
+  const scopedClones = channelScoped ? channelReady ? (rosterRead?.creators ?? []).map(creator => ({...creator, photoUrl: creator.photoUrl ?? clones.find(known => known.id === creator.id)?.photoUrl})) : [] : clones;
   const scopeId = combined ? null : channel === "onlyfans" ? searchParams.get("creator") : activeCloneId;
   const scopeLocked = isCreator || lockCreatorScope || combined || channelScoped && (!channelReady || scopedClones.length === 0);
   const fallbackScope = combined ? "All creators" : channelScoped && !channelReady ? rosterRead?.channel === channel ? "Creators unavailable" : "Loading creators…" : channelScoped && scopedClones.length === 0 ? `No ${channel === "onlyfans" ? "OnlyFans" : "Telegram"} creators` : creatorName;
@@ -105,6 +109,25 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
+  if (pathname === "/onlyfans/inbox" && !isCreator) {
+    return <header className="dashboard-topbar of-inbox-topbar">
+      <Link href="/onlyfans/overview" className="of-inbox-wordmark" aria-label="OnlyFans overview">tw</Link>
+      <div className="of-inbox-active-creator">
+        <CloneSwitcher clones={scopedClones} activeCloneId={inboxIdentity?.creatorId ?? scopeId} locked={scopeLocked} fallbackName={inboxIdentity?.creatorName ?? fallbackScope}/>
+        {inboxIdentity ? <small className="creator-name">@{inboxIdentity.handle}</small> : null}
+      </div>
+      <span className="of-inbox-platform"><img src="/brand/platforms/onlyfans.svg" alt="" width="24" height="24"/>OnlyFans</span>
+      <div className="of-inbox-header-tools"><BlurToggle/>
+        <details className="of-inbox-navigation"><summary aria-label="Workspace navigation"><MoreHorizontal size={20}/></summary>
+          <nav aria-label="OnlyFans workspace"><ChannelSwitch channels={channels}/>
+            {[["overview","Overview"],["accounts","Accounts"],["inbox","Inbox"],["campaigns","Campaigns"],["content","Content"],["sales","Sales"],["settings","Settings"],["launch","Launch control"]].map(([route,label])=><Link key={route} href={"/onlyfans/"+route+(inboxIdentity ? "?creator="+encodeURIComponent(inboxIdentity.creatorId) : "")}>{label}</Link>)}
+            {!isAgency ? <Link href="/onlyfans/operations">Operations</Link> : null}
+          </nav>
+        </details>
+        {signOut === "simulated" ? <SignOutButton mode="simulated"/> : <form action={isAgency ? "/agency/logout" : signOutAction} method={isAgency ? "post" : undefined}><SignOutButton showLabel={false}/></form>}
+      </div>
+    </header>;
+  }
   if (isAgency && ["moxy", "top onlyfans agency"].includes(agencyName?.trim().toLowerCase() ?? "") && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
       <div className="moxy-overview-breadcrumb"><span>{agencyName}</span> / Earnings</div>

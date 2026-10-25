@@ -190,6 +190,8 @@ async function main() {
   let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
   const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
   const Header = compile("components/TopBar.tsx", {
+    "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+    "./onlyfans-preview/InboxIdentity": compile("components/onlyfans-preview/InboxIdentity.tsx", {}),
     "@/lib/channel-workspace/model": channelWorkspaceModel,
     "@/lib/dashboard-creator-route": dashboardCreatorRoute,
     "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
@@ -222,8 +224,14 @@ async function main() {
   headerAudience.isCreator = false; headerPath = "/onlyfans/inbox";
   const nativeHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
   assert.doesNotMatch(nativeHeader, /LIVE_BALANCE/, "OnlyFans navigation must not present Telegram Stars as account earnings");
-  assert.match(nativeHeader, /class="of-currency-label"[^>]*>USD</, "OnlyFans header identifies recorded summary currency");
-  assert.doesNotMatch(nativeHeader, /data-channel-switch=/, "OnlyFans keeps one workspace switch in the sidebar");
+  assert.match(nativeHeader, /of-inbox-topbar/, "Inbox uses its approved compact header");
+  assert.match(nativeHeader, /aria-label="Workspace navigation"/, "Compact header keeps workspace navigation accessible");
+  assert.match(nativeHeader, /data-channel-switch=/, "Inbox retains authorized channel switching in the header menu");
+  headerPath = "/onlyfans/accounts";
+  const accountHeader = header();
+  assert.match(accountHeader, /class="of-currency-label"[^>]*>USD</, "Other OnlyFans pages retain the recorded summary currency");
+  assert.doesNotMatch(accountHeader, /data-channel-switch=/, "Other OnlyFans pages keep one workspace switch in their sidebar");
+  headerPath = "/onlyfans/inbox";
   const WorkspaceSwitch = compile("components/ChannelSwitch.tsx", {
     "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
     "@/lib/channel-nav": channelNav,
