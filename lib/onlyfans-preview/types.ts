@@ -145,7 +145,7 @@ export type MessageOrigin = "fan" | "ai" | "human" | "imported";
 
 export type MessageAttachments = {
   count: number;
-  media: { mediaId: string; kind: "photo" | "video" | "audio" | "unknown" }[];
+  media: { mediaId: string; kind: "photo" | "video" | "audio" | "unknown"; source?: "message" }[];
   price: Money;
   purchaseStatus: "not_applicable" | "unconfirmed" | "not_purchased" | "purchased";
 };

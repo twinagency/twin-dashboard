@@ -247,7 +247,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                       (endsRun ? (inbound ? "tg-tail-in" : "tg-tail-out") : "")
                     }
                   >
-                    <MessageAttachments accountId={detail.accountId} attachments={message.attachments} />
+                    <MessageAttachments accountId={detail.accountId} attachments={message.attachments} conversationId={message.conversationId} messageId={message.messageId} />
                     <span className="whitespace-pre-wrap">{onlyFansMessageText(message.body)}</span>
                     <span className="tg-meta">{formatPreviewTime(message.occurredAt)}</span>
                   </div>
