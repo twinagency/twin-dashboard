@@ -20,7 +20,7 @@
 // cannot reach its backend.
 
 import type { OnlyFansDataSource } from "./data-source";
-import { isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
+import { controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
@@ -154,9 +154,8 @@ export function createFetchOnlyFansTransport(
               ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}) } : {}) }),
         });
         if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) {
-          return result("refused", response.status === 409
-            ? "The conversation changed or has an active hold. Refresh before trying again."
-            : "The change was not accepted. Check your session and refresh the conversation.");
+          const refusal = await response.json().catch(() => null);
+          return result("refused", controlRefusalNote(response.status, refusal));
         }
         if (response.ok) {
           const ack = parseControlAck(await response.json(), { ...command, action });

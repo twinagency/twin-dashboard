@@ -446,6 +446,37 @@ function ActionColumn({
         </div>
       ) : null}
 
+      {result ? (
+        <div
+          data-of-command-result
+          role={result.accepted ? "status" : "alert"}
+          data-of-command-accepted={result.accepted}
+          className={`rounded-xl border p-3 text-xs leading-5 ${
+            result.accepted
+              ? "border-[#e3c98b] bg-[#fffaee] text-[#8a5f06]"
+              : "border-[#f0c3cb] bg-[#fff5f6] text-[#9b2f62]"
+          }`}
+        >
+          <div className="font-semibold">
+            {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
+              : result.outcome === "recorded" ? result.intentId ? "Message queued" : "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
+          </div>
+          <p className="mt-1">{result.note}</p>
+          {!result.simulated && result.intentId && result.request.payload.kind === "manual_message" ?
+            <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 text-ink">{result.request.payload.body}</p> : null}
+          {result.simulated ? <p className="mt-1">
+            <code className="font-mono">{result.request.command}</code> on account{" "}
+            <code className="font-mono">{result.request.accountId}</code> against revision{" "}
+            <code className="font-mono">{result.request.expectedRevision}</code>, idempotency key{" "}
+            <code className="font-mono">{result.request.idempotencyKey}</code>.
+          </p> : null}
+          {!result.simulated && result.outcome === "unconfirmed" ? (
+            <button type="button" data-of-retry-control disabled={pending} onClick={onRetry}
+              className="mt-2 rounded-lg border border-current px-2 py-1 disabled:opacity-50">Retry same request</button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="of-reply-actions" data-of-actions>
         {actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action)).map(entry => {
           const resolution = entry.action === "resolve_delivery_evidence";
@@ -476,37 +507,6 @@ function ActionColumn({
           </div>
         </details>
       ) : null}
-
-      {result ? (
-        <div
-          data-of-command-result
-          data-of-command-accepted={result.accepted}
-          className={`rounded-xl border p-3 text-xs leading-5 ${
-            result.accepted
-              ? "border-[#e3c98b] bg-[#fffaee] text-[#8a5f06]"
-              : "border-[#f0c3cb] bg-[#fff5f6] text-[#9b2f62]"
-          }`}
-        >
-          <div className="font-semibold">
-            {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
-              : result.outcome === "recorded" ? result.intentId ? "Message queued" : "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
-          </div>
-          <p className="mt-1">{result.note}</p>
-          {!result.simulated && result.intentId && result.request.payload.kind === "manual_message" ?
-            <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 text-ink">{result.request.payload.body}</p> : null}
-          {result.simulated ? <p className="mt-1">
-            <code className="font-mono">{result.request.command}</code> on account{" "}
-            <code className="font-mono">{result.request.accountId}</code> against revision{" "}
-            <code className="font-mono">{result.request.expectedRevision}</code>, idempotency key{" "}
-            <code className="font-mono">{result.request.idempotencyKey}</code>.
-          </p> : null}
-          {!result.simulated && result.outcome === "unconfirmed" ? (
-            <button type="button" data-of-retry-control disabled={pending} onClick={onRetry}
-              className="mt-2 rounded-lg border border-current px-2 py-1 disabled:opacity-50">Retry same request</button>
-          ) : null}
-        </div>
-      ) : null}
-
 
     </div>
   );
