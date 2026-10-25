@@ -38,6 +38,10 @@ export function agencyScopedFetch(grant: AgencyGrant, options: { baseUrl: string
  * remain under their original owners. Future routes default to unavailable. */
 export function agencyOnlyFansRequest(path: string, method: string, serverAction: boolean, canManage: boolean): boolean {
   if (serverAction) return false;
+  // Connection browser access is limited to managers; each route independently
+  // rechecks the current membership and selected creator before using its service credential.
+  if (canManage && method === "POST" && path === "/api/onlyfans-connections/creators") return true;
+  if (canManage && ["GET","HEAD","POST"].includes(method) && /^\/api\/onlyfans-connections\/creators\/[A-Za-z0-9._:-]{1,64}\/sign-in$/.test(path)) return true;
   // Next keeps percent escapes in pathname; conversation IDs contain a colon.
   // Decode once for the route policy without allowing encoded path separators.
   if (/%(?:2f|5c)/i.test(path)) return false;

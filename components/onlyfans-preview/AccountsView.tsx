@@ -7,6 +7,7 @@
 // `p-4` stat cards, then a card grid — the shape `app/storage/page.tsx` uses for
 // its creator grid. Nothing here invents a second visual language.
 
+import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import Link from "next/link";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import type { ReactNode } from "react";
@@ -110,7 +111,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         ) : null}
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
-      {connectionEditable ? <ConnectionEditor accountId={account.accountId} /> : null}
+      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} /> : null}
     </Card>
   );
 }
@@ -126,6 +127,7 @@ export default function AccountsView({
   showPreviewChrome = true,
   connectionsConfigured = false,
   connectionCreators = [],
+  agencyConnections = false,
 }: {
   controls?: ReactNode;
   accountsState: RequestState<OfAccount[]>;
@@ -143,6 +145,7 @@ export default function AccountsView({
   /** Positive server configuration only; fixtures and read-only sessions still hide writes. */
   connectionsConfigured?: boolean;
   connectionCreators?: ConnectionCreator[];
+  agencyConnections?: boolean;
 }) {
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
@@ -167,7 +170,7 @@ export default function AccountsView({
         </div>
       ) : null}
 
-      {connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale", "empty"].includes(accountsState.status) ? <RegisterConnection creators={connectionCreators} /> : null}
+      {connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale", "empty"].includes(accountsState.status) ? agencyConnections ? <AdminOnlyFansSignIn creators={connectionCreators} /> : <RegisterConnection creators={connectionCreators} /> : null}
 
       <RequestStateBlock
         state={accountsState}
@@ -185,14 +188,14 @@ export default function AccountsView({
                 {creatorName
                   ? `No OnlyFans account is connected to ${creatorName} yet.`
                   : "Your OnlyFans accounts will appear here once connected."}{" "}
-                {connectionsConfigured && !showPreviewChrome && !readOnly ? "Choose Add OnlyFans account to start setup for an existing creator." : "Ask your account administrator to connect an OnlyFans account."}
+                {connectionsConfigured && !showPreviewChrome && !readOnly ? "Choose Add OnlyFans account to add a creator or select an existing creator." : "Ask your account administrator to connect an OnlyFans account."}
               </Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {list.map((account) => (
                   <div key={account.accountId} data-of-selected={activeAccountId === account.accountId || undefined} role="group" tabIndex={0} aria-label={`Select ${account.binding.creatorName} account`} onKeyDown={event => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onSelectAccount(account.accountId); } }} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
-                      connectionEditable={connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
+                      connectionEditable={!agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>
                 ))}
               </div>

@@ -4,9 +4,10 @@ import {ArrowRight,CheckCircle2,LoaderCircle,RefreshCw} from 'lucide-react';
 import {currentSignInAttempt,parseSignInAttempt,type SignInAttempt} from '@/lib/onlyfans-sign-in/model';
 import styles from './HostedConnect.module.css';
 
-const route='/creator-auth/platforms/onlyfans/sign-in';
+const creatorRoute='/creator-auth/platforms/onlyfans/sign-in';
 class SignInRequestError extends Error{constructor(readonly status:number,message:string){super(message);}}
-export default function HostedConnect({profileId,accountId,disabled,onChanged}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:()=>Promise<boolean>}){
+export default function HostedConnect({profileId,accountId,disabled,onChanged,endpoint=creatorRoute,connection,sessionMessage='Sign in to your creator account again.'}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:(enrollmentId?:string|null)=>Promise<boolean>;endpoint?:string;connection?:{accountId:string|null;proxyUrl:string|null};sessionMessage?:string}){
+  const route=endpoint;
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[statusNotice,setStatusNotice]=useState(''),[busy,setBusy]=useState(false),[sessionLost,setSessionLost]=useState(false),[showScreen,setShowScreen]=useState(false),[screenReady,setScreenReady]=useState(false),[keyboardOpen,setKeyboardOpen]=useState(false);
   const [screenUpdating,setScreenUpdating]=useState(false);
   const screenBlocked=useRef(true),cancelFrame=useRef<(()=>void)|null>(null),paintFrame=useRef<((blob:Blob,version:number,fromInput?:boolean)=>Promise<boolean>)|null>(null);
@@ -19,15 +20,15 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   const requestError=useCallback((error:unknown)=>{
     if(!live.current)return;
     if(error instanceof SignInRequestError&&[401,403].includes(error.status)){
-      generation.current++;pendingInputs.current=[];loginForm.current?.reset();keyboard.current?.blur();current.current=null;setAttempt(null);setShowScreen(false);setSessionLost(true);setNotice('Sign in to your creator account again.');void changed.current();
+      generation.current++;pendingInputs.current=[];loginForm.current?.reset();keyboard.current?.blur();current.current=null;setAttempt(null);setShowScreen(false);setSessionLost(true);setNotice(sessionMessage);void changed.current();
     }else if(error instanceof SignInRequestError&&[404,410].includes(error.status)){
       generation.current++;pendingInputs.current=[];if(current.current)save({...current.current,phase:'expired',keyboard:null});setShowScreen(false);setNotice('Your sign-in expired. Start again.');setStatusNotice('');
     }
-  },[save]);
+  },[save,sessionMessage]);
   const command=useCallback(async(action:string,extra:Record<string,unknown>={},receiveFrame?: (blob:Blob)=>Promise<void>)=>{
     commands.current++;
     try{
-      const response=await fetch(route,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json',...(receiveFrame?{Accept:'image/png'}:{})},body:JSON.stringify({action,profileId,...extra}),signal:AbortSignal.timeout(12000)});
+      const response=await fetch(route,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json',...(receiveFrame?{Accept:'image/png'}:{})},body:JSON.stringify({action,profileId,...extra,...(connection&&['start','confirm'].includes(action)?{connection}:{})}),signal:AbortSignal.timeout(12000)});
       if(response.ok&&receiveFrame&&['image/png','image/jpeg'].includes(response.headers.get('content-type')?.split(';')[0]??'')){
         let value:SignInAttempt|null=null;
         try{value=parseSignInAttempt(JSON.parse(decodeURIComponent(response.headers.get('x-twin-sign-in-attempt')??'')));}catch{}
@@ -39,7 +40,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
       const result=await response.json().catch(()=>null),value=result?.ok===true?parseSignInAttempt(result.attempt):null;
       if(!response.ok||!value)throw new SignInRequestError(response.status,result?.error||'Your sign-in could not be confirmed. Please try again.');return value;
     }finally{commands.current--;}
-  },[profileId]);
+  },[profileId,route,connection]);
   const start=useCallback(async()=>{
     if(disabled||sessionLost)return;setBusy(true);setNotice('');setStatusNotice('');const version=++generation.current;
     try{if(!startKey.current)startKey.current=crypto.randomUUID();const result=await command('start',{startKey:startKey.current,accountId});if(live.current&&version===generation.current)save(result);}
@@ -54,7 +55,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
     const poll=async()=>{if(running||commands.current||document.visibilityState==='hidden')return;running=true;const version=generation.current,input=inputVersion.current;try{
       const response=await fetch(route+'?attempt='+attempt.id,{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});const body=await response.json().catch(()=>null),value=body?.ok===true?parseSignInAttempt(body.attempt):null;
       if(!response.ok||!value)throw new SignInRequestError(response.status,body?.error||'Your sign-in status could not be loaded.');
-      if(active&&version===generation.current&&input===inputVersion.current&&!commands.current){save(value);setStatusNotice('');if(value.phase==='submitted')await changed.current();}
+      if(active&&version===generation.current&&input===inputVersion.current&&!commands.current){save(value);setStatusNotice('');if(value.phase==='submitted')await changed.current(value.enrollmentId);}
     }catch(error){if(active&&version===generation.current){setStatusNotice(error instanceof Error?error.message:'Your sign-in status could not be loaded.');requestError(error);}}finally{running=false;}};
     const timer=window.setInterval(()=>void poll(),1500);void poll();return()=>{active=false;controller.abort();clearInterval(timer);};
   },[attempt?.id,attempt?.phase,disabled,sessionLost,save,requestError]);
@@ -136,7 +137,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
     catch(error){if(live.current&&version===generation.current){setNotice('OnlyFans sign-in could not be submitted. Please try again.');requestError(error);}}
     finally{input.password='';form.reset();if(live.current)setBusy(false);}
   }
-  async function confirm(){if(!attempt||busy||sessionLost)return;setBusy(true);setNotice('');inputVersion.current++;const version=generation.current;try{const result=await command('confirm',{attempt:attempt.id});if(live.current&&version===generation.current){save(result);await changed.current();}}catch(error){if(live.current&&version===generation.current){setNotice(error instanceof Error?error.message:'Your connection could not be confirmed. Retry the same confirmation.');requestError(error);}}finally{if(live.current)setBusy(false);}}
+  async function confirm(){if(!attempt||busy||sessionLost)return;setBusy(true);setNotice('');inputVersion.current++;const version=generation.current;try{const result=await command('confirm',{attempt:attempt.id});if(live.current&&version===generation.current){save(result);await changed.current(result.enrollmentId);}}catch(error){if(live.current&&version===generation.current){setNotice(error instanceof Error?error.message:'Your connection could not be confirmed. Retry the same confirmation.');requestError(error);}}finally{if(live.current)setBusy(false);}}
   async function restart(){if(busy||sessionLost)return;setBusy(true);generation.current++;pendingInputs.current=[];setStatusNotice('');loginForm.current?.reset();try{if(current.current){try{await command('cancel',{attempt:current.current.id});}catch(error){if(!(error instanceof SignInRequestError&&[404,410].includes(error.status)))throw error;}}if(!live.current)return;current.current=null;setAttempt(null);setShowScreen(false);startKey.current=crypto.randomUUID();await start();}catch(error){if(live.current){setNotice('Your previous sign-in could not be closed. Please try again.');requestError(error);}}finally{if(live.current)setBusy(false);}}
   const failed=attempt&&['failed','wrong_account','expired','cancelled'].includes(attempt.phase);
   return <section className={styles.root} data-hosted-connect data-stage={showScreen&&attempt?.phase==='waiting'?'verification':'form'}>

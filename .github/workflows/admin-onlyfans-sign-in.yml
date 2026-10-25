@@ -1,0 +1,60 @@
+name: Admin OnlyFans dashboard
+on:
+  push:
+    branches: ['codex/admin-onlyfans-signin-20261025', 'codex/of-creator-connect-20261025']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: node scripts/check-admin-onlyfans-sign-in.cjs
+      - run: node scripts/check-onlyfans-creator-connect.cjs
+      - run: node scripts/check-onlyfans-creator-connect-ui.cjs
+      - run: node --import tsx scripts/check-onlyfans-agency.ts
+      - run: node scripts/check-creator-platforms.cjs
+      - run: node --import tsx scripts/check-onlyfans-connections.ts
+      - run: npm run test:onlyfans-proxy
+      - run: npm run test:onlyfans-ui
+      - run: npx tsc --noEmit
+  images:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REGISTRY: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com
+      BACKEND_SHA: ce92afb1ae9b22850a9690fdb0b3e4e624a3a361
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build dashboard candidate
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA" .
+          docker push "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA" > candidate-images.txt
+      - name: Reuse verified backend candidates
+        run: |
+          set -euo pipefail
+          for SPEC in "twin-onlyfans@sha256:8ce12d9b0232c252f04499d1f83818a0ab850f44105d793ea91c69d89f7674ae" "twin-dashboard@sha256:ffb5ce6f676bd30749e4cd240f5d9dc6df32f011c9eafcae241919831e47a807"; do
+            docker pull "$REGISTRY/$SPEC"
+            test "$(docker inspect --format='{{index .Config.Labels "org.opencontainers.image.revision"}}' "$REGISTRY/$SPEC")" = "$BACKEND_SHA"
+            echo "$REGISTRY/$SPEC" >> candidate-images.txt
+          done
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-sign-in-candidate-images
+          path: candidate-images.txt

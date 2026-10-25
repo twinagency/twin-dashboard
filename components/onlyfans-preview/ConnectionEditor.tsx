@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { connectionState, CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
 import { normalizeProxyInput, PROXY_RULE } from "@/lib/onlyfans-connections/proxy";
 import ConnectionSyncStatus from "./ConnectionSyncStatus";
+import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
@@ -16,7 +17,7 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
-export default function ConnectionEditor({ accountId }: { accountId: string }) {
+export default function ConnectionEditor({ accountId,creatorId,creatorName }: { accountId: string;creatorId?:string;creatorName?:string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [data, setData] = useState<Connection | null>(null), [notice, setNotice] = useState("");
@@ -140,6 +141,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
         {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
         <ConnectionSyncStatus connection={data} state={state} />
         <div className="mt-3 flex flex-wrap gap-2">
+          {creatorId && creatorName ? <AdminOnlyFansSignIn creators={[{id:creatorId,name:creatorName}]} accountId={accountId} /> : null}
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry || state === "retrying" || state === "checking" && data.verifiedAt !== null} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
@@ -211,8 +213,8 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
     finally { if (active.current) setBusy(false); submitting.current = false; }
   }
   return <Card className="mb-5 min-w-0 p-4" data-of-register-connection>
-    <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Your next connection.</h2><p className="mt-2 text-sm text-muted">Add OnlyFans to an existing creator profile.</p></div><button type="button" className={buttonClass} aria-expanded={open} onClick={() => setOpen(!open)} disabled={busy || denied}>Add OnlyFans account</button></div>
-    <p className="mt-3 text-xs text-muted">Creators can sign in through Platforms → Connect OnlyFans in their creator account. Use this form for administrator-assisted setup.</p>
+    <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Your next connection.</h2><p className="mt-2 text-sm text-muted">Add a creator or connect an existing creator to OnlyFans.</p></div><div className="flex flex-wrap gap-2"><AdminOnlyFansSignIn creators={creators} /><button type="button" className={buttonClass} aria-expanded={open} onClick={() => setOpen(!open)} disabled={busy || denied}>Manual session setup</button></div></div>
+    <p className="mt-3 text-xs text-muted">Choose Add OnlyFans account to sign in from this admin dashboard. Manual registration and session import remain available below.</p>
     {open ? <div className="mt-4">
       {notice ? <p role="status" className="mb-3 text-sm" data-of-registration-notice>{notice}</p> : null}
       {!creators.length ? <p className="text-sm text-muted">Existing Twin creators could not be loaded. Refresh the dashboard to try again.</p> : null}
