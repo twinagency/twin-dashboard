@@ -20,6 +20,10 @@
 
 import dns from "node:dns";
 import net from "node:net";
+import { createHash } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import sharp from "sharp";
 import { supabaseAdmin } from "./supabase";
 import { TelegramApiError } from "./telegram-raw";
@@ -28,13 +32,18 @@ import {
   MAX_BYTES,
   STORY_MAX_VIDEO_BYTES,
   PostingInputError,
+  checkOverlayUse,
   cleanText,
   mediaKindFor,
   planChannelPost,
   storyLinkArea,
   type MediaKind,
+  type OverlaySpec,
+  type PreviewMode,
   type UrlButton,
 } from "./posting-validate";
+
+import { renderStoryOverlay, type OverlayGeometry } from "./story-overlay";
 
 export { TelegramApiError };
 
@@ -341,18 +350,63 @@ export type StoryRequest = {
   postToChatPage: boolean;
   protectContent: boolean;
   fit: boolean;
+  // Visible caption/button/scrim burned into a photo (lib/story-overlay.ts).
+  overlay?: OverlaySpec | null;
+  // Dry runs only: hand back the rendered image.
+  preview?: PreviewMode;
   dryRun: boolean;
 };
 
+// Crop (and overlay) a story photo; shared by postStory and previewStory.
+async function storyImage(r: Pick<StoryRequest, "media" | "fit" | "overlay" | "linkUrl">): Promise<{ bytes: Buffer; geometry: OverlayGeometry | null }> {
+  if (!r.overlay) return { bytes: await storyPhoto(r.media, r.fit), geometry: null };
+  const out = await renderStoryOverlay(r.media.bytes, r.overlay, { fit: r.fit, linkUrl: r.linkUrl });
+  return { bytes: out.bytes, geometry: out.geometry };
+}
+
+function previewOut(bytes: Buffer, mode: PreviewMode): { previewBase64?: string; previewMime?: string; previewPath?: string } {
+  const out: { previewBase64?: string; previewMime?: string; previewPath?: string } = {};
+  if (mode === "base64" || mode === "both") {
+    out.previewBase64 = bytes.toString("base64");
+    out.previewMime = "image/jpeg";
+  }
+  if (mode === "file" || mode === "both") {
+    const f = path.join(os.tmpdir(), `twin-story-preview-${createHash("sha256").update(bytes).digest("hex").slice(0, 12)}.jpg`);
+    writeFileSync(f, bytes);
+    out.previewPath = f;
+  }
+  return out;
+}
+
+// Render only: every input check and the real crop/overlay, but no Telegram
+// call at all (no clone bot, no business connection), so the owner can iterate
+// on a look in a second. Nothing is posted or written.
+export async function previewStory(r: Pick<StoryRequest, "media" | "mediaType" | "fit" | "overlay" | "linkUrl" | "preview">) {
+  const kind = mediaKindFor(r.media.mime, r.media.filename, r.mediaType ?? r.media.kind);
+  if (!r.overlay) throw new PostingInputError("story_preview needs an overlay");
+  checkOverlayUse(r.overlay, { kind, linkUrl: r.linkUrl });
+  checkSize(r.media, kind, MAX_BYTES.photo);
+  const { bytes, geometry } = await storyImage(r);
+  return {
+    dryRun: true as const,
+    previewOnly: true,
+    wouldPost: { mediaType: kind, bytes: bytes.length, linkUrl: r.linkUrl, overlay: geometry },
+    ...previewOut(bytes, r.preview && r.preview !== "none" ? r.preview : "base64"),
+  };
+}
+
 export async function postStory(r: StoryRequest) {
+  // Pure input rules first: a bad overlay is a 400 before any Telegram call.
+  const kind = mediaKindFor(r.media.mime, r.media.filename, r.mediaType ?? r.media.kind);
+  checkOverlayUse(r.overlay ?? null, { kind, linkUrl: r.linkUrl });
   const c = await cloneBot(r.cloneId);
   const conn = await liveConnection(c);
   if (!conn) throw new PostingUnavailableError(`${c.slug} has no enabled business connection`);
   if (!conn.canStories) throw new PostingUnavailableError(`${c.slug}'s story right is off`);
 
-  const kind = mediaKindFor(r.media.mime, r.media.filename, r.mediaType ?? r.media.kind);
   checkSize(r.media, kind, kind === "video" ? STORY_MAX_VIDEO_BYTES : MAX_BYTES.photo);
-  const bytes = kind === "photo" ? await storyPhoto(r.media, r.fit) : r.media.bytes;
+  const img = kind === "photo" ? await storyImage(r) : { bytes: r.media.bytes, geometry: null };
+  const bytes = img.bytes;
   const caption = cleanText(r.caption, LIMITS.storyCaption, "caption");
 
   const fields: Record<string, unknown> = {
@@ -360,17 +414,18 @@ export async function postStory(r: StoryRequest) {
     content: kind === "photo" ? { type: "photo", photo: "attach://story_file" } : { type: "video", video: "attach://story_file" },
     active_period: r.activePeriod,
     caption: caption || undefined,
-    areas: r.linkUrl ? [storyLinkArea(r.linkUrl)] : undefined,
+    // With a burned-in button the tappable area is the button's own rectangle.
+    areas: r.linkUrl ? [img.geometry?.linkArea ?? storyLinkArea(r.linkUrl)] : undefined,
     post_to_chat_page: r.postToChatPage,
     protect_content: r.protectContent,
   };
-  const summary = { clone: c.slug, mediaType: kind, file: r.media.filename || null, bytes: bytes.length, caption, activePeriod: r.activePeriod, linkUrl: r.linkUrl };
-  if (r.dryRun) return { dryRun: true, wouldPost: summary };
+  const summary = { clone: c.slug, mediaType: kind, file: r.media.filename || null, bytes: bytes.length, caption, activePeriod: r.activePeriod, linkUrl: r.linkUrl, overlay: img.geometry };
+  if (r.dryRun) return { dryRun: true as const, wouldPost: summary, ...previewOut(bytes, r.preview ?? "none") };
 
   const story = await tg(c.token, "postStory", fields, [
     { field: "story_file", bytes, filename: kind === "photo" ? "story.jpg" : "story.mp4", mime: kind === "photo" ? "image/jpeg" : r.media.mime || "video/mp4" },
   ]);
-  return { dryRun: false, posted: { ...summary, storyId: story?.id ?? null } };
+  return { dryRun: false as const, posted: { ...summary, storyId: story?.id ?? null } };
 }
 
 export async function deleteStory(cloneId: string, storyId: number) {
@@ -447,6 +502,7 @@ export async function postToChannel(r: ChannelRequest) {
 
   const warnings: string[] = [];
   if (r.pin && !rights.canPin) warnings.push("not pinned: the bot lacks the Edit Messages right in this channel");
+  if (r.buttons?.flat().some((b) => b.style)) warnings.push("button style is Telegram's own blue/green/red; apps older than Bot API 9.4 show the default look");
   if (plan.method === "sendPaidMedia") warnings.push("paid media Stars go to the channel's balance, not the bot's");
 
   const summary = {
