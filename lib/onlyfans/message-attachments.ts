@@ -7,6 +7,7 @@ export function parseMessageAttachments(value: unknown): MessageAttachments | nu
   const ids = new Set<string>();
   for (const item of v.media) {
     if (!item || typeof item !== "object" || typeof item.mediaId !== "string" || !/^[1-9][0-9]{0,18}$/.test(item.mediaId) || BigInt(item.mediaId) >= BigInt("9223372036854775808") || ids.has(item.mediaId) || !["photo", "video", "audio", "unknown"].includes(item.kind)) return null;
+    if (item.source !== undefined && item.source !== "message") return null;
     ids.add(item.mediaId);
   }
   const price = v.price as Record<string, unknown> | null;
