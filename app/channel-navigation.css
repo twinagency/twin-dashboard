@@ -1,0 +1,30 @@
+/* One visible, branded channel list in desktop sidebars and phone drawers. */
+.workspace-channel-list[data-channel-switch] {
+  display: grid; grid-template-columns: minmax(0,1fr); width: 100%; gap: 4px;
+  margin: 0; padding: 5px; border: 1px solid var(--studio-nav-line, #d4e8f5);
+  border-radius: 14px; background: var(--studio-channel-bg, #fff);
+}
+.workspace-channel-list[data-channel-switch] .workspace-channel-option {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px;
+  border-radius: 10px; color: var(--studio-nav-ink, #49637e) !important;
+  font-size: 16px; line-height: 24px; font-weight: 600; box-shadow: none;
+  text-decoration: none;
+}
+.workspace-channel-list .workspace-channel-logo {
+  width: 28px; height: 28px; flex: 0 0 28px; object-fit: contain;
+}
+.workspace-channel-list[data-channel-switch] .workspace-channel-option[data-channel-option="all"] { font-weight: 750; }
+.workspace-channel-list[data-channel-switch] .workspace-channel-option:hover { background: var(--studio-nav-hover, #e1f2ff); }
+.workspace-channel-list[data-channel-switch] .workspace-channel-option[aria-current="page"] {
+  background: var(--studio-channel-active, #dcefff);
+  color: var(--studio-accent-deep, #087bbb) !important;
+}
+.workspace-channel-list .workspace-channel-option:focus-visible {
+  outline: 2px solid var(--studio-accent, #2fa8eb); outline-offset: 2px;
+}
+/* Moxy uses its own accent in both its existing dashboard and OnlyFans. */
+html[data-agency="moxy"] .workspace-channel-list {
+  --studio-nav-ink: #3b2930; --studio-nav-line: #e8dbe0; --studio-channel-bg: #fff;
+  --studio-channel-active: #F4E9EC; --studio-nav-hover: #fbf5f7;
+  --studio-accent: #752638; --studio-accent-deep: #752638;
+}

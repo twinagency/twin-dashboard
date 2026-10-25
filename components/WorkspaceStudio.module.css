@@ -94,36 +94,6 @@
 .workspace :global(.workspace-channel-selector), .drawer :global(.workspace-channel-selector) {
   padding: 0 20px 18px;
 }
-/* The same visible channel list in every workspace and in the phone drawer. */
-.workspace.workspace :global(.workspace-channel-list),
-.drawer.drawer :global(.workspace-channel-list) {
-  display: grid; grid-template-columns: minmax(0,1fr); width: 100%; gap: 4px;
-  margin: 0; padding: 5px; border: 1px solid var(--studio-nav-line, #ffffff12);
-  border-radius: 14px; background: var(--studio-channel-bg, #ffffff05);
-}
-.workspace.workspace.workspace :global(.workspace-channel-list .workspace-channel-option),
-.drawer.drawer.drawer :global(.workspace-channel-list .workspace-channel-option) {
-  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 10px 12px;
-  border-radius: 10px; color: var(--studio-nav-ink, #cfcfcf) !important;
-  font-size: 16px; line-height: 24px; font-weight: 600; box-shadow: none;
-}
-.workspace :global(.workspace-channel-logo), .drawer :global(.workspace-channel-logo) {
-  width: 28px; height: 28px; flex: 0 0 28px; object-fit: contain;
-}
-.workspace.workspace.workspace :global(.workspace-channel-list .workspace-channel-option[data-channel-option="all"]),
-.drawer.drawer.drawer :global(.workspace-channel-list .workspace-channel-option[data-channel-option="all"]) { font-weight: 750; }
-.workspace.workspace.workspace :global(.workspace-channel-list .workspace-channel-option:hover),
-.drawer.drawer.drawer :global(.workspace-channel-list .workspace-channel-option:hover) {
-  background: var(--studio-nav-hover, #ffffff0b);
-}
-.workspace.workspace.workspace :global(.workspace-channel-list .workspace-channel-option[aria-current="page"]),
-.drawer.drawer.drawer :global(.workspace-channel-list .workspace-channel-option[aria-current="page"]) {
-  background: var(--studio-channel-active, #ffffff12);
-  color: var(--studio-accent-deep, #fff) !important;
-}
-.workspace :global(.workspace-channel-option:focus-visible), .drawer :global(.workspace-channel-option:focus-visible) {
-  outline: 2px solid var(--studio-accent); outline-offset: 2px;
-}
 .workspace :global(.studio-sidebar-nav), .drawer :global(.studio-sidebar-nav) {
   padding: 0 20px 22px; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--studio-nav-line, #ffffff35) transparent;
 }
@@ -202,7 +172,7 @@
   --studio-channel-bg: #fff; --studio-channel-active: #dcefff;
   --studio-accent: #2fa8eb; --studio-accent-deep: #087bbb;
   width: 240px; color: #49637e; border-right: 1px solid #dce8f2;
-  background: linear-gradient(165deg,#e8f5ff,#f0f9ff) !important;
+  background: linear-gradient(165deg,#e8f5ff,#f0f9ff) !important; background-color: #e8f5ff !important;
 }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-brand-row),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-brand-row) {
