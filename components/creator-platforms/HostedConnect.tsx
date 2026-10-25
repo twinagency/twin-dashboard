@@ -6,7 +6,7 @@ import styles from './HostedConnect.module.css';
 
 const creatorRoute='/creator-auth/platforms/onlyfans/sign-in';
 class SignInRequestError extends Error{constructor(readonly status:number,message:string){super(message);}}
-export default function HostedConnect({profileId,accountId,disabled,onChanged,endpoint=creatorRoute,connection,sessionMessage='Sign in to your creator account again.'}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:(enrollmentId?:string|null)=>Promise<boolean>;endpoint?:string;connection?:{accountId:string|null;proxyUrl:string|null};sessionMessage?:string}){
+export default function HostedConnect({profileId,accountId,disabled,onChanged,endpoint=creatorRoute,connection,sessionMessage='Sign in to your creator account again.'}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:(enrollmentId?:string|null)=>Promise<boolean>;endpoint?:string;connection?:{accountId:string|null;proxyUrl:string|null;managedProxy?:{countryCode:string;handle:string}};sessionMessage?:string}){
   const route=endpoint;
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[statusNotice,setStatusNotice]=useState(''),[busy,setBusy]=useState(false),[sessionLost,setSessionLost]=useState(false),[showScreen,setShowScreen]=useState(false),[screenReady,setScreenReady]=useState(false),[keyboardOpen,setKeyboardOpen]=useState(false);
   const [screenUpdating,setScreenUpdating]=useState(false);
