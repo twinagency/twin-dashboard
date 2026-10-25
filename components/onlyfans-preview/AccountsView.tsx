@@ -45,7 +45,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
 
       <dl className="of-account-status">
         <div><dt>Connection</dt><dd><HealthPill health={account.health} /></dd></div>
-        <div><dt>Replies</dt><dd><ModePill mode={account.automationMode} /></dd></div>
+        <div><dt>Replies</dt><dd>{showPreviewChrome ? <ModePill mode={account.automationMode} /> : <span>Managed per fan in Inbox</span>}</dd></div>
         <div><dt>Last sync</dt><dd><FreshnessLine freshness={account.syncFreshness} /></dd></div>
       </dl>
 

@@ -9,11 +9,12 @@ class SignInRequestError extends Error{constructor(readonly status:number,messag
 export default function HostedConnect({profileId,accountId,disabled,onChanged}:{profileId:string;accountId:string|null;disabled:boolean;onChanged:()=>Promise<boolean>}){
   const [attempt,setAttempt]=useState<SignInAttempt|null>(null),[notice,setNotice]=useState(''),[statusNotice,setStatusNotice]=useState(''),[busy,setBusy]=useState(false),[sessionLost,setSessionLost]=useState(false),[showScreen,setShowScreen]=useState(false),[screenReady,setScreenReady]=useState(false),[keyboardOpen,setKeyboardOpen]=useState(false);
   const [screenUpdating,setScreenUpdating]=useState(false);
-  const screenBlocked=useRef(true),paintFrame=useRef<((blob:Blob,version:number,fromInput?:boolean)=>Promise<boolean>)|null>(null);
+  const screenBlocked=useRef(true),cancelFrame=useRef<(()=>void)|null>(null),paintFrame=useRef<((blob:Blob,version:number,fromInput?:boolean)=>Promise<boolean>)|null>(null);
   const live=useRef(false),current=useRef<SignInAttempt|null>(null),started=useRef(false),startKey=useRef('');
   const canvas=useRef<HTMLCanvasElement>(null),keyboard=useRef<HTMLInputElement>(null),queue=useRef(Promise.resolve()),pendingInputs=useRef<Array<{input:Record<string,unknown>;identity:string;version:number}>>([]);
+  const lastPaint=useRef({version:-1,time:0});
   const inputVersion=useRef(0),refreshFrame=useRef<(()=>void)|null>(null),commands=useRef(0),loginForm=useRef<HTMLFormElement>(null);
-  const generation=useRef(0),pointer=useRef<{id:number;version:number;x:number;y:number;left:number;top:number;width:number;height:number}|null>(null),changed=useRef(onChanged);changed.current=onChanged;
+  const generation=useRef(0),pointer=useRef<{id:number;version:number;kind:string;x:number;y:number;left:number;top:number;width:number;height:number}|null>(null),changed=useRef(onChanged);changed.current=onChanged;
   const save=useCallback((value:SignInAttempt)=>{if(live.current){const next=currentSignInAttempt(value);current.current=next;setAttempt(next);if(next.phase!=='waiting'){loginForm.current?.reset();keyboard.current?.blur();setKeyboardOpen(false);}}},[]);
   const requestError=useCallback((error:unknown)=>{
     if(!live.current)return;
@@ -64,8 +65,9 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   },[attempt?.id,attempt?.expiresAt,attempt?.phase,save]);
   useEffect(()=>{
     if(!attempt||attempt.phase!=='waiting'||disabled||sessionLost||!showScreen)return;
-    let active=true,badFrames=0,running=false,redraw=false;const controller=new AbortController();let timer:number;screenBlocked.current=true;setScreenReady(false);setScreenUpdating(false);
+    let active=true,badFrames=0,running=false,redraw=false;const controller=new AbortController();let timer:number,frameRequest:AbortController|null=null;screenBlocked.current=true;lastPaint.current={version:-1,time:0};setScreenReady(false);setScreenUpdating(false);
     const schedule=(delay=0)=>{clearTimeout(timer);timer=window.setTimeout(()=>void draw(),delay);};
+    cancelFrame.current=()=>{clearTimeout(timer);frameRequest?.abort();redraw=true;};
     refreshFrame.current=()=>{if(running)redraw=true;else schedule();};
     const screenError='Your sign-in screen could not be loaded. Restart sign-in to continue.';
     const paint=async(blob:Blob,version:number,fromInput=false)=>{
@@ -74,30 +76,35 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
         if(!active||version!==inputVersion.current||pendingInputs.current.length||(!fromInput&&commands.current)||!canvas.current)return false;
         const context=canvas.current.getContext('2d');if(!context)throw new Error('canvas_unavailable');
         if(canvas.current.width!==image.width||canvas.current.height!==image.height){canvas.current.width=image.width;canvas.current.height=image.height;}
-        context.drawImage(image,0,0);badFrames=0;screenBlocked.current=false;setScreenReady(true);setScreenUpdating(false);setNotice(value=>value===screenError?'':value);
+        context.drawImage(image,0,0);lastPaint.current={version,time:performance.now()};badFrames=0;screenBlocked.current=false;setScreenReady(true);setScreenUpdating(false);setNotice(value=>value===screenError?'':value);
         return true;
       }finally{image.close();}
     };
     paintFrame.current=paint;
     const draw=async()=>{if(running)return;running=true;redraw=false;const version=inputVersion.current;try{
       await queue.current;if(!active)return;if(version!==inputVersion.current){redraw=true;return;}
+      if(lastPaint.current.version===version&&performance.now()-lastPaint.current.time<1000){redraw=false;return;}
       // Only a frame requested after the input queue drained can unlock clicks.
-      const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});
+      frameRequest=new AbortController();
+      const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,frameRequest.signal,AbortSignal.timeout(12000)])});
       if([401,403,404,410].includes(r.status))throw new SignInRequestError(r.status,'Your sign-in screen could not be loaded.');
       if(!r.ok||!['image/jpeg','image/png'].includes(r.headers.get('content-type')?.split(';')[0]??''))throw new Error('frame_unavailable');
       await paint(await r.blob(),version);
-    }catch(error){if(active){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3){screenBlocked.current=true;setScreenReady(false);setNotice(screenError);}}}finally{running=false;if(active)schedule(redraw?0:350);}};
-    void draw();return()=>{active=false;screenBlocked.current=true;pointer.current=null;controller.abort();refreshFrame.current=null;paintFrame.current=null;clearTimeout(timer);};
+    }catch(error){if(active&&!frameRequest?.signal.aborted){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3){screenBlocked.current=true;setScreenReady(false);setNotice(screenError);}}}finally{frameRequest=null;running=false;if(active)schedule(redraw?0:1000);}};
+    void draw();return()=>{active=false;screenBlocked.current=true;pointer.current=null;controller.abort();frameRequest?.abort();cancelFrame.current=null;refreshFrame.current=null;paintFrame.current=null;clearTimeout(timer);};
   },[attempt?.id,attempt?.phase,disabled,sessionLost,showScreen,requestError]);
   function send(input:Record<string,unknown>){
     if(disabled||sessionLost||current.current?.phase!=='waiting')return;
     // A queued pointer action could land on a page the user has not seen yet.
     if((input.type==='click'||input.type==='scroll')&&screenBlocked.current)return;
-    screenBlocked.current=true;setScreenUpdating(true);
+    screenBlocked.current=true;setScreenUpdating(true);cancelFrame.current?.();
     const identity=current.current.id,version=generation.current;inputVersion.current++;
     pendingInputs.current.push({input,identity,version});
     queue.current=queue.current.then(async()=>{
       const next=pendingInputs.current.shift();if(!next)return;
+      if(!live.current||next.version!==generation.current)return;
+      // Briefly collect a typing burst before the network request, preserving field changes.
+      if(next.input.type==='text')await new Promise(resolve=>window.setTimeout(resolve,35));
       if(!live.current||next.version!==generation.current)return;
       let payload=next.input;
       // Merge only adjacent text; clicks and field changes retain their order.
@@ -107,19 +114,18 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
         pendingInputs.current.shift();payload={type:'text',text};
       }
       const frameVersion=inputVersion.current,paint=paintFrame.current;
-      let painted=false;
-      const receiveFrame=paint&&['click','scroll'].includes(String(payload.type))?async(blob:Blob)=>{
-        if(live.current&&next.version===generation.current)painted=await paint(blob,frameVersion,true);
+      const receiveFrame=paint&&pendingInputs.current.length===0?async(blob:Blob)=>{
+        if(live.current&&next.version===generation.current)await paint(blob,frameVersion,true);
       }:undefined;
-      try{const result=await command('input',{attempt:next.identity,input:payload},receiveFrame);if(live.current&&next.version===generation.current){save(result);if(!painted)refreshFrame.current?.();}}
+      try{const result=await command('input',{attempt:next.identity,input:payload},receiveFrame);if(live.current&&next.version===generation.current){save(result);refreshFrame.current?.();}}
       catch(error){if(live.current&&next.version===generation.current){setNotice('That input was not confirmed. Restart sign-in to continue.');if(current.current)save({...current.current,phase:'failed'});requestError(error);generation.current++;pendingInputs.current=[];}}
     });
   }
   function type(event:KeyboardEvent<HTMLInputElement>){
     if(['Enter','Tab','Backspace','Delete','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End'].includes(event.key)){event.preventDefault();send({type:'key',key:event.key});}
   }
-  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();if(screenBlocked.current||pointer.current)return;const box=event.currentTarget.getBoundingClientRect();pointer.current={id:event.pointerId,version:inputVersion.current,x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);keyboard.current?.blur();}
-  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const p=pointer.current;if(!p||p.id!==event.pointerId)return;pointer.current=null;if(screenBlocked.current||p.version!==inputVersion.current)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height)),x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});else if(Math.abs(p.x-event.clientX)<18)send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});}
+  function press(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();if(screenBlocked.current||pointer.current)return;const box=event.currentTarget.getBoundingClientRect();pointer.current={id:event.pointerId,version:inputVersion.current,kind:event.pointerType,x:event.clientX,y:event.clientY,left:box.left,top:box.top,width:box.width,height:box.height};event.currentTarget.setPointerCapture(event.pointerId);if(event.pointerType!=='mouse'||!window.matchMedia('(hover: hover) and (pointer: fine)').matches)keyboard.current?.blur();}
+  function release(event:PointerEvent<HTMLCanvasElement>){event.preventDefault();const p=pointer.current;if(!p||p.id!==event.pointerId)return;pointer.current=null;if(screenBlocked.current||p.version!==inputVersion.current)return;const box=p,dy=p.y-event.clientY;if(Math.abs(dy)>18)send({type:'scroll',delta:Math.max(-1000,Math.min(1000,dy*720/box.height)),x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});else if(Math.abs(p.x-event.clientX)<18){send({type:'click',x:Math.max(0,Math.min(1,(p.x-box.left)/box.width)),y:Math.max(0,Math.min(1,(p.y-box.top)/box.height))});if(p.kind==='mouse'&&window.matchMedia('(hover: hover) and (pointer: fine)').matches)keyboard.current?.focus({preventScroll:true});}}
   async function login(event:FormEvent<HTMLFormElement>){
     event.preventDefault();if(busy||disabled||sessionLost||current.current?.phase!=='waiting')return;
     const form=event.currentTarget,values=new FormData(form);

@@ -1,9 +1,11 @@
 /** Creator editor contract. No service credential enters browser code. */
+import { validFanSelection, parseActivationReadiness, type FanSelection, type ActivationReadiness } from "./activation";
 export const CONFIGURATION_SCHEMA = "of-configuration.v3";
 export const CONFIGURATION_HEADER = "X-OnlyFans-Configuration-Version";
 export const FACT_KEYS = ["age", "job", "home_city", "relationship", "kids", "family", "tattoos", "kinks", "limits"] as const;
 export type FactKey = typeof FACT_KEYS[number];
 export type Configuration = {
+  activation?: ActivationReadiness;
   configurationRevision: number; fingerprint: string; persona: string | null; personaTruncated: boolean;
   creatorFacts: Record<FactKey, string | null>; factFields: { key: FactKey; label: string }[];
   factsValid: boolean; readOnlyFacts: FactKey[]; modelsValid: boolean;
@@ -12,10 +14,11 @@ export type Configuration = {
   defaultModel: string | null; replyModelOverride: string | null; replyOverridePresent: boolean;
   resolvedReplyModel: string | null; modelOptions: string[];
   salesConfigurationValid: boolean; onRequestSalesEnabled: boolean;
+  fasttDiscountResend: boolean; fasttPostBuyUpsell: boolean;
   dailyCostCapCents: number; reasoningEffort: string | null; reasoningOptions: Record<string, string[]>;
 };
-export type ConfigurationPatch = { persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
-  defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean; dailyCostCapCents?: number; reasoningEffort?: string | null };
+export type ConfigurationPatch = { fasttScope?: FanSelection; persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
+  defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean; fasttDiscountResend?: boolean; fasttPostBuyUpsell?: boolean; dailyCostCapCents?: number; reasoningEffort?: string | null };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
   accountId: string; commandKey: string; recordedRevision: number; recordedFingerprint: string };
@@ -30,10 +33,12 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["fasttScope", "persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if ("fasttScope" in patch && !validFanSelection(patch.fasttScope)) return false;
   if ("dailyCostCapCents" in patch && (!Number.isInteger(patch.dailyCostCapCents) || Number(patch.dailyCostCapCents) < 0 || Number(patch.dailyCostCapCents) > 1_000_000)) return false;
   if ("reasoningEffort" in patch && patch.reasoningEffort !== null && (!text(patch.reasoningEffort, 40) || !patch.reasoningEffort.trim())) return false;
   if ("onRequestSalesEnabled" in patch && typeof patch.onRequestSalesEnabled !== "boolean") return false;
+  if (("fasttDiscountResend" in patch && typeof patch.fasttDiscountResend !== "boolean") || ("fasttPostBuyUpsell" in patch && typeof patch.fasttPostBuyUpsell !== "boolean")) return false;
   if ("inheritCreatorFacts" in patch && (!Array.isArray(patch.inheritCreatorFacts) || !patch.inheritCreatorFacts.length ||
     new Set(patch.inheritCreatorFacts).size !== patch.inheritCreatorFacts.length || patch.inheritCreatorFacts.some(key =>
       !(FACT_KEYS as readonly unknown[]).includes(key) || object(patch.creatorFacts) && Object.hasOwn(patch.creatorFacts, String(key))))) return false;
@@ -48,7 +53,8 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "configuration"]) ||
     value.schemaVersion !== CONFIGURATION_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.configuration)) return null;
   const c = value.configuration;
-  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled", "dailyCostCapCents", "reasoningEffort", "reasoningOptions"]) ||
+  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort", "reasoningOptions", ...("activation" in c ? ["activation"] : [])]) ||
+    ("activation" in c && !parseActivationReadiness(c.activation)) ||
     !revision(c.configurationRevision) || !configurationHash(c.fingerprint) || !optionalText(c.persona, 4096) ||
     typeof c.personaTruncated !== "boolean" || (c.personaTruncated ? c.persona !== null : typeof c.persona !== "string") ||
     !object(c.creatorFacts) || !exact(c.creatorFacts, [...FACT_KEYS]) || Object.values(c.creatorFacts).some(value => !optionalText(value, 16000)) ||
@@ -57,7 +63,8 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
     !Array.isArray(c.readOnlyFacts) || new Set(c.readOnlyFacts).size !== c.readOnlyFacts.length || c.readOnlyFacts.some(key => !(FACT_KEYS as readonly unknown[]).includes(key)) ||
     typeof c.factsValid !== "boolean" || typeof c.modelsValid !== "boolean" || typeof c.replyOverridePresent !== "boolean" ||
     typeof c.salesConfigurationValid !== "boolean" || typeof c.onRequestSalesEnabled !== "boolean" ||
-    (!c.salesConfigurationValid && c.onRequestSalesEnabled) ||
+    typeof c.fasttDiscountResend !== "boolean" || typeof c.fasttPostBuyUpsell !== "boolean" ||
+    (!c.salesConfigurationValid && (c.onRequestSalesEnabled || c.fasttDiscountResend || c.fasttPostBuyUpsell)) ||
     !optionalText(c.defaultModel, 160) || !optionalText(c.replyModelOverride, 160) || !optionalText(c.resolvedReplyModel, 160) ||
     !Array.isArray(c.modelOptions) || !c.modelOptions.length || c.modelOptions.length > 500 ||
     new Set(c.modelOptions).size !== c.modelOptions.length || c.modelOptions.some(model => !text(model, 160) || !model) ||

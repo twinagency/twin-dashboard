@@ -1,0 +1,46 @@
+name: Responsive OnlyFans login candidate
+on:
+  push:
+    branches: [codex/onlyfans-login-responsive-20261025]
+permissions:
+  contents: read
+jobs:
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: node scripts/check-creator-testing.cjs
+      - run: node scripts/check-creator-platforms.cjs
+      - run: node scripts/check-creator-sign-in-ui.mjs
+      - run: node scripts/check-creator-sign-in-editing.mjs
+      - run: npx tsc --noEmit
+      - name: Build the verified dashboard candidate
+        run: docker build --build-arg GIT_SHA="$GITHUB_SHA" --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$ECR_REPO:login-$GITHUB_SHA" .
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Publish the exact candidate digest
+        run: |
+          docker push "$ECR_REPO:login-$GITHUB_SHA"
+          IMAGE=$(docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:login-$GITHUB_SHA")
+          jq -n --arg commit "$GITHUB_SHA" --arg image "$IMAGE" '{dashboardCommit:$commit,dashboardImage:$image}' > login-responsive-image.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: onlyfans-login-responsive
+          path: |
+            login-responsive-image.json
+            test-results/creator-sign-in
+            test-results/creator-sign-in-editing
+          retention-days: 7

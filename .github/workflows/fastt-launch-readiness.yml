@@ -1,0 +1,61 @@
+name: FASTT dashboard launch readiness
+on:
+  push:
+    branches: ['codex/fastt-launch-readiness-*']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  activation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Scope and connection regressions
+        run: |
+          npm run test:onlyfans-activation
+          node --import tsx scripts/check-onlyfans-configuration.ts
+          node --import tsx scripts/check-onlyfans-connections.ts
+          node --import tsx scripts/check-onlyfans-connection-status.ts
+          npm run test:onlyfans-proxy
+          node --import tsx scripts/check-onlyfans-ai-live.ts
+          npm run test:onlyfans-operations
+          npm run test:onlyfans-ui
+      - name: Type check
+        run: npx tsc --noEmit
+  image:
+    needs: activation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: AWS credentials for existing image registry
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and publish candidate only
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+          ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$RELEASE_SHA" --label org.opencontainers.image.revision="$RELEASE_SHA" -t "$ECR_REPO:fastt-readiness-$RELEASE_SHA" .
+          docker push "$ECR_REPO:fastt-readiness-$RELEASE_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:fastt-readiness-$RELEASE_SHA" > candidate-image.txt
+          cat candidate-image.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: candidate-dashboard-image
+          path: candidate-image.txt

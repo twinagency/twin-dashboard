@@ -10,7 +10,7 @@ export type ConnectionRunnerState = "running" | "held" | "restarting" | "stoppin
 export type ConnectionRunner = { state: ConnectionRunnerState; reason: string | null; observedAt: string | null; stale: boolean; restarts: number | null };
 export type Connection = { accountId: string; revision: number; status: ConnectionStatus; ownerId: string | null;
   expiresAt: string | null; verifiedAt: string | null; lastError: string | null; outgoingEnabled: boolean;
-  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync;
+  policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync; throttleSeconds?: number | null;
   /** Present only when the backend answered ?runner=1. Connected is not live: see aiLive. */ runner?: ConnectionRunner; aiLive?: boolean };
 export type ConnectionSave = { ownerId: number; capture: Record<string, unknown>; xHash: string; proxyUrl: string | null;
   expiresAt: string; model: { modelId: string; apiKey: string } | null };
@@ -99,9 +99,10 @@ export function parseConnection(value: unknown, accountId: string): Connection |
   const c = value.connection;
   const base = ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"];
   // Optional keys are accepted only as known, valid shapes; runner and aiLive travel together, and aiLive can never contradict the runner.
-  const optional = ["sync", "runner", "aiLive"].filter(key => key in c);
+  const optional = ["sync", "runner", "aiLive", "throttleSeconds"].filter(key => key in c);
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
+    ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||
     ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
       (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
     c.accountId !== accountId || !id(c.accountId) || !integer(c.revision, 0, 2 ** 31 - 1) ||
