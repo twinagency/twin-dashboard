@@ -6,7 +6,7 @@ import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
 export const dynamic = "force-dynamic";
 
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ account?: string | string[]; creator?: string | string[] }> }) {
-  const ctx = await requireOnlyFansRead();
+  const ctx = await requireOnlyFansRead({ agency: true });
   const description = "Check your connection, message activity and anything that needs attention.";
   const unavailable = (message: string, connect = false) => <div className="dashboard-page"><CreatorPlatformHeading title="Operations" description={description} /><CreatorPlatformEmpty title={connect ? "Your account activity starts here." : "Let’s get this ready."} description={message} actionHref={connect ? "/onlyfans/accounts" : undefined} /></div>;
   if (ctx instanceof NextResponse) return unavailable("Your session cannot read operational status. Sign in again.");

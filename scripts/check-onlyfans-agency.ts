@@ -22,8 +22,9 @@ async function main() {
   assert(agencyOnlyFansRequest("/api/onlyfans/accounts/acc-a/conversations/acc-a%3A101/handover", "GET", false, false));
   for (const id of ["acc-a%2F101", "acc-a%5C101", "acc-a%253A101", "acc-a%ZZ101"])
     assert(!agencyOnlyFansRequest(`/api/onlyfans/accounts/acc-a/conversations/${id}`, "GET", false, false));
-  assert(!agencyOnlyFansRequest("/onlyfans/operations", "GET", false, true));
-  for (const path of ["/api/onlyfans-connections/accounts", "/api/onlyfans/accounts/acc-a/operations", "/api/earnings", "/creator/settings"])
+  assert(agencyOnlyFansRequest("/onlyfans/operations", "GET", false, true));
+  assert(agencyOnlyFansRequest("/api/onlyfans/accounts/acc-a/operations", "GET", false, false));
+  for (const path of ["/api/onlyfans-connections/accounts", "/api/earnings", "/creator/settings"])
     assert(!agencyOnlyFansRequest(path, "GET", false, true), path);
   for (const purpose of ["controls", "configuration", "content", "campaigns"]) {
     const path = `/api/onlyfans-${purpose}/accounts/acc-a`;

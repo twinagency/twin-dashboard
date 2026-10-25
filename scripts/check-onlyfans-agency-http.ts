@@ -115,7 +115,7 @@ async function main() {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), `Overflow at ${width}px`);
       await page.screenshot({ path: join(artifacts, `handover-${width}.png`), fullPage: true });
     }
-    assert.equal(await page.locator('[data-channel-link="of-operations"]').count(), 0);
+    assert.equal(await page.locator('[data-channel-link="of-operations"]').count(), 1);
     assert.deepEqual(errors, []);
     await context.close();
     const readContext = await browser.newContext(); await readContext.addCookies([{ name: "twin_agency_access", value: "synthetic-reader", url: base }]);
