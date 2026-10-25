@@ -6,7 +6,9 @@ const base = {deploymentAllowed:true, allFansAllowed:false, allowedFans:[123,456
   modelCredentialReady:true,proxySaved:true,automatedConversations:1,pausedConversations:5,noContactConversations:1,
   takeoverConversations:1,nextSendAt:null,throttleSeconds:20};
 assert(parseActivationReadiness(base));
-for (const change of [{apiKey:"private"},{deploymentAllowed:false},{throttleSeconds:0},{throttleSeconds:1.5},
+assert(parseActivationReadiness({...base,throttleSeconds:0.25}));
+assert(parseActivationReadiness({...base,throttleSeconds:1.5}));
+for (const change of [{apiKey:"private"},{deploymentAllowed:false},{throttleSeconds:0},{throttleSeconds:0.05},
   {nextSendAt:"invalid"},{selection:{mode:"all",fans:[123]}},{pausedConversations:-1},{allowedFans:[true]},
   {modelCredentialReady:"true"},{selectionValid:undefined}]) assert.equal(parseActivationReadiness({...base,...change}),null);
 assert.deepEqual(fanSelectionFromText("selected","456, 123 456"),{mode:"selected",fans:[123,456]});
