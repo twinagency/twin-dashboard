@@ -30,8 +30,9 @@ window.fetch=async(input,init={})=>{
   if(!p.startsWith("/api/onlyfans-controls/")) throw Error("Unexpected write");
   const body=JSON.parse(init.body);window.__takeoverPosts.push(body);
   if(scenario==="refused") return Response.json({schemaVersion:"of-controls.v1",ok:false,outcome:"refused",error:"Conversation controls are not configured."},{status:503});
+  if(scenario==="conflict") return Response.json({schemaVersion:"of-controls.v1",ok:false,outcome:"refused",error:"The conversation changed or has an active hold. Refresh before trying again."},{status:409});
   if(body.action!=="request_takeover") throw Error("Only synthetic takeover is allowed");
-  detail.summary.automationMode="human_controlled";detail.summary.takeoverState="effective";detail.summary.revision++;
+  detail.summary.automationMode="human_controlled";detail.summary.takeoverState=scenario==="held"?"requested":"effective";detail.summary.delivery=scenario==="held"?"dispatching":"sent";detail.summary.revision++;
   return Response.json({schemaVersion:"of-controls.v1",ok:true,applied:true,commandKey:"a".repeat(64),accountId:account.accountId,conversationId:detail.summary.conversationId,action:body.action,recordedRevision:detail.summary.revision});
  }
  if(p.endsWith("/accounts")) return Response.json({accounts:[account]});
@@ -61,15 +62,17 @@ try {
  const takeover=page.locator('[data-of-action="request_takeover"]'),composer=page.locator("[data-of-composer]");
  await takeover.waitFor({timeout:15000});
  assert.equal(await composer.isDisabled(),true);
- await takeover.click();
+ await page.locator("[data-of-composer-takeover]").click();
  await page.locator('[data-of-action="release_takeover"]').waitFor({timeout:15000});
  await page.waitForFunction(()=>document.querySelector("[data-of-composer]")?.disabled===false);
  assert.equal(await composer.isEnabled(),true);
+ assert.equal(await page.locator("[data-of-manual-offer]").isEnabled(),true);
+ assert.equal(await page.locator("[data-of-composer-takeover]").count(),0);
  assert.equal(await page.evaluate(()=>window.__takeoverPosts.length),1);
  assert.equal(await page.evaluate(()=>window.__takeoverPosts[0].action),"request_takeover");
  console.log("PASS accepted takeover: one request, manual control, composer unlocked");
  await page.goto(origin+"/onlyfans/inbox?scenario=refused");
- await takeover.waitFor();await takeover.click();
+ await takeover.waitFor();await page.locator("[data-of-composer-takeover]").click();
  await page.locator("[data-of-command-result]").waitFor();
  assert.equal(await composer.isDisabled(),true);
  const message=await page.locator("[data-of-command-result]").innerText();
@@ -78,6 +81,20 @@ try {
  assert.equal(await page.locator("[data-of-command-result]").getAttribute("role"),"alert");
  const feedbackBox=await page.locator("[data-of-command-result]").boundingBox(),buttonBox=await takeover.boundingBox();
  assert(feedbackBox&&buttonBox&&feedbackBox.y<buttonBox.y,"Failure feedback appears before the clicked control");
+ await page.goto(origin+"/onlyfans/inbox?scenario=conflict");
+ await page.locator("[data-of-composer-takeover]").waitFor();await page.locator("[data-of-composer-takeover]").click();
+ await page.getByText("The conversation changed or has an active hold. Refresh before trying again.",{exact:true}).waitFor();
+ assert.equal(await composer.isDisabled(),true);
+ assert.equal(await page.evaluate(()=>window.__takeoverPosts.length),1);
+ console.log("PASS conflict: one request, clear error, manual send remains locked");
+ await page.goto(origin+"/onlyfans/inbox?scenario=held");
+ await page.locator("[data-of-composer-takeover]").waitFor();await page.locator("[data-of-composer-takeover]").click();
+ await page.getByText("Waiting for the current delivery to settle. Manual replies stay paused until handover completes.",{exact:true}).waitFor();
+ assert.equal(await composer.isDisabled(),true);
+ assert.equal(await page.locator("[data-of-manual-offer]").isDisabled(),true);
+ assert.equal(await page.locator("[data-of-composer-takeover]").count(),0);
+ assert.equal(await page.evaluate(()=>window.__takeoverPosts.length),1);
+ console.log("PASS unsettled send: takeover requested, composer and paid content remain locked");
  assert.deepEqual(errors,[]);
  console.log("PASS refused takeover: no false manual control, clear visible error; 0 page errors");
 } finally {
