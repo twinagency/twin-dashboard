@@ -3,7 +3,7 @@
 import { guardDashboardAction } from "@/lib/agency-management";
 
 import { getDashboardAccess } from "@/lib/dashboard-access";
-import { AGENCY_PROTECTED_CLONE_FIELDS } from "@/lib/agency-write";
+import { AGENCY_WRITABLE_CLONE_FIELDS } from "@/lib/agency-write";
 import { revalidatePath } from "next/cache";
 import { invalidateCloneCaches } from "@/lib/query-cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -1138,7 +1138,11 @@ export async function updateClone(id: string, fd: FormData) {
 
   const row = rowFromForm(fd);
   if (await getDashboardAccess()) {
-    for (const key of AGENCY_PROTECTED_CLONE_FIELDS) delete (row as Record<string, unknown>)[key];
+    // The shared form also contains internal-only fields. Preserve those stored
+    // values and submit exactly the same allowlist enforced by the agency fetch.
+    for (const key of Object.keys(row)) {
+      if (!AGENCY_WRITABLE_CLONE_FIELDS.includes(key)) delete (row as Record<string, unknown>)[key];
+    }
   }
   if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
