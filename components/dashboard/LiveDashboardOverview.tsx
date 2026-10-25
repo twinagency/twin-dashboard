@@ -18,7 +18,7 @@ export default function LiveDashboardOverview({ cloneId, clones, initialData, co
     // reads the same selection. The combined homepage always remains all creators.
     if (combined && id) router.push("/dashboard?workspace=telegram");
   }
-  return <RevenueDashboard cloneId={cloneId} initialData={initialData} sharedOverview={{ component: SharedOverview, creators: clones, creatorsHref: "/clones", chatHref: "/users?workspace=telegram", brand: "twin", onSelectCreator: selectCreator }} overviewPresentation={{
+  return <RevenueDashboard cloneId={cloneId} initialData={initialData} sharedOverview={{ component: SharedOverview, creators: clones, creatorsHref: "/clones", chatHref: "/users?workspace=telegram", brand: "twin", combinedRevenue: combined, onSelectCreator: selectCreator }} overviewPresentation={{
     className: styles.page,
     header: windowLabel => <LiveOverviewHero clones={clones} cloneId={cloneId} windowLabel={windowLabel} />,
     activity: (data, money) => <LiveOverviewActivity data={data} cloneId={cloneId} money={money} />,

@@ -101,7 +101,7 @@
     "test:onlyfans-operations": "node --import tsx scripts/check-onlyfans-operations.ts",
     "test:onlyfans-unconfigured": "tsx scripts/check-onlyfans-unconfigured.tsx",
     "test:onlyfans-media": "node --import tsx scripts/check-onlyfans-vault-media.ts && node scripts/check-onlyfans-vault-origin.cjs && node --import tsx scripts/check-onlyfans-vault-metadata-lifecycle.tsx",
-    "test:onlyfans-agency": "node --import tsx scripts/check-onlyfans-agency.ts",
+    "test:onlyfans-agency": "node --import tsx scripts/check-onlyfans-agency.ts && npm run test:overview-earnings",
     "test:onlyfans-agency-http": "node --import tsx scripts/check-onlyfans-agency-http.ts",
     "test:catalogue-audit": "node scripts/check-catalogue-preview-audit.cjs",
     "test:onlyfans-launch": "node --import tsx scripts/check-onlyfans-launch.ts",
@@ -109,7 +109,8 @@
     "test:onlyfans-launch-access": "node --import tsx scripts/check-onlyfans-launch-access.ts",
     "test:onlyfans-ui": "node --import tsx scripts/check-onlyfans-ui.tsx && node --import tsx scripts/check-channel-integration.ts",
     "test:onlyfans-ui-browser": "node preview/onlyfans-ui/build.mjs && node scripts/check-onlyfans-ui-browser.mjs",
-    "test:onlyfans-activation": "tsx scripts/check-onlyfans-activation.ts"
+    "test:onlyfans-activation": "tsx scripts/check-onlyfans-activation.ts",
+    "test:overview-earnings": "node scripts/check-overview-channel-revenue.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

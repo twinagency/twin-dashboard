@@ -47,6 +47,7 @@ export type FullData = DashboardData & {
   analyticsError?: string | null;
   balance: StarBalance | null;
   /** Server snapshot metadata. The API deliberately never serves browser-cached revenue. */
+  reportWindow?: { startMs: number; endMs: number };
   cachedAt: number;
   ageSeconds: number;
   stale: boolean;
@@ -600,6 +601,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
   if (sharedOverview && OverviewComponent && !showDetailed) return <OverviewComponent {...sharedOverview}
     cloneId={cloneId} data={data} loading={loading} error={loadError}
     period={period} range={customRange} currency={currency} money={money}
+    moneyWithUsd={(stars, additionalUsd) => fmtMoney(starsToMoneyRate(stars, currency, rate, scopeRate) + usdToMoneyRate(additionalUsd, currency, rate), currency)}
     onPeriod={value => { setCustomRange(null); setPeriod(value); }}
     onRange={setCustomRange} onRefresh={refreshNow} onDetails={() => setShowDetailed(true)} />;
 

@@ -12,6 +12,7 @@ import type { FullData } from "@/components/RevenueDashboard";
 import type { Period } from "@/lib/dashboard-data";
 import { REPORT_TZ, reportTzLabel } from "@/lib/report-time";
 import styles from "./SharedOverview.module.css";
+import CombinedNetRevenue from "./CombinedNetRevenue";
 
 export type SharedOverviewCreator = {
   id: string; name: string; color?: string; photoUrl?: string | null;
@@ -21,6 +22,7 @@ export type SharedOverviewConfig = {
   creators: SharedOverviewCreator[];
   creatorsHref: string;
   chatHref?: string;
+  combinedRevenue?: boolean;
   brand?: "twin" | "moxy" | "flirt";
   creatorOverviewPath?: string;
   onSelectCreator?: (id: string | null) => Promise<void>;
@@ -30,6 +32,7 @@ type Props = SharedOverviewConfig & {
   cloneId?: string | null; data: FullData | null; loading: boolean; error: string | null;
   period: Period; range: Range | null; currency: string;
   money: (stars: number, cloneId?: string | null) => string;
+  moneyWithUsd?: (stars: number, usd: number) => string;
   onPeriod: (period: Period) => void; onRange: (range: Range) => void;
   onRefresh: () => void; onDetails: () => void;
 };
@@ -48,7 +51,7 @@ function Portrait({ creator }: { creator: SharedOverviewCreator }) {
 
 /** Shared presentation only. RevenueDashboard retains each deployment's reader,
  * revenue projection, currency rates, refresh lifecycle and report state. */
-export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, onSelectCreator, cloneId, data, loading, error, period, range, currency, money, onPeriod, onRange, onRefresh, onDetails }: Props) {
+export default function SharedOverview({ creators, creatorsHref, chatHref, brand: configuredBrand, creatorOverviewPath, onSelectCreator, combinedRevenue, cloneId, data, loading, error, period, range, currency, money, moneyWithUsd, onPeriod, onRange, onRefresh, onDetails }: Props) {
   const router = useRouter();
   const { isAgency, agencyName } = useDashboardAccess();
   const brand = configuredBrand ?? (agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin");
@@ -93,6 +96,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
       else throw new Error("Creator selection is unavailable. Please refresh and try again.");
       startNavigation(() => {
         if (creatorOverviewPath) router.push(id ? `${creatorOverviewPath}?clone=${encodeURIComponent(id)}` : creatorOverviewPath);
+        else if (isAgency && combinedRevenue && id) router.push("/revenue?workspace=telegram");
         router.refresh();
       });
     } catch (e) { setSwitchError(e instanceof Error ? e.message : "Could not open this creator."); }
@@ -120,7 +124,7 @@ export default function SharedOverview({ creators, creatorsHref, chatHref, brand
     {error && <div className={styles.error} role="alert"><span>Earnings could not be refreshed.{data ? " Showing the last successfully loaded figures." : " Please try again."}</span><button type="button" onClick={onRefresh} disabled={loading}>Retry</button></div>}
     <div className={styles.reporting}><div><h2>Earnings overview</h2><p>{currency} · {reportTzLabel()}{data?.stale ? " · Updating figures" : ""}</p></div><div className={styles.reportingActions}><label className={styles.period}><CalendarDays size={17} /><select aria-label="Reporting period" value={range ? "CUSTOM" : period} onChange={event => event.target.value === "CUSTOM" ? openDates() : onPeriod(event.target.value as Period)}>{periods.map(([key, label]) => <option key={key} value={key}>{label}</option>)}<option value="CUSTOM">Custom dates</option></select></label><button className={styles.refresh} type="button" onClick={onRefresh} disabled={loading} aria-label="Refresh earnings"><RefreshCw size={17} /><span>{loading ? "Refreshing…" : "Refresh"}</span></button></div></div>
     {range && <button type="button" className={styles.rangeLabel} onClick={openDates}>{reportingWindow}<CalendarDays size={14} /></button>}
-    <section className={styles.metrics} aria-label="Earnings summary">{metrics.map(([label, value, meta, isMoney]) => <article key={label} className={styles.metric} data-overview-metric={label}><h3>{label}</h3><strong className={isMoney ? "money-value" : undefined}>{value}</strong><small>{meta}</small></article>)}</section>
+    <section className={styles.metrics} aria-label="Earnings summary">{combinedRevenue && !cloneId && moneyWithUsd ? <CombinedNetRevenue className={styles.metric} telegramStars={stats?.stars ?? null} reportWindow={data?.reportWindow} snapshotAt={data?.cachedAt} money={money} moneyWithUsd={moneyWithUsd} /> : null}{metrics.filter(([label]) => !(combinedRevenue && !cloneId && moneyWithUsd && label === "Net revenue")).map(([label, value, meta, isMoney]) => <article key={label} className={styles.metric} data-overview-metric={label}><h3>{label}</h3><strong className={isMoney ? "money-value" : undefined}>{value}</strong><small>{combinedRevenue && !cloneId ? "Telegram · " : ""}{meta}</small></article>)}</section>
     <div className={styles.mainGrid}>
       <section className={styles.panel} aria-label="Revenue performance"><header className={styles.panelHeading}><div><h2>Revenue performance</h2><p>{selected?.name ?? "All creators"} · {reportingWindow}</p></div></header>
         <div className={styles.chartToolbar}><div className={styles.legend}><span />Telegram<strong className="money-value">{stats ? money(stats.stars) : loadingValue}</strong></div><div className={styles.chartOptions}>{!cloneId && chartCreators.length > 1 && <button type="button" aria-pressed={byCreator} onClick={() => setByCreator(value => !value)}>By creator</button>}<div role="group" aria-label="Chart type">{(["line", "bar"] as const).map(value => <button type="button" key={value} aria-pressed={chartType === value} onClick={() => setChartType(value)}>{value === "line" ? "Line" : "Bar"}</button>)}</div></div></div>
