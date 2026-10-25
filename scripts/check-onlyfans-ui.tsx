@@ -9,7 +9,14 @@ import { agencyOnlyFansRequest } from "../lib/onlyfans/agency-scope";
 import { ONLYFANS_CHANNEL } from "../lib/channel-nav";
 import type { SalesRead } from "../lib/onlyfans/workspace";
 
+import { onlyFansMessageText } from "../lib/onlyfans/message-display";
 async function main() {
+  assert.equal(onlyFansMessageText("<p>Hello &amp; welcome</p><p>Line two<br>Last line &#128075;</p>"), "Hello & welcome\nLine two\nLast line \u{1f44b}");
+  assert.equal(onlyFansMessageText("I <3 you & 2 < 3"), "I <3 you & 2 < 3");
+  assert.equal(onlyFansMessageText("<p>hello<script>alert(1)</script><strong> friend</strong></p>"), "hello friend");
+  assert.equal(onlyFansMessageText("<p>&lt;img src=x onerror=alert(1)&gt;</p>"), "<img src=x onerror=alert(1)>");
+  assert.equal(onlyFansMessageText("<p>&#xD800; &#999999999; &unknown;</p>"), "&#xD800; &#999999999; &unknown;");
+
   // Match Next's automatic JSX/CSS-module boundary in this offline renderer.
   (globalThis as unknown as { React: typeof React }).React = React;
   const requireNative = createRequire(import.meta.url);

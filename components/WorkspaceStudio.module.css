@@ -176,13 +176,13 @@
 }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-brand-row),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-brand-row) {
-  min-height: 104px; padding: 24px 26px;
+  min-height: 92px; padding: 22px 26px;
 }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark) { color: #24445f !important; }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark strong),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark strong) {
-  font-family: var(--font-sans), Inter, sans-serif; font-size: 38px; font-weight: 700; letter-spacing: -.065em;
+  font-family: var(--font-sans), Inter, sans-serif; font-size: 32px; font-weight: 700; letter-spacing: -.065em;
 }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark > span),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark > span) {
@@ -194,11 +194,11 @@
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-sidebar-nav > h2) { display: none; }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.dashboard-sidebar nav .workspace-nav-row),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(nav .workspace-nav-row) {
-  min-height: 52px; padding: 13px 16px; border-radius: 12px; gap: 16px;
-  font-size: 16px; line-height: 24px; font-weight: 500; color: #49637e !important;
+  min-height: 44px; padding: 10px 14px; border-radius: 10px; gap: 12px;
+  font-size: 14px; line-height: 24px; font-weight: 500; color: #49637e !important;
 }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.workspace-nav-row > svg),
-.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.workspace-nav-row > svg) { width: 22px; height: 22px; stroke-width: 1.8; }
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.workspace-nav-row > svg) { width: 20px; height: 20px; stroke-width: 1.8; }
 .workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.dashboard-sidebar nav [aria-current="page"]),
 .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(nav [aria-current="page"]) {
   background: #dcefff; color: #087bbb !important; font-weight: 600;

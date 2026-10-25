@@ -226,7 +226,7 @@
 /* Render fidelity: keep the reference scale above the shared compact shell. */
 .platform.platform.platform.platform :global(.studio-wordmark > span) { font-size: 11px; letter-spacing: .32em; line-height: 1.4; padding-left: 2px; }
 .platform.platform.platform.platform :global(.studio-wordmark strong) { font-family: var(--font-sans), Inter, sans-serif; font-size: 38px; letter-spacing: -.065em; }
-.platform.platform.platform.platform :global(.dashboard-sidebar nav .workspace-nav-row) { min-height: 52px; padding: 13px 16px; font-size: 16px; line-height: 24px; gap: 16px; }
+.platform.platform.platform.platform :global(.dashboard-sidebar nav .workspace-nav-row) { min-height: 44px; padding: 10px 14px; font-size: 14px; line-height: 24px; gap: 12px; }
 .platform.platform.platform.platform :global(.workspace-nav-row > svg) { width: 22px; height: 22px; stroke-width: 1.8; }
 .platform.platform.platform.platform :global(.studio-sidebar-nav) { padding-top: 12px; }
 .platform :global(.of-channel-logo) { width: 30px; height: 30px; flex-shrink: 0; object-fit: contain; }
