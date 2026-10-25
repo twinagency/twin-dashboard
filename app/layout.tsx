@@ -12,6 +12,7 @@ import "./flirt-theme.css";
 import "./studio-workspace.css";
 import "./compact-workspace.css";
 import "./flirt-identity.css";
+import "./channel-navigation.css";
 import WorkspaceMobileNav from "@/components/WorkspaceMobileNav";
 import WorkspaceShell from "@/components/WorkspaceShell";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";

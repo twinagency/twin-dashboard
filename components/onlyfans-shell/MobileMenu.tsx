@@ -116,7 +116,7 @@ export default function MobileMenu({
               // The top bar's channel switch is hidden below sm, so the drawer
               // carries the same control. One switch per breakpoint, always the
               // same component reading the same route.
-              channelSwitch={<ChannelSwitch channels={channels} />}
+              channelSwitch={<ChannelSwitch channels={channels} onNavigate={() => setOpen(false)} />}
               headerAction={
                 <button
                   type="button"
