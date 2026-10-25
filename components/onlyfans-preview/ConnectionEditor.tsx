@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { connectionState, CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
 import { normalizeProxyInput, PROXY_RULE } from "@/lib/onlyfans-connections/proxy";
 import ConnectionSyncStatus from "./ConnectionSyncStatus";
+import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
@@ -16,7 +17,7 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
-export default function ConnectionEditor({ accountId }: { accountId: string }) {
+export default function ConnectionEditor({ accountId,creatorId,creatorName }: { accountId: string;creatorId?:string;creatorName?:string }) {
   const router = useRouter();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [data, setData] = useState<Connection | null>(null), [notice, setNotice] = useState("");
@@ -77,7 +78,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
   }
   async function send(command: ConnectionRequest) {
     if (submitting.current || !validConnectionRequest(command)) return;
-    submitting.current = true; setBusy(true); setNotice("Saving account connection command…");
+    submitting.current = true; setBusy(true); setNotice("Saving account connection command.");
     let message = "Outcome not confirmed. Refresh the recorded status or retry the exact same command.";
     let uncertain = true, sessionLost = false;
     try {
@@ -91,7 +92,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
       if (response.ok && parseConnectionAck(await response.json(), { ...command, accountId })) {
         uncertain = false;
         message = command.action === "save" ? "Credential save recorded. Check the refreshed verification and outgoing state."
-          : command.action === "verify" ? "Verification requested. Refresh for the worker’s recorded result."
+          : command.action === "verify" ? "Verification requested. Refresh for the worker's recorded result."
           : command.action === "pause" ? "Pause recorded. Check the refreshed outgoing state."
           : "Activation recorded. Check the refreshed outgoing state and limits.";
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
@@ -140,6 +141,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
         {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
         <ConnectionSyncStatus connection={data} state={state} />
         <div className="mt-3 flex flex-wrap gap-2">
+          {creatorId && creatorName ? <AdminOnlyFansSignIn creators={[{id:creatorId,name:creatorName}]} accountId={accountId} /> : null}
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry || state === "retrying" || state === "checking" && data.verifiedAt !== null} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
@@ -172,7 +174,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-media type="checkbox" checked={media} onChange={event => setMedia(event.target.checked)} /><span>Allow eligible paid media sends</span></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-automate-new type="checkbox" checked={automateNew} onChange={event => setAutomateNew(event.target.checked)} /><span>Automatically reply to new conversations</span></label>
             <p className="text-xs text-muted">Automatic replies require a saved matching model credential and creator settings. This option applies to new conversations received after activation; existing paused, takeover and no-contact conversations keep their saved state.</p>
-            <p className="text-xs text-muted">Enabling outgoing permits this account’s worker to send messages within these limits. Used allowance is retained.</p>
+            <p className="text-xs text-muted">Enabling outgoing permits this account's worker to send messages within these limits. Used allowance is retained.</p>
             <button type="submit" className={buttonClass} data-of-connection-activate disabled={state !== "connected"}>Enable outgoing messages</button>
           </fieldset>
         </form>
@@ -195,7 +197,7 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   async function register(command: ConnectionRegistration) {
     if (submitting.current || !validConnectionRegistration(command)) return;
-    submitting.current = true; setBusy(true); setNotice("Registering the selected creator’s account…");
+    submitting.current = true; setBusy(true); setNotice("Registering the selected creator's account.");
     try {
       const response = await fetch("/api/onlyfans-connections/accounts", { method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -203,7 +205,7 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
       if ([401, 403].includes(response.status)) { setDenied(true); setRetry(null); setOwner(""); setHandle(""); setNotice("Sign in again before registering an account."); router.refresh(); return; }
       const ack = response.ok ? parseRegistrationAck(await response.json(), command) : null;
       if (ack) {
-        setRetry(null); setNotice("Registration recorded. Check the account’s current connection and outgoing state.");
+        setRetry(null); setNotice("Registration recorded. Check the account's current connection and outgoing state.");
         router.push(`/onlyfans/accounts?creator=${encodeURIComponent(command.creatorId)}&account=${encodeURIComponent(ack.accountId)}`); router.refresh();
       } else if ([400, 404, 409, 413, 503].includes(response.status)) { setRetry(null); setNotice("Registration refused. Check the existing creator and account owner."); }
       else { setRetry(command); setNotice("Registration outcome not confirmed. Retry the same registration."); }
@@ -211,8 +213,8 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
     finally { if (active.current) setBusy(false); submitting.current = false; }
   }
   return <Card className="mb-5 min-w-0 p-4" data-of-register-connection>
-    <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Your next connection.</h2><p className="mt-2 text-sm text-muted">Add OnlyFans to an existing creator profile.</p></div><button type="button" className={buttonClass} aria-expanded={open} onClick={() => setOpen(!open)} disabled={busy || denied}>Add OnlyFans account</button></div>
-    <p className="mt-3 text-xs text-muted">Creators can sign in through Platforms → Connect OnlyFans in their creator account. Use this form for administrator-assisted setup.</p>
+    <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Your next connection.</h2><p className="mt-2 text-sm text-muted">Add OnlyFans to an existing creator profile.</p></div><div className="flex flex-wrap gap-2"><AdminOnlyFansSignIn creators={creators} /><button type="button" className={buttonClass} aria-expanded={open} onClick={() => setOpen(!open)} disabled={busy || denied}>Add OnlyFans account</button></div></div>
+    <p className="mt-3 text-xs text-muted">Choose Sign in to OnlyFans to connect from this admin dashboard. Manual registration and session import remain available below.</p>
     {open ? <div className="mt-4">
       {notice ? <p role="status" className="mb-3 text-sm" data-of-registration-notice>{notice}</p> : null}
       {!creators.length ? <p className="text-sm text-muted">Existing Twin creators could not be loaded. Refresh the dashboard to try again.</p> : null}
