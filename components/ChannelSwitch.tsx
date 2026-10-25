@@ -37,7 +37,7 @@ export default function ChannelSwitch({
       {offered.map((channel) => (
         <Link
           key={channel.channel}
-          href={channel.href}
+          href={channel.channel === "all" && audience === "agency" ? "/revenue" : channel.href}
           aria-current={channel.channel === active ? "page" : undefined}
           title={channel.summary}
           data-channel-option={channel.channel}
