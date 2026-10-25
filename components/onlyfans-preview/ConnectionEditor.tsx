@@ -78,7 +78,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
   }
   async function send(command: ConnectionRequest) {
     if (submitting.current || !validConnectionRequest(command)) return;
-    submitting.current = true; setBusy(true); setNotice("Saving account connection command.");
+    submitting.current = true; setBusy(true); setNotice("Saving account connection command…");
     let message = "Outcome not confirmed. Refresh the recorded status or retry the exact same command.";
     let uncertain = true, sessionLost = false;
     try {
@@ -92,7 +92,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
       if (response.ok && parseConnectionAck(await response.json(), { ...command, accountId })) {
         uncertain = false;
         message = command.action === "save" ? "Credential save recorded. Check the refreshed verification and outgoing state."
-          : command.action === "verify" ? "Verification requested. Refresh for the worker's recorded result."
+          : command.action === "verify" ? "Verification requested. Refresh for the worker’s recorded result."
           : command.action === "pause" ? "Pause recorded. Check the refreshed outgoing state."
           : "Activation recorded. Check the refreshed outgoing state and limits.";
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
@@ -174,7 +174,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-media type="checkbox" checked={media} onChange={event => setMedia(event.target.checked)} /><span>Allow eligible paid media sends</span></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-automate-new type="checkbox" checked={automateNew} onChange={event => setAutomateNew(event.target.checked)} /><span>Automatically reply to new conversations</span></label>
             <p className="text-xs text-muted">Automatic replies require a saved matching model credential and creator settings. This option applies to new conversations received after activation; existing paused, takeover and no-contact conversations keep their saved state.</p>
-            <p className="text-xs text-muted">Enabling outgoing permits this account's worker to send messages within these limits. Used allowance is retained.</p>
+            <p className="text-xs text-muted">Enabling outgoing permits this account’s worker to send messages within these limits. Used allowance is retained.</p>
             <button type="submit" className={buttonClass} data-of-connection-activate disabled={state !== "connected"}>Enable outgoing messages</button>
           </fieldset>
         </form>
@@ -197,7 +197,7 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   async function register(command: ConnectionRegistration) {
     if (submitting.current || !validConnectionRegistration(command)) return;
-    submitting.current = true; setBusy(true); setNotice("Registering the selected creator's account.");
+    submitting.current = true; setBusy(true); setNotice("Registering the selected creator’s account…");
     try {
       const response = await fetch("/api/onlyfans-connections/accounts", { method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -205,7 +205,7 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
       if ([401, 403].includes(response.status)) { setDenied(true); setRetry(null); setOwner(""); setHandle(""); setNotice("Sign in again before registering an account."); router.refresh(); return; }
       const ack = response.ok ? parseRegistrationAck(await response.json(), command) : null;
       if (ack) {
-        setRetry(null); setNotice("Registration recorded. Check the account's current connection and outgoing state.");
+        setRetry(null); setNotice("Registration recorded. Check the account’s current connection and outgoing state.");
         router.push(`/onlyfans/accounts?creator=${encodeURIComponent(command.creatorId)}&account=${encodeURIComponent(ack.accountId)}`); router.refresh();
       } else if ([400, 404, 409, 413, 503].includes(response.status)) { setRetry(null); setNotice("Registration refused. Check the existing creator and account owner."); }
       else { setRetry(command); setNotice("Registration outcome not confirmed. Retry the same registration."); }
