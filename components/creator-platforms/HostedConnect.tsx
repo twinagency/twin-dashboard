@@ -71,8 +71,8 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
       if(!response.ok||!value)throw new SignInRequestError(response.status,body?.error||'Your sign-in status could not be loaded.');
       if(active&&version===generation.current&&input===inputVersion.current&&!commands.current){save(value);setStatusNotice('');if(value.phase==='submitted')await changed.current(value.enrollmentId);}
     }catch(error){if(active&&version===generation.current){setStatusNotice(error instanceof SignInRequestError?error.message:'Your sign-in status could not be loaded.');requestError(error);}}finally{request.dispose();running=false;}};
-    const timer=window.setInterval(()=>void poll(),1500);void poll();return()=>{active=false;controller.abort();clearInterval(timer);};
-  },[attempt?.id,attempt?.phase,disabled,sessionLost,save,requestError]);
+    const timer=window.setInterval(()=>void poll(),slowStage?750:attempt.phase==='opening'||showScreen?300:attempt.phase==='submitted'?500:1500);void poll();return()=>{active=false;controller.abort();clearInterval(timer);};
+  },[attempt?.id,attempt?.phase,disabled,sessionLost,save,requestError,showScreen,slowStage]);
   useEffect(()=>{
     if(!attempt||!['opening','waiting','ready'].includes(attempt.phase))return;
     const timer=window.setTimeout(()=>{if(current.current?.id===attempt.id){generation.current++;pendingInputs.current=[];save({...attempt,phase:'expired',keyboard:null});setShowScreen(false);setNotice('Your sign-in expired. Start again.');}},Math.max(0,Date.parse(attempt.expiresAt)-Date.now()));
