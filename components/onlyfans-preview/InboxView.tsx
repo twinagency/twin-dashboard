@@ -11,6 +11,7 @@ import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Se
 import styles from "./InboxView.module.css";
 import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
 import CreatorPortrait from "./CreatorPortrait";
+import MessageAttachments from "./MessageAttachments";
 import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
@@ -246,6 +247,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                       (endsRun ? (inbound ? "tg-tail-in" : "tg-tail-out") : "")
                     }
                   >
+                    <MessageAttachments accountId={detail.accountId} attachments={message.attachments} />
                     <span className="whitespace-pre-wrap">{onlyFansMessageText(message.body)}</span>
                     <span className="tg-meta">{formatPreviewTime(message.occurredAt)}</span>
                   </div>
