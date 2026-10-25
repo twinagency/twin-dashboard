@@ -30,6 +30,7 @@ export type ConnectionFailure = { ok: false; status: number; outcome: "refused" 
 export const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const exact = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).sort().join(",") === [...keys].sort().join(",");
 const integer = (value: unknown, min = 0, max = Number.MAX_SAFE_INTEGER): value is number => Number.isSafeInteger(value) && (value as number) >= min && (value as number) <= max;
+const interval = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0.1 && value <= 86400;
 const id = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(value);
 const ownerString = (value: unknown): value is string => typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) < BigInt("9223372036854775808");
 const hash = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
@@ -61,7 +62,7 @@ export function validConnectionRequest(value: unknown): value is ConnectionReque
   const p = value.payload;
   if (value.action === "verify" || value.action === "pause") return !Object.keys(p).length;
   if (value.action === "activate") return (exact(p, ["limitUnits", "throttleSeconds", "mediaEnabled"]) || exact(p, ["limitUnits", "throttleSeconds", "mediaEnabled", "automateNewConversations"])) &&
-    integer(p.limitUnits, 1, 10_000) && integer(p.throttleSeconds, 1, 86_400) && typeof p.mediaEnabled === "boolean" &&
+    integer(p.limitUnits, 1, 1_000_000) && interval(p.throttleSeconds) && typeof p.mediaEnabled === "boolean" &&
     (!("automateNewConversations" in p) || typeof p.automateNewConversations === "boolean");
   const sessionOnly = value.action === "session";
   if (!["save", "session"].includes(value.action as string) || !exact(p, sessionOnly ? ["ownerId", "capture", "xHash", "expiresAt"] : ["ownerId", "capture", "xHash", "proxyUrl", "expiresAt", "model"]) || !integer(p.ownerId, 1) ||
@@ -102,7 +103,7 @@ export function parseConnection(value: unknown, accountId: string): Connection |
   const optional = ["sync", "runner", "aiLive", "throttleSeconds"].filter(key => key in c);
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
-    ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||
+    ("throttleSeconds" in c && c.throttleSeconds !== null && !interval(c.throttleSeconds)) ||
     ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
       (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
     c.accountId !== accountId || !id(c.accountId) || !integer(c.revision, 0, 2 ** 31 - 1) ||

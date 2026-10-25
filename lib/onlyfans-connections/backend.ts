@@ -10,6 +10,11 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
   async function post(path: string, body: unknown) {
     try {
       const response = await call(path, { method: "POST", timeoutMs: 15_000, headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      if (response.status === 503) {
+        const body = await response.clone().json().catch(() => null);
+        if (body?.code === "proxy_unavailable") return { ok: false, status: 503, outcome: "refused",
+          error: "No fixed proxy is available for this creator. Ask your administrator to add proxy capacity." } as ConnectionFailure;
+      }
       if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) return { ok: false, status: response.status, outcome: "refused",
         error: response.status === 409 ? "The connection command was refused. Review the refreshed account and entered values." : "The account connection change was refused." } as ConnectionFailure;
       if (response.ok) return { ok: true as const, body: await response.json() as unknown };
@@ -17,8 +22,8 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
     return { ok: false, status: 502, outcome: "unconfirmed", error: "The connection outcome is not confirmed. Refresh or retry the same request." } as ConnectionFailure;
   }
   return {
-    async captureContext(creatorId:string,accountId:string|null) {
-      const result=await post(root+'/capture-context',{creatorId,accountId});
+    async captureContext(creatorId:string,accountId:string|null,assignProxy=false) {
+      const result=await post(root+'/capture-context',{creatorId,accountId,...(assignProxy?{assignProxy:true}:{})});
       if(!result.ok)return result;
       const body=result.body as {ok?:boolean;context?:import('@/lib/onlyfans-sign-in/backend').SignInNetwork};
       const data=body?.ok===true?body.context:null;

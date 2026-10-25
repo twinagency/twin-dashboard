@@ -26,7 +26,7 @@ async function main() {
     assert.equal(validConnectionRequest({ action, payload: { enabled: true }, expectedRevision: 1 }), false);
   }
   assert(validConnectionRequest({ action: "activate", payload: { limitUnits: 10, throttleSeconds: 60, mediaEnabled: false }, expectedRevision: 1 }));
-  for (const changed of [{ limitUnits: 0 }, { limitUnits: 10001 }, { throttleSeconds: 0 }, { throttleSeconds: 86401 }, { mediaEnabled: 1 }])
+  for (const changed of [{ limitUnits: 0 }, { limitUnits: 1000001 }, { throttleSeconds: 0 }, { throttleSeconds: 86401 }, { mediaEnabled: 1 }])
     assert.equal(validConnectionRequest({ action: "activate", payload: { limitUnits: 10, throttleSeconds: 60, mediaEnabled: false, ...changed }, expectedRevision: 1 }), false);
   assert.equal(validConnectionRequest({ ...command, actor: "browser-supplied" }), false);
   const registration = { creatorId: "existing-creator", ownerId: 123, handle: "synthetic-handle" };

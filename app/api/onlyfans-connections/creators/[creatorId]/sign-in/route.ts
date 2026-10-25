@@ -64,14 +64,15 @@ export async function POST(request:NextRequest,context:Context){
     const c=b.connection as {accountId:unknown;proxyUrl:unknown};
     if(!c||typeof c!=='object'||Array.isArray(c)||Object.keys(c).sort().join(',')!=='accountId,proxyUrl'||!(c.accountId===null||typeof c.accountId==='string'&&/^[A-Za-z0-9._:-]{1,64}$/.test(c.accountId))||!(c.proxyUrl===null||typeof c.proxyUrl==='string'))return connectionRefusal(400,'Review the selected account and proxy.');
     if(b.action==='start'&&b.accountId!==c.accountId)return connectionRefusal(400,'The selected account changed. Start again.');
-    const existing=await native.captureContext(creator.id,c.accountId as string|null);
-    if(!existing.ok)return connectionRefusal(existing.status,'The selected account connection could not be prepared.');
+    const existing=await native.captureContext(creator.id,c.accountId as string|null,c.accountId===null&&c.proxyUrl===null);
+    if(!existing.ok)return connectionRefusal(existing.status,existing.error);
     let network:SignInNetwork=existing.data;
-    if(c.accountId===null){
+    if(c.accountId===null&&c.proxyUrl!==null){
       const entry=normalizeProxyInput(c.proxyUrl??'');
       if(!entry.ok||!entry.url||!['http:','https:','socks5:'].includes(new URL(entry.url).protocol))return connectionRefusal(400,'Enter this creator’s fixed HTTP, HTTPS or SOCKS5 proxy before signing in.');
       network={accountId:null,ownerId:null,proxyUrl:entry.url,fingerprint:fingerprint(entry.url)};
-    }else if(c.proxyUrl!==null)return connectionRefusal(400,'Reconnect uses the account’s saved proxy.');
+    }else if(c.accountId!==null&&c.proxyUrl!==null)return connectionRefusal(400,'Reconnect uses the account’s saved proxy.');
+    if(c.accountId===null&&!network.proxyUrl)return connectionRefusal(503,'No fixed proxy is available for this creator. Ask your administrator to add proxy capacity.');
     if(b.action==='start')return connectionAnswer({ok:true,attempt:await backend.start(scope,b.startKey as string,network)});
     const status=await backend.status(scope,id);
     if(status.phase==='submitted'&&status.enrollmentId)return connectionAnswer({ok:true,attempt:status});

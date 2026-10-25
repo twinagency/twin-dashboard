@@ -16,6 +16,7 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
   const [name,setName]=useState(''),[handle,setHandle]=useState(''),[busy,setBusy]=useState(false);
   const [selection,setSelection]=useState<Selection|null>(null),[lost,setLost]=useState(false);
   useEffect(()=>{alive.current=true;return()=>{alive.current=false;generation.current++;};},[]);
+  const [automaticProxy,setAutomaticProxy]=useState(true);
   const entry=normalizeProxyInput(proxy);
   const proxyValid=entry.ok&&!!entry.url&&['http:','https:','socks5:'].includes(new URL(entry.url).protocol);
   const endpoint=selection?`/api/onlyfans-connections/creators/${encodeURIComponent(selection.creatorId)}/sign-in`:'';
@@ -42,7 +43,7 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
   }
   async function start(){
     if(starting.current||lost)return;
-    if(accountId===null&&!proxyValid){setNotice("Enter this creator's fixed HTTP, HTTPS or SOCKS5 proxy first.");return;}
+    if(accountId===null&&!automaticProxy&&!proxyValid){setNotice("Enter this creator's fixed HTTP, HTTPS or SOCKS5 proxy first.");return;}
     const current=generation.current;
     starting.current=true;setBusy(true);setNotice('');
     try{
@@ -59,7 +60,7 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
       }
       if(!creator){setNotice('Select a creator first.');return;}
       if(!alive.current||current!==generation.current)return;
-      setSelection({creatorId:creator.id,creatorName:creator.name,accountId,proxyUrl:accountId===null&&entry.ok?entry.url:null});setProxy('');
+      setSelection({creatorId:creator.id,creatorName:creator.name,accountId,proxyUrl:accountId===null&&!automaticProxy&&entry.ok?entry.url:null});setProxy('');
     }catch{if(alive.current&&current===generation.current)setNotice('Creator setup could not be confirmed. Retry with the same handle.');}
     finally{starting.current=false;if(alive.current)setBusy(false);}
   }
@@ -72,8 +73,8 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
         {!selection?<div className="space-y-4">
           {!accountId?<div className="flex gap-2" role="group" aria-label="Creator setup"><button type="button" className={button} aria-pressed={mode==='new'} disabled={busy||lost} onClick={()=>{setMode('new');setNotice('');}}>Add a creator</button><button type="button" className={button} aria-pressed={mode==='existing'} disabled={busy||lost} onClick={()=>{setMode('existing');setNotice('');}}>Select creator</button></div>:null}
           {mode==='new'&&!accountId?<><label className="block text-sm">Full name<input className={field} autoComplete="off" value={name} maxLength={160} disabled={busy||lost} onChange={event=>setName(event.target.value)}/></label><label className="block text-sm">OnlyFans handle<input className={field} autoComplete="off" placeholder="@username" value={handle} maxLength={81} disabled={busy||lost} onChange={event=>setHandle(event.target.value)}/></label></>:<label className="block text-sm">Creator<select className={field} value={creatorId} onChange={event=>setCreatorId(event.target.value)} disabled={!!accountId||lost||busy}><option value="">Select creator</option>{creators.map(creator=><option key={creator.id} value={creator.id}>{creator.name}</option>)}</select></label>}
-          {accountId?<p className="text-sm text-muted">Sign in to this account through its saved proxy. Its model settings and used allowance are retained.</p>:<><label className="block text-sm">Creator's fixed proxy<input className={field} type="password" autoComplete="off" placeholder="HOST:PORT:USER:PASS" value={proxy} disabled={lost||busy} onChange={event=>setProxy(event.target.value)}/></label><p className="text-xs text-muted">Use this creator's own proxy. The login and ongoing connection use the same network.</p></>}
-          <button type="button" className={button} onClick={start} disabled={busy||lost||!ready||(accountId===null&&!proxyValid)}>{busy?'Preparing sign-in...':'Continue to OnlyFans login'}</button>
+          {accountId?<p className="text-sm text-muted">Sign in to this account through its saved proxy. Its model settings and used allowance are retained.</p>:<><label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={automaticProxy} disabled={lost||busy} onChange={event=>{setAutomaticProxy(event.target.checked);setProxy('');setNotice('');}}/>Assign a fixed proxy automatically</label>{automaticProxy?<p className="text-xs text-muted">A dedicated proxy will be reserved for this creator and reused on reconnect. Messages and media import after verification. AI replies stay off until you enable them.</p>:<><label className="block text-sm">Creator's fixed proxy<input className={field} type="password" autoComplete="off" placeholder="HOST:PORT:USER:PASS" value={proxy} disabled={lost||busy} onChange={event=>setProxy(event.target.value)}/></label><p className="text-xs text-muted">Use this creator's own proxy. The login and ongoing connection use the same network.</p></>}</>}
+          <button type="button" className={button} onClick={start} disabled={busy||lost||!ready||(accountId===null&&!automaticProxy&&!proxyValid)}>{busy?'Preparing sign-in...':'Continue to OnlyFans login'}</button>
         </div>:<><p className="mb-3 text-sm text-muted">Connecting for {selection.creatorName}. Confirm the account shown after signing in.</p><HostedConnect key={selection.creatorId+':'+(selection.accountId??'new')} profileId={selection.creatorId} accountId={selection.accountId} disabled={lost} endpoint={endpoint} connection={connection} sessionMessage="Sign in to your dashboard again." onChanged={changed}/></>}
         {notice?<p role="status" className="mt-4 text-sm">{notice}</p>:null}
       </section>
