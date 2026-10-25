@@ -110,7 +110,7 @@
     "test:onlyfans-ui": "node --import tsx scripts/check-onlyfans-ui.tsx && node --import tsx scripts/check-channel-integration.ts",
     "test:onlyfans-ui-browser": "node preview/onlyfans-ui/build.mjs && node scripts/check-onlyfans-ui-browser.mjs",
     "test:onlyfans-activation": "tsx scripts/check-onlyfans-activation.ts",
-    "test:overview-earnings": "node scripts/check-overview-channel-revenue.cjs"
+    "test:overview-earnings": "node scripts/check-overview-channel-revenue.cjs && node --import tsx scripts/check-onlyfans-full-history.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
