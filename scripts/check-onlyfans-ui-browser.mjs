@@ -107,6 +107,18 @@ try {
         const controlColors=await page.locator("[data-of-action=request_takeover]").evaluate(e=>({background:getComputedStyle(e).backgroundColor,foreground:getComputedStyle(e).color,opacity:getComputedStyle(e).opacity}));
         check(controlColors.background!==controlColors.foreground&&controlColors.background!=="rgba(0, 0, 0, 0)"&&controlColors.opacity==="1",brand+": takeover has visible text and a filled button");
       }
+      const navigation = width >= 1024 ? page.locator(".dashboard-sidebar") : page.getByRole("dialog", {name:"Main navigation"});
+      if (width < 1024) await page.getByRole("button", {name:"Open navigation",exact:true}).first().click();
+      check((await navigation.locator("[data-channel-option]").evaluateAll(items=>items.map(item=>item.getAttribute("data-channel-option")))).join(",")==="all,telegram,onlyfans", brand+": all three channels on desktop and mobile");
+      if (brand === "Moxy") {
+        check(await navigation.locator('[data-channel-option="telegram"]').getAttribute("href")==="/clones?workspace=telegram", "Moxy Telegram stays on the agency-scoped creator route");
+        check(await navigation.locator('[data-channel-option="all"]').getAttribute("href")==="/revenue", "Moxy All channels stays on agency earnings");
+        if (width < 1024) {
+          check(await page.locator('.dashboard-mobile-header img[alt^="Moxy"]').getAttribute("src")==="/moxy/moxy-ai-dark.svg", "Moxy mobile bar uses the black wordmark");
+          check(await page.locator('.dashboard-mobile-header button').first().evaluate(e=>getComputedStyle(e).color)==="rgb(17, 17, 17)", "Moxy mobile controls use black text");
+        }
+      }
+      if (width < 1024) await navigation.getByRole("button", {name:"Close navigation",exact:true}).click();
       const size=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       check(size.scroll<=size.width+1,brand+": no horizontal overflow at "+width);
       await page.screenshot({path:path.join(shots,brand.toLowerCase()+"-inbox-"+width+".png")});

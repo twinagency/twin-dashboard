@@ -13,9 +13,9 @@ import MobileMenu from '@/components/MobileMenu';
 import TwinWordmark from '@/components/TwinWordmark';
 import {PREVIEW_CLONES} from '@/lib/onlyfans-preview/workspace';
 import {UiFixturePage,configurationFixture,vaultFixture} from '../onlyfans-integration/ui-fixtures';
-const channels=['all','telegram','onlyfans'] as const;
 const brand=new URLSearchParams(location.search).get('brand');
 const agencyName=brand==='Moxy'?'Moxy':undefined;
+const channels: ('all'|'telegram'|'onlyfans')[]=agencyName?['all','onlyfans']:['all','telegram','onlyfans'];
 if(agencyName)document.documentElement.dataset.agency='moxy';
 // Component review only. Every API is local synthetic data or an explicit refusal.
 window.fetch=async(input,init)=>{

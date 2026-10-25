@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "@/components/NavigationLink";
+import { isMoxy } from "@/lib/agency-brand";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -19,13 +20,17 @@ export default function ChannelSwitch({
   channels?: DashboardChannel[];
 }) {
   const pathname = usePathname();
-  const { audience } = useDashboardAccess();
+  const { audience, agencyName } = useDashboardAccess();
   const searchParams = useSearchParams();
-  const active = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
   const allowed = channels ?? ["all"];
-  const offered = offeredChannels(allowed);
+  // Moxy's Telegram tools already use agency-scoped routes. Link to those,
+  // without granting access to the operator-only /telegram roster.
+  const moxyTelegram = audience === "agency" && isMoxy(agencyName) && !!channels?.includes("all");
+  const visibleChannels: DashboardChannel[] = moxyTelegram ? [...allowed, "telegram"] : allowed;
+  const active = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin" || moxyTelegram);
+  const offered = offeredChannels(visibleChannels);
 
-  if (!shouldShowChannelSwitch(allowed)) return null;
+  if (!shouldShowChannelSwitch(visibleChannels)) return null;
 
   return (
     <div
@@ -37,7 +42,7 @@ export default function ChannelSwitch({
       {offered.map((channel) => (
         <Link
           key={channel.channel}
-          href={channel.channel === "all" && audience === "agency" ? "/revenue" : channel.href}
+          href={channel.channel === "all" && audience === "agency" ? "/revenue" : channel.channel === "telegram" && moxyTelegram ? "/clones?workspace=telegram" : channel.href}
           aria-current={channel.channel === active ? "page" : undefined}
           title={channel.summary}
           data-channel-option={channel.channel}
