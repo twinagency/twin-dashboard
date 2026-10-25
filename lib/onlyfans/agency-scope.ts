@@ -34,10 +34,11 @@ export function agencyScopedFetch(grant: AgencyGrant, options: { baseUrl: string
   };
 }
 
-/** Explicit route list: connections, operator diagnostics and combined earnings
- * remain under their original owners. Future routes default to unavailable. */
+/** Explicit route list: the overview earnings read uses the same creator scope.
+ * Connections and operator diagnostics keep their existing owners. */
 export function agencyOnlyFansRequest(path: string, method: string, serverAction: boolean, canManage: boolean): boolean {
   if (serverAction) return false;
+  if (path === "/api/onlyfans/earnings" && ["GET", "HEAD"].includes(method)) return true;
   // Connection browser access is limited to managers; each route independently
   // rechecks the current membership and selected creator before using its service credential.
   if (canManage && method === "POST" && path === "/api/onlyfans-connections/creators") return true;

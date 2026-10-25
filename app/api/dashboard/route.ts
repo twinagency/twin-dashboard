@@ -72,7 +72,7 @@ async function read(req: NextRequest) {
       }
       cutMeta = { perCloneCuts };
     }
-    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, analyticsError, balance: outBalance, cachedAt, ageSeconds, stale, ...(cutMeta ?? {}) };
+    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, analyticsError, balance: outBalance, cachedAt, ageSeconds, stale, reportWindow: rollup.reportWindow, ...(cutMeta ?? {}) };
     // Finding A: costUsd/profitUsd/margin are OUR figures, not the agency's or
     // creator's, and unscaled they still carry gross revenue (profit + cost =
     // gross), which would let a non-admin viewer back out the exact cut

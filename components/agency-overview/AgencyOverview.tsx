@@ -6,7 +6,7 @@ import RevenueDashboard from "@/components/RevenueDashboard";
 import type { OverviewCreator } from "@/lib/agency-overview";
 
 /** Renew private portraits while the shared report retains financial state. */
-export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: string | null; initialCreators: OverviewCreator[] }) {
+export default function AgencyOverview({ cloneId, initialCreators, combinedRevenue = false }: { cloneId: string | null; initialCreators: OverviewCreator[]; combinedRevenue?: boolean }) {
   const [creators, setCreators] = useState(initialCreators);
   useEffect(() => setCreators(initialCreators), [initialCreators]);
   useEffect(() => {
@@ -22,5 +22,5 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
     }, 300000);
     return () => { clearInterval(interval); controller.abort(); };
   }, []);
-  return <RevenueDashboard cloneId={cloneId} sharedOverview={{ component: SharedOverview, creators, creatorsHref: "/clones", chatHref: "/users" }} />;
+  return <RevenueDashboard cloneId={cloneId} sharedOverview={{ component: SharedOverview, creators, creatorsHref: "/clones", chatHref: "/users", combinedRevenue }} />;
 }

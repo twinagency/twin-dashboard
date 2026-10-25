@@ -2,7 +2,7 @@ import RevenueDashboard from "@/components/RevenueDashboard";
 import RevenueTooltipFix from "@/components/RevenueTooltipFix";
 import { getCloneScope } from "@/lib/clone-scope";
 import { getDashboardAccess } from "@/lib/dashboard-access";
-import { usesAgencyOverview } from "@/lib/agency-brand";
+import { usesAgencyOverview, isMoxy } from "@/lib/agency-brand";
 import { getAgencyOverview } from "@/lib/agency-overview";
 import AgencyOverview from "@/components/agency-overview/AgencyOverview";
 import { redirect } from "next/navigation";
@@ -25,7 +25,11 @@ export default async function RevenuePage({ searchParams }: { searchParams?: Pro
       <RevenueDashboard cloneId={cloneId} />
     </div>;
   }
-  if (access && usesAgencyOverview(access.name)) return <AgencyOverview key={cloneId ?? 'agency'} cloneId={cloneId} initialCreators={await getAgencyOverview()} />;
+  if (access && usesAgencyOverview(access.name)) {
+    const combinedRevenue = isMoxy(access.name) && (await searchParams)?.workspace !== "telegram";
+    const overviewCloneId = combinedRevenue ? null : cloneId;
+    return <AgencyOverview key={overviewCloneId ?? 'agency'} cloneId={overviewCloneId} combinedRevenue={combinedRevenue} initialCreators={await getAgencyOverview()} />;
+  }
   return (
     <>
       <RevenueTooltipFix />

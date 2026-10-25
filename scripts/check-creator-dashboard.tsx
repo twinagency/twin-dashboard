@@ -171,7 +171,7 @@ async function main() {
     "@/lib/dashboard-access": { getDashboardAccess: async () => reportingAccess },
     "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
     "@/components/CombinedEarnings": { __esModule: true, default: () => null },
-    "@/lib/agency-brand": { usesAgencyOverview: (name: string) => ["Moxy", "Top Onlyfans Agency"].includes(name) },
+    "@/lib/agency-brand": { isMoxy: (name: string) => name === "Moxy", usesAgencyOverview: (name: string) => ["Moxy", "Top Onlyfans Agency"].includes(name) },
     "@/lib/agency-overview": { getAgencyOverview: async () => [] },
     "@/components/agency-overview/AgencyOverview": { __esModule: true, default: () => null },
     "@/components/RevenueDashboard": { __esModule: true, default: () => null },
