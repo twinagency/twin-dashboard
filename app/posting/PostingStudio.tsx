@@ -11,6 +11,9 @@ type Clone = { id: string; slug: string; name: string };
 type Kind = "photo" | "video" | "upload";
 type BtnRow = { text: string; url: string };
 
+const TSOCIAL_OPEN = "https://t.me/TSocialAppBot?startapp";
+const TSOCIAL_CAPTION = "new on my T-Social 💕\nmy clips, my threads, and me. tap below to open it 👇";
+
 const PERIODS = [
   { v: "6", l: "6 hours" },
   { v: "12", l: "12 hours" },
@@ -202,6 +205,16 @@ function Composer({
   }, [files]);
 
   const mediaCount = kind === "upload" ? files.length : picked ? 1 : 0;
+  const profileLink = `https://t.me/TSocialAppBot?startapp=c_${clone.slug}`;
+
+  // One tap: caption, channel text, "Open T-Social" button and her profile as
+  // the story link. Whatever picture is picked stays as is.
+  function applyTsocialTemplate() {
+    setCaption(TSOCIAL_CAPTION);
+    setChannelText(TSOCIAL_CAPTION);
+    setLinkUrl(profileLink);
+    setButtons([{ text: "Open T-Social 💕", url: TSOCIAL_OPEN }]);
+  }
 
   async function send(dryRun: boolean) {
     setError(null);
@@ -361,6 +374,10 @@ function Composer({
           )}
         </div>
 
+        <Button size="sm" variant="outline" className="self-start" onClick={applyTsocialTemplate}>
+          T-Social promo template
+        </Button>
+
         <textarea
           className={inputCls + " min-h-20"}
           placeholder="Caption"
@@ -379,6 +396,19 @@ function Composer({
               ))}
             </select>
             <input className={inputCls} placeholder="Tap link (optional), https://t.me/..." value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
+            <div className="flex flex-wrap gap-1">
+              <Button size="xs" variant="outline" onClick={() => setLinkUrl(profileLink)}>
+                Link to her T-Social profile
+              </Button>
+              <Button size="xs" variant="outline" onClick={() => setLinkUrl(TSOCIAL_OPEN)}>
+                Link to open T-Social
+              </Button>
+              {linkUrl && (
+                <Button size="xs" variant="outline" onClick={() => setLinkUrl("")}>
+                  Clear
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -411,9 +441,17 @@ function Composer({
               </div>
             ))}
             {buttons.length < 8 && (
-              <Button size="sm" variant="outline" className="self-start" onClick={() => setButtons([...buttons, { text: "", url: "" }])}>
-                + Button
-              </Button>
+              <div className="flex flex-wrap gap-1">
+                <Button size="sm" variant="outline" onClick={() => setButtons([...buttons, { text: "", url: "" }])}>
+                  + Button
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setButtons([...buttons, { text: "Open T-Social 💕", url: TSOCIAL_OPEN }])}>
+                  + Open T-Social
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => setButtons([...buttons, { text: "See my T-Social 💕", url: profileLink }])}>
+                  + Her T-Social profile
+                </Button>
+              </div>
             )}
             <input
               className={inputCls}
