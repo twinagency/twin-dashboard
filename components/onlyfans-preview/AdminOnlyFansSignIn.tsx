@@ -42,7 +42,7 @@ export default function AdminOnlyFansSignIn({creators,accountId=null}:{creators:
     setNotice('');setSelection({creatorId:creator.id,creatorName:creator.name,accountId,proxyUrl:accountId===null&&entry.ok?entry.url:null});setProxy('');
   }
   return <>
-    <button type="button" className={button} disabled={!creators.length} onClick={event=>{event.stopPropagation();setOpen(true);setNotice('');}}>{accountId?'Reconnect OnlyFans':'Sign in to OnlyFans'}</button>
+    <button type="button" className={button} disabled={!creators.length} onClick={event=>{event.stopPropagation();setOpen(true);setNotice('');}}>{accountId?'Reconnect OnlyFans':'Add OnlyFans account'}</button>
     {open?<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4" onClick={event=>event.stopPropagation()}>
       <section role="dialog" aria-modal="true" aria-label="Admin OnlyFans connection" className="max-h-[90dvh] w-full max-w-lg overflow-y-auto rounded-2xl border border-line bg-card p-5 text-ink shadow-xl">
         <div className="mb-5 flex items-center justify-between gap-3"><h2 className="text-lg font-semibold">{accountId?'Reconnect OnlyFans':'Add OnlyFans account'}</h2><button type="button" className={button} onClick={()=>{setOpen(false);setSelection(null);setProxy('');}} aria-label="Close account sign-in">Close</button></div>

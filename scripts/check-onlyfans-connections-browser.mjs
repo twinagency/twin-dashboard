@@ -10,7 +10,7 @@ export async function checkConnections(page, context, origin) {
   const captureFile = { name: "synthetic-session.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(capture)) };
   await page.goto(origin + "/onlyfans/accounts", { waitUntil: "networkidle" });
   const registration = page.locator("[data-of-register-connection]");
-  await registration.getByRole("button", { name: "Add OnlyFans account", exact: true }).click();
+  await registration.getByRole("button", { name: "Manual session setup", exact: true }).click();
   const option = await registration.locator("[data-of-register-creator] option:not([disabled])").first().getAttribute("value");
   assert(option, "fixture must expose a real synthetic Twin creator through the identity owner");
   await registration.locator("[data-of-register-creator]").selectOption(option);
