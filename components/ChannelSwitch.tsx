@@ -10,33 +10,12 @@ import {
   type DashboardChannel,
 } from "@/lib/channel-nav";
 
-// The top-level channel switch: All channels / Telegram / OnlyFans.
-//
-// One Twin CRM with three transports, so this is a scope selector inside the
-// product, not a switcher between products. It is route-driven — each channel
-// has a real, bookmarkable path — so the control and the URL can never
-// disagree, and the sidebar, the breadcrumb and the page all derive the channel
-// from the same place (`lib/channel-nav.ts`).
-//
-// Styling is the dashboard's own segmented control (`CurrencyToggle`'s
-// non-compact variant): `gap-1 rounded-lg bg-muted/10 p-1`, active
-// `bg-muted/15 text-ink shadow-sm`. No new visual language.
-
+// Every authorized workspace stays visible, with one route-driven active state.
 export default function ChannelSwitch({
   className = "",
   channels,
 }: {
   className?: string;
-  /**
-   * Which channels to offer, from the server's channel scope
-   * (`lib/channel-scope.ts`).
-   *
-   * The default is "no channel switch": a caller that has not been told which
-   * channels this session may open gets exactly the bar this feature found, so
-   * forgetting the prop cannot hand a channel workspace to a surface that
-   * should not have one. The dashboard and the isolated preview both pass an
-   * explicit list.
-   */
   channels?: DashboardChannel[];
 }) {
   const pathname = usePathname();
@@ -46,41 +25,37 @@ export default function ChannelSwitch({
   const allowed = channels ?? ["all"];
   const offered = offeredChannels(allowed);
 
-  // A switch with nothing to switch to is a control that does nothing. Below two
-  // options the bar renders exactly as it did before this feature existed, which
-  // is what a session with no channel workspace should see.
   if (!shouldShowChannelSwitch(allowed)) return null;
-
-  if (active === "onlyfans") return <details className="of-channel-menu" data-channel-switch={active}>
-    <summary><img className="of-channel-logo" src="/brand/platforms/onlyfans.svg" width="30" height="30" alt="" /><span>OnlyFans<small>Workspace</small></span><svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg></summary>
-    <div role="group" aria-label="Channel workspace">{offered.map(channel => <Link key={channel.channel} href={channel.href} aria-current={channel.channel === active ? "page" : undefined} title={channel.summary}>{channel.label}</Link>)}</div>
-  </details>;
 
   return (
     <div
       role="group"
       aria-label="Channel workspace"
       data-channel-switch={active}
-      className={"inline-flex gap-1 rounded-lg bg-muted/10 p-1 text-xs " + className}
+      className={"workspace-channel-list " + className}
     >
-      {offered.map((channel) => {
-        const selected = channel.channel === active;
-        return (
-          <Link
-            key={channel.channel}
-            href={channel.href}
-            aria-current={selected ? "page" : undefined}
-            aria-pressed={selected}
-            title={channel.summary}
-            className={
-              "whitespace-nowrap rounded-md px-3 py-1 font-semibold transition " +
-              (selected ? "bg-muted/15 text-ink shadow-sm" : "text-muted hover:text-ink")
-            }
-          >
-            {channel.label}
-          </Link>
-        );
-      })}
+      {offered.map((channel) => (
+        <Link
+          key={channel.channel}
+          href={channel.href}
+          aria-current={channel.channel === active ? "page" : undefined}
+          title={channel.summary}
+          data-channel-option={channel.channel}
+          className="workspace-channel-option"
+        >
+          {channel.channel === "all" ? (
+            <svg className="workspace-channel-logo" aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="2" />
+              <rect x="14" y="3" width="7" height="7" rx="2" />
+              <rect x="3" y="14" width="7" height="7" rx="2" />
+              <rect x="14" y="14" width="7" height="7" rx="2" />
+            </svg>
+          ) : (
+            <img className="workspace-channel-logo" src={"/brand/platforms/" + channel.channel + ".svg"} width="28" height="28" alt="" />
+          )}
+          <span>{channel.label}</span>
+        </Link>
+      ))}
     </div>
   );
 }
