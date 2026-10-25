@@ -106,7 +106,7 @@ function ConversationList({
     (filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
   return (
     <div className="of-list-content">
-    <div className="of-list-heading"><h1>Inbox</h1></div>
+    <div className="of-list-heading"><h2>Conversations</h2></div>
     <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search loaded conversations</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search conversations" /></label>
     <div className="of-filters" aria-label="Filter loaded conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Needs reply"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
     {(query || filter !== "all") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
@@ -641,15 +641,14 @@ export default function InboxView({
 
   return (
     <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
-      <aside className="of-creator-rail" aria-label="Creator accounts">          <RequestStateBlock
-            showStaleWarning={false}
-            state={accountsState}
-            label="account scope"
-            render={(list) => (
-              <AccountChips accounts={list} activeAccountId={activeAccountId} onSelectAccount={onSelectAccount} />
-            )}
-          />
-<a href="/onlyfans/accounts" className="of-add-account" aria-label="Add or manage creator accounts">+</a><a href="/onlyfans/settings" className="of-rail-settings" aria-label="OnlyFans settings"><Sparkles size={18}/></a></aside>
+      <header className="of-inbox-heading">
+        <h1>OnlyFans inbox</h1>
+        <div className="of-account-switcher">
+          <RequestStateBlock showStaleWarning={false} state={accountsState} label="account scope"
+            render={(list) => <AccountChips accounts={list} activeAccountId={activeAccountId} onSelectAccount={onSelectAccount} />} />
+          <a href="/onlyfans/accounts" className="of-manage-accounts">Manage accounts <ArrowUpRight size={14} aria-hidden="true" /></a>
+        </div>
+      </header>
       {[accountsState.status, conversations.status, detailState?.status].includes("stale") ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span><strong>Sync needs attention.</strong> Newer activity may be missing.</span><a href="/onlyfans/accounts">Check connection <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
       {!viewer.canManage ? (
         <div
@@ -662,11 +661,11 @@ export default function InboxView({
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
 
-      <nav aria-label="Inbox panels" className="mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
+      <nav aria-label="Inbox panels" className="of-panel-switch mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
         {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Fan info"] ] as const).map(([key, label]) =>
           <button key={key} type="button" data-of-mobile-panel={key} aria-pressed={mobilePanel === key}
             onClick={() => setMobilePanel(key)} disabled={key !== "conversations" && !selectedConversationId}
-            className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-ink text-white" : "text-muted"}`}>{label}</button>)}
+            className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-accent/10 text-accent-deep" : "text-muted"}`}>{label}</button>)}
       </nav>
       <div className="of-layout" data-of-inbox-layout>
         <Card size="sm" className={`users-panel users-panel-list h-[min(34rem,65dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "conversations" ? "flex" : "hidden lg:flex"}`}>
@@ -689,7 +688,7 @@ export default function InboxView({
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5">
+              <div className="of-chat-header flex items-center gap-2.5 border-b border-line px-3.5 py-2.5">
                 <FanAvatar
                   cloneId=""
                   telegramId={null}

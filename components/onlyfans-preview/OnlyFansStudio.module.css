@@ -381,24 +381,17 @@
 .platform :global(.of-tab-workspace[data-active="replies"] .of-identity-card .of-portrait-large) { width: 58px; height: 64px; margin: 0; font-size: 22px; }
 .platform :global(.of-tab-workspace[data-active="replies"] .of-identity-card h2), .platform :global(.of-tab-workspace[data-active="replies"] .of-identity-card p), .platform :global(.of-tab-workspace[data-active="replies"] .of-identity-card .of-platform-tag) { margin: 0; }
 
-/* The inbox uses its approved compact workspace; other OnlyFans pages retain their navigation. */
-.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-sidebar),
-.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-mobile-header),
-.platform.platform.platform[data-of-inbox-shell] :global(.of-mobile-nav) { display:none; }
-.platform.platform.platform[data-of-inbox-shell] :global(.studio-workspace-main:not(.studio-workspace-edge)) { padding:0; overflow:hidden; scrollbar-gutter:auto; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-topbar) { display:flex; flex-shrink:0; height:56px; min-height:56px; padding:0 14px 0 0; gap:16px; background:#fff; z-index:45; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-wordmark) { display:grid; place-items:center; align-self:stretch; flex-shrink:0; width:56px; color:#079cf4; border-right:1px solid #e8edf3; font:bold italic 28px Arial,sans-serif; letter-spacing:-4px; padding-right:4px; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator) { display:flex; align-items:center; position:relative; min-width:0; padding-bottom:9px; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator > button), .platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator > div) { border:0; padding:0; gap:10px; background:transparent; box-shadow:none; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator .creator-avatar) { width:34px; height:34px; margin-top:8px; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator > small) { position:absolute; left:44px; bottom:0; max-width:140px; font-size:10px; color:#79869a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-platform) { display:flex; align-items:center; gap:7px; border-left:1px solid #e8edf3; padding-left:16px; color:#079cf4; font-size:11px; font-weight:600; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-header-tools) { margin-left:auto; display:flex; align-items:center; gap:10px; flex-shrink:0; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-header-tools button) { display:grid; place-items:center; padding:5px; background:transparent; color:#7890a5; border:0; width:32px; height:32px; min-height:32px; box-shadow:none; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation) { position:relative; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation > summary) { list-style:none; display:grid; place-items:center; width:32px; min-height:32px; border-radius:8px; color:#7890a5; cursor:pointer; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation > summary::-webkit-details-marker) { display:none; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation > nav) { position:absolute; right:0; top:38px; width:220px; max-height:75dvh; overflow:auto; display:flex; flex-direction:column; gap:3px; padding:8px; border:1px solid #e0e8f1; border-radius:12px; background:white; box-shadow:0 12px 35px #14263d1a; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation nav > a) { padding:10px 12px; border-radius:7px; font-size:12px; color:#486179; }
-.platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-navigation nav > a:hover) { background:#edf8ff; }
-@media(max-width:600px) { .platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-platform) { display:none; } .platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-header-tools) { gap:2px; } .platform.platform.platform[data-of-inbox-shell] :global(.of-inbox-active-creator .creator-name) { max-width:130px; } }
+/* The inbox shares the Telegram dashboard frame, including its visible navigation. */
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.studio-workspace-main) { padding:0; overflow:hidden; scrollbar-gutter:auto; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { min-height:72px; height:72px; padding:12px 32px; gap:12px; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar > div:first-child) { display:flex; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:initial; width:auto; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls > button:first-child) { min-width:0; padding:6px 8px; font-size:13px; border:0; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { font-size:12px; gap:7px; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.of-currency-label) { margin-left:0; padding:6px 8px; font-size:11px; }
+@media(max-width:1023px) {
+ .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { height:72px; min-height:72px; padding:8px 12px; }
+ .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar > div:first-child) { display:none; }
+ .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:1; flex-wrap:wrap; justify-content:center; gap:5px; }
+ .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { display:none; }
+}

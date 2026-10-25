@@ -1,6 +1,5 @@
 "use client";
 import Link from "next/link";
-import { MoreHorizontal } from "lucide-react";
 import { useInboxIdentity } from "./onlyfans-preview/InboxIdentity";
 import { useEffect, useState } from "react";
 import { mergeChannelCreators, type ChannelRoster } from "@/lib/channel-workspace/model";
@@ -109,25 +108,6 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
-  if (pathname === "/onlyfans/inbox" && !isCreator) {
-    return <header className="dashboard-topbar of-inbox-topbar">
-      <Link href="/onlyfans/overview" className="of-inbox-wordmark" aria-label="OnlyFans overview">{isAgency && agencyName?.trim().toLowerCase() === "moxy" ? <img src="/moxy/icon.svg" alt="Moxy" width="30" height="30" /> : "tw"}</Link>
-      <div className="of-inbox-active-creator">
-        <CloneSwitcher clones={scopedClones} activeCloneId={inboxIdentity?.creatorId ?? scopeId} locked={scopeLocked} fallbackName={inboxIdentity?.creatorName ?? fallbackScope}/>
-        {inboxIdentity ? <small className="creator-name">@{inboxIdentity.handle}</small> : null}
-      </div>
-      <span className="of-inbox-platform"><img src="/brand/platforms/onlyfans.svg" alt="" width="24" height="24"/>OnlyFans</span>
-      <div className="of-inbox-header-tools"><BlurToggle/>
-        <details className="of-inbox-navigation"><summary aria-label="Workspace navigation"><MoreHorizontal size={20}/></summary>
-          <nav aria-label="OnlyFans workspace"><ChannelSwitch channels={channels}/>
-            {[["overview","Overview"],["accounts","Accounts"],["inbox","Inbox"],["campaigns","Campaigns"],["content","Content"],["sales","Sales"],["settings","Settings"],["launch","Launch control"]].map(([route,label])=><Link key={route} href={"/onlyfans/"+route+(inboxIdentity ? "?creator="+encodeURIComponent(inboxIdentity.creatorId) : "")}>{label}</Link>)}
-            {!isAgency || agencyName?.trim().toLowerCase() === "moxy" ? <Link href="/onlyfans/operations">Operations</Link> : null}
-          </nav>
-        </details>
-        {signOut === "simulated" ? <SignOutButton mode="simulated"/> : <form action={isAgency ? "/agency/logout" : signOutAction} method={isAgency ? "post" : undefined}><SignOutButton showLabel={false}/></form>}
-      </div>
-    </header>;
-  }
   if (isAgency && ["moxy", "top onlyfans agency"].includes(agencyName?.trim().toLowerCase() ?? "") && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
       <div className="moxy-overview-breadcrumb"><span>{agencyName}</span> / Earnings</div>
@@ -171,7 +151,7 @@ export default function TopBar({
       </div>
 
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        {isCreator ? <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} /> : <CloneSwitcher clones={scopedClones} activeCloneId={scopeId} locked={scopeLocked} fallbackName={fallbackScope} allowNewCreator={channel !== "onlyfans"} />}
+        {isCreator ? <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} /> : <CloneSwitcher clones={scopedClones} activeCloneId={channel === "onlyfans" ? inboxIdentity?.creatorId ?? scopeId : scopeId} locked={scopeLocked} fallbackName={channel === "onlyfans" ? inboxIdentity?.creatorName ?? fallbackScope : fallbackScope} allowNewCreator={channel !== "onlyfans"} />}
         <div className="h-5 w-px shrink-0 bg-line" />
         {channel === "onlyfans" ? <span className="of-workspace-context"><img src="/brand/platforms/onlyfans.svg" alt="" width="24" height="24" />OnlyFans workspace</span> : null}
         {/* All-time cash made, scoped to the clone switcher above - not
