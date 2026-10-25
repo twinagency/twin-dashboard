@@ -10,10 +10,10 @@ import postcss from 'postcss';
 import tailwind from '@tailwindcss/postcss';
 const root=process.cwd(),out=resolve('test-results/creator-sign-in');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:'canonical-creator',requested:['onlyfans'],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',signIn:'hosted',error:null,accounts:[],enrollments:[]}};
-let snapshot,attempt,posted,expired,denied,lostConfirm,unavailableFrame,unavailableStatus;
+let snapshot,attempt,posted,expired,denied,lostConfirm,unavailableFrame,unavailableStatus,openingOnStart=false;
 let inputGate=null,frameGate=null,combinedGate=null,combinedFrames=true,combinedStarted=0,requestDelay=0,framesStarted=0,framesCompleted=0,inputsCompleted=0;
 const gate=()=>{let release;const promise=new Promise(resolve=>{release=resolve});return {promise,release}};
-const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;unavailableFrame=false;unavailableStatus=false;};reset();
+const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;unavailableFrame=false;unavailableStatus=false;openingOnStart=false;};reset();
 async function until(check){for(let n=0;n<100;n++){if(check())return;await new Promise(r=>setTimeout(r,50));}assert(check(),'Expected fixture request was not received');}
 const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';import Shell from './components/CreatorStudioShell';import {creatorStudioStatus} from './lib/creator-studio-model';createRoot(document.getElementById('root')).render(<React.StrictMode><Shell brand="moxy" creatorName="Fixture creator" status={creatorStudioStatus(false,"Draft / unfinished",null)} contentHref="/creator/onboarding?step=content"><Platforms initial={${JSON.stringify(initial)}}/></Shell></React.StrictMode>);`;
 const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'links',setup(b){b.onResolve({filter:/^next\/(link|navigation)$|\/CurrencyProvider$/},a=>({path:a.path,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({resolveDir:root,loader:'jsx',contents:a.path==='next/link'?`import React from 'react';export const useLinkStatus=()=>({pending:false});export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`:a.path==='next/navigation'?`export const useSearchParams=()=>new URLSearchParams(location.search);export const usePathname=()=>'/creator/platforms';export const useRouter=()=>({refresh(){}});`:`export const useCurrency=()=>({currency:'AUD',setCurrency(){}});`}))}}]});
@@ -35,10 +35,11 @@ const server=createServer(async(req,res)=>{try{
   if(expired&&req.method==='GET'){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
   if(unavailableStatus&&req.method==='GET'&&!url.searchParams.has('frame')){res.statusCode=503;return res.end(JSON.stringify({error:'Your sign-in status could not be loaded.'}))}
   if(req.method==='GET'&&url.searchParams.get('frame')==='1'){framesStarted++;const held=frameGate;if(held)await held.promise;if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/png');framesCompleted++;return res.end(png)}
+  if(req.method==='GET'&&attempt.phase==='opening')attempt={...attempt,phase:'waiting'};
   if(req.method==='POST'){
    let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);posted.push(body);
    if(body.action==='cancel'&&expired){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
-   if(body.action==='start'){expired=false;attempt={...attempt,id:randomUUID(),phase:'waiting',handle:null,keyboard:null,enrollmentId:null};}
+   if(body.action==='start'){expired=false;attempt={...attempt,id:randomUUID(),phase:openingOnStart?'opening':'waiting',handle:null,keyboard:null,enrollmentId:null};}
    if(body.action==='input'){
     if(inputGate)await inputGate.promise;
     if(body.input.type==='click')attempt.keyboard='email';
@@ -150,6 +151,29 @@ try{
   await page.screenshot({path:out+'/'+name+'-connected.png',fullPage:true});
   assert.deepEqual(errors,[]);await context.close();
  }
+ // Reproduce older Safari: neither static AbortSignal helper exists.
+ reset();openingOnStart=true;unavailableStatus=true;
+ const legacyContext=await safari.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});
+ await legacyContext.addInitScript(()=>{Object.defineProperty(AbortSignal,'any',{value:undefined,configurable:true});Object.defineProperty(AbortSignal,'timeout',{value:undefined,configurable:true});});
+ const legacy=await legacyContext.newPage(),legacyErrors=[];legacy.on('pageerror',e=>legacyErrors.push(e.message));
+ await legacy.goto(url);await legacy.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();
+ await legacy.getByText('Your sign-in status could not be loaded.',{exact:true}).waitFor();
+ assert.equal(await legacy.getByText('Opening your OnlyFans sign-in…',{exact:true}).count(),0,'A failed status request must not leave a misleading opening spinner');
+ assert(await legacy.getByRole('button',{name:'Restart sign-in',exact:true}).isEnabled(),'Opening errors offer recovery');
+ unavailableStatus=false;
+ await legacy.getByLabel('Email address',{exact:true}).waitFor();
+ await legacy.getByText('Your sign-in status could not be loaded.',{exact:true}).waitFor({state:'hidden'});
+ await legacy.getByRole('button',{name:'Other sign-in options',exact:true}).click();
+ await legacy.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.dataset.ready==='true');
+ attempt={...attempt,phase:'ready',handle:'fixture_creator'};
+ await legacy.getByRole('button',{name:'Connect this account',exact:true}).click();
+ await until(()=>snapshot.onlyfans.enrollments.length===1);
+ snapshot.onlyfans.enrollments[0]={...snapshot.onlyfans.enrollments[0],status:'accepted',accountId:'of-legacy'};
+ snapshot.onlyfans.accounts=[{id:'of-legacy',handle:'fixture_creator',connection:{status:'verified',expiresAt:new Date(Date.now()+3600000).toISOString(),outgoingEnabled:false}}];
+ await legacy.getByRole('dialog').waitFor({state:'hidden'});await legacy.locator('[data-state="connected"]').waitFor();
+ assert.deepEqual(legacyErrors,[]);assert.equal(posted.filter(b=>b.action==='start').length,1);
+ await legacyContext.close();
+ console.log('PASS legacy Safari: no AbortSignal.any/timeout, opening status recovery, visible retry, rendered frame and confirmed connection refresh.');
  // Smaller phones retain a visible close button, the entire frame and its controls.
  for(const [width,height]of [[320,667],[430,932]]){reset();const context=await safari.newContext({viewport:{width,height},isMobile:true,hasTouch:true});const phone=await context.newPage();await phone.goto(url);await phone.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await phone.getByRole('button',{name:'Other sign-in options',exact:true}).click();await phone.waitForFunction(()=>document.querySelector('[aria-label="OnlyFans sign-in screen"]')?.dataset.ready==='true');const frame=await phone.getByLabel('OnlyFans sign-in screen').boundingBox(),back=await phone.getByRole('button',{name:'Back to sign-in',exact:true}).boundingBox();assert(frame.width>=240&&frame.y>=0&&frame.y+frame.height<=height,'Whole verification frame stays visible on small phones');assert(back.y+back.height<=height,'Phone controls stay visible');assert(await phone.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'No phone horizontal overflow');await context.close();}
  // Expiry removes the attempt server-side; restarting must still reach start.
