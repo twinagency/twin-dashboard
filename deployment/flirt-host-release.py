@@ -140,6 +140,9 @@ def configure(encoded):
             raise RuntimeError("The existing Twin live connection could not be verified")
         env.update({"FLIRT_LIVE_TWIN_ENABLED": "true", "FLIRT_LIVE_TWIN_URL": live["url"].rstrip("/"), "FLIRT_LIVE_TWIN_SERVICE_KEY": live["key"]})
         env["DASHBOARD_PUBLIC_ORIGIN"] = ORIGIN
+        if previous.get("FLIRT_SHARED_ONLYFANS_ENABLED") == "true":
+            env["FLIRT_SHARED_ONLYFANS_ENABLED"] = "true"
+            env.update({k: v for k, v in previous.items() if k.startswith("ONLYFANS_")})
         for name in ("DASHBOARD_SESSION_SECRET", "CREATOR_SESSION_SECRET", "DASHBOARD_PASSWORD"):
             env[name] = previous.get(name) or secrets.token_hex(32)
     else:
@@ -282,6 +285,8 @@ def deploy(kind, image, sha):
     limit = "512m" if kind == "dashboard" else "384m"
     args = ["docker", "run", "-d", "--name", name, "--restart", "unless-stopped", "--stop-timeout", "30", "--memory", limit, "--memory-swap", limit, "--cpus", "1", "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "--label", "io.flirt.project=" + PROJECT, "--label", "io.flirt.commit=" + sha, "--env-file", str(env_file)]
     if kind == "dashboard": args.extend(["-p", "127.0.0.1:3101:3001"])
+    if kind == "dashboard" and env.get("FLIRT_SHARED_ONLYFANS_ENABLED") == "true":
+        args.extend(["--network", "twin-onlyfans_default"])
     args.append(image)
     if older:
         # Preserve the stopped, labelled older version without blocking the

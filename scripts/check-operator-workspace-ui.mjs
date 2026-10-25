@@ -116,7 +116,7 @@ await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;
 await page.locator('[data-creator-studio="identity"]').waitFor();
 assert.equal(await page.locator("[data-intelligence-workspace]").count(),0,"Demo policies do not enter partner or other-creator forms");
 assert.equal(await page.locator('[data-studio-workspace="true"]').count(),1);
-assert.ok(await page.locator('img[alt="FLIRT"]').first().evaluate(image=>image.complete&&image.naturalWidth>0),"Existing FLIRT wordmark loads");
+assert.ok(await page.locator('img[alt="Flirt" i]').first().evaluate(image=>image.complete&&image.naturalWidth>0),"Existing FLIRT wordmark loads");
 const nav=page.getByRole("navigation",{name:"Control Panel sections",exact:true});
 const color=await nav.getByRole("button",{name:"Identity",exact:true}).evaluate(e=>getComputedStyle(e).borderTopColor);
 if(brand==="Moxy")assert.equal(color,"rgb(117, 38, 56)","Moxy burgundy");

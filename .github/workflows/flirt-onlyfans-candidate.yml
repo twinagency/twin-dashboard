@@ -1,0 +1,41 @@
+name: FLIRT OnlyFans CRM candidate
+on:
+  push:
+    branches: ["codex/flirt-onlyfans-live-20261026"]
+permissions:
+  contents: read
+concurrency:
+  group: flirt-onlyfans-candidate
+  cancel-in-progress: false
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci
+      - name: Existing Flirt isolation and new CRM authorization and reads
+        run: |
+          npm run test:flirt-isolation
+          node --import tsx scripts/check-flirt-onlyfans.ts
+          node --import tsx scripts/check-onlyfans-read.ts
+          node --import tsx scripts/check-onlyfans-ui.tsx
+          python3 deployment/flirt-host-release.test.py
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and publish immutable candidate
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$ECR_REPO:flirt-onlyfans-$GITHUB_SHA" .
+          docker push "$ECR_REPO:flirt-onlyfans-$GITHUB_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:flirt-onlyfans-$GITHUB_SHA"

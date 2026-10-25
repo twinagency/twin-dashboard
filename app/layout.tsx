@@ -1,3 +1,4 @@
+import FlirtOnlyFansShell from "@/components/FlirtOnlyFansShell";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
 import { agencyCanManage } from "@/lib/agency-management-policy";
@@ -102,6 +103,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider>
+        <FlirtOnlyFansShell fallback={<>
         <WorkspaceShell activeCloneId={activeCloneId}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="workspace-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
@@ -113,6 +115,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <WorkspaceMobileNav activeCloneId={activeCloneId} />
           </div>
         </WorkspaceShell>
+        </>}>{children}</FlirtOnlyFansShell>
         {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
       </BlurProvider></CurrencyProvider></DashboardAccessProvider>
     </body>
