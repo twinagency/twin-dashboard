@@ -1,3 +1,4 @@
+import EarningsAutoRefresh from "./EarningsAutoRefresh";
 import Link from "@/components/NavigationLink";
 import { ArrowRight, ArrowUpRight, Banknote, CheckCheck, CircleAlert, RotateCcw, Users, Wallet } from "lucide-react";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
@@ -12,6 +13,10 @@ import { workspaceHref } from "@/lib/onlyfans-preview/scope";
 export default function OverviewView({ data }: { data: OverviewData }) {
   const earnings = data.earnings?.status === "current" ? data.earnings : null;
   const recorded = data.earnings?.recorded;
+  const history = data.earnings?.history;
+  const statistics = data.earnings?.statistics;
+  const periodLabel = data.period === "all" ? "All time" : data.period === "90d" ? "Last 90 days" : data.period === "30d" ? "Last 30 days" : "Last 7 days";
+  const creatorName = (id: string) => data.accounts.find(a => a.accountId === id)?.binding.creatorName ?? id;
   const money = (value: number | null | undefined) => value == null ? "Unavailable" : formatRecordedMoney(value, "USD");
   const count = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString("en-US");
   const connected = data.accounts.filter(account => account.health === "connected").length;
@@ -31,7 +36,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     <div className="of-page-intro"><CreatorPlatformHeading title="Overview" description="Your OnlyFans creators, earnings and activity." />
       <form className="of-period-form" action="/onlyfans/overview" method="get">
         {data.activityAccount ? <input type="hidden" name="account" value={data.activityAccount.accountId} /> : null}
-        <label><span className="sr-only">Reporting period</span><select name="period" defaultValue={data.period}><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option></select></label>
+        <label><span className="sr-only">Reporting period</span><select name="period" defaultValue={data.period}><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All time</option></select></label>
         <button type="submit" className="of-secondary">Apply / refresh</button>
       </form>
     </div>
@@ -42,11 +47,20 @@ export default function OverviewView({ data }: { data: OverviewData }) {
       </Link>)}{!data.accounts.length ? <p role="status">{data.accountsError || "Your connected OnlyFans creators will appear here."}</p> : null}</div>
       <Link href="/onlyfans/accounts" className="of-text-link">View accounts <ArrowRight size={17} /></Link>
     </section>
-    <div className="of-scope-line"><span>Workspace totals · All authorised OnlyFans accounts</span><span>USD · UTC · Rolling {data.period === "30d" ? "30" : "7"} days</span></div>
-    <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
-      <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? "Selected period" : "Current account state"}</small>
-    </article>)}</section>
+    <div className="of-scope-line"><span>Workspace totals · All authorised OnlyFans accounts</span><span>USD · UTC · {periodLabel}</span></div>
     {reasons ? <p className="of-notice" role="status">{recorded ? "Sync delayed. Showing recorded payments; newer activity may be missing. " : ""}{reasons}</p> : null}
+    {history ? <div className="of-panel" role="status" aria-label="Payment history import">
+      <strong>{history.accountCount === 0 ? "No connected OnlyFans accounts" : history.completedAccountCount === history.accountCount ? "Full payment history imported" : "Importing full payment history"} · {history.completedAccountCount} of {history.accountCount} accounts</strong>
+      <p>{history.accounts.map(a => creatorName(a.accountId) + ": " + (a.status === "complete" ? "history imported" : a.status === "held" ? "import needs review" : "importing") + " (" + a.importedPayments.toLocaleString("en-US") + " payments)").join(" · ")}</p>
+      <EarningsAutoRefresh />
+    </div> : <EarningsAutoRefresh />}
+    <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
+      <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? periodLabel : "Current account state"}</small>
+    </article>)}</section>
+    {statistics ? <div className="of-overview-panels" aria-label="Earnings breakdown">
+      <section className="of-panel"><h2>Earnings by creator</h2>{statistics.byAccount.map(row => <div className="of-sale-row" key={row.accountId}><div><strong>{creatorName(row.accountId)}</strong><small>{count(row.paymentCount)} payments · {periodLabel}</small></div><div><strong>{money(row.netCents)} net</strong><small>{money(row.grossCents)} gross</small></div></div>)}</section>
+      <section className="of-panel"><h2>Earnings by source</h2>{statistics.byKind.map(row => <div className="of-sale-row" key={row.kind}><div><strong>{row.kind.replaceAll("_", " ")}</strong><small>{count(row.paymentCount)} payments · {periodLabel}</small></div><div><strong>{money(row.netCents)} net</strong><small>{money(row.grossCents)} gross</small></div></div>)}</section>
+    </div> : null}
     <div className="of-overview-panels">
       <section className="of-panel"><div className="of-section-heading"><h2>Account activity</h2><Link href="/onlyfans/accounts" className="of-text-link">View all <ArrowUpRight size={16} /></Link></div>
         {data.accounts.slice(0, 6).map(account => <Link className="of-activity-row" key={account.accountId} href={workspaceHref("/onlyfans/accounts", { creatorId: account.binding.creatorId, accountId: account.accountId })}>

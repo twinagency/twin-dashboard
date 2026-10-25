@@ -53,7 +53,7 @@ const { NextRequest, NextResponse } = require("next/server");
     }
     assert.equal(reads, 1);
     assert.equal((await route.GET(new NextRequest("http://localhost/api/onlyfans/earnings?" + new URLSearchParams(window) + "&start=" + encodeURIComponent(window.start)))).status, 400);
-    const long = { ...window, start: "2026-01-01T00:00:00.000Z" };
+    const long = { ...window, start: "1969-01-01T00:00:00.000Z" };
     response = await get(long);
     assert.equal((await response.json()).status, "empty", "No accounts contributes zero even for all-time");
     accounts = [{ accountId: "connected" }];
@@ -62,6 +62,13 @@ const { NextRequest, NextResponse } = require("next/server");
     assert.equal(unsupported.netCents, null, "Never truncate a longer report to 90 days and label it complete");
     assert.equal(unsupported.status, "unavailable");
     assert.equal(accountReads, 2);
+    const allTime = { ...window, start: "1970-01-01T00:00:00.000Z" };
+    global.__overviewReadContext = { backend: { ...backend, getEarnings: async value => {
+      assert.deepEqual(value, allTime, "Forward the entire selected history window");
+      return { ok: true, data: { ...native, window: allTime } };
+    } } };
+    response = await get(allTime);
+    assert.equal((await response.json()).netCents, 7276);
     global.__overviewReadContext = NextResponse.json({ error: "Denied" }, { status: 403 });
     assert.equal((await get(window)).status, 403);
     assert.equal(reads, 1, "An unauthorised caller does not reach the backend");

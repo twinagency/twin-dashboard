@@ -21,11 +21,11 @@ export async function GET(request: NextRequest) {
   const readWindow = { ...window, end: new Date(Math.min(Date.parse(window.end), Date.now())).toISOString() };
   if (Date.parse(readWindow.end) <= Date.parse(readWindow.start)) return NextResponse.json({ error: "Choose a reporting window that has started." }, { status: 400, headers: PRIVATE_HEADERS });
   if (!validEarningsWindow(readWindow)) {
-    // Never silently add only the most recent 90 days to a longer Telegram report.
+    // Reject unsupported dates without substituting a shorter reporting period.
     const accounts = await context.backend.listAccounts({ creatorId: null });
     const value = accounts.ok && accounts.data.length === 0
       ? emptyOverviewRevenue(window, new Date().toISOString())
-      : unavailableOverviewRevenue(window, "Verified OnlyFans payment history is available for periods up to 90 days. Choose a shorter period.");
+      : unavailableOverviewRevenue(window, "That reporting period is outside the supported payment history range.");
     return NextResponse.json(value, { headers: PRIVATE_HEADERS });
   }
   const result = await context.backend.getEarnings(readWindow);
