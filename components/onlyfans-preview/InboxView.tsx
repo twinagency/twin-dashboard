@@ -9,6 +9,8 @@
 import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
+import CreatorPortrait from "./CreatorPortrait";
+import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
@@ -73,8 +75,8 @@ function AccountChips({
       {accounts.map(account => <button key={account.accountId} type="button"
         data-of-account-chip={account.accountId} aria-pressed={account.accountId === activeAccountId}
         onClick={() => onSelectAccount(account.accountId)} title={`${account.binding.creatorName} · @${account.binding.handle}`}
-        className="of-account">
-        <span className="of-creator-avatar creator-name" aria-hidden="true">{account.binding.creatorName.split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}</span>
+        className="of-account" aria-label={account.binding.creatorName + " @" + account.binding.handle}>
+        <span className="creator-name"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} /></span>
         <span className="of-account-copy"><strong className="creator-name">{account.binding.creatorName}</strong><small>@{account.binding.handle}</small></span>
         <span className="of-health" data-health={account.health} aria-label={account.health} title={account.healthReason ?? account.health} />
       </button>)}
@@ -216,7 +218,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
     >
       {/* A short thread sits at the bottom of the panel, the way a chat does,
           instead of leaving the wallpaper dangling under three bubbles. */}
-      <div className="flex min-h-full flex-col justify-end">
+      <div className="flex min-h-full flex-col justify-start">
       {detail.messages.length === 0 ? (
         <div className="mx-auto w-fit rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-white">
           No messages in this view
@@ -230,6 +232,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
           const endsRun = index === lastIndex || next.direction !== message.direction;
           return (
             <div key={message.messageId}>
+              {index === 0 || new Date(previous.occurredAt).toDateString() !== new Date(message.occurredAt).toDateString() ? <div className="of-message-day">{new Date(message.occurredAt).toLocaleDateString(undefined, {day:"numeric",month:"short",year:"numeric"})}</div> : null}
 
               <div className={"flex " + (inbound ? "justify-start" : "justify-end") + (startsRun ? " mt-2" : " mt-0.5")}>
                 <div className="flex max-w-[78%] flex-col items-stretch gap-1">
@@ -508,50 +511,28 @@ function ActionColumn({
   );
 }
 
-function FanContext({ detail }: { detail: ConversationDetail }) {
-  return (
-    <div className="flex flex-col gap-5">
-      {detail.ownedMedia.length > 0 ? <div className="of-fan-metrics">
-        <div><strong>{detail.ownedMedia.length}</strong><span>Recorded purchases</span></div>
-        <div><strong>{Array.from(new Set(detail.ownedMedia.map(item => item.price.currency))).map(currency => formatMoney({ currency, minorUnits: detail.ownedMedia.filter(item => item.price.currency === currency).reduce((sum, item) => sum + item.price.minorUnits, 0) })).join(" · ")}</strong><span>Recorded purchase value</span></div>
-      </div> : null}
-
-      <details className="of-facts" open={detail.facts.length > 0}><summary>Saved facts {detail.facts.length ? <span>{detail.facts.length}</span> : null}</summary>
-        <ul className="mt-2 space-y-2">
-          {detail.facts.map((item) => (
-            <li key={`${item.label}-${item.value}`} className="of-fact" title={`Source: ${item.source}`}>
-              <div className="text-[11px] font-medium text-muted">{item.label}</div>
-              <div className="mt-0.5 text-sm leading-5 text-ink">{item.value}</div>
-
-            </li>
-          ))}
-          {detail.facts.length === 0 ? (
-            <li className="text-xs text-muted">No stored facts for this fan yet.</li>
-          ) : null}
-        </ul>
-      </details>
-
-      {detail.ownedMedia.length > 0 ? (
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Purchase history</div>
-          <ul className="mt-2 space-y-2">
-            {detail.ownedMedia.map((item) => (
-              <li
-                key={item.mediaId}
-                className="flex items-center justify-between gap-2 rounded-xl border border-line p-3"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-ink">{item.label}</div>
-                  <div className="text-[11px] text-muted">{formatAge(item.purchasedAt)}</div>
-                </div>
-                <span className="shrink-0 text-sm font-semibold text-good">{formatMoney(item.price)}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
+function FanMetrics({detail}: {detail:ConversationDetail}) {
+  const currencies=Array.from(new Set(detail.ownedMedia.map(item=>item.price.currency)));
+  return <div className="of-fan-metrics">
+    <div><strong>{currencies.length ? currencies.map(currency=>formatMoney({currency,minorUnits:detail.ownedMedia.filter(item=>item.price.currency===currency).reduce((total,item)=>total+item.price.minorUnits,0)})).join(" · ") : "—"}</strong><span>Recorded spend</span></div>
+    <div><strong>{detail.ownedMedia.length}</strong><span>Recorded purchases</span></div>
+  </div>;
+}
+function FanContext({detail}:{detail:ConversationDetail}) {
+  const notes=detail.facts.filter(fact=>/^(notes?|conversation notes?)$/i.test(fact.label.trim()));
+  const facts=detail.facts.filter(fact=>!notes.includes(fact) && !(/^display name$/i.test(fact.label) && fact.value===fanName(detail.summary.fan)));
+  return <div className="of-fan-context">
+    <section><h3 className="of-section-heading">Saved facts</h3>
+      {facts.length ? <ul className="of-fact-list">{facts.map(item=><li key={item.label+item.value} title={"Source: "+item.source}><span>{item.label}</span><p>{item.value}</p></li>)}</ul> : <p className="of-empty-context">Nothing saved yet.</p>}
+    </section>
+    <section><h3 className="of-section-heading">Notes</h3><div className="of-note">{notes.length ? notes.map(item=><p key={item.label+item.value}>{item.value}</p>) : <p className="of-empty-context">No notes available.</p>}</div></section>
+    <section><h3 className="of-section-heading">Recent purchases</h3>
+      {detail.ownedMedia.length ? <ul className="of-purchases">{detail.ownedMedia.map(item=><li key={item.mediaId}>
+        <span className="of-purchase-icon" aria-hidden="true"><ImagePlus size={21}/></span>
+        <div><strong>{item.label}</strong><small>{formatAge(item.purchasedAt)}</small></div><span>{formatMoney(item.price)}</span>
+      </li>)}</ul> : <p className="of-empty-context">No purchases recorded in this view.</p>}
+    </section>
+  </div>;
 }
 
 /** Every outbound message and what the provider did with it. */
@@ -634,6 +615,9 @@ export default function InboxView({
   onLoadMore: () => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
+  const {setIdentity}=useInboxIdentity();
+  const creatorId=activeAccount?.binding.creatorId, creatorName=activeAccount?.binding.creatorName, creatorHandle=activeAccount?.binding.handle;
+  useEffect(()=>{ setIdentity(creatorId && creatorName && creatorHandle ? {creatorId,creatorName,handle:creatorHandle} : null); return ()=>setIdentity(null); },[creatorId,creatorName,creatorHandle,setIdentity]);
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
 
@@ -657,6 +641,15 @@ export default function InboxView({
 
   return (
     <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
+      <aside className="of-creator-rail" aria-label="Creator accounts">          <RequestStateBlock
+            showStaleWarning={false}
+            state={accountsState}
+            label="account scope"
+            render={(list) => (
+              <AccountChips accounts={list} activeAccountId={activeAccountId} onSelectAccount={onSelectAccount} />
+            )}
+          />
+<a href="/onlyfans/accounts" className="of-add-account" aria-label="Add or manage creator accounts">+</a><a href="/onlyfans/settings" className="of-rail-settings" aria-label="OnlyFans settings"><Sparkles size={18}/></a></aside>
       {[accountsState.status, conversations.status, detailState?.status].includes("stale") ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span><strong>Sync needs attention.</strong> Newer activity may be missing.</span><a href="/onlyfans/accounts">Check connection <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
       {!viewer.canManage ? (
         <div
@@ -677,14 +670,6 @@ export default function InboxView({
       </nav>
       <div className="of-layout" data-of-inbox-layout>
         <Card size="sm" className={`users-panel users-panel-list h-[min(34rem,65dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "conversations" ? "flex" : "hidden lg:flex"}`}>
-          <RequestStateBlock
-            showStaleWarning={false}
-            state={accountsState}
-            label="account scope"
-            render={(list) => (
-              <AccountChips accounts={list} activeAccountId={activeAccountId} onSelectAccount={onSelectAccount} />
-            )}
-          />
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ConversationList
               conversations={conversations}
@@ -768,6 +753,7 @@ export default function InboxView({
                 </div>
               </div>
 
+              <FanMetrics detail={detail} />
               <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn
@@ -792,7 +778,7 @@ export default function InboxView({
               <details open={!!detail.deliveryIncident}><summary className="text-sm font-semibold">Delivery history</summary><DeliveryLedger messages={detail.messages} /></details>
 
               <div className="border-t border-line pt-3">
-                <FreshnessLine freshness={detail.freshness} />
+                <details className="of-freshness"><summary>Sync details</summary><FreshnessLine freshness={detail.freshness} /></details>
               </div>
             </div>
           )}

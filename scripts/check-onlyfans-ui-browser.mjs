@@ -51,6 +51,30 @@ try {
     }
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(origin + "/onlyfans/inbox/", {waitUntil:"load"});
+  await page.locator("[data-of-conversation-id]").first().waitFor();
+  check(!await page.locator(".dashboard-sidebar").isVisible(), "Wide sidebar is replaced inside the inbox");
+  check(await page.locator(".of-creator-rail").isVisible(), "Creator rail is visible");
+  const rail=await page.locator(".of-creator-rail").boundingBox();
+  check(rail.width===56 && rail.x===0, "Creator rail uses the reference width");
+  check(await page.locator(".users-panel-list [data-of-account-chip]").count()===0, "Account cards no longer duplicate the rail inside the inbox");
+  const account=page.locator("[data-of-account-chip]").nth(1);
+  const label=await account.getAttribute("aria-label");
+  await account.click();
+  const handle=label.match(/@(.+)$/)[1];
+  await page.locator(".of-inbox-active-creator small").filter({hasText:"@"+handle}).waitFor();
+  check(await page.locator(".of-inbox-active-creator small").innerText()==="@"+handle, "Header follows the selected account");
+  await page.getByRole("heading",{name:"Notes",exact:true}).waitFor();
+  check(await page.getByRole("heading",{name:"Recent purchases",exact:true}).isVisible(), "Fan panel keeps notes and purchase sections");
+  await page.getByLabel("Workspace navigation",{exact:true}).click();
+  check(await page.getByRole("navigation",{name:"OnlyFans workspace",exact:true}).getByRole("link",{name:"Content",exact:true}).isVisible(), "Full workspace navigation remains reachable");
+  await page.getByLabel("Workspace navigation",{exact:true}).click();
+  await page.setViewportSize({width:390,height:1000});
+  await page.locator("[data-of-mobile-panel=controls]").click();
+  check(await page.locator(".users-panel-profile").isVisible(), "Mobile fan panel remains reachable");
+  await page.locator("[data-of-mobile-panel=chat]").click();
+  check(await page.locator("[data-of-composer]").isVisible(), "Mobile composer remains reachable");
+  await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${origin}/onlyfans/settings/`, { waitUntil: "load" });
   await page.locator("[data-of-edit-persona]").fill("Retained unsaved synthetic persona");
   await page.getByRole("tab", { name: "Reply settings", exact: true }).click();
