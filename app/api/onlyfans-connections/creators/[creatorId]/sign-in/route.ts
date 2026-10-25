@@ -6,6 +6,7 @@ import {configuredConnectionBackend} from '@/lib/onlyfans-connections/backend';
 import {resolveConnectionCreator,connectionAccess,connectionSignInCommand} from '@/lib/onlyfans/connection-creators';
 import {normalizeProxyInput} from '@/lib/onlyfans-connections/proxy';
 import {configuredManagedProxyBackend,ManagedProxyError} from '@/lib/onlyfans-managed-proxy/backend';
+import {publicProxy} from '@/lib/onlyfans-managed-proxy/public';
 import {validManagedProxySelection} from '@/lib/onlyfans-managed-proxy/model';
 import {configuredSignInBackend,SignInBackendError,type SignInNetwork} from '@/lib/onlyfans-sign-in/backend';
 
@@ -25,6 +26,17 @@ export async function GET(request:NextRequest,context:Context){
   if(!creator)return connectionRefusal(404,'That existing Twin creator is unavailable.');
   try{
     const native=configuredConnectionBackend();
+    if(request.nextUrl.searchParams.get('proxy')==='1'){
+      const accountId=request.nextUrl.searchParams.get('accountId');
+      if(!accountId||!/^[A-Za-z0-9._:-]{1,64}$/.test(accountId))return connectionRefusal(400,'Select an account to view its proxy.');
+      if(!native)return connectionRefusal(503,'Connection details are unavailable.');
+      // This ownership check must precede both credential projection and status lookup.
+      const saved=await native.captureContext(creator.id,accountId);
+      if(!saved.ok)return connectionRefusal(saved.status,'This account does not belong to the selected creator.');
+      const recorded=await native.get(accountId);
+      if(!recorded.ok)return connectionRefusal(recorded.status,'Connection status could not be verified.');
+      return connectionAnswer({ok:true,proxy:publicProxy(saved.data.proxyUrl,null,recorded.data.status,recorded.data.verifiedAt)});
+    }
     if(request.nextUrl.searchParams.get('enrollments')==='1'){
       if(!native)return connectionRefusal(503,'Account connection management is unavailable.');
       const result=await native.enrollments(creator.id);
@@ -75,7 +87,7 @@ export async function POST(request:NextRequest,context:Context){
     if(c.accountId===null){
       if(managed){
         const broker=configuredManagedProxyBackend();
-        if(!broker)return connectionRefusal(503,'Managed proxies are not configured yet. Choose Use own proxy or contact your administrator.');
+        if(!broker)return connectionRefusal(503,'Automatic connection setup is unavailable. Please contact support.');
         const proxyUrl=await broker.assign(creator.id,c.managedProxy as import('@/lib/onlyfans-managed-proxy/model').ManagedProxySelection,ctx.actor);
         network={accountId:null,ownerId:null,proxyUrl,fingerprint:fingerprint(proxyUrl)};
       }else{
@@ -84,7 +96,11 @@ export async function POST(request:NextRequest,context:Context){
         network={accountId:null,ownerId:null,proxyUrl:entry.url,fingerprint:fingerprint(entry.url)};
       }
     }else if(c.proxyUrl!==null)return connectionRefusal(400,'Reconnect uses the account’s saved proxy.');
-    if(b.action==='start')return connectionAnswer({ok:true,attempt:await backend.start(scope,b.startKey as string,network)});
+    if(b.action==='start'){
+      const country=managed?(c.managedProxy as {countryCode:string}).countryCode:null;
+      const countryCode=country==='auto'?(process.env.ONLYFANS_MANAGED_PROXY_DEFAULT_COUNTRY??'').trim().toUpperCase():country;
+      return connectionAnswer({ok:true,attempt:await backend.start(scope,b.startKey as string,network),proxy:publicProxy(network.proxyUrl,countryCode)});
+    }
     const status=await backend.status(scope,id);
     if(status.phase==='submitted'&&status.enrollmentId)return connectionAnswer({ok:true,attempt:status});
     const capture=await backend.capture(scope,id);
@@ -99,3 +115,4 @@ export async function POST(request:NextRequest,context:Context){
     return connectionAnswer({ok:true,attempt:acknowledged??{...status,phase:'submitted',enrollmentId:result.data.id}});
   }catch(error){return failed(error);}
 }
+
