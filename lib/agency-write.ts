@@ -6,8 +6,9 @@ import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 
 export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_at","deployed_at","uses_default_config","strict_minor_gate","photo_vision_model"] as const;
+export const AGENCY_WRITABLE_CLONE_FIELDS = AGENCY_COLUMNS.clones.filter(c => !(AGENCY_PROTECTED_CLONE_FIELDS as readonly string[]).includes(c));
 const WRITABLE: Record<string, {methods:string[];fields:readonly string[]}> = {
-  clones: {methods:["PATCH"],fields:AGENCY_COLUMNS.clones.filter(c => !(AGENCY_PROTECTED_CLONE_FIELDS as readonly string[]).includes(c))},
+  clones: {methods:["PATCH"],fields:AGENCY_WRITABLE_CLONE_FIELDS},
   users: {methods:["PATCH"],fields:["message_credits","total_messages_sent","total_messages_purchased","is_active","blocked","paused"]},
   photos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","image_name","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
   videos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
