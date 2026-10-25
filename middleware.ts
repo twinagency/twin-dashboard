@@ -117,7 +117,11 @@ async function routeMiddleware(req: NextRequest) {
   const isMutation = req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method);
   const sessionNavigation = !req.headers.has("next-action") && req.method === "POST"
     && ["/moxy/auth", "/agency/logout", "/agency/clone-scope"].includes(pathname);
-  const writeIdentity = agencyToken && isMutation && !sessionNavigation ? await agencyIdentity(agencyToken) : undefined;
+  // Public sign-in entries independently validate their credentials and never
+  // inspect an unrelated or stale agency cookie. They cannot perform workspace edits.
+  const authEntry = isTwinLoginPath(pathname) || isMarketingPath(pathname) || pathname === "/admin-auth"
+    || /\/(?:auth|login|logout)$/.test(pathname);
+  const writeIdentity = agencyToken && isMutation && !sessionNavigation && !authEntry ? await agencyIdentity(agencyToken) : undefined;
   if (writeIdentity?.id === MOXY_MANAGEMENT_AGENCY_ID && !agencyCanManage(writeIdentity))
     return privateResponse(NextResponse.json({ ok: false, error: "Your Moxy access is view-only." }, { status: 403 }));
 
