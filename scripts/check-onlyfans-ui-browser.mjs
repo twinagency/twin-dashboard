@@ -25,7 +25,7 @@ const origin = `http://127.0.0.1:${server.address().port}`;
 let browser;
 try {
   browser = await chromium.launch({ headless: true, ...(process.env.PREVIEW_CHROME ? { executablePath: process.env.PREVIEW_CHROME } : {}), args: ["--no-sandbox", "--disable-dev-shm-usage"] });
-  const page = await browser.newPage(), errors = [];
+  const page = await browser.newPage({reducedMotion:"reduce"}), errors = [];
   page.on("pageerror", error => errors.push(String(error)));
   const pages = ["overview", "accounts", "inbox", "campaigns", "content", "sales", "settings", "operations"];
   for (const width of [390, 430, 768, 1024, 1280, 1440]) {
@@ -104,6 +104,8 @@ try {
         check(await page.locator(".dashboard-sidebar [data-channel-option] img").evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),brand+": real channel logos load");
         if(brand==="Moxy")check(await page.locator('.dashboard-sidebar img[alt^="Moxy"]').evaluate(img=>img.complete&&img.naturalWidth>0),"Moxy logo loads");
         check(await page.locator("[data-of-action=request_takeover]").isVisible(),brand+": manual takeover remains visible");
+        const controlColors=await page.locator("[data-of-action=request_takeover]").evaluate(e=>({background:getComputedStyle(e).backgroundColor,foreground:getComputedStyle(e).color,opacity:getComputedStyle(e).opacity}));
+        check(controlColors.background!==controlColors.foreground&&controlColors.background!=="rgba(0, 0, 0, 0)"&&controlColors.opacity==="1",brand+": takeover has visible text and a filled button");
       }
       const size=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth}));
       check(size.scroll<=size.width+1,brand+": no horizontal overflow at "+width);

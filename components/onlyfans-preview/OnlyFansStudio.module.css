@@ -383,14 +383,14 @@
 
 /* The inbox shares the Telegram dashboard frame, including its visible navigation. */
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.studio-workspace-main) { padding:0; overflow:hidden; scrollbar-gutter:auto; }
-.platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { min-height:72px; height:72px; padding:12px 32px; gap:12px; }
+.platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { padding:12px 32px; gap:12px; }
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar > div:first-child) { display:flex; }
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:initial; width:auto; }
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls > button:first-child) { min-width:0; padding:6px 8px; font-size:13px; border:0; }
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { font-size:12px; gap:7px; }
 .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-currency-label) { margin-left:0; padding:6px 8px; font-size:11px; }
 @media(max-width:1023px) {
- .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { height:72px; min-height:72px; padding:8px 12px; }
+ .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar) { padding:8px 12px; }
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.dashboard-topbar > div:first-child) { display:none; }
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:1; flex-wrap:wrap; justify-content:center; gap:5px; }
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { display:none; }
