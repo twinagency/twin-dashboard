@@ -46,8 +46,8 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
   // Decode once for the route policy without allowing encoded path separators.
   if (/%(?:2f|5c)/i.test(path)) return false;
   try { path = decodeURIComponent(path); } catch { return false; }
-  if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:overview|accounts|inbox|content|sales|settings|campaigns|launch(?:\/(?:automation|memory))?))?\/?$/.test(path)) return true;
-  const api = /^\/api\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}\/(?:conversations(?:\/[A-Za-z0-9._:-]{1,64}(?:\/handover)?)?|workspace\/(?:content|sales|settings)))?\/?$/.test(path);
+  if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:overview|accounts|inbox|content|sales|settings|campaigns|operations|launch(?:\/(?:automation|memory))?))?\/?$/.test(path)) return true;
+  const api = /^\/api\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}\/(?:conversations(?:\/[A-Za-z0-9._:-]{1,64}(?:\/handover)?)?|workspace\/(?:content|sales|settings)|operations))?\/?$/.test(path);
   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
   // Launch routes have a section before /accounts. Whitelist delivered routes
   // and their methods explicitly; future launch endpoints remain default-deny.

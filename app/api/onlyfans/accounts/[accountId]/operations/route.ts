@@ -4,7 +4,7 @@ import { PRIVATE_HEADERS, badRequest, requestId, requireOnlyFansRead } from "@/l
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ accountId: string }> }) {
-  const ctx = await requireOnlyFansRead();
+  const ctx = await requireOnlyFansRead({ agency: true });
   if (ctx instanceof NextResponse) return ctx;
   const accountId = requestId((await params).accountId);
   if (!accountId) return badRequest("That account reference is not a valid identifier.");
