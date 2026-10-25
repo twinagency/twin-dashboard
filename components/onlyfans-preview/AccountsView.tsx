@@ -33,7 +33,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; showPreviewChrome: boolean }) {
+function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean }) {
   return (
     <Card className="flex h-full flex-col p-4" data-of-account-id={account.accountId}>
       <div className="of-account-identity">
@@ -95,7 +95,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         >
           Open inbox →
         </Link>
-        {account.health !== "connected" && !connectionEditable ? (
+        {account.health !== "connected" && !connectionEditable && !agencyConnectionEditable ? (
           <>
             <button
               type="button"
@@ -111,6 +111,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         ) : null}
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
+      {agencyConnectionEditable ? <div className="mt-3 flex flex-wrap items-start gap-2"><AdminOnlyFansSignIn creators={[{id:account.binding.creatorId,name:account.binding.creatorName}]} accountId={account.accountId}/></div> : null}
       {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} /> : null}
     </Card>
   );
@@ -195,6 +196,7 @@ export default function AccountsView({
                 {list.map((account) => (
                   <div key={account.accountId} data-of-selected={activeAccountId === account.accountId || undefined} role="group" tabIndex={0} aria-label={`Select ${account.binding.creatorName} account`} onKeyDown={event => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onSelectAccount(account.accountId); } }} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
+                      agencyConnectionEditable={agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)}
                       connectionEditable={!agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>
                 ))}
@@ -206,3 +208,4 @@ export default function AccountsView({
     </div>
   );
 }
+
