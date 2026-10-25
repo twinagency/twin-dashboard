@@ -101,7 +101,14 @@ for (const requirement of CREATOR_CONTENT_REQUIREMENTS) {
 assert.equal(creatorContentRequirementsMet([...files, { kind: "content", storage_transfer_status: "verified" }]), true, "Legacy rows must remain harmless");
 const legacyOnly = [{ kind: "content", storage_transfer_status: "verified" }];
 assert.equal(creatorContentCompleted(legacyOnly, true), true, "Previously completed legacy uploads must remain grandfathered");
-assert.equal(creatorContentCompleted(legacyOnly, false), false, "New creators must meet the categorized minimums");
+assert.equal(creatorContentCompleted(legacyOnly, false), false, "One new combined upload must not mark content complete");
+const combinedFiles = Array.from({ length: 50 }, () => ({ kind: "content", storage_transfer_status: "verified" }));
+assert.equal(creatorContentCompleted(combinedFiles.slice(0, 49)), false, "49 combined uploads remain incomplete");
+assert.equal(creatorContentCompleted(combinedFiles), true, "50 verified combined uploads must complete agency content progress");
+assert.equal(creatorContentCompleted(combinedFiles.map((file, index) => index === 0 ? { ...file, storage_transfer_status: "pending" } : file)), false, "An unverified file cannot complete the 50-file target");
+assert.equal(creatorContentCompleted(combinedFiles.map((file, index) => index === 0 ? { ...file, kind: "voice" } : file)), false, "Voice recordings do not count toward content completion");
+assert.equal(creatorContentCompleted(combinedFiles.map((file, index) => index === 0 ? { ...file, kind: "content_forged" } : file)), false, "Unknown content kinds do not count toward completion");
+assert.equal(creatorContentCompleted(combinedFiles.map((file, index) => index < 25 ? file : { ...file, kind: "content_sfw_video" })), true, "Combined and older categorized media share the creator-facing target");
 assert.equal(creatorContentRequirementsMet(files.map((file, index) => index === 0 ? { ...file, storage_transfer_status: "pending" } : file)), false, "Only verified files count");
 const counts = creatorContentCounts(files);
 for (const { kind, minimum } of CREATOR_CONTENT_REQUIREMENTS) assert.equal(counts[kind], minimum);

@@ -1,3 +1,5 @@
+import { CREATOR_CONTENT_TARGET } from "./creator-content-intake";
+
 export const CREATOR_CONTENT_REQUIREMENTS = [
   { kind: "content_sfw_image", label: "SFW images", shortLabel: "SFW images", media: "image", minimum: 20, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 75 MiB each" },
   { kind: "content_nsfw_image", label: "NSFW images", shortLabel: "NSFW images", media: "image", minimum: 30, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 75 MiB each" },
@@ -44,6 +46,7 @@ export function creatorLegacyContentCount(files: CreatorContentFile[]): number {
 }
 
 export function creatorContentCompleted(files: CreatorContentFile[], previouslyCompleted = false): boolean {
-  return creatorContentRequirementsMet(files) || (previouslyCompleted && creatorLegacyContentCount(files) > 0);
+  const verifiedContentCount = files.filter((file) => file.storage_transfer_status === "verified" && isAnyCreatorContentKind(file.kind)).length;
+  return verifiedContentCount >= CREATOR_CONTENT_TARGET || creatorContentRequirementsMet(files) || (previouslyCompleted && creatorLegacyContentCount(files) > 0);
 }
 
