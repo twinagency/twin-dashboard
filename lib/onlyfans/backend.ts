@@ -30,6 +30,7 @@ import type {
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
 import { parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
+import { parseMessageAttachments } from "./message-attachments";
 import { parseOperations, type OperationsSnapshot } from "./operations";
 import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
 
@@ -293,6 +294,8 @@ export function createHttpOnlyFansBackend(options: {
       }
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}`, (body) => {
         if (!isRecord(body) || !isRecord(body.conversation)) return null;
+        const messages = body.conversation.messages;
+        if (Array.isArray(messages) && messages.some(message => isRecord(message) && message.attachments !== undefined && !parseMessageAttachments(message.attachments))) return null;
         return body.conversation as ConversationDetail;
       });
     },
