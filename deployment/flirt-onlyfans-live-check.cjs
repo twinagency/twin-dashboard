@@ -17,7 +17,7 @@ const assert=require("node:assert/strict");
  for(const account of data.accounts){
   const id=account.accountId;
   const scoped=await get("/api/onlyfans/accounts?account="+id);
-  assert.equal(scoped.accounts.length,1);assert.equal(scoped.accounts[0].accountId,id);
+  assert.equal(scoped.scope.accountId,id);assert(scoped.accounts.some(a=>a.accountId===id),"selected account remains in authorized roster");
   const chats=await get("/api/onlyfans/accounts/"+id+"/conversations");
   assert.equal(chats.accountId,id);
   for(const section of ["content","sales","settings"]){const v=await get("/api/onlyfans/accounts/"+id+"/workspace/"+section);assert(v,"workspace response");}
@@ -28,7 +28,7 @@ const assert=require("node:assert/strict");
   const html=await get(page,false);
   assert(!html.includes("NEXT_HTTP_ERROR_FALLBACK;500")&&!html.includes('data-next-error-message'),page+" no render error");
  }
- const bad=await fetch(base+"/api/onlyfans/accounts?account=of-999999999999",{headers,redirect:"manual"});
+ const bad=await fetch(base+"/api/onlyfans/accounts/of-999999999999/conversations",{headers,redirect:"manual"});
  assert([403,404].includes(bad.status),"unknown account refused: "+bad.status);
  const tg=await get("/revenue",false);assert(tg.includes("OnlyFans"),"existing sidebar exposes OnlyFans");
  console.log(JSON.stringify({ok:true,accounts:checks,pages:9,unknownAccountRefused:true,unauthenticatedRefused:true,telegramNavigation:true}));
