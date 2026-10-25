@@ -8,7 +8,7 @@ import { useCreatorContentFolders } from "./useCreatorContentFolders";
 import { contentMediaKind } from "@/lib/creator-content-intake";
 import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
 
-type State = "queued" | "uploading" | "saving" | "saved" | "failed" | "reselect";
+type State = "checking" | "queued" | "uploading" | "saving" | "saved" | "failed" | "reselect";
 export type ContentUploadItem = { id: string; name: string; size: number; lastModified: number; state: State; percent: number; file?: File; error?: string };
 type Queue = { items: ContentUploadItem[]; working: boolean; add: (files: File[]) => void; retry: (id: string) => void; remove: (id: string) => boolean; revision: number; folderPending: boolean; folder: ReturnType<typeof useCreatorContentFolders> };
 const Context = createContext<Queue | null>(null);
@@ -124,7 +124,7 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
     alive.current = true;
     try {
       const recovered = recoverableUploadQueue(JSON.parse(localStorage.getItem(key) || "[]")) as ContentUploadItem[];
-      replace(recovered.map(item => ({ ...item, state: "reselect", percent: 0, error: "Checking previously selected files…" })));
+      replace(recovered.map(item => ({ ...item, state: "checking", percent: 0, error: "Checking previously selected files…" })));
       // The server is authoritative, including files removed in another session.
       void (async () => {
         for (let start = 0; start < recovered.length; start += 100) {
@@ -135,9 +135,9 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
             const result = await response.json();
             if (!alive.current) return;
             replace(ref.current.flatMap(item => {
-              if (item.file) return [item];
+              if (item.file || !batch.some(previous => previous.id === item.id)) return [item];
               const receipt = result.uploads?.find((entry: { id: string; state: string }) => entry.id === item.id);
-              if (!receipt) return [item];
+              if (!receipt) return [{ ...item, state: "reselect", error: "Reselect this file to check its saved status and continue." }];
               if (receipt.state === "removed") return [];
               return [{ ...item, state: receipt.state === "saved" ? "saved" : "reselect", percent: receipt.state === "saved" ? 100 : 0, error: receipt.state === "saved" ? undefined : "Reselect the original file to continue." }];
             }));
@@ -162,5 +162,5 @@ export function CreatorUploadActivity() {
   const queue = useContentUploads();
   const router = useContext(AppRouterContext);
   if (!queue?.items.length) return null;
-  return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity><span role="status">{queue.items.filter(item => item.state === "saved").length} of {queue.items.length} files saved</span><button type="button" className="min-h-11 font-medium underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=content", router?.push)}>View uploads</button></div>;
+  return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity><span role="status">{queue.items.some(item => item.state === "checking") ? "Checking saved files..." : `${queue.items.filter(item => item.state === "saved").length} of ${queue.items.length} files saved`}</span><button type="button" className="min-h-11 font-medium underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=content", router?.push)}>View uploads</button></div>;
 }

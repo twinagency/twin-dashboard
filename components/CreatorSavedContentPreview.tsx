@@ -52,13 +52,13 @@ export default function CreatorSavedContentPreview({ revision, children, items =
   const dialog = useRef<HTMLDialogElement>(null), pages = useRef(1), generation = useRef(0);
   const onCountsRef = useRef(onCounts); onCountsRef.current = onCounts;
   const savedIds = new Set(files.map(file => file.id));
-  const localFiles: GalleryFile[] = items.filter(item => !savedIds.has(item.id)).map(item => ({ id: item.id, name: item.name,
+  const localFiles: GalleryFile[] = items.filter(item => item.state !== "checking" && !savedIds.has(item.id)).map(item => ({ id: item.id, name: item.name,
     mime: item.file?.type || (contentMediaKind({ name: item.name }) === "video" ? "video/mp4" : "image/jpeg"),
     status: item.state === "saved" ? "verified" : "pending", previewAvailable: !!item.file || item.state === "saved", removalAvailable: item.state === "saved", local: item }));
   const all: GalleryFile[] = [...localFiles, ...files];
   const selected = all.find(file => file.id === selectedId);
   const index = all.findIndex(file => file.id === selectedId);
-  const fileCount = Math.max(counts?.total ?? total, files.length) + items.filter(item => item.state !== "saved" && !savedIds.has(item.id)).length;
+  const fileCount = Math.max(counts?.total ?? total, files.length) + items.filter(item => item.state !== "checking" && item.state !== "saved" && !savedIds.has(item.id)).length;
   function acceptCounts(body: FilePage) {
     if (Number.isFinite(body.total) && Number.isFinite(body.savedCount)) {
       const next = { total: body.total!, saved: body.savedCount! }; setCounts(next); onCountsRef.current?.(next);
