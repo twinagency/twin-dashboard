@@ -11,10 +11,12 @@ global.IS_REACT_ACT_ENVIRONMENT = true;
 URL.createObjectURL = () => 'blob:synthetic'; URL.revokeObjectURL = () => {};
 const saved = new Set(), calls = [], folderCalls = [];
 let active = 0, peak = 0, failure = true, lost = false, delay = 60;
+let holdRecovery = false, releaseRecovery, galleryFiles = [];
 global.fetch = async (url, init = {}) => {
+  if (url.startsWith('/creator-auth/uploads') && holdRecovery) await new Promise(resolve => { releaseRecovery = resolve; });
   if (url.startsWith('/creator-auth/uploads')) return { ok: true, status: 200, json: async () => ({ uploads: new URL(url, window.location.href).searchParams.get('ids').split(',').map(id => ({ id, state: saved.has(id) ? 'saved' : 'needs_file' })) }) };
   if (url === '/creator-auth/content-folders') { folderCalls.push(JSON.parse(init.body)); await new Promise(r => setTimeout(r, 60)); return { ok: true, json: async () => ({ folders: folderCalls.map(row => ({ ...row, provider: 'Google Drive', submittedAt: new Date().toISOString() })) }) }; }
-  return { ok: true, json: async () => ({ files: [], hasMore: false }) };
+  return { ok: true, json: async () => ({ files: galleryFiles, hasMore: false, total: 10, savedCount: 10 }) };
 };
 class XHR {
   upload = {};
@@ -35,7 +37,7 @@ class XHR {
 global.XMLHttpRequest = XHR;
 (async () => {
   const outfile = resolve('node_modules/.cache/creator-combined-content.cjs');
-  await build({ stdin: { contents: `import React from 'react'; import Intake from './components/CreatorContentIntake'; import {CreatorContentUploadProvider, useContentUploads} from './components/CreatorContentUploadProvider'; function Probe({show,locked}) { globalThis.__contentQueue=useContentUploads();return show ? <Intake savedPhotos={4} savedVideos={6} locked={locked} loginPath="/login"/> : <div>Questionnaire</div>; } export default function Fixture(p){return <CreatorContentUploadProvider accountId="synthetic-owner"><Probe {...p}/></CreatorContentUploadProvider>}`, resolveDir: process.cwd(), loader: 'tsx' }, outfile, bundle: true, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic', plugins: [{ name: 'router', setup(b) {
+  await build({ stdin: { contents: `import React from 'react'; import Intake from './components/CreatorContentIntake'; import {CreatorContentUploadProvider, CreatorUploadActivity, useContentUploads} from './components/CreatorContentUploadProvider'; function Probe({show,locked}) { globalThis.__contentQueue=useContentUploads();return show ? <Intake savedPhotos={4} savedVideos={6} locked={locked} loginPath="/login"/> : <div>Questionnaire</div>; } export default function Fixture(p){return <CreatorContentUploadProvider accountId="synthetic-owner"><CreatorUploadActivity/><Probe {...p}/></CreatorContentUploadProvider>}`, resolveDir: process.cwd(), loader: 'tsx' }, outfile, bundle: true, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic', plugins: [{ name: 'router', setup(b) {
     b.onResolve({ filter: /^next\/navigation$/ }, () => ({ path: 'router', namespace: 'fixture' }));
     b.onLoad({ filter: /.*/, namespace: 'fixture' }, () => ({ contents: 'export const useRouter=()=>({refresh(){}});' }));
   } }] });
@@ -75,7 +77,14 @@ global.XMLHttpRequest = XHR;
   const recovered = global.__contentQueue.items.map(({file,...row}) => row);
   saved.delete(recovered[0].id);
   await act(async () => root.unmount());
-  root = createRoot(document.getElementById('root')); await render(); await wait(40);
+  galleryFiles = [...recovered.slice(1).map(row => ({ id: row.id, name: row.name, mime: 'image/jpeg', status: 'verified', previewAvailable: false })), ...Array.from({length: 7}, (_, i) => ({id: 'existing-'+i, name: 'Existing '+i, mime: 'image/jpeg', status: 'verified', previewAvailable: false}))];
+  holdRecovery = true;
+  root = createRoot(document.getElementById('root')); await render(); await wait(180);
+  assert.doesNotMatch(document.body.textContent, /action needed|Some files need attention/, 'Pending receipt checks are not upload failures');
+  assert.match(document.body.textContent, /Checking saved files/, 'Reload reports verification instead of zero saved');
+  assert.ok([...document.querySelectorAll('button')].some(button => button.textContent.includes('View all (10)')), 'Recovered uploads do not double the saved gallery count');
+  assert.equal(calls.length, before, 'Checking saved uploads never reuploads files');
+  holdRecovery = false; await act(async () => releaseRecovery()); await wait(40);
   assert.equal(global.__contentQueue.items[0].state, 'reselect', 'Local saved labels are checked against the server on restore');
   assert.equal(global.__contentQueue.items.slice(1).every(row => row.state === 'saved'), true);
   await act(async () => root.unmount()); rmSync(outfile, { force: true });
