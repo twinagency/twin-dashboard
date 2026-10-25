@@ -47,7 +47,7 @@ try{
   releaseStart();await page.getByText('The secure connection is taking longer than expected. You can restart below.',{exact:true}).waitFor();
   assert(await page.getByRole('button',{name:'Restart sign-in',exact:true}).isEnabled());
   assert.equal(await page.getByLabel('OnlyFans password',{exact:true}).inputValue(),'synthetic-password','Opening status polls preserve typed details');
-  phase='waiting';await page.getByRole('button',{name:'Sign in',exact:true}).waitFor();
+  const readyAt=performance.now();phase='waiting';await page.getByRole('button',{name:'Sign in',exact:true}).waitFor();const observedMs=Math.round(performance.now()-readyAt);assert(observedMs<1100,'Ready sign-in should appear without a 1.5 second poll delay');console.log(JSON.stringify({brand,readyObservedMs:observedMs}));
   assert.equal(await page.getByLabel('Email address',{exact:true}).inputValue(),'fixture@example.test');
   assert.equal(await page.getByLabel('OnlyFans password',{exact:true}).inputValue(),'synthetic-password','Browser readiness preserves typed details');
   uncertain=true;await page.getByRole('button',{name:'Sign in',exact:true}).click();
