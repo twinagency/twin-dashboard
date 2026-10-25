@@ -1,0 +1,64 @@
+name: Admin OnlyFans dashboard
+on:
+  push:
+    branches: ['codex/admin-onlyfans-signin-20261025']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: node scripts/check-admin-onlyfans-sign-in.cjs
+      - run: node scripts/check-creator-platforms.cjs
+      - run: node --import tsx scripts/check-onlyfans-connections.ts
+      - run: npm run test:onlyfans-proxy
+      - run: npm run test:onlyfans-ui
+      - run: npx tsc --noEmit
+  images:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REGISTRY: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com
+      BACKEND_SHA: ce92afb1ae9b22850a9690fdb0b3e4e624a3a361
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build dashboard candidate
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA" .
+          docker push "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-dashboard:admin-$GITHUB_SHA" > candidate-images.txt
+      - name: Build exact tested enrollment and sign-in changes on the current runtime images
+        run: |
+          set -euo pipefail
+          sha256sum -c .github/release-artifacts/admin-sign-in-source.sha256
+          mkdir -p admin-context
+          tar -xzf .github/release-artifacts/admin-sign-in-source.tar.gz -C admin-context
+          printf 'FROM %s/twin-onlyfans@sha256:6194642df9974819d1ce2dd89b04ada6cdd129f25b4391cb7f8306a86bccfe90\nCOPY service/ /app/service/\nLABEL org.opencontainers.image.revision="%s"\n' "$REGISTRY" "$BACKEND_SHA" > admin-context/Dockerfile.api
+          docker build --network=none -f admin-context/Dockerfile.api -t "$REGISTRY/twin-onlyfans:admin-$BACKEND_SHA" admin-context
+          docker push "$REGISTRY/twin-onlyfans:admin-$BACKEND_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-onlyfans:admin-$BACKEND_SHA" >> candidate-images.txt
+          printf 'FROM %s/twin-dashboard@sha256:222efad2ae4f44eeb8118c804d032d2f4e5a8068b92a6c4deefbe4be2f993d4e\nCOPY --chown=pwuser:pwuser creator-sign-in/service.mjs /app/creator-sign-in/service.mjs\nLABEL org.opencontainers.image.revision="%s"\n' "$REGISTRY" "$BACKEND_SHA" > admin-context/Dockerfile.sign-in
+          docker build --network=none -f admin-context/Dockerfile.sign-in -t "$REGISTRY/twin-dashboard:admin-signin-$BACKEND_SHA" admin-context
+          docker push "$REGISTRY/twin-dashboard:admin-signin-$BACKEND_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-dashboard:admin-signin-$BACKEND_SHA" >> candidate-images.txt
+          cat candidate-images.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-sign-in-candidate-images
+          path: candidate-images.txt

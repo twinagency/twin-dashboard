@@ -4,7 +4,7 @@
 //
 // The composition is the dashboard's own: `dashboard-page`, an `h1` at
 // `text-2xl font-semibold` with a `text-sm text-muted` line under it, a row of
-// `p-4` stat cards, then a card grid — the shape `app/storage/page.tsx` uses for
+// `p-4` stat cards, then a card grid - the shape `app/storage/page.tsx` uses for
 // its creator grid. Nothing here invents a second visual language.
 
 import Link from "next/link";
@@ -110,7 +110,7 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         ) : null}
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
-      {connectionEditable ? <ConnectionEditor accountId={account.accountId} /> : null}
+      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} /> : null}
     </Card>
   );
 }
@@ -152,7 +152,7 @@ export default function AccountsView({
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">
       <CreatorPlatformHeading title="Accounts" description={creatorName
-        ? `Manage ${creatorName}’s OnlyFans accounts and choose how you want to reply.`
+        ? `Manage ${creatorName}'s OnlyFans accounts and choose how you want to reply.`
         : "Your creator accounts, connections and reply settings, together."} />
       {showPreviewChrome ? <span data-of-source-note>{sourceLabel}</span> : null}
 
@@ -163,7 +163,7 @@ export default function AccountsView({
           data-of-readonly
           className="mb-5 rounded-xl border border-[#dce8fb] bg-[#edf3fc] p-3 text-xs leading-5 text-[#2f6fed]"
         >
-          Read only. You are viewing as the creator. You can explore this account’s activity and settings here.
+          Read only. You are viewing as the creator. You can explore this account's activity and settings here.
         </div>
       ) : null}
 
