@@ -22,6 +22,7 @@ jobs:
       - run: node --import tsx scripts/check-onlyfans-agency.ts
       - run: node scripts/check-agency-proxy-onboarding.cjs
       - run: node scripts/check-proxy-details-ui.cjs
+      - run: node scripts/check-agency-account-proxy-ui.cjs
       - run: npx tsc --noEmit
   image:
     needs: checks
