@@ -6,7 +6,7 @@ import { CONFIGURATION_SCHEMA, FACT_KEYS, canonicalConfiguration, parseConfigura
 async function main() {
   const configuration = { configurationRevision: 7, fingerprint: "a".repeat(64), persona: "Approved synthetic persona.", personaTruncated: false,
     creatorFacts: Object.fromEntries(FACT_KEYS.map(key => [key, null])), factFields: FACT_KEYS.map(key => ({ key, label: key })),
-    factsValid: true, readOnlyFacts: [], modelsValid: true, salesConfigurationValid: true, onRequestSalesEnabled: false,
+    factsValid: true, readOnlyFacts: [], modelsValid: true, salesConfigurationValid: true, onRequestSalesEnabled: false, fasttDiscountResend: false, fasttPostBuyUpsell: false,
     dailyCostCapCents: 100, reasoningEffort: null, reasoningOptions: { "synthetic/model": ["low", "high"] },
     sharedFacts: { state: "unconfigured", checkedAt: null, sourceUpdatedAt: null, overrideKeys: [] },
     defaultModel: "synthetic/model", replyModelOverride: null,
@@ -17,6 +17,7 @@ async function main() {
     { creatorFacts: { unknown: "private" } }, { factFields: [] }, { readOnlyFacts: ["unknown"] }, { modelOptions: ["a", "a"] }, { sharedFacts: { ...configuration.sharedFacts, state: "current" } },
     { sharedFacts: { ...configuration.sharedFacts, overrideKeys: ["unknown"] } }, { unexpected: true },
     { salesConfigurationValid: "true" }, { onRequestSalesEnabled: 1 },
+    { fasttDiscountResend: "true" }, { fasttPostBuyUpsell: 1 }, { fasttDiscountResend: undefined }, { salesConfigurationValid: false, fasttPostBuyUpsell: true },
     { salesConfigurationValid: false, onRequestSalesEnabled: true }, {dailyCostCapCents:1.5}, {dailyCostCapCents:-1}, {reasoningEffort:17}, {reasoningOptions:{bad:["low"]}}]) {
     assert.equal(parseConfiguration({ ...read, configuration: { ...configuration, ...changed } }, "acc-a"), null);
   }
@@ -29,12 +30,17 @@ async function main() {
   for (const patch of [{ dailyCostCap: 0 }, {}, { creatorFacts: { unknown: "x" } }, { creatorFacts: { age: 28 } }, { persona: "" },
     { inheritCreatorFacts: [] }, { inheritCreatorFacts: ["job", "job"] }, { inheritCreatorFacts: ["unknown"] },
     { creatorFacts: { job: null }, inheritCreatorFacts: ["job"] }, { onRequestSalesEnabled: "true" },
-    { onRequestSalesEnabled: 1 }, { onRequestSalesEnabled: null }, { pack_send_enabled: true }])
+    { onRequestSalesEnabled: 1 }, { onRequestSalesEnabled: null }, { pack_send_enabled: true },
+    { fasttDiscountResend: "true" }, { fasttDiscountResend: 1 }, { fasttPostBuyUpsell: null }, { fastt_post_buy_upsell: true }])
     assert.equal(validConfigurationRequest({ ...browserCommand, patch }), false);
   assert(validConfigurationRequest({ ...browserCommand, patch: { inheritCreatorFacts: ["job"] } }));
   for (const onRequestSalesEnabled of [true, false]) {
     assert(validConfigurationRequest({ ...browserCommand, patch: { onRequestSalesEnabled } }));
     assert(parseConfiguration({ ...read, configuration: { ...configuration, onRequestSalesEnabled } }, "acc-a"));
+  }
+  for (const key of ["fasttDiscountResend", "fasttPostBuyUpsell"] as const) for (const value of [true, false]) {
+    assert(validConfigurationRequest({ ...browserCommand, patch: { [key]: value } }));
+    assert(parseConfiguration({ ...read, configuration: { ...configuration, [key]: value } }, "acc-a"));
   }
   assert(parseConfiguration({ ...read, configuration: { ...configuration, salesConfigurationValid: false } }, "acc-a"));
   assert(parseConfiguration({ ...read, configuration: { ...configuration,

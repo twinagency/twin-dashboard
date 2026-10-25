@@ -17,7 +17,7 @@ export async function GET(_request: NextRequest, context: Context) {
   const accountId = requestId((await context.params).accountId);
   if (!accountId) return refuse(400, "That account reference is invalid.");
   const backend = configuredConfigurationBackend(ctx.fetch); if (!backend) return refuse(503, "Configuration editing is not configured.");
-  const result = await backend.get(accountId);
+  const result = await backend.get(accountId, true);
   return result.ok ? answer({ schemaVersion: CONFIGURATION_SCHEMA, ok: true, accountId, configuration: result.data }) : refuse(result.status, result.error);
 }
 export async function POST(request: NextRequest, context: Context) {

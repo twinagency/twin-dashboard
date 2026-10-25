@@ -37,3 +37,6 @@ for(const changed of [{pages:-1},{pendingMessages:1.5},{lastCompleteSyncAt:"inva
   assert.equal(parseConnection({...read,connection:{...c,sync:{...sync,...changed}}},c.accountId),null);
 }
 console.log("PASS connection status: renewable deadlines, transient failures, rejected authentication, paused accounts, opt-in progress compatibility and no premature import completion");
+
+for (const throttleSeconds of [null, 1, 20, 86400]) assert(parseConnection({...read, connection:{...c, throttleSeconds}}, c.accountId));
+for (const throttleSeconds of [0, -1, 1.5, 86401, "20", undefined]) assert.equal(parseConnection({...read, connection:{...c, throttleSeconds}}, c.accountId), null);

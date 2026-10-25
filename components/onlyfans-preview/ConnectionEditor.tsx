@@ -49,7 +49,7 @@ export default function ConnectionEditor({ accountId }: { accountId: string }) {
       const next = response.ok ? parseConnection(await response.json(), accountId) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
-      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations); }
+      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations); }
       return true;
     } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
@@ -212,7 +212,7 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
   }
   return <Card className="mb-5 min-w-0 p-4" data-of-register-connection>
     <div className="flex flex-wrap items-center justify-between gap-4"><div><h2 className="font-semibold">Your next connection.</h2><p className="mt-2 text-sm text-muted">Add OnlyFans to an existing creator profile.</p></div><button type="button" className={buttonClass} aria-expanded={open} onClick={() => setOpen(!open)} disabled={busy || denied}>Add OnlyFans account</button></div>
-    <p className="mt-3 text-xs text-muted">Account setup currently requires administrator assistance. Guided sign-in is not available yet.</p>
+    <p className="mt-3 text-xs text-muted">Creators can sign in through Platforms → Connect OnlyFans in their creator account. Use this form for administrator-assisted setup.</p>
     {open ? <div className="mt-4">
       {notice ? <p role="status" className="mb-3 text-sm" data-of-registration-notice>{notice}</p> : null}
       {!creators.length ? <p className="text-sm text-muted">Existing Twin creators could not be loaded. Refresh the dashboard to try again.</p> : null}
