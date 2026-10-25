@@ -1,28 +1,14 @@
 "use client";
 
-// The OnlyFans inbox.
+// The OnlyFans inbox. Presentation refresh; backend command and ownership gates remain authoritative.
 //
-// The composition, the panels and the bubbles are the dashboard's own. The grid
-// is the Fans screen's three-column `users-panel` layout, the bubbles use the
-// same `tg-bubble` classes the Telegram thread renders with, and the page header
-// is the standard `dashboard-page` + `h1 text-2xl font-semibold` block. This is
-// the OnlyFans channel inside the existing product, not a second inbox design.
-//
-// Two things are deliberately unlike the Telegram thread, both for the same
-// reason — an OnlyFans fan is not a Telegram fan:
-//
-//   * every outbound bubble carries its own receipt here, because a turn is
-//     several actions and one of them can land while the next does not. The
-//     shared ChatThread footer totals Telegram **Stars**, and OnlyFans money is
-//     not Stars, so its thread component is not reused: the styling is, the
-//     Stars-shaped content is not.
-//   * the control column renders the actions the backend actually admits and
-//     says why each unavailable one is unavailable. An unresolved send offers an
-//     evidence path and never a resend.
+// The fan profile and reply controls stay visible on desktop. The existing
+// capability, ownership and delivery gates decide which commands can be used.
+// Compact rendering changes presentation only; stale reads remain visible.
 
 import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowUpRight, CheckCircle2, MessageCircle, Send } from "lucide-react";
-import { CreatorPlatformHeading } from "./CreatorPlatformPage";
+import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
+import styles from "./InboxView.module.css";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
@@ -45,8 +31,6 @@ import type {
 import { NO_PAYLOAD } from "@/lib/onlyfans-preview/types";
 import {
   DeliveryPill,
-  HealthPill,
-  ModePill,
   SimulatedTag,
   TakeoverPill,
   formatMoney,
@@ -70,6 +54,10 @@ const ORIGIN_LABEL: Record<MessageOrigin, string> = {
   imported: "imported history",
 };
 
+function fanName(fan: ConversationSummary["fan"]): string {
+  return !fan.displayName || /^unnamed fan$/i.test(fan.displayName.trim()) ? `Fan ${fan.shortRef}` : fan.displayName;
+}
+
 function AccountChips({
   accounts,
   activeAccountId,
@@ -81,28 +69,15 @@ function AccountChips({
 }) {
   if (accounts.length === 0) return null;
   return (
-    <div className="flex flex-wrap gap-1.5 border-b border-line px-3.5 py-2.5">
-      {accounts.map((account) => {
-        const selected = account.accountId === activeAccountId;
-        return (
-          <button
-            key={account.accountId}
-            type="button"
-            data-of-account-chip={account.accountId}
-            aria-pressed={selected}
-            onClick={() => onSelectAccount(account.accountId)}
-            title={`@${account.binding.handle}`}
-            className={`flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition ${
-              selected
-                ? "border-accent-2/40 bg-accent-2/[0.06] text-ink"
-                : "border-line bg-white text-muted hover:bg-elev/70 hover:text-ink"
-            }`}
-          >
-            <span className="min-w-0 truncate">@{account.binding.handle}</span>
-            <HealthPill health={account.health} />
-          </button>
-        );
-      })}
+    <div className="of-accounts" aria-label="Creator accounts">
+      {accounts.map(account => <button key={account.accountId} type="button"
+        data-of-account-chip={account.accountId} aria-pressed={account.accountId === activeAccountId}
+        onClick={() => onSelectAccount(account.accountId)} title={`${account.binding.creatorName} · @${account.binding.handle}`}
+        className="of-account">
+        <span className="of-creator-avatar creator-name" aria-hidden="true">{account.binding.creatorName.split(/\s+/).map(part => part[0]).slice(0, 2).join("").toUpperCase()}</span>
+        <span className="of-account-copy"><strong className="creator-name">{account.binding.creatorName}</strong><small>@{account.binding.handle}</small></span>
+        <span className="of-health" data-health={account.health} aria-label={account.health} title={account.healthReason ?? account.health} />
+      </button>)}
     </div>
   );
 }
@@ -122,8 +97,19 @@ function ConversationList({
   loadingMore: boolean;
   onLoadMore: () => void;
 }) {
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<"all" | "unread" | "attention">("all");
+  const matches = (conversation: ConversationSummary) =>
+    (!query.trim() || `${conversation.fan.displayName} ${conversation.fan.shortRef} ${conversation.lastMessagePreview}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
+    (filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
   return (
+    <div className="of-list-content">
+    <div className="of-list-heading"><h1>Inbox</h1></div>
+    <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search loaded conversations</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search conversations" /></label>
+    <div className="of-filters" aria-label="Filter loaded conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Needs reply"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
+    {(query || filter !== "all") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
     <RequestStateBlock
+      showStaleWarning={false}
       state={conversations}
       label="conversations"
       render={(page) =>
@@ -133,8 +119,9 @@ function ConversationList({
           </div>
         ) : (
           <div data-of-conversation-list>
+            {page.items.length > 0 && !page.items.some(matches) ? <p className="of-filter-note px-4 py-6" role="status">No matching conversations in the loaded results.</p> : null}
             <div className="divide-y divide-line/80">
-              {page.items.map((conversation) => {
+              {page.items.filter(matches).map((conversation) => {
                 const active = conversation.conversationId === selectedConversationId;
                 const priority = PRIORITY_LABEL[conversation.priority];
                 return (
@@ -144,7 +131,7 @@ function ConversationList({
                     data-of-conversation-id={conversation.conversationId}
                     aria-current={active ? "true" : undefined}
                     onClick={() => onSelectConversation(conversation.conversationId)}
-                    className={`flex w-full gap-3 px-3.5 py-3 text-left transition ${
+                    className={`of-conversation flex w-full gap-3 px-3.5 py-3 text-left transition ${
                       active
                         ? "border-l-[3px] border-accent-2 bg-accent-2/[0.045] pl-[11px]"
                         : "hover:bg-[#f8fafc]"
@@ -159,7 +146,7 @@ function ConversationList({
                     <span className="min-w-0 flex-1">
                       <span className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-ink">
-                          {conversation.fan.displayName}
+                          {fanName(conversation.fan)}
                         </span>
                         <span className="shrink-0 text-[11px] text-muted">
                           {formatAge(conversation.lastActivityAt)}
@@ -171,10 +158,11 @@ function ConversationList({
                       <span className="mt-1.5 flex flex-wrap items-center gap-1">
                         {conversation.requiresAttention ? (
                           <span className="rounded-full bg-[#fdf2f6] px-1.5 py-0.5 text-[10px] font-semibold text-[#9b2f62]">
-                            {priority.label}
+                            {conversation.priority === "normal" ? "Needs reply" : priority.label}
                           </span>
                         ) : null}
-                        <DeliveryPill outcome={conversation.delivery} />
+                        {["failed", "partial", "unknown", "refused"].includes(conversation.delivery) ? <DeliveryPill outcome={conversation.delivery} /> : null}
+                        {conversation.unreadCount > 0 ? <span className="of-unread" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount}</span> : null}
                         <TakeoverPill state={conversation.takeoverState} />
                       </span>
                     </span>
@@ -199,6 +187,7 @@ function ConversationList({
         )
       }
     />
+    </div>
   );
 }
 
@@ -209,7 +198,6 @@ function ConversationList({
  */
 function Thread({ detail }: { detail: ConversationDetail }) {
   const lastIndex = detail.messages.length - 1;
-  const outbound = detail.messages.filter((message) => message.direction === "outbound");
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Open on the newest message, the way the Telegram thread does: a bottom-anchored
@@ -242,13 +230,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
           const endsRun = index === lastIndex || next.direction !== message.direction;
           return (
             <div key={message.messageId}>
-              {index === lastIndex && detail.messages.length > 1 ? (
-                <div className="tg-newline my-2 -mx-3">
-                  <span className="h-px flex-1 bg-white/40" />
-                  latest message
-                  <span className="h-px flex-1 bg-white/40" />
-                </div>
-              ) : null}
+
               <div className={"flex " + (inbound ? "justify-start" : "justify-end") + (startsRun ? " mt-2" : " mt-0.5")}>
                 <div className="flex max-w-[78%] flex-col items-stretch gap-1">
                   <div
@@ -265,11 +247,8 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                   </div>
                   {!inbound ? (
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
-                      <DeliveryPill outcome={message.delivery} />
-                      {message.evidenceRef ? (
-                        <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span>
-                      ) : null}
-                      <span className="text-[10px] text-white/90">from {ORIGIN_LABEL[message.origin]}</span>
+                      {message.delivery === "sent" ? <span className="of-sent-receipt" title={`Provider accepted this message from ${ORIGIN_LABEL[message.origin]}. Read and purchase status are not confirmed.${message.evidenceRef ? " Receipt recorded." : ""}`}><Check size={13} aria-hidden="true" /><span className="sr-only">Sent to provider</span></span> : <DeliveryPill outcome={message.delivery} />}
+                      {message.delivery !== "sent" && message.evidenceRef ? <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span> : null}
                     </div>
                   ) : null}
                 </div>
@@ -279,12 +258,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
         })
       )}
 
-      {outbound.length > 0 ? (
-        <div className="mt-3 flex items-center gap-2.5 rounded-lg bg-black/20 px-3 py-2 text-[11px] text-white/90">
-          <span>last active {formatAge(detail.summary.lastActivityAt)}</span>
-          <span className="ml-auto tabular-nums">{outbound.length} outbound</span>
-        </div>
-      ) : null}
+
       </div>
     </div>
   );
@@ -347,9 +321,9 @@ function Composer({
   }
 
   return (
-    <div className="border-t border-line p-3">
+    <div className="of-composer border-t border-line p-3">
       <form onSubmit={handleSubmit} className="space-y-2">
-        {!simulated && account.capabilities.sendManualMessage === "available" ? <div className="space-y-1">
+        {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
           <label className="block text-[11px] font-medium text-muted">Paid content
             <select data-of-manual-offer value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)} disabled={!canSend}
               className="mt-1 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink disabled:bg-elev disabled:text-muted">
@@ -360,8 +334,8 @@ function Composer({
           {catalogueError ? <p className="text-[11px] text-muted" role="status">{catalogueError}</p> : null}
           {catalogueCursor || catalogueError ? <button type="button" className="text-[11px] font-semibold text-accent disabled:text-muted" disabled={!canSend || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more saved content" : "Retry saved content"}</button> : null}
           {catalogItemId ? <p className="text-[11px] text-muted">This reply will include the saved item at its catalogue price and previews.</p> : null}
-        </div> : null}
-        <div className="flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
+        </div></details> : null}
+        <div className="of-input flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
           <label className="min-w-0 flex-1">
             <span className="sr-only">Manual message</span>
             <textarea
@@ -393,7 +367,7 @@ function Composer({
               bodyProblem ??
               (simulated ? `Nothing is sent. @${account.binding.handle} is a fixture, and this preview has no delivery authority.`
                 : actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason ??
-                  "Replies enter the delivery queue. Provider acceptance appears in the thread.")}
+                  null)}
           </span>
         </div>
       </form>
@@ -468,53 +442,26 @@ function ActionColumn({
         </div>
       ) : null}
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Actions</div>
-        <div className="mt-2 space-y-2" data-of-actions>
-          {actionSet.available.map((entry) => {
-            if (entry.action === "send_manual_message") return null;
-            const primary = entry.action === "resolve_delivery_evidence";
-            const needsDecision = entry.action === "resolve_delivery_evidence" && decision === null;
-            return (
-              <div key={entry.action}>
-                <button
-                  type="button"
-                  data-of-action={entry.action}
-                  disabled={needsDecision || pending}
-                  title={needsDecision ? "Choose what the evidence shows first." : undefined}
-                  onClick={() =>
-                    entry.action === "resolve_delivery_evidence"
-                      ? incident && decision && onResolve(incident.attemptId, decision)
-                      : onCommand(entry.action, NO_PAYLOAD)
-                  }
-                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                    primary
-                      ? "bg-accent text-white hover:bg-accent-deep"
-                      : "border border-line text-ink hover:bg-elev/70"
-                  } disabled:cursor-not-allowed disabled:bg-elev disabled:text-muted`}
-                >
-                  {entry.label}
-                  <ArrowUpRight className="size-4 opacity-70" />
-                </button>
-                {needsDecision ? (
-                  <p className="mt-1 text-[11px] leading-4 text-muted">
-                    Choose what the evidence shows before resolving.
-                  </p>
-                ) : null}
-              </div>
-            );
-          })}
-          {actionSet.available.length === 0 ? (
-            <p className="rounded-lg bg-[#fbfdfe] px-3 py-2 text-xs leading-5 text-muted">
-              No action is available for this conversation right now.
-            </p>
-          ) : null}
-        </div>
+      <div className="of-reply-actions" data-of-actions>
+        {actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action)).map(entry => {
+          const resolution = entry.action === "resolve_delivery_evidence";
+          const needsDecision = resolution && decision === null;
+          const primary = resolution || ["request_takeover", "release_takeover", "resume_automation"].includes(entry.action);
+          const label = entry.action === "pause_automation" ? "Pause AI" : entry.action === "resume_automation" ? "Resume AI" : entry.action === "release_takeover" ? "Hand back to AI" : entry.label;
+          const Icon = entry.action === "request_takeover" ? UserRound : entry.action === "pause_automation" ? Pause : Sparkles;
+          return <div key={entry.action}><button type="button" data-of-action={entry.action} disabled={needsDecision || pending}
+            title={needsDecision ? "Choose what the evidence shows first." : undefined}
+            onClick={() => resolution ? incident && decision && onResolve(incident.attemptId, decision) : onCommand(entry.action, NO_PAYLOAD)}
+            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending ? "Saving…" : label}</button>
+            {needsDecision ? <p className="of-filter-note">Choose what the evidence shows before resolving.</p> : null}</div>;
+        })}
+        {actionSet.available.every(entry => ["send_manual_message", "mark_no_contact"].includes(entry.action)) ? <p className="of-filter-note">No reply changes are available right now.</p> : null}
       </div>
+      {actionSet.available.some(entry => entry.action === "mark_no_contact") ? <details className="of-more-actions"><summary>More actions</summary><button type="button" data-of-action="mark_no_contact" disabled={pending} onClick={() => onCommand("mark_no_contact", NO_PAYLOAD)} className="of-control-button of-secondary">Stop further contact</button></details> : null}
 
       {actionSet.blocked.length > 0 ? (
         <details open={!!incident} className="of-blocked-actions">
-          <summary className="text-xs font-semibold text-muted">Unavailable actions ({actionSet.blocked.length})</summary>
+          <summary className="text-xs font-semibold text-muted">Control availability</summary>
           <div className="mt-2 space-y-1.5">
             {actionSet.blocked.map((entry) => (
               <div key={entry.action} className="rounded-lg bg-[#fbfdfe] px-3 py-2">
@@ -556,11 +503,7 @@ function ActionColumn({
         </div>
       ) : null}
 
-      <div className="text-[11px] leading-5 text-muted">
-        {viewer.canManage
-          ? "Actions request a change. The backend decides whether it is allowed."
-          : "This session is read only, so every action is refused before it is offered."}
-      </div>
+
     </div>
   );
 }
@@ -568,45 +511,25 @@ function ActionColumn({
 function FanContext({ detail }: { detail: ConversationDetail }) {
   return (
     <div className="flex flex-col gap-5">
-      {detail.ownedMedia.length > 0 ? (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-[#e8f5f0] p-3">
-            <div className="text-[11px] font-medium text-good">Owned items</div>
-            <div className="mt-1 text-lg font-semibold text-good">{detail.ownedMedia.length}</div>
-          </div>
-          <div className="rounded-xl bg-[#fff6e5] p-3">
-            <div className="text-[11px] font-medium text-[#9a6810]">Paid total</div>
-            <div className="mt-1 text-lg font-semibold text-[#9a6810]">
-              {formatMoney({
-                currency: detail.ownedMedia[0].price.currency,
-                minorUnits: detail.ownedMedia.reduce((total, item) => total + item.price.minorUnits, 0),
-              })}
-            </div>
-          </div>
-        </div>
-      ) : null}
+      {detail.ownedMedia.length > 0 ? <div className="of-fan-metrics">
+        <div><strong>{detail.ownedMedia.length}</strong><span>Recorded purchases</span></div>
+        <div><strong>{Array.from(new Set(detail.ownedMedia.map(item => item.price.currency))).map(currency => formatMoney({ currency, minorUnits: detail.ownedMedia.filter(item => item.price.currency === currency).reduce((sum, item) => sum + item.price.minorUnits, 0) })).join(" · ")}</strong><span>Recorded purchase value</span></div>
+      </div> : null}
 
-      <div>
-        <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">
-          Saved facts
-        </div>
+      <details className="of-facts" open={detail.facts.length > 0}><summary>Saved facts {detail.facts.length ? <span>{detail.facts.length}</span> : null}</summary>
         <ul className="mt-2 space-y-2">
           {detail.facts.map((item) => (
-            <li key={`${item.label}-${item.value}`} className="rounded-xl border border-line bg-[#fbfdfe] p-3">
+            <li key={`${item.label}-${item.value}`} className="of-fact" title={`Source: ${item.source}`}>
               <div className="text-[11px] font-medium text-muted">{item.label}</div>
               <div className="mt-0.5 text-sm leading-5 text-ink">{item.value}</div>
-              <div className="mt-1">
-                <span className="rounded-full bg-elev px-2 py-0.5 text-[10px] font-medium text-muted">
-                  {item.source}
-                </span>
-              </div>
+
             </li>
           ))}
           {detail.facts.length === 0 ? (
             <li className="text-xs text-muted">No stored facts for this fan yet.</li>
           ) : null}
         </ul>
-      </div>
+      </details>
 
       {detail.ownedMedia.length > 0 ? (
         <div>
@@ -733,8 +656,8 @@ export default function InboxView({
     activeAccount && activeAccount.health !== "connected" ? activeAccount.healthReason : null;
 
   return (
-    <div className="users-workspace lg:h-full" data-of-surface="onlyfans-inbox">
-      <CreatorPlatformHeading title="Inbox" description="A little closer to your fans. Your conversations and their details, together." />
+    <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
+      {[accountsState.status, conversations.status, detailState?.status].includes("stale") ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span><strong>Sync needs attention.</strong> Newer activity may be missing.</span><a href="/onlyfans/accounts">Check connection <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
       {!viewer.canManage ? (
         <div
           data-of-readonly
@@ -752,9 +675,10 @@ export default function InboxView({
             onClick={() => setMobilePanel(key)} disabled={key !== "conversations" && !selectedConversationId}
             className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-ink text-white" : "text-muted"}`}>{label}</button>)}
       </nav>
-      <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-3" data-of-inbox-layout>
+      <div className="of-layout" data-of-inbox-layout>
         <Card size="sm" className={`users-panel users-panel-list h-[min(34rem,65dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "conversations" ? "flex" : "hidden lg:flex"}`}>
           <RequestStateBlock
+            showStaleWarning={false}
             state={accountsState}
             label="account scope"
             render={(list) => (
@@ -784,21 +708,18 @@ export default function InboxView({
                 <FanAvatar
                   cloneId=""
                   telegramId={null}
-                  name={detail.summary.fan.displayName}
+                  name={fanName(detail.summary.fan)}
                   className="h-9 w-9 text-[11px]"
                 />
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-semibold text-ink">
-                    {detail.summary.fan.displayName}
+                    {fanName(detail.summary.fan)}
                   </div>
                   <div className="truncate text-[11px] text-muted">
                     <span className="creator-name">{activeAccount.binding.creatorName}</span> · @{activeAccount.binding.handle}
                   </div>
                 </div>
-                <ModePill mode={detail.summary.automationMode} />
-                <span className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] font-medium text-muted">
-                  OnlyFans
-                </span>
+
               </div>
 
               <Thread detail={detail} />
@@ -828,17 +749,18 @@ export default function InboxView({
               Pick a conversation to see the fan and the controls.
             </div>
           ) : (
-            <div className="flex flex-col gap-5">
-              <div className="flex items-center gap-3">
+            <div className="of-fan-sidebar flex flex-col gap-5">
+              <h2 className="of-section-heading">Fan profile</h2>
+              <div className="of-profile-identity flex items-center gap-3">
                 <FanAvatar
                   cloneId=""
                   telegramId={null}
-                  name={detail.summary.fan.displayName}
+                  name={fanName(detail.summary.fan)}
                   className="h-11 w-11 text-xs"
                 />
                 <div className="min-w-0">
                   <div className="truncate font-semibold text-ink">
-                    {detail.summary.fan.displayName}
+                    {fanName(detail.summary.fan)}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
                     <span>Ref {detail.summary.fan.shortRef}</span>
@@ -846,7 +768,8 @@ export default function InboxView({
                 </div>
               </div>
 
-              {handover}
+              <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
+              {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn
                 actionSet={actionSet}
                 viewer={viewer}
@@ -863,6 +786,7 @@ export default function InboxView({
                   })
                 }
               />
+              </section>
 
               <FanContext detail={detail} />
               <details open={!!detail.deliveryIncident}><summary className="text-sm font-semibold">Delivery history</summary><DeliveryLedger messages={detail.messages} /></details>
@@ -875,13 +799,7 @@ export default function InboxView({
         </Card>
       </div>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-white p-3 text-xs text-muted">
-        <CheckCircle2 className="size-4 text-muted" />
-        <span>
-          A sent bubble means the provider accepted it. It never means read, and it never means
-          purchased.
-        </span>
-      </div>
+
     </div>
   );
 }

@@ -74,8 +74,11 @@ export function RequestStateBlock<T>({
   state,
   label,
   render,
+  showStaleWarning = true,
 }: {
   state: RequestState<T>;
+  /** Suppress only when the containing workspace supplies a consolidated warning. */
+  showStaleWarning?: boolean;
   label: string;
   render: (data: T, freshness: Freshness | null) => ReactNode;
 }) {
@@ -99,12 +102,12 @@ export function RequestStateBlock<T>({
     case "stale":
       return (
         <div className="space-y-3">
-          <StateCard
+          {showStaleWarning ? <StateCard
             tone="warn"
             title="Data may be outdated"
             detail={state.freshness.asOf ? `The last complete sync was ${formatAge(state.freshness.asOf)}. Newer activity may not appear here.` : "Synchronization is incomplete or has not been verified. Newer activity may be missing."}
-          />
-          <div className="opacity-90">{render(state.data, state.freshness)}</div>
+          /> : null}
+          <div className={showStaleWarning ? "opacity-90" : undefined}>{render(state.data, state.freshness)}</div>
         </div>
       );
     case "ready":

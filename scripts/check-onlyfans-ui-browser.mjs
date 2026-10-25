@@ -28,7 +28,7 @@ try {
   const page = await browser.newPage(), errors = [];
   page.on("pageerror", error => errors.push(String(error)));
   const pages = ["overview", "accounts", "inbox", "campaigns", "content", "sales", "settings", "operations"];
-  for (const width of [390, 430, 768, 1440]) {
+  for (const width of [390, 430, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     for (const section of pages) {
       await page.goto(`${origin}/onlyfans/${section}/`, { waitUntil: "load" });
@@ -38,6 +38,15 @@ try {
       if (section === "settings") await page.locator("[data-of-edit-persona]").waitFor();
       const sizing = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: innerWidth, main: document.querySelector("main")?.scrollWidth }));
       check(sizing.page <= sizing.viewport + 1, `${section} overflows at ${width}px: ${JSON.stringify(sizing)}`);
+      if (section === "inbox" && width >= 1024) {
+        const chat = await page.locator(".users-panel-chat").boundingBox();
+        const fan = await page.locator(".users-panel-profile").boundingBox();
+        const composer = await page.locator("[data-of-composer]").boundingBox();
+        check(!!chat && !!fan && fan.x >= chat.x + chat.width - 1 && Math.abs(fan.y - chat.y) < 1, `Fan sidebar remains beside the conversation at ${width}px`);
+        check(!!composer && composer.y + composer.height <= 1000, `Reply box stays inside the viewport at ${width}px`);
+        check(await page.locator("[data-of-action=request_takeover]").isVisible(), `Manual takeover remains visible at ${width}px`);
+        check(await page.locator("[data-of-action=pause_automation]").isVisible(), `Pause AI remains visible at ${width}px`);
+      }
       await page.screenshot({ path: path.join(shots, `${width}-${section}.png`), fullPage: true });
     }
   }
@@ -64,7 +73,7 @@ try {
   const refused = await page.evaluate(async () => (await fetch("/api/onlyfans-configuration/accounts/synthetic", { method: "POST", body: "{}" })).status);
   check(refused === 403, "Synthetic review refuses every external mutation");
   check(errors.length === 0, `Browser errors: ${errors.join("; ")}`);
-  console.log(`OnlyFans UI synthetic browser: ${checks} assertions passed, 0 failed; 32 page/viewport cases. No live-account or provider acceptance.`);
+  console.log(`OnlyFans UI synthetic browser: ${checks} assertions passed, 0 failed; 48 page/viewport cases. No live-account or provider acceptance.`);
 } finally {
   await browser?.close();
   await new Promise(resolve => server.close(resolve));
