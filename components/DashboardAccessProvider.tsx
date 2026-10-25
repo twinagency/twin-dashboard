@@ -87,6 +87,10 @@ export default function DashboardAccessProvider({
       if(previousAgency) root.setAttribute("data-agency",previousAgency); else root.removeAttribute("data-agency");
     };
   },[lynq]);
+  useEffect(() => {
+    if (!readOnly || agencyName?.trim().toLowerCase() !== "moxy") return;
+    return lockReadOnlyMutationForms(document.body);
+  }, [readOnly, agencyName]);
   return <Access.Provider value={{
     audience: resolvedAudience,
     readOnly,
@@ -127,4 +131,36 @@ export function ReadOnlyEditor({children}:{children:ReactNode}) {
     return ()=>observer.disconnect();
   },[readOnly]);
   return <div ref={ref} className="contents">{children}</div>;
+}
+
+
+// Plain POST forms in onboarding/team pages also honor the shared read-only
+// identity. GET filters, links, details and channel navigation remain usable.
+// Server middleware independently blocks submissions, including crafted requests.
+export function lockReadOnlyMutationForms(root: HTMLElement): () => void {
+  const previous = new Map<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement, boolean>();
+  const isMutation = (form: HTMLFormElement) => form.method.toLowerCase() !== "get"
+    && !["/agency/logout", "/agency/clone-scope"].includes(new URL(form.action, document.baseURI).pathname);
+  const lock = () => root.querySelectorAll<HTMLFormElement>("form").forEach(form => {
+    if (!isMutation(form)) return;
+    form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button").forEach(control => {
+      if (!previous.has(control)) previous.set(control, control.disabled);
+      control.disabled = true;
+    });
+  });
+  const prevent = (event: Event) => {
+    if (event.target instanceof HTMLFormElement && isMutation(event.target)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+  lock();
+  const observer = new MutationObserver(lock);
+  observer.observe(root, { childList: true, subtree: true });
+  root.addEventListener("submit", prevent, true);
+  return () => {
+    observer.disconnect();
+    root.removeEventListener("submit", prevent, true);
+    previous.forEach((disabled, control) => { control.disabled = disabled; });
+  };
 }

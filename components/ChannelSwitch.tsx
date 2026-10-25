@@ -58,6 +58,7 @@ export default function ChannelSwitch({
             <img className="workspace-channel-logo" src={"/brand/platforms/" + channel.channel + ".svg"} width="28" height="28" alt="" />
           )}
           <span>{channel.label}</span>
+          {moxyTelegram && channel.channel === "onlyfans" && <span className="workspace-channel-new" aria-label="New">New</span>}
         </Link>
       ))}
     </div>

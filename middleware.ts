@@ -3,7 +3,7 @@ import { agencyOnlyFansRequest } from "@/lib/onlyfans/agency-scope";
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
-import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
+import { agencyCanManage, agencyManagementRequestAllowed, MOXY_MANAGEMENT_AGENCY_ID } from "@/lib/agency-management-policy";
 import { canonicalDashboardOrigin, dashboardOrigin, isLynqHost, LYNQ_DASHBOARD_ORIGIN, trustedFormOrigin } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity, agencyIdentityById } from "@/lib/agency-identity";
@@ -110,6 +110,17 @@ async function routeMiddleware(req: NextRequest) {
     if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }
+  // Moxy viewers can browse, switch creator scope and sign out, but every
+  // mutation is refused before public/onboarding/team route shortcuts.
+  // Resolve current membership on each write so existing sessions lose access immediately.
+  const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
+  const isMutation = req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method);
+  const sessionNavigation = !req.headers.has("next-action") && req.method === "POST"
+    && ["/moxy/auth", "/agency/logout", "/agency/clone-scope"].includes(pathname);
+  const writeIdentity = agencyToken && isMutation && !sessionNavigation ? await agencyIdentity(agencyToken) : undefined;
+  if (writeIdentity?.id === MOXY_MANAGEMENT_AGENCY_ID && !agencyCanManage(writeIdentity))
+    return privateResponse(NextResponse.json({ ok: false, error: "Your Moxy access is view-only." }, { status: 403 }));
+
   // Fixed-account, fixed-expiry owner testing link. The handler checks the key
   // and current account before issuing the ordinary scoped creator session.
   if (/^\/creator-testing\/[a-f0-9]{64}$/.test(pathname)) {
@@ -234,9 +245,8 @@ async function routeMiddleware(req: NextRequest) {
     return new NextResponse("This page or setting is not available to creators", { status: 403 });
   }
   if (SELF_AUTHENTICATED_PREFIXES.some((p) => pathname.startsWith(p))) return withPathname(req);
-  const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
   if (agencyToken || viewAs?.targetType === "agency") {
-    const identity = agencyToken ? await agencyIdentity(agencyToken) : await agencyIdentityById(viewAs!.targetId);
+    const identity = agencyToken ? (writeIdentity ?? await agencyIdentity(agencyToken)) : await agencyIdentityById(viewAs!.targetId);
     if (!identity) return agencyToken ? NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req))) : NextResponse.redirect(new URL("/admin/view-as", dashboardOrigin(req)));
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
