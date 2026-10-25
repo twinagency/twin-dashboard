@@ -111,7 +111,7 @@ try {
       if (width < 1024) await page.getByRole("button", {name:"Open navigation",exact:true}).first().click();
       check((await navigation.locator("[data-channel-option]").evaluateAll(items=>items.map(item=>item.getAttribute("data-channel-option")))).join(",")==="all,telegram,onlyfans", brand+": all three channels on desktop and mobile");
       if (brand === "Moxy") {
-        check(await navigation.locator('[data-channel-option="telegram"]').getAttribute("href")==="/clones?workspace=telegram", "Moxy Telegram stays on the agency-scoped creator route");
+        check(await navigation.locator('[data-channel-option="telegram"]').getAttribute("href")==="/revenue?workspace=telegram", "Moxy Telegram stays on the agency-scoped creator route");
         check(await navigation.locator('[data-channel-option="all"]').getAttribute("href")==="/revenue", "Moxy All channels stays on agency earnings");
         if (width < 1024) {
           check(await page.locator('.dashboard-mobile-header img[alt^="Moxy"]').getAttribute("src")==="/moxy/moxy-ai-dark.svg", "Moxy mobile bar uses the black wordmark");

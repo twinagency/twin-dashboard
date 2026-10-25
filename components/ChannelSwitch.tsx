@@ -41,7 +41,7 @@ export default function ChannelSwitch({
       {offered.map((channel) => (
         <Link
           key={channel.channel}
-          href={channel.channel === "all" && audience === "agency" ? "/revenue" : channel.channel === "telegram" && moxyTelegram ? "/clones?workspace=telegram" : channel.href}
+          href={channel.channel === "all" && audience === "agency" ? "/revenue" : channel.channel === "telegram" && moxyTelegram ? "/revenue?workspace=telegram" : channel.href}
           aria-current={channel.channel === active ? "page" : undefined}
           title={channel.summary}
           data-channel-option={channel.channel}

@@ -39,3 +39,7 @@ html[data-agency="moxy"] .dashboard-mobile-header :is(a, button) {
 html[data-agency="moxy"] .dashboard-mobile-header :is(a, button):hover {
   background-color: #dcefff;
 }
+
+/* The Moxy wordmark is unframed, including drawer autofocus. */
+html[data-agency="moxy"] a:has(> img[alt^="Moxy"]) { border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
+html[data-agency="moxy"] a:has(> img[alt^="Moxy"]):focus-visible { opacity: .65; }
