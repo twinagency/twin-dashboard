@@ -4,6 +4,7 @@ import {ArrowRight,CheckCircle2,LoaderCircle,RefreshCw} from 'lucide-react';
 import {currentSignInAttempt,parseSignInAttempt,type SignInAttempt} from '@/lib/onlyfans-sign-in/model';
 import {parsePublicProxy,type PublicProxy} from '@/lib/onlyfans-managed-proxy/public';
 import {ProxySummary} from '@/components/onlyfans-preview/ProxyDetails';
+import {signInRequestSignal} from '@/lib/onlyfans-sign-in/request-signal';
 import styles from './HostedConnect.module.css';
 
 const creatorRoute='/creator-auth/platforms/onlyfans/sign-in';
@@ -29,9 +30,9 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
     }
   },[save,sessionMessage]);
   const command=useCallback(async(action:string,extra:Record<string,unknown>={},receiveFrame?: (blob:Blob)=>Promise<void>)=>{
-    commands.current++;
+    commands.current++;const request=signInRequestSignal(12000);
     try{
-      const response=await fetch(route,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json',...(receiveFrame?{Accept:'image/png'}:{})},body:JSON.stringify({action,profileId,...extra,...(connection&&['start','confirm'].includes(action)?{connection}:{})}),signal:AbortSignal.timeout(12000)});
+      const response=await fetch(route,{method:'POST',credentials:'same-origin',redirect:'error',headers:{'Content-Type':'application/json',...(receiveFrame?{Accept:'image/png'}:{})},body:JSON.stringify({action,profileId,...extra,...(connection&&['start','confirm'].includes(action)?{connection}:{})}),signal:request.signal});
       if(response.ok&&receiveFrame&&['image/png','image/jpeg'].includes(response.headers.get('content-type')?.split(';')[0]??'')){
         let value:SignInAttempt|null=null;
         try{value=parseSignInAttempt(JSON.parse(decodeURIComponent(response.headers.get('x-twin-sign-in-attempt')??'')));}catch{}
@@ -42,7 +43,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
       }
       const result=await response.json().catch(()=>null),value=result?.ok===true?parseSignInAttempt(result.attempt):null;
       if(!response.ok||!value)throw new SignInRequestError(response.status,result?.error||'Your sign-in could not be confirmed. Please try again.');if(action==='start')pendingProxy.current=parsePublicProxy(result.proxy);return value;
-    }finally{commands.current--;}
+    }finally{request.dispose();commands.current--;}
   },[profileId,route,connection]);
   const start=useCallback(async()=>{
     if(disabled||sessionLost)return;setBusy(true);setNotice('');setStatusNotice('');const version=++generation.current;
@@ -55,11 +56,11 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
   useEffect(()=>{
     if(!attempt||!['opening','waiting','submitted'].includes(attempt.phase)||disabled||sessionLost)return;
     let active=true,running=false;const controller=new AbortController();
-    const poll=async()=>{if(running||commands.current||document.visibilityState==='hidden')return;running=true;const version=generation.current,input=inputVersion.current;try{
-      const response=await fetch(route+'?attempt='+attempt.id,{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,AbortSignal.timeout(12000)])});const body=await response.json().catch(()=>null),value=body?.ok===true?parseSignInAttempt(body.attempt):null;
+    const poll=async()=>{if(running||commands.current||document.visibilityState==='hidden')return;running=true;const version=generation.current,input=inputVersion.current,request=signInRequestSignal(12000,[controller.signal]);try{
+      const response=await fetch(route+'?attempt='+attempt.id,{cache:'no-store',credentials:'same-origin',redirect:'error',signal:request.signal});const body=await response.json().catch(()=>null),value=body?.ok===true?parseSignInAttempt(body.attempt):null;
       if(!response.ok||!value)throw new SignInRequestError(response.status,body?.error||'Your sign-in status could not be loaded.');
       if(active&&version===generation.current&&input===inputVersion.current&&!commands.current){save(value);setStatusNotice('');if(value.phase==='submitted')await changed.current(value.enrollmentId);}
-    }catch(error){if(active&&version===generation.current){setStatusNotice(error instanceof Error?error.message:'Your sign-in status could not be loaded.');requestError(error);}}finally{running=false;}};
+    }catch(error){if(active&&version===generation.current){setStatusNotice(error instanceof SignInRequestError?error.message:'Your sign-in status could not be loaded.');requestError(error);}}finally{request.dispose();running=false;}};
     const timer=window.setInterval(()=>void poll(),1500);void poll();return()=>{active=false;controller.abort();clearInterval(timer);};
   },[attempt?.id,attempt?.phase,disabled,sessionLost,save,requestError]);
   useEffect(()=>{
@@ -85,16 +86,16 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
       }finally{image.close();}
     };
     paintFrame.current=paint;
-    const draw=async()=>{if(running)return;running=true;redraw=false;const version=inputVersion.current;try{
+    const draw=async()=>{if(running)return;running=true;redraw=false;const version=inputVersion.current;let request:ReturnType<typeof signInRequestSignal>|undefined;try{
       await queue.current;if(!active)return;if(version!==inputVersion.current){redraw=true;return;}
       if(lastPaint.current.version===version&&performance.now()-lastPaint.current.time<1000){redraw=false;return;}
       // Only a frame requested after the input queue drained can unlock clicks.
-      frameRequest=new AbortController();
-      const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:AbortSignal.any([controller.signal,frameRequest.signal,AbortSignal.timeout(12000)])});
+      frameRequest=new AbortController();request=signInRequestSignal(12000,[controller.signal,frameRequest.signal]);
+      const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:request.signal});
       if([401,403,404,410].includes(r.status))throw new SignInRequestError(r.status,'Your sign-in screen could not be loaded.');
       if(!r.ok||!['image/jpeg','image/png'].includes(r.headers.get('content-type')?.split(';')[0]??''))throw new Error('frame_unavailable');
       await paint(await r.blob(),version);
-    }catch(error){if(active&&!frameRequest?.signal.aborted){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3){screenBlocked.current=true;setScreenReady(false);setNotice(screenError);}}}finally{frameRequest=null;running=false;if(active)schedule(redraw?0:1000);}};
+    }catch(error){if(active&&!frameRequest?.signal.aborted){if(error instanceof SignInRequestError)requestError(error);else if(++badFrames>=3){screenBlocked.current=true;setScreenReady(false);setNotice(screenError);}}}finally{request?.dispose();frameRequest=null;running=false;if(active)schedule(redraw?0:1000);}};
     void draw();return()=>{active=false;screenBlocked.current=true;pointer.current=null;controller.abort();frameRequest?.abort();cancelFrame.current=null;refreshFrame.current=null;paintFrame.current=null;clearTimeout(timer);};
   },[attempt?.id,attempt?.phase,disabled,sessionLost,showScreen,requestError]);
   function send(input:Record<string,unknown>){
@@ -145,7 +146,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
   const failed=attempt&&['failed','wrong_account','expired','cancelled'].includes(attempt.phase);
   return <section className={styles.root} data-hosted-connect data-stage={showScreen&&attempt?.phase==='waiting'?'verification':'form'}>
     {proxy&&!sessionLost&&<ProxySummary proxy={proxy}/>}
-    {!sessionLost&&((!attempt&&!notice)||attempt?.phase==='opening')&&<div className={styles.loading}><LoaderCircle className={styles.spinner} size={22}/><p>Opening your OnlyFans sign-in…</p></div>}
+    {!sessionLost&&!statusNotice&&((!attempt&&!notice)||attempt?.phase==='opening')&&<div className={styles.loading}><LoaderCircle className={styles.spinner} size={22}/><p>Opening your OnlyFans sign-in…</p></div>}
     {attempt?.phase==='waiting'&&<>
       {!showScreen?<form ref={loginForm} className={styles.loginForm} aria-label="OnlyFans login" onSubmit={event=>void login(event)}>
         <div className={styles.welcome}><span className={styles.step}>YOUR ACCOUNT</span><h3>Bring your OnlyFans<br/>into your space.</h3><p>Sign in once to connect your account.</p></div>
@@ -170,7 +171,7 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged,en
     {failed&&!notice&&<p role="status">{attempt.phase==='wrong_account'?'That is a different OnlyFans account. Restart and sign in to the selected account.':'Your sign-in ended. Start again to connect.'}</p>}
     {statusNotice&&!notice&&<p role="status" className={styles.notice}>{statusNotice}</p>}
     {notice&&<p role="status" className={styles.notice}>{notice}</p>}
-    {!sessionLost&&(notice||failed)&&<button className={styles.secondary} disabled={busy||disabled} onClick={()=>void restart()}><RefreshCw size={15}/>Restart sign-in</button>}
+    {!sessionLost&&(notice||failed||(statusNotice&&attempt?.phase==='opening'))&&<button className={styles.secondary} disabled={busy||disabled} onClick={()=>void restart()}><RefreshCw size={15}/>Restart sign-in</button>}
     {!showScreen&&<p className={styles.privacy}>Your password is used to connect and isn’t saved by Twin.</p>}
   </section>;
 }
