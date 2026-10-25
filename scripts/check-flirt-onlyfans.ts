@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { isFlirtOnlyFansOwner } from "../lib/onlyfans/flirt-owner";
 import { identity } from "../deployment/flirt-live-twin.cjs";
 import { agencyOnlyFansRequest } from "../lib/onlyfans/agency-scope";
-const on = { FLIRT_SHARED_ONLYFANS_ENABLED: "true" } as NodeJS.ProcessEnv;
+const on = { FLIRT_SHARED_ONLYFANS_ENABLED: "true" };
 assert.equal(isFlirtOnlyFansOwner(identity(), true, on), true);
 assert.equal(isFlirtOnlyFansOwner(identity(), false, on), false);
 assert.equal(isFlirtOnlyFansOwner(null, true, on), false);
