@@ -137,7 +137,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse={!isMoxy(agency?.name)} agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
-            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} allTimeUsdPerStar={headerUsdPerStar} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
+            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} allTimeUsdPerStar={headerUsdPerStar} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{isMoxy(agency?.name) && !canManage && <p role="status" className="mx-4 mt-3 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-muted">View-only access · You can browse every available page. Changes and account connections are disabled.</p>}{children}</MainShell>
             <WorkspaceMobileNav activeCloneId={activeCloneId} channels={channelScope.allowed} />
           </div>
         </WorkspaceShell>
