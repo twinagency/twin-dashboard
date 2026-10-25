@@ -22,6 +22,7 @@ async function main(){
   '@/lib/session':`export const SESSION_COOKIE='master_session';export async function verifySessionToken(token){return globalThis.__adminSignInTest.authed&&token==='verified-master-session'}`,
   '@/lib/onlyfans/route':`import {NextResponse} from 'next/server';import{createHash}from'node:crypto';export const PRIVATE_HEADERS={'Cache-Control':'private, no-store'};export async function requireOnlyFansRead(){const f=globalThis.__adminSignInTest;if(!f.authed)return NextResponse.json({ok:false},{status:401});if(f.denied)return NextResponse.json({ok:false},{status:403});return {actor:'op-session:'+createHash('sha256').update(f.token).digest('hex'),canManage:true}}`,
   '@/lib/onlyfans/connection-creators':`import {requireOnlyFansRead} from '@/lib/onlyfans/route';import {connectionCommandContext} from '@/lib/onlyfans-connections/route';export const connectionAccess=requireOnlyFansRead;export const connectionSignInCommand=connectionCommandContext;export async function resolveConnectionCreator(id){return id==='creator-a'?{id,name:'Verified creator',expectedHandle:globalThis.__adminSignInTest.expectedHandle}:null}`,
+  '@/lib/onlyfans-managed-proxy/backend':"export class ManagedProxyError extends Error {constructor(status,message){super(message);this.status=status;}};export function configuredManagedProxyBackend(){return globalThis.__adminSignInTest.broker??null;}",
   '@/lib/onlyfans-sign-in/backend':`export const SignInBackendError=globalThis.__adminSignInTest.Error;export function configuredSignInBackend(){return globalThis.__adminSignInTest.signin}`,
   '@/lib/onlyfans-connections/backend':`export function configuredConnectionBackend(){return globalThis.__adminSignInTest.native}`,
  };
@@ -59,6 +60,20 @@ async function main(){
   const input={action:'input',profileId:'creator-a',attempt:id,input:{type:'key',key:'Enter'}};
   for(const status of [429,503]){f.frameError=status;const n=f.calls.filter(x=>x.kind==='input').length;assert.equal((await post(input,{accept:'image/png'})).status,200);assert.equal(f.calls.filter(x=>x.kind==='input').length,n+1);}
   f.frameError=null;const paired=await post(input,{accept:'image/png'});assert.equal(paired.headers.get('content-type'),'image/jpeg');
+  f.phase='ready';const privateProxy='http://managed:private-managed-secret@8.8.4.4:12323';
+  f.broker={async assign(creatorId,selection,actor){f.calls.push({kind:'proxy-assignment',creatorId,selection,actor});return privateProxy;}};
+  const managed={accountId:null,proxyUrl:null,managedProxy:{countryCode:'US',handle:'fixture_creator'}};
+  const managedStart={...start,connection:managed};
+  const previousFingerprint=f.capture.session.networkFingerprint;f.capture.session.networkFingerprint=fingerprint(privateProxy);
+  const managedResponse=await post(managedStart);assert.equal(managedResponse.status,200);
+  assert(!JSON.stringify(await managedResponse.json()).includes('private-managed-secret'),'Managed credentials never enter public responses');
+  assert.equal(f.calls.filter(x=>x.kind==='start').at(-1).network.proxyUrl,privateProxy);
+  assert.equal((await post({...confirm,connection:managed})).status,200);
+  assert.equal(f.calls.filter(x=>x.kind==='enroll').at(-1).command.initialProxyUrl,privateProxy);
+  f.expectedHandle='different_handle';assert.equal((await post(managedStart)).status,409);f.expectedHandle=undefined;
+  for(const connection of [{...managed,proxyUrl:privateProxy},{...managed,accountId:'of-123'},{...managed,managedProxy:{countryCode:'US',handle:'bad handle'}}])assert.equal((await post({...managedStart,connection})).status,400);
+  f.broker=null;assert.equal((await post(managedStart)).status,503);
+  f.capture.session.networkFingerprint=previousFingerprint;
   f.actor='op-session:'+'f'.repeat(64);assert.equal((await get('?attempt='+id)).status,404);f.actor=null;
   f.phase='ready';f.capture.session.networkFingerprint=f.network.fingerprint;
   const reconnect={...confirm,connection:{accountId:'of-123',proxyUrl:null}};assert.equal((await post(reconnect)).status,200);

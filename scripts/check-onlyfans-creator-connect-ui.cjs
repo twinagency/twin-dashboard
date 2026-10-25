@@ -11,7 +11,7 @@ function load(file,dependencies={}){
 }
 const proxy=load('lib/onlyfans-connections/proxy.ts');
 const Component=load('components/onlyfans-preview/AdminOnlyFansSignIn.tsx',{'next/navigation':{useRouter:()=>router},'@/lib/onlyfans-connections/contract':contract,'@/lib/onlyfans-connections/proxy':proxy,'@/components/creator-platforms/HostedConnect':{__esModule:true,default:props=>{captured=props;return React.createElement('div',{'data-hosted':true},'Hosted login')}}}).default;
-globalThis.fetch=async(url,init)=>{requests.push({url,init});return new Promise(resolve=>{pending=resolve})};
+globalThis.fetch=async(url,init)=>{if(url==='/api/onlyfans-connections/proxies')return Response.json({ok:true,configured:true,countries:[{code:'US',name:'United States',available:1}]});requests.push({url,init});return new Promise(resolve=>{pending=resolve})};
 const root=createRoot(document.getElementById('root'));
 const button=text=>[...document.querySelectorAll('button')].find(e=>e.textContent===text);
 async function click(text){const b=button(text);assert(b,text);assert(!b.disabled,text+' enabled');await React.act(async()=>b.click())}
@@ -22,20 +22,28 @@ async function fill(label,value){
 async function mount(creators=[],accountId=null){captured=null;await React.act(async()=>root.render(React.createElement(Component,{key:Math.random(),creators,accountId})))}
 async function main(){
  try{
+  await mount();await click('Add OnlyFans account');
+  assert.equal(document.querySelector('[data-of-proxy-mode]').value,'managed');
+  assert(!document.querySelector('input[type=password]'),'Automatic setup never asks for proxy credentials');
+  await fill('Full name','Managed Fixture');await fill('OnlyFans handle','@managed_fixture');await fill('Creator’s country','US');
+  await click('Continue to OnlyFans login');
+  await React.act(async()=>pending(Response.json({ok:true,creator:{id:'managed-creator',name:'Managed Fixture'}})));
+  assert.deepEqual(captured.connection,{accountId:null,proxyUrl:null,managedProxy:{countryCode:'US',handle:'managed_fixture'}});
+  await click('Close');requests=[];
   await mount();await click('Add OnlyFans account');assert(button('Continue to OnlyFans login').disabled);
-  await fill('Full name','Fixture New');await fill('OnlyFans handle','@fixture_new');await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');
+  await fill('Full name','Fixture New');await fill('OnlyFans handle','@fixture_new');await fill("Proxy setup","own");await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');
   await click('Continue to OnlyFans login');assert.equal(requests.length,1);assert.equal(requests[0].url,'/api/onlyfans-connections/creators');
   assert.deepEqual(JSON.parse(requests[0].init.body),{name:'Fixture New',handle:'@fixture_new'});
   assert(button('Preparing sign-in...').disabled,'Duplicate submit disabled');
   await React.act(async()=>pending(Response.json({ok:true,creator:{id:'new-creator',name:'Fixture New'}})));
   assert(captured);assert.equal(captured.profileId,'new-creator');assert.equal(captured.connection.proxyUrl,'http://user:pass@proxy.example:8080');assert.equal(captured.connection.accountId,null);
   await click('Close');assert(!document.querySelector('[role=dialog]'));
-  await mount([{id:'existing',name:'Existing Creator'}]);await click('Add OnlyFans account');await click('Select creator');await fill('Creator','existing');await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');
+  await mount([{id:'existing',name:'Existing Creator'}]);await click('Add OnlyFans account');await click('Select creator');await fill('Creator','existing');await fill("Proxy setup","own");await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');
   assert.equal(requests.length,1,'Existing creator does not create a duplicate');assert.equal(captured.profileId,'existing');
   await mount([{id:'existing',name:'Existing Creator'}],'of-existing');await click('Reconnect OnlyFans');assert(!button('Add a creator'));await click('Continue to OnlyFans login');assert.deepEqual(captured.connection,{accountId:'of-existing',proxyUrl:null});
-  await mount();await click('Add OnlyFans account');await fill('Full name','Close Fixture');await fill('OnlyFans handle','close_fixture');await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');await click('Close');
+  await mount();await click('Add OnlyFans account');await fill('Full name','Close Fixture');await fill('OnlyFans handle','close_fixture');await fill("Proxy setup","own");await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');await click('Close');
   await React.act(async()=>pending(Response.json({ok:true,creator:{id:'late',name:'Late Response'}})));assert.equal(captured,null);assert(!document.querySelector('[role=dialog]'),'Late creation cannot reopen a closed dialog');
-  await mount();await click('Add OnlyFans account');await fill('Full name','Expired Fixture');await fill('OnlyFans handle','expired_fixture');await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');
+  await mount();await click('Add OnlyFans account');await fill('Full name','Expired Fixture');await fill('OnlyFans handle','expired_fixture');await fill("Proxy setup","own");await fill("Creator's fixed proxy",'proxy.example:8080:user:pass');await click('Continue to OnlyFans login');
   await React.act(async()=>pending(Response.json({ok:false,error:'Sign in again'},{status:401})));assert.equal(document.querySelector('input[type=password]').value,'');assert(button('Continue to OnlyFans login').disabled);
   console.log('PASS real creator connection UI: empty roster, new/existing paths, proxy handoff, no duplicate request, saved-proxy reconnect, close-during-request and session loss.');
  }finally{await React.act(async()=>root.unmount());dom.window.close();}
