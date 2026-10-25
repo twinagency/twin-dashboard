@@ -111,7 +111,7 @@ export default function TopBar({
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
   if (pathname === "/onlyfans/inbox" && !isCreator) {
     return <header className="dashboard-topbar of-inbox-topbar">
-      <Link href="/onlyfans/overview" className="of-inbox-wordmark" aria-label="OnlyFans overview">tw</Link>
+      <Link href="/onlyfans/overview" className="of-inbox-wordmark" aria-label="OnlyFans overview">{isAgency && agencyName?.trim().toLowerCase() === "moxy" ? <img src="/moxy/icon.svg" alt="Moxy" width="30" height="30" /> : "tw"}</Link>
       <div className="of-inbox-active-creator">
         <CloneSwitcher clones={scopedClones} activeCloneId={inboxIdentity?.creatorId ?? scopeId} locked={scopeLocked} fallbackName={inboxIdentity?.creatorName ?? fallbackScope}/>
         {inboxIdentity ? <small className="creator-name">@{inboxIdentity.handle}</small> : null}
@@ -121,7 +121,7 @@ export default function TopBar({
         <details className="of-inbox-navigation"><summary aria-label="Workspace navigation"><MoreHorizontal size={20}/></summary>
           <nav aria-label="OnlyFans workspace"><ChannelSwitch channels={channels}/>
             {[["overview","Overview"],["accounts","Accounts"],["inbox","Inbox"],["campaigns","Campaigns"],["content","Content"],["sales","Sales"],["settings","Settings"],["launch","Launch control"]].map(([route,label])=><Link key={route} href={"/onlyfans/"+route+(inboxIdentity ? "?creator="+encodeURIComponent(inboxIdentity.creatorId) : "")}>{label}</Link>)}
-            {!isAgency ? <Link href="/onlyfans/operations">Operations</Link> : null}
+            {!isAgency || agencyName?.trim().toLowerCase() === "moxy" ? <Link href="/onlyfans/operations">Operations</Link> : null}
           </nav>
         </details>
         {signOut === "simulated" ? <SignOutButton mode="simulated"/> : <form action={isAgency ? "/agency/logout" : signOutAction} method={isAgency ? "post" : undefined}><SignOutButton showLabel={false}/></form>}
