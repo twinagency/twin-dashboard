@@ -23,6 +23,7 @@ jobs:
       - run: node scripts/check-creator-testing.cjs
       - run: node scripts/check-creator-platforms.cjs
       - run: node scripts/check-creator-sign-in-ui.mjs
+      - run: node scripts/check-creator-sign-in-editing.mjs
       - run: node scripts/check-creator-platforms-ui.mjs
       - uses: actions/upload-artifact@v4
         if: always()
