@@ -22,6 +22,12 @@ async function main() {
   const unavailable = renderToStaticMarkup(<MessageAttachments accountId="account" attachments={{...paid,media:[]}} />);
   assert.match(unavailable,/5 attachments/); assert.match(unavailable,/Some attachment previews are unavailable/);
   for (const invalid of [{...paid,count:-1},{...paid,count:0},{...paid,media:[{mediaId:"../other-account",kind:"photo"}]},{...paid,media:[paid.media[0],paid.media[0]]},{...paid,price:{currency:"USD",minorUnits:5.5}},{...paid,purchaseStatus:"paid"}]) assert.equal(parseMessageAttachments(invalid),null);
+  const incoming={...paid,count:1,media:[{mediaId:"4761496022",kind:"photo" as const,source:"message" as const}]};
+  assert.deepEqual(parseMessageAttachments(incoming),incoming);
+  const messageMarkup=renderToStaticMarkup(<MessageAttachments accountId="of-99421145" conversationId="of-99421145:5459302" messageId="11790004102254" attachments={incoming}/>);
+  assert.match(messageMarkup,/Loading preview/);assert.doesNotMatch(messageMarkup,/data-of-vault-image/);
+  assert.equal(parseMessageAttachments({...incoming,media:[{...incoming.media[0],source:"foreign"}]}),null);
   console.log("PASS OnlyFans chat media: five previews, USD price, purchase meanings, legacy messages, missing previews and malformed metadata.");
 }
 main().catch(error => { console.error(error); process.exitCode=1; });
+
