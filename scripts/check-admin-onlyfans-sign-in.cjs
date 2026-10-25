@@ -21,7 +21,7 @@ async function main(){
   'next/headers':`export async function cookies(){return {get(){return {value:globalThis.__adminSignInTest.token}}}}`,
   '@/lib/session':`export const SESSION_COOKIE='master_session';export async function verifySessionToken(token){return globalThis.__adminSignInTest.authed&&token==='verified-master-session'}`,
   '@/lib/onlyfans/route':`import {NextResponse} from 'next/server';import{createHash}from'node:crypto';export const PRIVATE_HEADERS={'Cache-Control':'private, no-store'};export async function requireOnlyFansRead(){const f=globalThis.__adminSignInTest;if(!f.authed)return NextResponse.json({ok:false},{status:401});if(f.denied)return NextResponse.json({ok:false},{status:403});return {actor:'op-session:'+createHash('sha256').update(f.token).digest('hex'),canManage:true}}`,
-  '@/lib/onlyfans/connection-creators':`export async function resolveConnectionCreator(id){return id==='creator-a'?{id,name:'Verified creator'}:null}`,
+  '@/lib/onlyfans/connection-creators':`import {requireOnlyFansRead} from '@/lib/onlyfans/route';import {connectionCommandContext} from '@/lib/onlyfans-connections/route';export const connectionAccess=requireOnlyFansRead;export const connectionSignInCommand=connectionCommandContext;export async function resolveConnectionCreator(id){return id==='creator-a'?{id,name:'Verified creator',expectedHandle:globalThis.__adminSignInTest.expectedHandle}:null}`,
   '@/lib/onlyfans-sign-in/backend':`export const SignInBackendError=globalThis.__adminSignInTest.Error;export function configuredSignInBackend(){return globalThis.__adminSignInTest.signin}`,
   '@/lib/onlyfans-connections/backend':`export function configuredConnectionBackend(){return globalThis.__adminSignInTest.native}`,
  };
@@ -51,6 +51,7 @@ async function main(){
   const confirm={action:'confirm',attempt:id,profileId:'creator-a',connection};
   assert.equal((await post({...confirm,connection:{...connection,proxyUrl:'http://other:secret@proxy.example:8080'}})).status,409);
   assert.equal(f.calls.filter(x=>x.kind==='enroll').length,0);
+  f.expectedHandle='wrong_handle';assert.equal((await post(confirm)).status,409);assert.equal(f.calls.filter(x=>x.kind==='enroll').length,0);f.expectedHandle='fixture_creator';
   f.ackLost=true;const confirmed=await post(confirm);assert.equal(confirmed.status,200);const ack=await confirmed.json();assert.equal(ack.attempt.enrollmentId,enrollment);
   const first=f.calls.find(x=>x.kind==='enroll').command;assert.equal(first.creatorId,'creator-a');assert.equal(first.creatorName,'Verified creator');assert.equal(first.initialProxyUrl,connection.proxyUrl);assert.equal(first.actor,scope.actor);assert.match(first.commandKey,/^[a-f0-9]{64}$/);
   await post(confirm);assert.deepEqual(f.calls.filter(x=>x.kind==='enroll').at(-1).command,first,'Lost acknowledgments retry exactly the same enrollment');

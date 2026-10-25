@@ -645,6 +645,7 @@ export default function OnlyFansWorkspace({
         sourceLabel={source.label}
         connectionsConfigured={sourceMode === "server" && connectionsConfigured}
         connectionCreators={connectionCreators}
+        agencyConnections={agencyViewer}
       />
     );
   }

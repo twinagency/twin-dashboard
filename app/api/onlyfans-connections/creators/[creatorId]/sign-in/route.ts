@@ -1,9 +1,9 @@
 import {createHash} from 'node:crypto';
 import {NextRequest,NextResponse} from 'next/server';
-import {requireOnlyFansRead,PRIVATE_HEADERS} from '@/lib/onlyfans/route';
-import {connectionAnswer,connectionRefusal,connectionCommandContext} from '@/lib/onlyfans-connections/route';
+import {PRIVATE_HEADERS} from '@/lib/onlyfans/route';
+import {connectionAnswer,connectionRefusal} from '@/lib/onlyfans-connections/route';
 import {configuredConnectionBackend} from '@/lib/onlyfans-connections/backend';
-import {resolveConnectionCreator} from '@/lib/onlyfans/connection-creators';
+import {resolveConnectionCreator,connectionAccess,connectionSignInCommand} from '@/lib/onlyfans/connection-creators';
 import {normalizeProxyInput} from '@/lib/onlyfans-connections/proxy';
 import {configuredSignInBackend,SignInBackendError,type SignInNetwork} from '@/lib/onlyfans-sign-in/backend';
 
@@ -17,8 +17,8 @@ const failed=(error:unknown)=>connectionRefusal(error instanceof SignInBackendEr
 const pixels=(image:ArrayBuffer,extra:Record<string,string>={})=>new NextResponse(image,{headers:{...PRIVATE_HEADERS,'Content-Type':new Uint8Array(image)[0]===137?'image/png':'image/jpeg','X-Content-Type-Options':'nosniff','Cross-Origin-Resource-Policy':'same-origin',...extra}});
 
 export async function GET(request:NextRequest,context:Context){
-  const auth=await requireOnlyFansRead();if(auth instanceof NextResponse)return auth;
-  if(!operator(auth.actor)||!auth.canManage)return connectionRefusal(403,'Sign in to your admin account to manage connections.');
+  const auth=await connectionAccess();if(auth instanceof NextResponse)return auth;
+  if(!operator(auth.actor))return connectionRefusal(403,'Sign in to your admin account to manage connections.');
   const creator=await resolveConnectionCreator((await context.params).creatorId);
   if(!creator)return connectionRefusal(404,'That existing Twin creator is unavailable.');
   try{
@@ -38,7 +38,7 @@ export async function GET(request:NextRequest,context:Context){
 }
 
 export async function POST(request:NextRequest,context:Context){
-  const ctx=await connectionCommandContext(request);if(ctx instanceof NextResponse)return ctx;
+  const ctx=await connectionSignInCommand(request);if(ctx instanceof NextResponse)return ctx;
   if(!operator(ctx.actor))return connectionRefusal(403,'Sign in to your admin account to manage connections.');
   const creator=await resolveConnectionCreator((await context.params).creatorId);
   if(!creator)return connectionRefusal(404,'That existing Twin creator is unavailable.');
@@ -76,6 +76,8 @@ export async function POST(request:NextRequest,context:Context){
     const status=await backend.status(scope,id);
     if(status.phase==='submitted'&&status.enrollmentId)return connectionAnswer({ok:true,attempt:status});
     const capture=await backend.capture(scope,id);
+    if(c.accountId===null&&creator.expectedHandle&&capture.handle.toLowerCase()!==creator.expectedHandle.toLowerCase())
+      return connectionRefusal(409,'The signed-in OnlyFans handle does not match this creator. Sign in to the matching account.');
     if(capture.session.networkFingerprint!==network.fingerprint||(network.ownerId!==null&&capture.session.ownerId!==network.ownerId))return connectionRefusal(409,'The account or proxy changed after sign-in. Start again.');
     const command={creatorId:creator.id,creatorName:creator.name,handle:capture.handle,session:capture.session,...(c.accountId===null?{initialProxyUrl:network.proxyUrl}:{})};
     const result=await native.enroll({...command,...ctx.identity('admin-enroll-account',command)});
