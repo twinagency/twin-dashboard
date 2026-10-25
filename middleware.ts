@@ -1,4 +1,4 @@
-import { agencyOnlyFansRequest } from "@/lib/onlyfans/agency-scope";
+import { flirtOnlyFansRequest } from "@/lib/onlyfans/flirt-request";
 import { renewAgencySession, setAgencySessionCookies, clearAgencySessionCookies } from "@/lib/agency-session";
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
 import { FLIRT_OVERVIEW_SCOPE_HEADER } from "@/lib/flirt-overview-routing";
@@ -194,7 +194,7 @@ async function routeMiddleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
   if (liveTwinEnabled()) {
-    if (process.env.FLIRT_SHARED_ONLYFANS_ENABLED === "true" && agencyOnlyFansRequest(pathname, req.method, req.headers.has("next-action"), true)) {
+    if (process.env.FLIRT_SHARED_ONLYFANS_ENABLED === "true" && flirtOnlyFansRequest(pathname, req.method, req.headers.has("next-action"))) {
       if (!["GET", "HEAD"].includes(req.method) && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
       return privateResponse(withPathname(req));
     }
