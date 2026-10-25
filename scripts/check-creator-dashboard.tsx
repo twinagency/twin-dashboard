@@ -244,8 +244,7 @@ async function main() {
   assert.match(switchMarkup, /href="\/telegram"/);
   headerPath = "/users";
   const sharedHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
-  assert.match(sharedHeader, /aria-label="Channel workspace"/, "Non-admin shared headers retain their channel control");
-  assert.match(sharedHeader, /href="\/onlyfans\/overview"/, "The non-admin shared header still opens the authorised OnlyFans Overview");
+  assert.doesNotMatch(sharedHeader, /aria-label="Channel workspace"/, "Shared headers keep channel selection in the sidebar and mobile drawer");
 
   // Execute the real component with the existing shell's currency context
   // isolated. Any new network request or global currency mutation is a failure.

@@ -20,7 +20,7 @@ async function waitForCampaigns(page){
 mkdirSync(out,{recursive:true});
 const publicDir=path.join(root,'preview/onlyfans-integration/public/brand/platforms');
 mkdirSync(publicDir,{recursive:true});
-copyFileSync(path.join(root,'public/brand/platforms/onlyfans.svg'),path.join(publicDir,'onlyfans.svg'));
+for(const name of ['onlyfans','telegram'])copyFileSync(path.join(root,'public/brand/platforms',name+'.svg'),path.join(publicDir,name+'.svg'));
 const server=spawn(node,['scripts/preview-onlyfans-ui.mjs'],{cwd:root,env:{...process.env,PORT:'4198'},stdio:['ignore','pipe','pipe']});
 const log=createWriteStream(path.join(out,'preview.log'));server.stdout.pipe(log);server.stderr.pipe(log);
 let browser;
