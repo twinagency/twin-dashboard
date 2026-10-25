@@ -1,7 +1,7 @@
 name: FLIRT OnlyFans CRM candidate
 on:
   push:
-    branches: ["codex/flirt-onlyfans-live-20261026"]
+    branches: ["codex/flirt-onlyfans-live-20261026", "codex/flirt-creator-save-20261026"]
 permissions:
   contents: read
 concurrency:
@@ -23,6 +23,7 @@ jobs:
         run: |
           npm run test:flirt-isolation
           node --import tsx scripts/check-flirt-onlyfans.ts
+          node scripts/check-onlyfans-creator-save.cjs
           node --import tsx scripts/check-onlyfans-read.ts
           node --import tsx scripts/check-onlyfans-ui.tsx
           python3 deployment/flirt-host-release.test.py

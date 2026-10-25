@@ -1,11 +1,17 @@
 import "server-only";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseAdmin as sharedCreatorClient } from "@/lib/supabase";
-import { serviceClient as localServiceClient } from "@/lib/supabase-service";
+import { serviceClient as localServiceClient, serviceClientForAccess } from "@/lib/supabase-service";
 import { isAuthed } from "@/lib/auth";
 import { isFlirtOnlyFansOwner } from "./flirt-owner";
-async function connectionDatabase() { return isFlirtOnlyFansOwner(await getDashboardAccess(), await isAuthed()) ? sharedCreatorClient : localServiceClient(); }
+async function connectionDatabase() {
+  const access = await getDashboardAccess();
+  // The shared OnlyFans owner has already passed connectionAccess. The general
+  // agency client intentionally refuses new profiles and cannot serve this path.
+  return isFlirtOnlyFansOwner(access, await isAuthed())
+    ? serviceClientForAccess(access)
+    : localServiceClient();
+}
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { requireOnlyFansRead } from "./route";
 import { trustedFormOrigin } from "@/lib/form-origin";
