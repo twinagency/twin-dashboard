@@ -158,12 +158,8 @@ export default function TopBar({
     // has nothing to mis-place. Everything here is breakpoint-scoped, so sm+
     // (and lg+) renders exactly as before.
     <div className="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 justify-center items-center gap-3 border-b border-line px-5 sm:grid sm:grid-cols-[1fr_auto_1fr] lg:px-8">
-      {/* The channel switch sits above the breadcrumb in the same grid column,
-          so the channel and the page it is showing read as one line and the
-          centre control pill stays dead-centre. Below sm this column is
-          display:none; the mobile drawer carries the same switch. */}
+      {/* Channel selection lives in the sidebar and mobile drawer. */}
       <div className="hidden min-w-0 flex-col items-start gap-1.5 sm:flex">
-        {audience !== "admin" && channel !== "onlyfans" ? <ChannelSwitch channels={channels} /> : null}
         <h1 className="min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink">
           <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
           {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
