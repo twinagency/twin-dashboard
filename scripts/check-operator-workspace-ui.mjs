@@ -30,7 +30,7 @@ const params=new URLSearchParams(location.search),brand=params.get("brand")||"Tw
 const agencyName=brand==="Twin"?undefined:brand,canManage=params.get("readonly")!=="true";
 if(brand==="Twin")document.documentElement.dataset.brandTheme="twin-light";
 if(brand==="Moxy")document.documentElement.dataset.agency="moxy";
-const channels=brand==="Twin"?["all","telegram","onlyfans"]:["all"];
+const channels=brand==="Twin"?["all","telegram","onlyfans"]:brand==="Moxy"?["all","onlyfans"]:["all"];
 if(brand==="Jess and Kate AI")document.documentElement.dataset.brandTheme="ivory-cherry";
 const clone={id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",name:"Fixture Creator",stage_name:"Fixture Creator",slug:"fixture-creator",
 status:params.has("paused")?"paused":"active",updated_at:"2026-10-11T00:00:00Z",uses_default_config:false,
