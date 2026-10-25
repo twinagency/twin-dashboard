@@ -20,7 +20,7 @@ async function waitForCampaigns(page){
 mkdirSync(out,{recursive:true});
 const publicDir=path.join(root,'preview/onlyfans-integration/public/brand/platforms');
 mkdirSync(publicDir,{recursive:true});
-copyFileSync(path.join(root,'public/brand/platforms/onlyfans.svg'),path.join(publicDir,'onlyfans.svg'));
+for(const name of ['onlyfans','telegram'])copyFileSync(path.join(root,'public/brand/platforms',name+'.svg'),path.join(publicDir,name+'.svg'));
 const server=spawn(node,['scripts/preview-onlyfans-ui.mjs'],{cwd:root,env:{...process.env,PORT:'4198'},stdio:['ignore','pipe','pipe']});
 const log=createWriteStream(path.join(out,'preview.log'));server.stdout.pipe(log);server.stderr.pipe(log);
 let browser;
@@ -51,7 +51,7 @@ try{
    const thumb=await page.locator('.of-media-cover').first().boundingBox();
    assert(thumb && thumb.y<500 && thumb.height>180,'The media grid must appear in the first desktop viewport');
    assert(thumb && thumb.y>=0 && thumb.y+thumb.height<=page.viewportSize().height && thumb.height>180,`The first portrait must be fully visible in the desktop viewport: ${JSON.stringify(thumb)}`);
-   const logo=page.locator('.dashboard-sidebar .of-channel-logo');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
+   const logo=page.locator('.dashboard-sidebar [data-channel-option="onlyfans"] img');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
    await page.getByRole('button',{name:'Create offer',exact:true}).click();
    await page.locator('[data-of-vault-product-label]').fill('Unsaved visual test');
    await page.getByRole('tab',{name:'Offers',exact:true}).click();

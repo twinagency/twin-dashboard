@@ -94,17 +94,6 @@
 .workspace :global(.workspace-channel-selector), .drawer :global(.workspace-channel-selector) {
   padding: 0 20px 18px;
 }
-.workspace :global(.dashboard-sidebar [data-channel-switch]), .drawer :global([data-channel-switch]) {
-  display: grid; grid-template-columns: 1fr; width: 100%; gap: 2px; margin: 0;
-  padding: 4px; border: 1px solid var(--studio-nav-line, #ffffff12); background: var(--studio-channel-bg, #ffffff05);
-}
-.workspace.workspace :global(.dashboard-sidebar [data-channel-switch] a),
-.drawer.drawer :global([data-channel-switch] a) {
-  display: flex; align-items: center; min-height: 32px; padding: 6px 10px;
-  color: var(--studio-nav-ink, #b8b8b8) !important; font-size: 11px; font-weight: 500; box-shadow: none;
-}
-.workspace.workspace :global(.dashboard-sidebar [data-channel-switch] a[aria-current]),
-.drawer.drawer :global([data-channel-switch] a[aria-current]) { background: var(--studio-channel-active, #ffffff12); color: var(--studio-nav-ink, #fff) !important; }
 .workspace :global(.studio-sidebar-nav), .drawer :global(.studio-sidebar-nav) {
   padding: 0 20px 22px; min-height: 0; scrollbar-width: thin; scrollbar-color: var(--studio-nav-line, #ffffff35) transparent;
 }
@@ -172,4 +161,48 @@
   .workspace.workspace :global(.dashboard-topbar) { min-height: 64px; padding: 12px 16px; justify-content: center; }
   .workspace :global(.workspace-account-controls) { flex-wrap: wrap; justify-content: center; }
   .drawer.drawer { width: min(88vw, 20rem); }
+}
+
+/* Twin's sidebar keeps the OnlyFans scale and colours across every channel.
+   Route-specific pages and partner portal branding retain their own styles. */
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.dashboard-sidebar),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] {
+  --studio-nav-ink: #49637e; --studio-nav-muted: #586a82; --studio-logo: #24445f;
+  --studio-nav-line: #d4e8f5; --studio-nav-hover: #e1f2ff;
+  --studio-channel-bg: #fff; --studio-channel-active: #dcefff;
+  --studio-accent: #2fa8eb; --studio-accent-deep: #087bbb;
+  width: 240px; color: #49637e; border-right: 1px solid #dce8f2;
+  background: linear-gradient(165deg,#e8f5ff,#f0f9ff) !important; background-color: #e8f5ff !important;
+}
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-brand-row),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-brand-row) {
+  min-height: 104px; padding: 24px 26px;
+}
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark) { color: #24445f !important; }
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark strong),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark strong) {
+  font-family: var(--font-sans), Inter, sans-serif; font-size: 38px; font-weight: 700; letter-spacing: -.065em;
+}
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-wordmark > span),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-wordmark > span) {
+  font-size: 11px; letter-spacing: .32em; line-height: 1.4; padding-left: 2px;
+}
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-sidebar-nav),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-sidebar-nav) { padding: 12px 16px 24px; }
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.studio-sidebar-nav > h2),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.studio-sidebar-nav > h2) { display: none; }
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.dashboard-sidebar nav .workspace-nav-row),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(nav .workspace-nav-row) {
+  min-height: 52px; padding: 13px 16px; border-radius: 12px; gap: 16px;
+  font-size: 16px; line-height: 24px; font-weight: 500; color: #49637e !important;
+}
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.workspace-nav-row > svg),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(.workspace-nav-row > svg) { width: 22px; height: 22px; stroke-width: 1.8; }
+.workspace.workspace.workspace.workspace[data-workspace-theme="dark"] :global(.dashboard-sidebar nav [aria-current="page"]),
+.drawer.drawer.drawer.drawer[data-workspace-theme="dark"] :global(nav [aria-current="page"]) {
+  background: #dcefff; color: #087bbb !important; font-weight: 600;
+}
+@media (max-width: 1023px) {
+  .drawer.drawer.drawer.drawer[data-workspace-theme="dark"] { width: min(88vw,280px); }
 }

@@ -30,7 +30,7 @@ const params=new URLSearchParams(location.search),brand=params.get("brand")||"Tw
 const agencyName=brand==="Twin"?undefined:brand,canManage=params.get("readonly")!=="true";
 if(brand==="Twin")document.documentElement.dataset.brandTheme="twin-light";
 if(brand==="Moxy")document.documentElement.dataset.agency="moxy";
-const channels=brand==="Twin"?["all","telegram","onlyfans"]:["all"];
+const channels=brand==="Twin"?["all","telegram","onlyfans"]:brand==="Moxy"?["all","onlyfans"]:["all"];
 if(brand==="Jess and Kate AI")document.documentElement.dataset.brandTheme="ivory-cherry";
 const clone={id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",name:"Fixture Creator",stage_name:"Fixture Creator",slug:"fixture-creator",
 status:params.has("paused")?"paused":"active",updated_at:"2026-10-11T00:00:00Z",uses_default_config:false,
@@ -90,7 +90,7 @@ if(url.pathname.startsWith("/api/")){requests.push({method:req.method,path:url.p
 if(url.pathname==="/api/channel-roster")return res.end(JSON.stringify({schemaVersion:"channel-roster.v1",telegram:{status:url.searchParams.get("channel")==="onlyfans"?"not_requested":"ready",error:null,items:url.searchParams.get("channel")==="onlyfans"?[]:[{id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",name:"Fixture Creator",status:"active",handle:"fixture_tg",color:"#4fa7d9"}]},onlyfans:{status:url.searchParams.get("channel")==="telegram"?"not_requested":"ready",error:null,items:url.searchParams.get("channel")==="telegram"?[]:[{id:"of-a",creatorId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",creatorName:"Fixture Creator",handle:"fixture_of",health:"connected"},{id:"of-c",creatorId:"cccccccc-cccc-4ccc-8ccc-cccccccccccc",creatorName:"OnlyFans Only",handle:"onlyfans_only",health:"connected"}]}}));
 if(url.pathname==="/api/models")return res.end("[]");if(url.pathname==="/api/fx")return res.end(JSON.stringify({usd_to_aud:1.4}));
 res.statusCode=403;return res.end(JSON.stringify({error:"No live service in this fixture"}))}
-if(url.pathname.startsWith("/moxy/")&&url.pathname.endsWith(".svg")){res.setHeader("Content-Type","image/svg+xml");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
+if((url.pathname.startsWith("/moxy/")||url.pathname.startsWith("/brand/platforms/"))&&url.pathname.endsWith(".svg")){res.setHeader("Content-Type","image/svg+xml");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
 if(url.pathname.startsWith("/dashboard/fans/")||url.pathname==="/favicon.ico"){res.statusCode=204;return res.end()}
 res.setHeader("Content-Type","text/html");res.end(html)});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
@@ -147,13 +147,13 @@ for (const width of [390, 900, 1440]) {
       navTop:nav.top,navRowHeight:element.querySelector(".workspace-nav-row").getBoundingClientRect().height,headerTop:topbar.top,headerHeight:topbar.height};
     });
     const onlyfans = route.startsWith("/onlyfans/"), workspace = onlyfans ? "onlyfans" : "shared";
-    assert.equal(metrics.background,onlyfans?"rgb(232, 245, 255)":"rgb(230, 246, 255)",`${width} ${route}: scoped light-blue sidebar`);
+    assert.equal(metrics.background,"rgb(232, 245, 255)",`${width} ${route}: scoped light-blue sidebar`);
     if(!baselines.has(workspace))baselines.set(workspace,metrics);
     assert.deepEqual(metrics,baselines.get(workspace),`${width} ${route}: geometry stays stable within each workspace`);
     assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
     assert.equal(await sidebar.locator('a[href="/settings"]').count(),1,"Settings remains reachable exactly once in each workspace");
     if(onlyfans)assert(metrics.navRowHeight>=44&&metrics.navRowHeight<=52,`${width} ${route}: accessible compact studio navigation`);
-    else assert.equal(metrics.navRowHeight,46);
+    else assert.equal(metrics.navRowHeight,52);
     if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
     await noOverflow(page,`shared shell ${width} ${route}`);
   }
@@ -166,7 +166,7 @@ for (const width of [390, 900, 1440]) {
   await capture(page,`shared-dark-${width}.png`);
   assert.deepEqual(errors,[]);await context.close();
 }
-console.log("PASS: Main and Telegram retain their shared geometry; OnlyFans retains its dedicated studio geometry at 390, 900 and 1440px; channel links and mobile drawer work.");
+console.log("PASS: All channel sidebars use the OnlyFans scale and palette at 390, 900 and 1440px; channel links and mobile drawer work.");
 // Real roster UI: channel membership, canonical joins and scoped navigation.
 for(const width of [390,1440]){
  const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage();
