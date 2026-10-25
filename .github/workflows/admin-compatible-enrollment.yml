@@ -1,0 +1,59 @@
+name: Compatible admin enrollment runtime
+on:
+  push:
+    branches: ['codex/admin-compatible-runtime-20261025']
+permissions:
+  contents: read
+jobs:
+  verify-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: disposable_test_only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    env:
+      ONLYFANS_TEST_PG_URL: postgresql://postgres:disposable_test_only@127.0.0.1:5432/postgres
+      PYTHON_DOTENV_DISABLED: '1'
+      REGISTRY: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com
+      BACKEND_SHA: 8a72ec0d52dddb2fcd379113ba03b8c75b7102a9
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - name: Extract exact source
+        run: |
+          set -euo pipefail
+          sha256sum -c .github/release-artifacts/admin-compatible-source.sha256
+          mkdir compatible
+          tar -xzf .github/release-artifacts/admin-compatible-source.tar.gz -C compatible
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Enrollment, proxy, browser capture and vault folder regression checks
+        working-directory: compatible
+        run: |
+          pip install -r requirements-onlyfans-test.txt
+          python -m pytest -q service/tests/test_onlyfans_creator_enrollments_pg.py service/tests/test_onlyfans_connections_pg.py service/tests/test_onlyfans_browser_capture.py service/tests/test_onlyfans_vault_folder_states.py
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Package exact compatible runtime
+        run: |
+          set -euo pipefail
+          printf 'FROM %s/twin-onlyfans@sha256:8ce12d9b0232c252f04499d1f83818a0ab850f44105d793ea91c69d89f7674ae\nCOPY service/ /app/service/\nLABEL org.opencontainers.image.revision="%s"\n' "$REGISTRY" "$BACKEND_SHA" > compatible/Dockerfile.release
+          docker build --network=none -f compatible/Dockerfile.release -t "$REGISTRY/twin-onlyfans:admin-compatible-$BACKEND_SHA" compatible
+          docker push "$REGISTRY/twin-onlyfans:admin-compatible-$BACKEND_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-onlyfans:admin-compatible-$BACKEND_SHA" > compatible-image.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compatible-admin-runtime
+          path: compatible-image.txt
