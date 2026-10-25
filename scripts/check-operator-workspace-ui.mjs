@@ -122,6 +122,19 @@ for (const width of [390, 900, 1440]) {
   for (const route of ["/dashboard","/overview","/telegram","/users","/onlyfans/accounts","/onlyfans/inbox","/revenue"]) {
     await page.evaluate(route=>history.pushState({},"",route+"?brand=Twin"),route);
     await page.locator('[data-workspace-theme="dark"]').first().waitFor();
+    if(route === "/onlyfans/inbox") {
+      assert.equal(await page.locator("aside.dashboard-sidebar").first().isVisible(),false,"Inbox uses its compact creator workspace");
+      const topbar=await page.locator(".of-inbox-topbar").boundingBox();
+      assert.equal(topbar.height,56,"Inbox header uses the approved compact height");
+      await page.getByLabel("Workspace navigation",{exact:true}).click();
+      const menu=page.getByRole("navigation",{name:"OnlyFans workspace",exact:true});
+      assert(await menu.isVisible(),"Compact inbox navigation opens");
+      assert.equal(await menu.locator("[data-channel-switch] a").count(),3,"All authorized channels remain reachable");
+      for(const label of ["Accounts","Content","Sales","Settings"]) assert(await menu.getByRole("link",{name:label,exact:true}).isVisible(),label+" remains reachable in the inbox");
+      await page.getByLabel("Workspace navigation",{exact:true}).click();
+      await noOverflow(page,"Compact inbox "+width);
+      continue;
+    }
     if(width<1024) await page.getByRole("button",{name:"Open navigation",exact:true}).click();
     const sidebar=width<1024?page.locator("#mobile-sidebar"):page.locator("aside.dashboard-sidebar").first();
     await sidebar.waitFor({state:"visible"});
