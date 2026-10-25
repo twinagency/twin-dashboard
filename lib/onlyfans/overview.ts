@@ -3,7 +3,7 @@ import type { NativeEarnings } from "./earnings";
 import type { OfAccount } from "../onlyfans-preview/types";
 import type { SalesRead } from "./workspace";
 
-export type OverviewPeriod = "7d" | "30d";
+export type OverviewPeriod = "7d" | "30d" | "90d" | "all";
 export type OverviewData = {
   accounts: OfAccount[]; accountsError: string | null;
   earnings: NativeEarnings | null; earningsError: string | null;
@@ -14,7 +14,7 @@ export type OverviewData = {
 /** Bounded read composition. Totals remain workspace-wide; activity is one named account. */
 export async function loadOnlyFansOverview(backend: OnlyFansBackend | null, period: OverviewPeriod,
   accountId: string | null, now = new Date()): Promise<OverviewData> {
-  const window = { start: new Date(now.getTime() - (period === "30d" ? 30 : 7) * 86400000).toISOString(), end: now.toISOString() };
+  const window = { start: period === "all" ? new Date(0).toISOString() : new Date(now.getTime() - (period === "90d" ? 90 : period === "30d" ? 30 : 7) * 86400000).toISOString(), end: now.toISOString() };
   const data: OverviewData = { accounts: [], accountsError: null, earnings: null, earningsError: null,
     activityAccount: null, sales: null, salesError: null, period, window };
   if (!backend) return { ...data, accountsError: "The OnlyFans account service is unavailable.", earningsError: "Earnings are not configured.", salesError: "Sales are unavailable." };
