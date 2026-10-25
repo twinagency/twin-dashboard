@@ -3,6 +3,7 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "./moxy-earnings.css";
+@import "./channel-navigation.css";
 
 /* Day mode only — there is no theme toggle and no `.dark` class is ever
    applied. `@custom-variant dark` is kept class-scoped (not the default
