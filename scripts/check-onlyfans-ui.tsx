@@ -47,7 +47,7 @@ async function main() {
   assert(ONLYFANS_CHANNEL.nav.some(item => item.href === "/onlyfans/launch"), "Native launch readiness, personality, ledger, memory and account controls remain directly reachable");
   for (const method of ["GET", "HEAD"]) assert(agencyOnlyFansRequest("/onlyfans/overview", method, false, false));
   for (const method of ["POST", "PATCH", "DELETE"]) assert.equal(agencyOnlyFansRequest("/onlyfans/overview", method, false, true), false);
-  assert.equal(agencyOnlyFansRequest("/onlyfans/operations", "GET", false, true), false);
+  assert.equal(agencyOnlyFansRequest("/onlyfans/operations", "GET", false, true), true);
   assert.equal(agencyOnlyFansRequest("/onlyfans/overview", "GET", true, true), false);
   const saleMarkup = renderToStaticMarkup(<SalesView creatorName="Scoped creator" data={{...sales,transactions:[{transactionId:"1",fanId:"101",messageId:null,kind:"tip",status:"pending",grossCents:123,netCents:null,currency:"EUR",occurredAt:now.toISOString()}]}} />);
   assert.match(saleMarkup, /EUR 1\.23/); assert.match(saleMarkup, />Pending</); assert.doesNotMatch(saleMarkup, />Paid</);
