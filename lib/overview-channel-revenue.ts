@@ -51,3 +51,10 @@ export function parseOverviewOnlyFansRevenue(value: unknown, window: EarningsWin
       (data.status === "empty" && (data.netCents !== 0 || data.includesPending))) return null;
   return data;
 }
+
+
+// Telegram can start its all-time query at its first payment. The combined
+// headline must also include OnlyFans payments from before that first payment.
+export function overviewRevenueWindow(period: string, window: { startMs: number; endMs: number }) {
+  return period === "ALL" ? { ...window, startMs: 0 } : window;
+}

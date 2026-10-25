@@ -15,6 +15,10 @@ const { NextRequest, NextResponse } = require("next/server");
   try {
     const model = await compile("lib/overview-channel-revenue.ts", "model");
     const money = await compile("lib/money.ts", "money");
+    const telegramLifetime = { startMs: Date.parse("2026-01-01T00:00:00.000Z"), endMs: Date.parse("2026-10-26T00:00:00.000Z") };
+    assert.deepEqual(model.overviewRevenueWindow("ALL", telegramLifetime), { ...telegramLifetime, startMs: 0 }, "OnlyFans earnings before the first Telegram payment belong in All time");
+    for (const period of ["1M", "3M", "CUSTOM"]) assert.deepEqual(model.overviewRevenueWindow(period, telegramLifetime), telegramLifetime, "Dated reports retain the exact selected window");
+
     const window = { start: "2026-10-01T00:00:00.000Z", end: "2026-10-20T00:00:00.000Z" };
     const native = { schemaVersion: "of-earnings.v1", window, asOf: window.end, accountCount: 2, coveredAccountCount: 2,
       status: "current", reasons: [], currency: "USD", clearedGrossCents: 8496, clearedNetCents: 6796, clearedCount: 4, pendingCount: 2,

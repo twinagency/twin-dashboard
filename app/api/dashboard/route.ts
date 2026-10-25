@@ -1,3 +1,4 @@
+import { overviewRevenueWindow } from "@/lib/overview-channel-revenue";
 import { cloneBotToken } from "@/lib/clone-credentials";
 import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
@@ -72,7 +73,7 @@ async function read(req: NextRequest) {
       }
       cutMeta = { perCloneCuts };
     }
-    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, analyticsError, balance: outBalance, cachedAt, ageSeconds, stale, reportWindow: rollup.reportWindow, ...(cutMeta ?? {}) };
+    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, analyticsError, balance: outBalance, cachedAt, ageSeconds, stale, reportWindow: overviewRevenueWindow(period, rollup.reportWindow), ...(cutMeta ?? {}) };
     // Finding A: costUsd/profitUsd/margin are OUR figures, not the agency's or
     // creator's, and unscaled they still carry gross revenue (profit + cost =
     // gross), which would let a non-admin viewer back out the exact cut
