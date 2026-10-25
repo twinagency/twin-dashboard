@@ -32,7 +32,7 @@ export async function connectionAccess(write = false) {
   if (agency && !ctx.auth.agencyGrant) return connectionRefusal(403, "Scoped agency access is required.");
   // Backend connection credentials stay server-side. Bind the delegated operator
   // identity to the verified agency user; never accept an actor from the browser.
-  const actor = agency ? "op-session:" + hash("onlyfans-agency-connection.v1:" + ctx.actor) : ctx.actor;
+  const actor = ctx.auth.agencyGrant ? "op-session:" + hash("onlyfans-agency-connection.v1:" + ctx.actor) : ctx.actor;
   return { actor, agency, creatorIds: ctx.auth.agencyGrant?.creatorIds ?? null };
 }
 

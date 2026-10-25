@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import {flirtOnlyFansCreatorIds} from "../lib/onlyfans/flirt-scope";
+const flirt="66263f7f-77c6-4d9b-a828-e7c9d1ce3597",moxy="bc670215-110b-4ea0-8f5c-af3dfe21d253";
+const maile="5a7642bf-ca3e-5515-a159-ca6cc58a2134",naomi="ccf9ec63-9e46-43c8-a942-d6dd22df29f6",own="0328e7b3-a1e5-465a-9a30-c9cf6519cba1";
+assert.deepEqual(flirtOnlyFansCreatorIds([{id:maile,intake:{onlyfans_connection:{owner:"agency:"+moxy}}},{id:naomi},{id:own}],[{agency_id:moxy,clone_id:maile},{agency_id:flirt,clone_id:own}],flirt),[own,naomi].sort());
+assert.deepEqual(flirtOnlyFansCreatorIds([{id:maile,intake:{onlyfans_connection:{owner:"agency:"+moxy}}}],[],flirt),[]);
+assert.deepEqual(flirtOnlyFansCreatorIds([{id:maile}],[{agency_id:moxy,clone_id:maile}],flirt),[]);
+assert.throws(()=>flirtOnlyFansCreatorIds([{id:"bad"}],[],flirt));
+assert.throws(()=>flirtOnlyFansCreatorIds([{id:maile}],[{agency_id:"bad",clone_id:maile}],flirt));
+console.log("Flirt ownership: Moxy membership and intake excluded; approved internal/Flirt profiles retained; malformed ownership refused.");
