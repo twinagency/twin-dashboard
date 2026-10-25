@@ -19,7 +19,7 @@ async function main(){
  assert.equal(calls[0].options.redirect,'error');assert.equal(calls[0].options.credentials,'omit');
  assert.deepEqual(JSON.parse(calls[0].options.body),{creatorId:'creator-a',...selection,actor});
  response={ok:false,code:'proxy_stock_empty',error:'private provider text'};status=409;
- await assert.rejects(()=>client.assign('creator-a',selection,actor),error=>error instanceof ManagedProxyError&&error.status===409&&error.message.includes('No unused')&&!error.message.includes('private'));
+ await assert.rejects(()=>client.assign('creator-a',selection,actor),error=>error instanceof ManagedProxyError&&error.status===409&&error.message.includes('connection slots')&&!error.message.includes('private'));
  assert.equal(calls.length,2,'A refused assignment is attempted once');
  status=200;
  for(const url of ['http://user:pass@proxy.example:12323','https://fixture:pass@8.8.4.4:12323','http://8.8.4.4:12323','http://fixture:pass@8.8.4.4:12323/private']){
@@ -30,6 +30,14 @@ async function main(){
  response.countries[0].available=-1;await assert.rejects(()=>client.stock(),ManagedProxyError);
  const failing=createManagedProxyBackend({baseUrl:'http://broker.example:8791',token:'fixture',fetchImpl:async()=>{throw Error('private-token-should-not-leak')}});
  await assert.rejects(()=>failing.assign('creator-a',selection,actor),error=>error instanceof ManagedProxyError&&!error.message.includes('private-token'));
+ const automaticCalls=[];
+ const automatic=createManagedProxyBackend({baseUrl:'http://broker.example:8791',token:'fixture',defaultCountry:'PT',fetchImpl:async(url,options)=>{automaticCalls.push(JSON.parse(options.body));return Response.json({ok:true,proxyUrl:'http://fixture:password@8.8.4.4:12323'});}});
+ for(let i=0;i<2;i++)await automatic.assign('creator-a',{countryCode:'auto',handle:'fixture_creator'},actor);
+ assert.deepEqual(automaticCalls,[{creatorId:'creator-a',countryCode:'PT',handle:'fixture_creator',actor},{creatorId:'creator-a',countryCode:'PT',handle:'fixture_creator',actor}]);
+ let unexpectedCalls=0;
+ const missingRegion=createManagedProxyBackend({baseUrl:'http://broker.example:8791',token:'fixture',fetchImpl:async()=>{unexpectedCalls++;throw Error('not expected')}});
+ await assert.rejects(()=>missingRegion.assign('creator-a',{countryCode:'auto',handle:'fixture_creator'},actor),ManagedProxyError);
+ assert.equal(unexpectedCalls,0,'Missing platform configuration must not select a random region or connect directly');
  console.log('PASS managed proxy client: exact selections, private transport, one attempt, stock exhaustion, credential validation and redacted failures.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

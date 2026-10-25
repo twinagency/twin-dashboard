@@ -1,7 +1,7 @@
 name: Managed proxy dashboard
 on:
   push:
-    branches: ['codex/iproyal-managed-proxy-20261025']
+    branches: ['codex/iproyal-managed-proxy-20261025', 'codex/automatic-proxy-onboarding-20261025']
   workflow_dispatch:
 permissions:
   contents: read
