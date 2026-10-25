@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import {createConnectionBackend} from "../lib/onlyfans-connections/backend";
+import {parseActivationReadiness} from "../lib/onlyfans/activation";
 import {validConnectionRequest} from "../lib/onlyfans-connections/contract";
 async function main(){
   const calls:Record<string,unknown>[]=[];
@@ -19,6 +20,7 @@ async function main(){
   for(const delay of [0.1,0.25,1,20,86400])assert(validConnectionRequest(activate(delay)));
   for(const delay of [0,-1,0.01,NaN,Infinity,true,"0.1",86401])assert(!validConnectionRequest(activate(delay)));
   assert(!validConnectionRequest(activate(1,1000001)));
+  assert(parseActivationReadiness({deploymentAllowed:true,allFansAllowed:true,allowedFans:[],modelCredentialReady:false,proxySaved:true,selection:null,selectionValid:false,automatedConversations:0,pausedConversations:0,noContactConversations:0,takeoverConversations:0,nextSendAt:null,throttleSeconds:0.25}));
   console.log("automatic proxy transport and delivery-limit checks passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

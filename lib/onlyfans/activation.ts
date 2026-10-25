@@ -21,7 +21,7 @@ export function parseActivationReadiness(v: unknown): ActivationReadiness | null
     !(v.selection === null || validFanSelection(v.selection)) ||
     ![v.automatedConversations,v.pausedConversations,v.noContactConversations,v.takeoverConversations].every(n => Number.isSafeInteger(n) && Number(n) >= 0) ||
     !(v.nextSendAt === null || typeof v.nextSendAt === "string" && /Z$/.test(v.nextSendAt) && Number.isFinite(Date.parse(v.nextSendAt))) ||
-    !(v.throttleSeconds === null || Number.isInteger(v.throttleSeconds) && Number(v.throttleSeconds) >= 1 && Number(v.throttleSeconds) <= 86400) ||
+    !(v.throttleSeconds === null || typeof v.throttleSeconds === "number" && Number.isFinite(v.throttleSeconds) && v.throttleSeconds >= 0.1 && v.throttleSeconds <= 86400) ||
     v.allFansAllowed && !v.deploymentAllowed || !v.deploymentAllowed && v.allowedFans.length > 0) return null;
   return v as ActivationReadiness;
 }
