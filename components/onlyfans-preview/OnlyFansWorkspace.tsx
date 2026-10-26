@@ -84,6 +84,7 @@ import PreviewControlsPanel from "./PreviewControlsPanel";
 import type { PreviewPreset } from "./PreviewControlsPanel";
 import AccountsView from "./AccountsView";
 import InboxView from "./InboxView";
+import AllFansControl from "./AllFansControl";
 import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
@@ -656,6 +657,12 @@ export default function OnlyFansWorkspace({
 
   return (
     <InboxView
+      accountControls={sourceMode === "server" && activeAccount && actionViewer.canManage ? <AllFansControl key={activeAccount.accountId} account={activeAccount} viewer={actionViewer} source={source} onChanged={() => {
+        const id = ref.current.selectedAccountId; if (!id) return;
+        const pending = requestConversations(ref.current, id); commit(pending.state);
+        void source.listConversations(id, null, aiOnlyRef.current).then(result => commit(applyConversations(ref.current, id, pending.generation, pending.seq, result).state));
+        refreshHandover();
+      }} /> : undefined}
       controls={showPreviewChrome ? developerControls : undefined}
       showPreviewChrome={showPreviewChrome}
       accountsState={scopedAccounts}

@@ -586,6 +586,7 @@ function DeliveryLedger({ messages }: { messages: ConversationMessage[] }) {
 
 export default function InboxView({
   controls,
+  accountControls,
   accountsState,
   activeAccount,
   activeAccountId,
@@ -609,6 +610,7 @@ export default function InboxView({
   onAiFilterChange = () => {},
 }: {
   controls?: ReactNode;
+  accountControls?: ReactNode;
   handover?: ReactNode;
   handoverHistory?: Handover | null;
   /**
@@ -681,6 +683,7 @@ export default function InboxView({
       ) : null}
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
+      {accountControls}
 
       <nav aria-label="Inbox panels" className="of-panel-switch mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
         {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Fan info"] ] as const).map(([key, label]) =>
