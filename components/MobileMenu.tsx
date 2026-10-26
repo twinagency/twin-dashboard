@@ -51,13 +51,15 @@ export default function MobileMenu({
     const priorOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusable = () => Array.from(drawer.current?.querySelectorAll<HTMLElement>('a[href],button:not(:disabled),select,input,[tabindex="0"]') ?? []).filter(element => element.getClientRects().length > 0);
-    focusable()[0]?.focus();
+    // Focus the dialog itself so opening it does not frame the logo link.
+    drawer.current?.focus({ preventScroll: true });
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
       if (event.key !== "Tab") return;
       const items = focusable(), first = items[0], last = items.at(-1);
       if (!first) { event.preventDefault(); return; }
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (document.activeElement === drawer.current) { event.preventDefault(); (event.shiftKey ? last : first)?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
     window.addEventListener("keydown", closeOnEscape);
@@ -100,6 +102,7 @@ export default function MobileMenu({
           <aside
             id={drawerId}
             ref={drawer}
+            tabIndex={-1}
             data-compact-workspace={usesCompactWorkspace(audience, agencyName) || undefined}
             data-workspace-theme={operator ? "dark" : undefined}
             data-creator-studio={operator || onlyfans ? creatorBrand : undefined}
@@ -107,7 +110,7 @@ export default function MobileMenu({
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation"
-            className={`dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200${operator || onlyfans ? ` ${workspaceStyles.drawer}` : ""}${onlyfans ? ` ${onlyfansStyles.platform}` : ""}`}
+            className={`dashboard-sidebar outline-none absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200${operator || onlyfans ? ` ${workspaceStyles.drawer}` : ""}${onlyfans ? ` ${onlyfansStyles.platform}` : ""}`}
           >
             <SidebarContent
               activeCloneId={activeCloneId}
