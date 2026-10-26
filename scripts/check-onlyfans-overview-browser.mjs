@@ -51,7 +51,7 @@ export async function checkOnlyFansOverview(page, origin) {
       page.waitForURL(url => url.pathname === "/onlyfans/overview" && url.searchParams.get("period") === "30d" && url.searchParams.get("account") === "acc-a"),
       overview.getByRole("button", { name: "Apply / refresh", exact: true }).click(),
     ]);
-    await page.getByText("USD · UTC · Rolling 30 days", { exact: true }).waitFor();
+    await page.getByText("USD · UTC · Last 30 days", { exact: true }).waitFor();
     assert.equal(await page.locator(".of-sale-row").count(), 4, "Account activity is independent of the summary period");
     if (process.env.ONLYFANS_TEST_EVIDENCE) {
       // Hiding carets mutates even hidden inputs and can race React hydration.
