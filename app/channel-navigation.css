@@ -43,3 +43,6 @@ html[data-agency="moxy"] .dashboard-mobile-header :is(a, button):hover {
 /* The Moxy wordmark is unframed, including drawer autofocus. */
 html[data-agency="moxy"] a:has(> img[alt^="Moxy"]) { border: 0 !important; outline: none !important; box-shadow: none !important; background: transparent !important; }
 html[data-agency="moxy"] a:has(> img[alt^="Moxy"]):focus-visible { opacity: .65; }
+
+/* Moxy OnlyFans launch marker, shared by desktop and mobile navigation. */
+.workspace-channel-new { margin-left: auto; border-radius: 999px; padding: 2px 7px; background: #752f42; color: #fff; font-size: 10px; font-weight: 750; line-height: 16px; letter-spacing: .04em; text-transform: uppercase; }

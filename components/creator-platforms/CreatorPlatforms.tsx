@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronRight, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import BrowserConnect from "./BrowserConnect";
 import HostedConnect from "./HostedConnect";
+import {signInRequestSignal} from "@/lib/onlyfans-sign-in/request-signal";
 import SessionConnect from "./SessionConnect";
 import styles from "./CreatorPlatforms.module.css";
 import { CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
@@ -27,9 +28,9 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   const refresh=useCallback(async()=>{
     if(refreshRunning.current)return false;
     refreshRunning.current=true;setRefreshing(true);const controller=new AbortController();refreshController.current=controller;
-    const version=++generation.current;
+    const version=++generation.current,request=signInRequestSignal(20000,[controller.signal]);
     try {
-      const response=await fetch("/creator-auth/platforms",{cache:"no-store",credentials:"same-origin",redirect:"error",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(20000)])});
+      const response=await fetch("/creator-auth/platforms",{cache:"no-store",credentials:"same-origin",redirect:"error",signal:request.signal});
       const next=parseCreatorPlatforms(await response.json().catch(()=>null));
       if(!active.current||version!==generation.current)return false;
       if([401,403].includes(response.status)){
@@ -41,7 +42,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
       setNotice(current=>current==="Your latest connection status could not be loaded. Please try again."||current.startsWith("Your OnlyFans is connected.")&&!next.onlyfans.accounts.some(account=>platformConnectionState(account)==="connected")?"":current);
       return true;
     } catch {if(active.current&&version===generation.current){setStatusFresh(false);setNotice("Your latest connection status could not be loaded. Please try again.");}return false;}
-    finally{refreshRunning.current=false;if(active.current)setRefreshing(false);}
+    finally{request.dispose();refreshRunning.current=false;if(active.current)setRefreshing(false);}
   },[]);
   const pending=data.onlyfans.enrollments.some(row=>activePlatformEnrollment(row,now));
   useEffect(()=>{if(!statusFresh||!data.onlyfans.accounts.some(account=>platformConnectionState(account,now)==="connected"))setNotice(current=>current.startsWith("Your OnlyFans is connected.")?"":current);},[statusFresh,now,data.onlyfans.accounts]);
