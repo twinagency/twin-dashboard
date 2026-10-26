@@ -52,6 +52,7 @@ export type OnlyFansTransport = {
   readConversation(
     accountId: string,
     conversationId: string,
+    cursor?: string | null,
   ): Promise<TransportReply<ConversationDetail>>;
   submitControl?(request: CommandRequest): Promise<RecordedControlResult>;
 };
@@ -200,9 +201,9 @@ export function createFetchOnlyFansTransport(
       });
     },
 
-    readConversation(accountId, conversationId) {
+    readConversation(accountId, conversationId, cursor) {
       return request(
-        `/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}`,
+        `/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
         (body) => {
           if (typeof body !== "object" || body === null) return null;
           const conversation = (body as { conversation?: unknown }).conversation;
@@ -283,9 +284,9 @@ export function createServerOnlyFansDataSource(options: {
       );
     },
 
-    async getConversation(accountId, conversationId) {
+    async getConversation(accountId, conversationId, cursor) {
       return toState(
-        await transport.readConversation(accountId, conversationId),
+        await transport.readConversation(accountId, conversationId, cursor),
         () => false,
         (conversation) => conversation.freshness,
       );

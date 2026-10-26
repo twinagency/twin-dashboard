@@ -6,7 +6,7 @@
 // capability, ownership and delivery gates decide which commands can be used.
 // Compact rendering changes presentation only; stale reads remain visible.
 
-import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
 import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
@@ -120,7 +120,7 @@ function ConversationList({
     <div className="of-list-content">
     <div className="of-list-heading"><h2>Conversations</h2></div>
     <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search loaded conversations</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search conversations" /></label>
-    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Needs reply"], ["ai", "AI chatting"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
+    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Attention"], ["ai", "AI chatting"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
     {(query || filter === "unread" || filter === "attention") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
     <RequestStateBlock
       showStaleWarning={false}
@@ -172,7 +172,7 @@ function ConversationList({
                       <span className="mt-1.5 flex flex-wrap items-center gap-1">
                         {conversation.requiresAttention ? (
                           <span className="rounded-full bg-[#fdf2f6] px-1.5 py-0.5 text-[10px] font-semibold text-[#9b2f62]">
-                            {conversation.priority === "normal" ? "Needs reply" : priority.label}
+                            {conversation.priority === "normal" ? "Attention" : priority.label}
                           </span>
                         ) : null}
                         {["failed", "partial", "unknown", "refused"].includes(conversation.delivery) ? <DeliveryPill outcome={conversation.delivery} /> : null}
@@ -210,27 +210,43 @@ function ConversationList({
  * `tg-bubble-in/out`, run tails, the day rule) so the two channels read as one
  * product, with the OnlyFans receipt attached under each outbound bubble.
  */
-function Thread({ detail, handoverHistory }: { detail: ConversationDetail; handoverHistory?: Handover | null }) {
+function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail: ConversationDetail; handoverHistory?: Handover | null; loadingOlder: boolean; onLoadOlder: () => void }) {
   const timeline = conversationTimeline(detail, handoverHistory);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Open on the newest message, the way the Telegram thread does: a bottom-anchored
   // run inside a scroll box that starts at the top would otherwise show nothing but
   // wallpaper when the operator switches to a fan.
-  useEffect(() => {
+  const olderAnchor = useRef<{ height: number; top: number } | null>(null);
+  const bottom = useRef(true);
+  const previousThread = useRef("");
+  useLayoutEffect(() => {
     const node = scrollRef.current;
-    if (node) node.scrollTop = node.scrollHeight;
-  }, [detail.conversationId, timeline.length]);
+    if (!node) return;
+    if (previousThread.current !== detail.conversationId) {
+      previousThread.current = detail.conversationId; olderAnchor.current = null; bottom.current = true;
+      node.scrollTop = node.scrollHeight;
+    } else if (olderAnchor.current && !loadingOlder) {
+      node.scrollTop = olderAnchor.current.top + node.scrollHeight - olderAnchor.current.height;
+      olderAnchor.current = null;
+    } else if (!olderAnchor.current && bottom.current) node.scrollTop = node.scrollHeight;
+  }, [detail.conversationId, timeline.length, loadingOlder]);
 
   return (
     <div
       ref={scrollRef}
       className="tg-thread min-h-[16rem] flex-1 overflow-y-auto px-3 py-3"
       data-of-thread
+      onScroll={event => { const node = event.currentTarget; bottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}
     >
       {/* A short thread sits at the bottom of the panel, the way a chat does,
           instead of leaving the wallpaper dangling under three bubbles. */}
       <div className="flex min-h-full flex-col justify-start">
+      {detail.previousCursor ? <button type="button" data-of-load-older className="mx-auto mb-3 rounded-full bg-black/25 px-4 py-2 text-xs text-white" disabled={loadingOlder} onClick={() => {
+        const node = scrollRef.current;
+        if (node) olderAnchor.current = { height: node.scrollHeight, top: node.scrollTop };
+        onLoadOlder();
+      }}>{loadingOlder ? "Loading older messages…" : "Load older messages"}</button> : null}
       {timeline.length === 0 ? (
         <div className="mx-auto w-fit rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-white">
           No messages in this view
@@ -596,6 +612,8 @@ export default function InboxView({
   selectedConversationId,
   onSelectConversation,
   detailState,
+  loadingOlder = false,
+  onLoadOlder = () => {},
   viewer,
   onCommand,
   commandResult,
@@ -627,6 +645,8 @@ export default function InboxView({
   selectedConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
   detailState: RequestState<ConversationDetail> | null;
+  loadingOlder?: boolean;
+  onLoadOlder?: () => void;
   viewer: PreviewViewer;
   onCommand: (action: AvailableAction, payload: CommandPayload) => void;
   commandResult: CommandResult | null;
@@ -733,7 +753,7 @@ export default function InboxView({
                 {isAiChatting(detail.summary) ? <AiChattingBadge /> : null}
               </div>
 
-              <Thread detail={detail} handoverHistory={handoverHistory} />
+              <Thread detail={detail} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
               {actionSet ? (
                 <Composer

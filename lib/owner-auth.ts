@@ -38,3 +38,19 @@ export async function verifyOwnerSession(token: string): Promise<boolean> {
   if (!OWNER_TOKEN.test(token)) return false;
   return ownerRpc("dashboard_owner_session_verify", { p_session_hash: await hashToken(token) });
 }
+
+// Password-admin sessions reuse the existing owner token store and verifier.
+export async function issueAdminSession(): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const token = `owner_${Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("")}`;
+  if (!await ownerRpc("dashboard_admin_session_create", { p_session_hash: await hashToken(token) })) {
+    throw new Error("The session service is unavailable. Please try signing in again.");
+  }
+  return token;
+}
+
+export async function revokeOwnerSession(token: string | undefined | null): Promise<boolean> {
+  if (!token) return true;
+  if (!OWNER_TOKEN.test(token)) return false;
+  return ownerRpc("dashboard_owner_session_revoke", { p_session_hash: await hashToken(token) });
+}

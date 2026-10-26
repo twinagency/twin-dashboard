@@ -3,6 +3,7 @@
 import { guardDashboardAction } from "@/lib/agency-management";
 
 import { cookies } from "next/headers";
+import { revokeOwnerSession } from "@/lib/owner-auth";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, signSession, constantTimeEqual } from "@/lib/session";
 
@@ -33,6 +34,13 @@ export async function login(_prevState: { error?: string } | undefined, fd: Form
 
 export async function logout() {
   await guardDashboardAction("app/login/actions.ts#logout", []);
-  (await cookies()).delete(SESSION_COOKIE);
+  const jar = await cookies();
+  const token = jar.get(SESSION_COOKIE)?.value;
+  if (!await revokeOwnerSession(token)) {
+    // Keep the cookie available for a retry and make failure visible. A legacy
+    // stateless token cannot honestly be described as revoked by cookie deletion.
+    throw new Error("Sign out could not revoke this session. Please retry; legacy sessions require the server-session cutover.");
+  }
+  jar.delete(SESSION_COOKIE);
   redirect("/login");
 }

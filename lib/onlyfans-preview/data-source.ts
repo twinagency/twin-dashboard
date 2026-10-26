@@ -40,6 +40,7 @@ export interface OnlyFansDataSource {
   getConversation(
     accountId: string,
     conversationId: string,
+    cursor?: string | null,
   ): Promise<RequestState<ConversationDetail>>;
 
   /**

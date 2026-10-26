@@ -40,6 +40,11 @@ export async function POST(request:NextRequest){
       if(b.accountId!==null&&!(await ownedPlatformAccounts(profile.id)).some(a=>a.accountId===b.accountId))return platformFailure(404,'That account is unavailable.');
       const context=await native.captureContext(profile.id,b.accountId as string|null);
       if(!context.ok)return platformFailure(503,'Your account connection could not be prepared. Please try again.');
+      // First enrollment must use a prepared fixed network. Never open a
+      // direct browser and discover the missing proxy only after credentials
+      // have been entered. Reconnect keeps its existing saved network.
+      if (b.accountId === null && !context.data.proxyUrl)
+        return platformFailure(409,'Your OnlyFans connection needs setup before sign-in. Ask your agency to connect this account from Manage accounts.');
       return platformResponse({ok:true,attempt:await backend.start(scope,b.startKey as string,context.data)});
     }
     const identity=b.attempt as string;

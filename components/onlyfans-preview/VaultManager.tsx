@@ -198,7 +198,9 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       <div className="of-vault-sync-copy text-xs" data-of-vault-sync-status>
         {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? "Vault sync complete" : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
           <p className="mt-1 text-muted">{data.sync.itemsSeen.toLocaleString()} files checked in this sync. {["pending", "running"].includes(data.sync.status) ? "Totals may increase. This page updates automatically." : `Last updated ${new Date(data.sync.updatedAt).toLocaleString()}.`}</p>
-          {data.sync.lastError ? <p className="mt-2">Sync stopped ({data.sync.lastError.replaceAll("_", " ")}). Imported files remain below. Check the connection, then try Sync vault again.</p> : null}
+          {data.sync.lastError ? <p className="mt-2">{["pending", "running"].includes(data.sync.status)
+            ? `Sync is waiting (${data.sync.lastError.replaceAll("_", " ")}). Progress is saved and it will retry automatically.`
+            : `Sync stopped (${data.sync.lastError.replaceAll("_", " ")}). Imported files remain below. Check the connection, then try Sync vault again.`}</p> : null}
         </> : <p>No vault sync has run yet. Choose Sync vault to import this account’s existing media.</p>}
 
       </div>

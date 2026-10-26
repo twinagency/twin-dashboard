@@ -10,7 +10,7 @@ async function main(){
  // EarningsAutoRefresh reads the real Next router during render. Effects do
  // not run in static markup; provide its application context, retaining the
  // complete earnings component and every financial assertion below.
- const router:AppRouterInstance={back(){},forward(){},refresh(){},hmrRefresh(){},push(){},replace(){},prefetch(){}};
+ const router:AppRouterInstance={back(){},forward(){},refresh(){},push(){},replace(){},prefetch(){}};
  const render=(view:React.ReactNode)=>renderToStaticMarkup(<AppRouterContext.Provider value={router}>{view}</AppRouterContext.Provider>);
  const stamp='2026-10-23T00:00:00.000Z';
  const earnings={schemaVersion:'of-earnings.v1' as const,window:{start:'2026-10-16T00:00:00.000Z',end:stamp},asOf:stamp,accountCount:1,coveredAccountCount:0,status:'unavailable' as const,reasons:['ledger_held' as const],currency:'USD' as const,clearedGrossCents:null,clearedNetCents:null,clearedCount:null,pendingCount:null,refundedCount:null,recentLedgerAt:stamp,fullLedgerAt:stamp,recorded:{grossCents:3599,netCents:2879,pendingGrossCents:3599,pendingNetCents:2879,paymentCount:3,lastSuccessfulSyncAt:stamp}};

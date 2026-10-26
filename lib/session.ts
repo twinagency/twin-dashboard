@@ -1,6 +1,6 @@
 // Edge-safe session token signing/verification (Web Crypto only — no next/headers,
 // so this can be imported from both middleware.ts and server components/actions).
-import { verifyOwnerSession } from "./owner-auth";
+import { verifyOwnerSession, issueAdminSession } from "./owner-auth";
 export const SESSION_COOKIE = "allie_admin_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -37,6 +37,11 @@ async function hmac(data: string, secret: string): Promise<string> {
 }
 
 export async function signSession(): Promise<string> {
+  if (process.env.NODE_ENV === "production" || process.env.DASHBOARD_SERVER_ADMIN_SESSIONS === "1") {
+    return issueAdminSession();
+  }
+  // Only local synthetic harnesses retain stateless signing.
+
   const exp = Date.now() + SESSION_TTL_MS;
   const payload = String(exp);
   const sig = await hmac(payload, sessionSecret());
@@ -46,6 +51,9 @@ export async function signSession(): Promise<string> {
 export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
   if (!token) return false;
   if (token.startsWith("owner_")) return verifyOwnerSession(token);
+  // Explicit deployment compatibility is temporary; production defaults to
+  // revocable sessions. The release record must inventory the legacy cutover.
+  if (process.env.NODE_ENV === "production" && process.env.DASHBOARD_ALLOW_LEGACY_ADMIN_SESSIONS !== "1") return false;
   if (!/^[0-9]{1,16}\.[A-Za-z0-9_-]{43}$/.test(token)) return false;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return false;

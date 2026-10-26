@@ -179,13 +179,15 @@ async function main(){
     assert.equal(chosenSnapshot.telegram.configured,kind==='existing-telegram');
     for(const q of f.queries.filter(q=>q.table==='creator_accounts'))assert.deepEqual(q.filters,[['id',f.creator.accountId],['auth_user_id',f.creator.userId]]);
     f.attempt={...f.attempt,phase:'waiting',enrollmentId:null,handle:null};
-    const nextStart=await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id});assert.equal(nextStart.status,200);
-    const call=f.calls.find(c=>c.name==='signin-start');assert.equal(call.scope.creatorId,f.profile);actors.add(call.scope.actor);
+    const nextStart=await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id});assert.equal(nextStart.status,409);
+    assert.match((await nextStart.json()).error,/needs setup before sign-in/);
+    assert.equal(f.calls.some(c=>c.name==='signin-start'),false,'Missing fixed network is refused before opening a direct browser');
+    actors.add('creator-session:'+require('node:crypto').createHash('sha256').update(f.creator.accountId).digest('hex'));
     assert.equal(f.calls.some(c=>c.name==='enroll'||c.name==='command'),false,'Starting login is not account enrollment or delivery activation');
     assert.equal((await m.account.GET(request('/'),accountContext('someone-elses-account'))).status,404);
   }
   assert.equal(actors.size,3,'Each creator has their own private sign-in actor');
-  console.log('PASS creator platforms: current/future and agency creator identities, opt-in without migration, Telegram preservation, owner-isolated sign-in, authenticated frame/confirmation, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, no creator activation, read-only owned history and middleware routes.');
+  console.log('PASS creator platforms: current/future and agency creator identities, opt-in without migration, Telegram preservation, owner-isolated reconnect and explicit first-connection setup gate, authenticated frame/confirmation, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, no creator activation, read-only owned history and middleware routes.');
  }finally{delete globalThis.__creatorPlatformsTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

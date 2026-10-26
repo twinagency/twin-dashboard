@@ -220,13 +220,13 @@ export async function readConversations(
 
 export async function readConversation(
   input: ReadInput,
-  request: { accountId: string; conversationId: string },
+  request: { accountId: string; conversationId: string; cursor?: string | null },
 ): Promise<ReadResult<ConversationReadBody>> {
   const denial = authorizeRead(input.auth);
   if (denial) return denial;
   if (!input.backend) return unavailable(NOT_CONFIGURED);
 
-  const result = await input.backend.getConversation(request.accountId, request.conversationId);
+  const result = await input.backend.getConversation(request.accountId, request.conversationId, request.cursor);
   if (!result.ok) return mapFailure(result);
 
   const detail = result.data;

@@ -184,6 +184,8 @@ export type ConversationDetail = {
   accountId: string;
   summary: ConversationSummary;
   messages: ConversationMessage[];
+  /** Keyset position for the older page in this exact account and thread. */
+  previousCursor?: string | null;
   facts: FanContextFact[];
   ownedMedia: OwnedMediaItem[];
   /** A summary of a structured resolution path when delivery is unresolved. */
