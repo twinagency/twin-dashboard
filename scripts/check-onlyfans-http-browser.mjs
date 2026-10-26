@@ -65,8 +65,8 @@ try {
   const manual = page.locator('[data-of-message-id="3"]');
   await manual.getByText("Synthetic manual reply through the shared authority", { exact: true }).waitFor({ timeout: 15000 });
   assert.equal(await manual.getAttribute("data-of-message-delivery"), "sent");
-  assert.equal(await manual.locator(".of-sent-receipt").getAttribute("title"), "Provider accepted this message from an operator. Read and purchase status are not confirmed. Receipt recorded.");
-  assert.equal(await manual.getByText("Sent to provider", { exact: true }).count(), 1);
+  assert.equal(await manual.locator("..").locator(".of-sent-receipt").getAttribute("title"), "Provider accepted this message from an operator. Read and purchase status are not confirmed. Receipt recorded.");
+  assert.equal(await manual.locator("..").getByText("Sent to provider", { exact: true }).count(), 1);
   await page.getByText("Retracted synthetic message", { exact: true }).first().waitFor({ timeout: 15000 });
   assert(await page.getByText("Retracted", { exact: true }).count());
   assert.equal(await page.getByText("Sync needs attention.", { exact: true }).count(), 1);
