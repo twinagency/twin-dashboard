@@ -529,10 +529,9 @@ function ActionColumn({
 }
 
 function FanMetrics({detail}: {detail:ConversationDetail}) {
-  const currencies=Array.from(new Set(detail.ownedMedia.map(item=>item.price.currency)));
   return <div className="of-fan-metrics">
-    <div><strong>{currencies.length ? currencies.map(currency=>formatMoney({currency,minorUnits:detail.ownedMedia.filter(item=>item.price.currency===currency).reduce((total,item)=>total+item.price.minorUnits,0)})).join(" · ") : "—"}</strong><span>Recorded spend</span></div>
-    <div><strong>{detail.ownedMedia.length}</strong><span>Recorded purchases</span></div>
+    <div><strong>Unavailable</strong><span>Recorded spend</span></div>
+    <div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div>
   </div>;
 }
 function FanContext({detail}:{detail:ConversationDetail}) {
@@ -543,11 +542,11 @@ function FanContext({detail}:{detail:ConversationDetail}) {
       {facts.length ? <ul className="of-fact-list">{facts.map(item=><li key={item.label+item.value} title={"Source: "+item.source}><span>{item.label}</span><p>{item.value}</p></li>)}</ul> : <p className="of-empty-context">Nothing saved yet.</p>}
     </section>
     <section><h3 className="of-section-heading">Notes</h3><div className="of-note">{notes.length ? notes.map(item=><p key={item.label+item.value}>{item.value}</p>) : <p className="of-empty-context">No notes available.</p>}</div></section>
-    <section><h3 className="of-section-heading">Recent purchases</h3>
+    <section><h3 className="of-section-heading">Purchased media</h3>
       {detail.ownedMedia.length ? <ul className="of-purchases">{detail.ownedMedia.map(item=><li key={item.mediaId}>
         <span className="of-purchase-icon" aria-hidden="true"><ImagePlus size={21}/></span>
-        <div><strong>{item.label}</strong><small>{formatAge(item.purchasedAt)}</small></div><span>{formatMoney(item.price)}</span>
-      </li>)}</ul> : <p className="of-empty-context">No purchases recorded in this view.</p>}
+        <div><strong>{item.label}</strong><small>{formatAge(item.purchasedAt)}</small></div>
+      </li>)}</ul> : <p className="of-empty-context">No purchased media in this view.</p>}
     </section>
   </div>;
 }

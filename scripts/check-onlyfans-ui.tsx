@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { createRequire } from "node:module";
 import { loadOnlyFansOverview, paymentLabel } from "../lib/onlyfans/overview";
 import type { OnlyFansBackend } from "../lib/onlyfans/backend";
-import { accounts } from "../lib/onlyfans-preview/fixtures";
+import { accounts, conversationDetails } from "../lib/onlyfans-preview/fixtures";
+import { operatorViewer } from "../lib/onlyfans-preview/fixture-data-source";
 import { agencyOnlyFansRequest } from "../lib/onlyfans/agency-scope";
 import { ONLYFANS_CHANNEL } from "../lib/channel-nav";
 import type { SalesRead } from "../lib/onlyfans/workspace";
@@ -23,6 +24,28 @@ async function main() {
   requireNative.extensions[".css"] = module => { module.exports = {}; };
   const { default: SalesView } = await import("../components/onlyfans-preview/SalesView");
   const { default: NativeWorkspaceView } = await import("../components/onlyfans-preview/NativeWorkspaceView");
+  const { default: InboxView } = await import("../components/onlyfans-preview/InboxView");
+  const originalDetail = Object.values(conversationDetails).find(detail => detail.ownedMedia.length > 0)!;
+  assert(originalDetail, "A purchase-linked media fixture is required");
+  const bundledDetail = { ...originalDetail, messages: [], ownedMedia: [1, 2, 3].map(index => ({
+    ...originalDetail.ownedMedia[0], mediaId: "bundle-asset-" + index, label: "Bundle item " + index,
+    purchasedAt: "2026-10-26T10:00:00Z", price: { currency: "USD", minorUnits: 1000 },
+  })) };
+  const fixtureAccount = accounts.find(account => account.accountId === bundledDetail.accountId)!;
+  const inboxMarkup = renderToStaticMarkup(<InboxView
+    accountsState={{ status: "ready", data: [fixtureAccount] }} activeAccount={fixtureAccount} activeAccountId={fixtureAccount.accountId}
+    onSelectAccount={() => {}} conversations={{ status: "ready", data: { items: [bundledDetail.summary], nextCursor: null } }}
+    selectedConversationId={bundledDetail.conversationId} onSelectConversation={() => {}}
+    detailState={{ status: "ready", data: bundledDetail }} viewer={operatorViewer()} onCommand={() => {}}
+    commandResult={null} nextCursor={null} loadingMore={false} onLoadMore={() => {}} showPreviewChrome={false}
+  />);
+  assert.match(inboxMarkup, /<strong>Unavailable<\/strong><span>Recorded spend<\/span>/,
+    "Asset-level bundle prices cannot establish a fan's canonical spend");
+  assert.match(inboxMarkup, /<strong>3<\/strong><span>Owned media items<\/span>/);
+  assert.doesNotMatch(inboxMarkup, /Recorded purchases|Recent purchases|USD 30\.00/,
+    "Three owned assets from one bundle must never be presented as three financial transactions");
+  assert.equal((inboxMarkup.match(/Bundle item [123]/g) || []).length, 3, "All owned media stay visible");
+  assert.doesNotMatch(inboxMarkup, /USD 10\.00/, "A bundle price must not be repeated as each asset's purchase price");
   const now = new Date("2026-10-23T00:00:00Z");
   const account = accounts[0];
   const reads: string[] = [];
