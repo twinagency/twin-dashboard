@@ -85,7 +85,11 @@ try {
   // Local controls work on the explicitly disconnected account. Every control
   // is followed by the real canonical read, rather than an optimistic badge.
   const action = name => page.locator(`[data-of-action="${name}"]`);
+  const reveal = async name => {
+    if (name === "mark_no_contact" && !await action(name).isVisible()) await page.locator("details.of-more-actions > summary").click();
+  };
   const recorded = async name => {
+    await reveal(name);
     await action(name).click();
     await page.getByText("Change saved", { exact: true }).waitFor({ timeout: 15000 });
   };
@@ -121,12 +125,13 @@ try {
   assert.equal(await page.locator("[data-of-incident]").getByText("Outcome unknown", { exact: true }).count(), 1);
   assert.equal(await action("release_takeover").count(), 0, "unknown send allowed hand-back");
   assert.equal(await action("resume_automation").count(), 0, "unknown send allowed resume");
+  await reveal("mark_no_contact");
   await page.locator('[data-of-action="mark_no_contact"]:enabled').waitFor({ timeout: 15000 });
   await context.clearCookies();
   await action("mark_no_contact").click();
   await page.locator("[data-of-incident]").waitFor({ state: "detached", timeout: 15000 });
   assert.equal(await page.locator("[data-of-incident]").count(), 0, "session loss left private conversation evidence visible");
-  assert.equal(await page.locator("[data-of-actions] button").count(), 0);
+  assert.equal(await page.locator("[data-of-action]").count(), 0, "session loss left private control actions available");
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   for (const section of ["settings", "content", "sales"]) {
     await page.goto(origin + `/onlyfans/${section}?account=acc-a`, { waitUntil: "domcontentloaded" });
