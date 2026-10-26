@@ -47,6 +47,7 @@ export type OnlyFansTransport = {
   readConversations(
     accountId: string,
     cursor: string | null,
+    aiOnly?: boolean,
   ): Promise<TransportReply<CursorPage<ConversationSummary>>>;
   readConversation(
     accountId: string,
@@ -180,8 +181,11 @@ export function createFetchOnlyFansTransport(
       });
     },
 
-    readConversations(accountId, cursor) {
-      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    readConversations(accountId, cursor, aiOnly) {
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      if (aiOnly) params.set("filter", "ai");
+      const query = params.size ? `?${params}` : "";
       return request(`/accounts/${encodeURIComponent(accountId)}/conversations${query}`, (body) => {
         if (typeof body !== "object" || body === null) return null;
         const page = (body as { page?: unknown }).page;
@@ -271,9 +275,9 @@ export function createServerOnlyFansDataSource(options: {
       return toState({ outcome: "ok", data: found }, () => false, (account) => account.syncFreshness);
     },
 
-    async listConversations(accountId, cursor) {
+    async listConversations(accountId, cursor, aiOnly) {
       return toState(
-        await transport.readConversations(accountId, cursor ?? null),
+        await transport.readConversations(accountId, cursor ?? null, aiOnly),
         (page) => page.items.length === 0,
         (page) => oldestStale(page.items.map((conversation) => conversation.freshness)),
       );
