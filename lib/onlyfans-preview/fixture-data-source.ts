@@ -5,6 +5,7 @@
 // so the accounts and inbox surface can be built and reviewed before the scoped
 // server API exists.
 
+import { isAiChatting } from "../onlyfans/ai-visibility";
 import type { OnlyFansDataSource } from "./data-source";
 import { commandPayloadProblem, isDeliveryUnresolved } from "./actions";
 import { NO_PAYLOAD } from "./types";
@@ -147,13 +148,13 @@ export function createFixtureOnlyFansDataSource(
     return { status: "ready", data: account };
     },
 
-    async listConversations(accountId: string, cursor?: string | null) {
+    async listConversations(accountId: string, cursor?: string | null, aiOnly?: boolean) {
       await wait(latencyMs);
       if (!inScope(viewer, accountId)) return scopeDenied();
       const requestedPage = parseCursor(cursor);
       const override = scenarios.conversations?.(accountId, requestedPage);
       if (override) return override;
-      const items = fixtureConversations[accountId] ?? [];
+      const items = (fixtureConversations[accountId] ?? []).filter(item => !aiOnly || isAiChatting(item));
       if (items.length === 0) return { status: "empty" };
       return { status: "ready", data: page(items, requestedPage) };
     },
