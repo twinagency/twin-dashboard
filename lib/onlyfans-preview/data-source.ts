@@ -35,6 +35,7 @@ export interface OnlyFansDataSource {
   listConversations(
     accountId: string,
     cursor?: string | null,
+    aiOnly?: boolean,
   ): Promise<RequestState<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
