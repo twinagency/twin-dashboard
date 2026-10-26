@@ -65,11 +65,12 @@ try {
   const manual = page.locator('[data-of-message-id="3"]');
   await manual.getByText("Synthetic manual reply through the shared authority", { exact: true }).waitFor({ timeout: 15000 });
   assert.equal(await manual.getAttribute("data-of-message-delivery"), "sent");
-  assert(await page.getByText("from an operator", { exact: true }).count());
-  assert(await page.getByText("Sent", { exact: true }).count());
+  assert.equal(await manual.locator(".of-sent-receipt").getAttribute("title"), "Provider accepted this message from an operator. Read and purchase status are not confirmed. Receipt recorded.");
+  assert.equal(await manual.getByText("Sent to provider", { exact: true }).count(), 1);
   await page.getByText("Retracted synthetic message", { exact: true }).first().waitFor({ timeout: 15000 });
   assert(await page.getByText("Retracted", { exact: true }).count());
-  assert(await page.getByText(/Synchronization is incomplete/).count());
+  assert.equal(await page.getByText("Sync needs attention.", { exact: true }).count(), 1);
+  assert.equal(await page.getByText("Newer activity may be missing.", { exact: true }).count(), 1);
   assert.equal(external.length, 0, "UI attempted an external request");
   if (process.env.ONLYFANS_TEST_EVIDENCE) {
     await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-inbox.png"), fullPage: true });
@@ -115,6 +116,9 @@ try {
   await page.locator('[data-of-conversation-id="acc-a:202"]').click();
   await recorded("request_takeover");
   await page.locator("[data-of-incident]").waitFor();
+  assert.equal(await page.locator("[data-of-handover]").getByRole("status").innerText(), "Takeover requested");
+  assert.equal(await page.locator("[data-of-handover]").getByText("Waiting for the current delivery to settle. Manual replies stay paused until handover completes.", { exact: true }).count(), 1);
+  assert.equal(await page.locator("[data-of-incident]").getByText("Outcome unknown", { exact: true }).count(), 1);
   assert.equal(await action("release_takeover").count(), 0, "unknown send allowed hand-back");
   assert.equal(await action("resume_automation").count(), 0, "unknown send allowed resume");
   await page.locator('[data-of-action="mark_no_contact"]:enabled').waitFor({ timeout: 15000 });
