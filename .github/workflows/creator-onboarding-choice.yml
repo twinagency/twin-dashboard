@@ -1,0 +1,42 @@
+name: Creator onboarding choice
+on:
+  push:
+    branches: ["codex/flirt-onboarding-choice-20261027"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Choice routes and verified dashboard redirect
+        run: node --import tsx scripts/check-creator-onboarding-choice.cjs
+      - name: Existing upload, questionnaire and consent flows
+        run: |
+          node scripts/check-creator-flow-ui.cjs
+          node scripts/check-creator-combined-content.cjs
+          node scripts/check-creator-inline-consent.cjs
+          node scripts/check-creator-questionnaire-compact.cjs
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Package verified runtime
+        run: |
+          mkdir -p runtime/.next
+          cp -a .next/standalone/. runtime/
+          cp -a .next/static runtime/.next/static
+          cp -a public runtime/public
+          cp -a deployment runtime/deployment
+          tar -czf runtime.tar.gz -C runtime .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flirt-onboarding-runtime
+          path: runtime.tar.gz
+          retention-days: 7
