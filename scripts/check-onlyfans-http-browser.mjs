@@ -120,6 +120,7 @@ try {
   await page.locator('[data-of-conversation-id="acc-a:202"]').click();
   await recorded("request_takeover");
   await page.locator("[data-of-incident]").waitFor();
+  await page.locator("[data-of-handover]").getByRole("status").filter({ hasText: /^Takeover requested$/ }).waitFor({ timeout: 15000 });
   assert.equal(await page.locator("[data-of-handover]").getByRole("status").innerText(), "Takeover requested");
   assert.equal(await page.locator("[data-of-handover]").getByText("Waiting for the current delivery to settle. Manual replies stay paused until handover completes.", { exact: true }).count(), 1);
   assert.equal(await page.locator("[data-of-incident]").getByText("Outcome unknown", { exact: true }).count(), 1);
