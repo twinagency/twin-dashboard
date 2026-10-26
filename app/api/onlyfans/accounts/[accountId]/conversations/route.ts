@@ -25,6 +25,8 @@ export async function GET(
   const cursor = rawCursor ? requestId(rawCursor) : null;
   if (rawCursor !== null && cursor === null) return badRequest("That page reference is not valid.");
 
-  const result = await readConversations(context, { accountId, cursor });
+  const filter = url.searchParams.get("filter");
+  if (filter !== null && filter !== "ai") return badRequest("That conversation filter is not valid.");
+  const result = await readConversations(context, { accountId, cursor, aiOnly: filter === "ai" });
   return readResponse(result);
 }

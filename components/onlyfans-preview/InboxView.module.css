@@ -152,3 +152,10 @@
  .workspace :global(.users-panel-profile) { max-height:none; }
  .workspace :global(.of-control-button) { min-height:44px; }
 }
+
+/* AI assignment and authorship stay distinct from delivery receipts. */
+.workspace :global(.of-filters) { flex-wrap:wrap; }
+.workspace :global(.of-ai-badge), .workspace :global(.of-ai-reply) { display:inline-flex; align-items:center; border-radius:999px; background:#e5f1ff; color:#1764c0; padding:3px 7px; font-size:10px; line-height:1.3; font-weight:650; white-space:nowrap; }
+.workspace :global(.of-ai-badge)::before { content:""; width:5px; height:5px; margin-right:5px; border-radius:50%; background:#2b7de9; }
+.workspace :global(.of-control-event) { display:flex; flex-wrap:wrap; justify-content:center; align-self:center; gap:6px; margin:12px 0; padding:6px 10px; border-radius:12px; background:#e8f2ff; color:#275e99; font-size:11px; line-height:1.5; text-align:center; }
+.workspace :global(.of-control-event time) { color:#577d9f; font-size:10px; }

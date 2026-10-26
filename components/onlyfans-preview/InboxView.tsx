@@ -16,6 +16,8 @@ import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
+import { conversationTimeline, isAiChatting } from "@/lib/onlyfans/ai-visibility";
+import type { Handover } from "@/lib/onlyfans/handover";
 import type { ActionSet } from "@/lib/onlyfans-preview/actions";
 import { formatAge, formatPreviewTime } from "@/lib/onlyfans-preview/fixtures";
 import type {
@@ -36,7 +38,6 @@ import { NO_PAYLOAD } from "@/lib/onlyfans-preview/types";
 import {
   DeliveryPill,
   SimulatedTag,
-  TakeoverPill,
   formatMoney,
 } from "./labels";
 import { FreshnessLine } from "./PreviewChrome";
@@ -86,6 +87,10 @@ function AccountChips({
   );
 }
 
+function AiChattingBadge() {
+  return <span className="of-ai-badge" data-of-ai-chatting title="AI replies are enabled for this conversation">AI chatting</span>;
+}
+
 function ConversationList({
   conversations,
   selectedConversationId,
@@ -93,6 +98,8 @@ function ConversationList({
   nextCursor,
   loadingMore,
   onLoadMore,
+  aiOnly,
+  onAiFilterChange,
 }: {
   conversations: RequestState<CursorPage<ConversationSummary>>;
   selectedConversationId: string | null;
@@ -100,18 +107,21 @@ function ConversationList({
   nextCursor: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
+  aiOnly: boolean;
+  onAiFilterChange: (enabled: boolean) => void;
 }) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread" | "attention">("all");
+  const [filter, setFilter] = useState<"all" | "unread" | "attention" | "ai">("all");
+  const chooseFilter = (value: typeof filter) => { setFilter(value); onAiFilterChange(value === "ai"); };
   const matches = (conversation: ConversationSummary) =>
     (!query.trim() || `${conversation.fan.displayName} ${conversation.fan.shortRef} ${onlyFansMessageText(conversation.lastMessagePreview)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
-    (filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
+    (filter === "ai" || aiOnly ? isAiChatting(conversation) : filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
   return (
     <div className="of-list-content">
     <div className="of-list-heading"><h2>Conversations</h2></div>
     <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search loaded conversations</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search conversations" /></label>
-    <div className="of-filters" aria-label="Filter loaded conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Needs reply"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}</button>)}</div>
-    {(query || filter !== "all") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
+    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Needs reply"], ["ai", "AI chatting"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
+    {(query || filter === "unread" || filter === "attention") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
     <RequestStateBlock
       showStaleWarning={false}
       state={conversations}
@@ -119,7 +129,7 @@ function ConversationList({
       render={(page) =>
         page.items.length === 0 && !nextCursor ? (
           <div className="px-3.5 py-6 text-xs leading-5 text-muted">
-            No conversations in scope for this account.
+            {aiOnly ? "No conversations have AI chatting enabled for this account." : "No conversations in scope for this account."}
           </div>
         ) : (
           <div data-of-conversation-list>
@@ -167,7 +177,7 @@ function ConversationList({
                         ) : null}
                         {["failed", "partial", "unknown", "refused"].includes(conversation.delivery) ? <DeliveryPill outcome={conversation.delivery} /> : null}
                         {conversation.unreadCount > 0 ? <span className="of-unread" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount}</span> : null}
-                        <TakeoverPill state={conversation.takeoverState} />
+                        {isAiChatting(conversation) ? <AiChattingBadge /> : null}
                       </span>
                     </span>
                   </button>
@@ -200,8 +210,8 @@ function ConversationList({
  * `tg-bubble-in/out`, run tails, the day rule) so the two channels read as one
  * product, with the OnlyFans receipt attached under each outbound bubble.
  */
-function Thread({ detail }: { detail: ConversationDetail }) {
-  const lastIndex = detail.messages.length - 1;
+function Thread({ detail, handoverHistory }: { detail: ConversationDetail; handoverHistory?: Handover | null }) {
+  const timeline = conversationTimeline(detail, handoverHistory);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Open on the newest message, the way the Telegram thread does: a bottom-anchored
@@ -210,7 +220,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
   useEffect(() => {
     const node = scrollRef.current;
     if (node) node.scrollTop = node.scrollHeight;
-  }, [detail.conversationId, detail.messages.length]);
+  }, [detail.conversationId, timeline.length]);
 
   return (
     <div
@@ -221,20 +231,23 @@ function Thread({ detail }: { detail: ConversationDetail }) {
       {/* A short thread sits at the bottom of the panel, the way a chat does,
           instead of leaving the wallpaper dangling under three bubbles. */}
       <div className="flex min-h-full flex-col justify-start">
-      {detail.messages.length === 0 ? (
+      {timeline.length === 0 ? (
         <div className="mx-auto w-fit rounded-full bg-black/25 px-3 py-1 text-[11px] font-medium text-white">
           No messages in this view
         </div>
       ) : (
-        detail.messages.map((message, index) => {
+        timeline.map((entry, index) => {
+          if (entry.kind === "control") return <div key={`control:${entry.event.revision}`} className="of-control-event" data-of-handover-event={entry.event.revision}><span>{entry.label}</span><time dateTime={entry.at}>{new Date(entry.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></div>;
+          const message = entry.message;
           const inbound = message.direction === "inbound";
-          const previous = detail.messages[index - 1];
-          const next = detail.messages[index + 1];
-          const startsRun = index === 0 || previous.direction !== message.direction;
-          const endsRun = index === lastIndex || next.direction !== message.direction;
+          const previousEntry = timeline[index - 1], nextEntry = timeline[index + 1];
+          const previous = previousEntry?.kind === "message" ? previousEntry.message : null;
+          const next = nextEntry?.kind === "message" ? nextEntry.message : null;
+          const startsRun = !previous || previous.direction !== message.direction;
+          const endsRun = !next || next.direction !== message.direction;
           return (
             <div key={message.messageId}>
-              {index === 0 || new Date(previous.occurredAt).toDateString() !== new Date(message.occurredAt).toDateString() ? <div className="of-message-day">{new Date(message.occurredAt).toLocaleDateString(undefined, {day:"numeric",month:"short",year:"numeric"})}</div> : null}
+              {!previous || new Date(previous.occurredAt).toDateString() !== new Date(message.occurredAt).toDateString() ? <div className="of-message-day">{new Date(message.occurredAt).toLocaleDateString(undefined, {day:"numeric",month:"short",year:"numeric"})}</div> : null}
 
               <div className={"flex " + (inbound ? "justify-start" : "justify-end") + (startsRun ? " mt-2" : " mt-0.5")}>
                 <div className="flex max-w-[78%] flex-col items-stretch gap-1">
@@ -253,6 +266,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                   </div>
                   {!inbound ? (
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
+                      {message.origin === "ai" ? <span className="of-ai-reply" data-of-ai-reply>AI reply</span> : null}
                       {message.delivery === "sent" ? <span className="of-sent-receipt" title={`Provider accepted this message from ${ORIGIN_LABEL[message.origin]}. Read and purchase status are not confirmed.${message.evidenceRef ? " Receipt recorded." : ""}`}><Check size={13} aria-hidden="true" /><span className="sr-only">Sent to provider</span></span> : <DeliveryPill outcome={message.delivery} />}
                       {message.delivery !== "sent" && message.evidenceRef ? <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span> : null}
                     </div>
@@ -574,6 +588,7 @@ function DeliveryLedger({ messages }: { messages: ConversationMessage[] }) {
 
 export default function InboxView({
   controls,
+  accountControls,
   accountsState,
   activeAccount,
   activeAccountId,
@@ -592,9 +607,14 @@ export default function InboxView({
   onLoadMore,
   showPreviewChrome = true,
   handover,
+  handoverHistory,
+  aiOnly = false,
+  onAiFilterChange = () => {},
 }: {
   controls?: ReactNode;
+  accountControls?: ReactNode;
   handover?: ReactNode;
+  handoverHistory?: Handover | null;
   /**
    * False on a live surface: the sample-data badge and the developer controls
    * describe fixture data and must not appear over real reads.
@@ -616,6 +636,8 @@ export default function InboxView({
   nextCursor: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
+  aiOnly?: boolean;
+  onAiFilterChange?: (enabled: boolean) => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
   const {setIdentity}=useInboxIdentity();
@@ -663,6 +685,7 @@ export default function InboxView({
       ) : null}
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
+      {accountControls}
 
       <nav aria-label="Inbox panels" className="of-panel-switch mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
         {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Fan info"] ] as const).map(([key, label]) =>
@@ -680,6 +703,8 @@ export default function InboxView({
               nextCursor={nextCursor}
               loadingMore={loadingMore}
               onLoadMore={onLoadMore}
+              aiOnly={aiOnly}
+              onAiFilterChange={onAiFilterChange}
             />
           </div>
         </Card>
@@ -706,10 +731,10 @@ export default function InboxView({
                     <span className="creator-name">{activeAccount.binding.creatorName}</span> · @{activeAccount.binding.handle}
                   </div>
                 </div>
-
+                {isAiChatting(detail.summary) ? <AiChattingBadge /> : null}
               </div>
 
-              <Thread detail={detail} />
+              <Thread detail={detail} handoverHistory={handoverHistory} />
 
               {actionSet ? (
                 <Composer

@@ -84,8 +84,10 @@ import PreviewControlsPanel from "./PreviewControlsPanel";
 import type { PreviewPreset } from "./PreviewControlsPanel";
 import AccountsView from "./AccountsView";
 import InboxView from "./InboxView";
+import AllFansControl from "./AllFansControl";
 import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
+import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 export type OnlyFansView = "inbox" | "accounts";
@@ -221,6 +223,8 @@ export default function OnlyFansWorkspace({
   const commandBusy = useRef(false);
 
   const { state, ref, commit } = useSelectionStore();
+  const [aiOnly, setAiOnly] = useState(false);
+  const aiOnlyRef = useRef(false);
   const [handover, setHandover] = useState<Handover | null>(null);
   const [handoverLoading, setHandoverLoading] = useState(false);
   const [handoverRefresh, setHandoverRefresh] = useState(0);
@@ -271,8 +275,8 @@ export default function OnlyFansWorkspace({
           withAccountOverrides(account, controls),
         );
       },
-      async listConversations(accountId, cursor) {
-        return mapState(await base.listConversations(accountId, cursor), (page) => ({
+      async listConversations(accountId, cursor, aiOnly) {
+        return mapState(await base.listConversations(accountId, cursor, aiOnly), (page) => ({
           ...page,
           items: page.items.map((summary) => withSummaryOverrides(summary, controls)),
         }));
@@ -381,10 +385,10 @@ export default function OnlyFansWorkspace({
     requested.current.conversations.add(accountId);
     const pending = requestConversations(ref.current, accountId);
     commit(pending.state);
-    void source.listConversations(accountId).then((result) => {
+    void source.listConversations(accountId, null, aiOnly).then((result) => {
       commit(applyConversations(ref.current, accountId, pending.generation, pending.seq, result).state);
     });
-  }, [state.selectedAccountId, authorizedIds, source, commit, ref]);
+  }, [state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly]);
 
   // The selected thread.
   useEffect(() => {
@@ -433,7 +437,8 @@ export default function OnlyFansWorkspace({
   useEffect(() => {
     if (sourceMode !== "server" || view !== "inbox" || !handoverAccount || !handoverConversation) { setHandover(null); return; }
     const controller = new AbortController(); let active = true;
-    setHandoverLoading(true); setHandover(null);
+    setHandoverLoading(true);
+    setHandover(current => current?.accountId === handoverAccount && current.conversationId === handoverConversation ? current : null);
     void fetch(`/api/onlyfans/accounts/${encodeURIComponent(handoverAccount)}/conversations/${encodeURIComponent(handoverConversation)}/handover`, {
       credentials: "same-origin", cache: "no-store", redirect: "error", signal: controller.signal,
     }).then(async response => {
@@ -498,7 +503,7 @@ export default function OnlyFansWorkspace({
     if (!cursor) return;
     const pending = requestMoreConversations(ref.current, accountId);
     commit(pending.state);
-    void source.listConversations(accountId, cursor).then((result) => {
+    void source.listConversations(accountId, cursor, aiOnlyRef.current).then((result) => {
       commit(appendConversations(ref.current, accountId, pending.generation, pending.seq, result).state);
     });
   }, [commit, ref, source]);
@@ -537,7 +542,7 @@ export default function OnlyFansWorkspace({
           requested.current.details.add(`${request.accountId}:${request.conversationId}`);
           const list = requestConversations(ref.current, request.accountId);
           commit(list.state);
-          const listRead = await source.listConversations(request.accountId);
+          const listRead = await source.listConversations(request.accountId, null, aiOnlyRef.current);
           commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
           if (generation === ref.current.scopeGeneration && selected()) {
             requested.current.details.add(`${request.accountId}:${request.conversationId}`);
@@ -652,17 +657,25 @@ export default function OnlyFansWorkspace({
 
   return (
     <InboxView
+      accountControls={sourceMode === "server" && activeAccount && actionViewer.canManage ? <AllFansControl key={activeAccount.accountId} account={activeAccount} viewer={actionViewer} source={source} onChanged={() => {
+        const id = ref.current.selectedAccountId; if (!id) return;
+        const pending = requestConversations(ref.current, id); commit(pending.state);
+        void source.listConversations(id, null, aiOnlyRef.current).then(result => commit(applyConversations(ref.current, id, pending.generation, pending.seq, result).state));
+        refreshHandover();
+      }} /> : undefined}
       controls={showPreviewChrome ? developerControls : undefined}
       showPreviewChrome={showPreviewChrome}
       accountsState={scopedAccounts}
       activeAccount={activeAccount}
       activeAccountId={state.selectedAccountId}
       onSelectAccount={handleSelectAccount}
-      conversations={
+      conversations={mapState<CursorPage<ConversationSummary>, CursorPage<ConversationSummary>>(
         state.selectedAccountId
           ? (state.byAccount[state.selectedAccountId]?.conversations ?? { status: "loading" })
-          : { status: "empty" }
-      }
+          : { status: "empty" },
+        page => ({ ...page, items: page.items.map(summary => selectedSummary?.accountId === summary.accountId &&
+          selectedSummary.conversationId === summary.conversationId && selectedSummary.revision >= summary.revision ? selectedSummary : summary) }),
+      )}
       selectedConversationId={
         state.selectedAccountId
           ? (state.byAccount[state.selectedAccountId]?.selectedConversationId ?? null)
@@ -671,6 +684,14 @@ export default function OnlyFansWorkspace({
       onSelectConversation={handleSelectConversation}
       detailState={detailState}
       viewer={actionViewer}
+      aiOnly={aiOnly}
+      onAiFilterChange={enabled => {
+        if (aiOnlyRef.current === enabled) return;
+        aiOnlyRef.current = enabled;
+        requested.current.conversations.clear();
+        setAiOnly(enabled);
+      }}
+      handoverHistory={sourceMode === "server" ? handover : null}
       handover={sourceMode === "server" ? <HandoverPanel value={handoverCurrent} loading={handoverLoading} onRefresh={refreshHandover} /> : undefined}
       onCommand={handleCommand}
       commandResult={commandResult}

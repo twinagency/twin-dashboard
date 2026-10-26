@@ -25,6 +25,7 @@
 
 // Relative rather than aliased on purpose: this module is imported by the
 // offline checks, which run outside Next and resolve no `@/` alias.
+import { isAiChatting } from "./ai-visibility";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
 import type {
   ConversationDetail,
@@ -195,19 +196,20 @@ export async function readAccounts(
 
 export async function readConversations(
   input: ReadInput,
-  request: { accountId: string; cursor: string | null },
+  request: { accountId: string; cursor: string | null; aiOnly?: boolean },
 ): Promise<ReadResult<ConversationsReadBody>> {
   const denial = authorizeRead(input.auth);
   if (denial) return denial;
   if (!input.backend) return unavailable(NOT_CONFIGURED);
 
-  const result = await input.backend.listConversations(request.accountId, request.cursor);
+  const result = await input.backend.listConversations(request.accountId, request.cursor, request.aiOnly);
   if (!result.ok) return mapFailure(result);
 
   const stray = result.data.items.find((item) => item.accountId !== request.accountId);
   if (stray) {
     return violation("a conversation from another account");
   }
+  if (request.aiOnly && result.data.items.some(item => !isAiChatting(item))) return violation("an unfiltered AI conversation list");
 
   return {
     ok: true,
