@@ -605,7 +605,7 @@ export default function OnlyFansWorkspace({
           commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
           if (generation === ref.current.scopeGeneration && selected()) {
             requested.current.details.add(`${request.accountId}:${request.conversationId}`);
-            const detail = requestConversation(ref.current, request.accountId, request.conversationId);
+            const detail = requestConversation(ref.current, request.accountId, request.conversationId, { background: true });
             commit(detail.state);
             const read = await source.getConversation(request.accountId, request.conversationId);
             commit(applyConversation(ref.current, request.accountId, request.conversationId,
