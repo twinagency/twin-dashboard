@@ -70,7 +70,7 @@ try {
   await page.getByText("Retracted synthetic message", { exact: true }).first().waitFor({ timeout: 15000 });
   assert(await page.getByText("Retracted", { exact: true }).count());
   assert.equal(await page.getByText("Sync needs attention.", { exact: true }).count(), 1);
-  assert.equal(await page.getByText("Newer activity may be missing.", { exact: true }).count(), 1);
+  assert.match(await page.getByRole("status").filter({ hasText: "Sync needs attention." }).innerText(), /Newer activity may be missing\./);
   assert.equal(external.length, 0, "UI attempted an external request");
   if (process.env.ONLYFANS_TEST_EVIDENCE) {
     await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-inbox.png"), fullPage: true });
@@ -112,7 +112,7 @@ try {
   await recorded("resume_automation");
   await action("pause_automation").waitFor({ timeout: 15000 });
   await recorded("mark_no_contact");
-  await page.getByText("No action is available for this conversation right now.", { exact: true }).waitFor({ timeout: 15000 });
+  await page.getByText("No reply changes are available right now.", { exact: true }).waitFor({ timeout: 15000 });
   await page.locator('[data-of-conversation-id="acc-a:202"]').click();
   await recorded("request_takeover");
   await page.locator("[data-of-incident]").waitFor();
