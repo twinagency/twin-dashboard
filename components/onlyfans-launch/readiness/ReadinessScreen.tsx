@@ -203,8 +203,8 @@ export default function ReadinessScreen({
               <dt>New conversations</dt>
               <dd>
                 {r.state.data.autonomy.automateNewConversations
-                  ? "Automatic handling configured"
-                  : "Automatic handling off"}
+                  ? "Automatic handling on"
+                  : "Off (locked): enable each fan individually"}
               </dd>
               <dt>Engagement settings</dt>
               <dd>

@@ -229,7 +229,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
             disabled={!data.activation.deploymentAllowed || !data.activation.selectionValid} onChange={e => setScopeFans(e.target.value)} /></label> : null}
           {scopeDirty && !selection ? <p role="alert" className="mt-2 text-xs">Enter one or more valid numeric fan IDs.</p> : null}
           {!data.activation.selectionValid ? <p role="alert" className="mt-2 text-xs">The saved fan scope needs review before it can be edited.</p> : null}
-          <p className="mt-2 text-xs text-muted">Scope selection does not resume paused chats or override human control or no-contact. Resume an approved chat in Inbox. New conversations also require “Automatically reply to new conversations” in Manage connection. Changes remain inside this creator’s deployment authorization.</p>
+          <p className="mt-2 text-xs text-muted">Scope selection does not resume paused chats or override human control or no-contact. Resume an approved chat in Inbox. New conversations are never enabled automatically; enable each fan in the inbox. Changes remain inside this creator’s deployment authorization.</p>
         </section> : null}
         </StudioTabPanel><button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command) || scopeDirty && !selection} className={buttonClass}>Save creator settings</button>
       </fieldset>

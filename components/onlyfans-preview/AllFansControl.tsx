@@ -50,8 +50,8 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         const state = await readControl();
         if (!config?.activation?.allFansAllowed || !config.activation.selectionValid || !config.activation.modelCredentialReady)
           throw Error("This account is not ready for all fans. Review its AI settings first.");
-        if (!state.autonomy.automateNewConversations || !state.autonomy.deliveryEnabled)
-          throw Error("Enable outgoing messages and automatic replies to new conversations in account settings first.");
+        if (!state.autonomy.deliveryEnabled)
+          throw Error("Enable outgoing messages in account settings first.");
         if (!state.accountControl.enabled && !state.readyToEnable)
           throw Error("This account needs attention before AI can resume. Review account readiness first.");
         if (config.activation.selection?.mode !== "all") {
@@ -63,7 +63,7 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         if (!state.accountControl.enabled) await changeAccount("resume");
         const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => stopped.current,
           progress: value => { if (!stopped.current) setProgress(value); } });
-        if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations are enabled.`);
+        if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
       }
     } catch (error) {
       if (!stopped.current) setNotice(error instanceof Error ? error.message : "Stopped. Refresh to check which changes were recorded.");

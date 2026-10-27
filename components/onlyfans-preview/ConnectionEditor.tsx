@@ -25,7 +25,6 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
   const [modelEnabled, setModelEnabled] = useState(false), [modelId, setModelId] = useState(""), [apiKey, setApiKey] = useState("");
   const [hours, setHours] = useState("6"), [captureReady, setCaptureReady] = useState(false);
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
-  const [automateNew, setAutomateNew] = useState(false);
   const [hasRetry, setHasRetry] = useState(false);
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
@@ -50,7 +49,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
       const next = response.ok ? parseConnection(await response.json(), accountId) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
-      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations); }
+      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); }
       return true;
     } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
@@ -120,7 +119,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
   function activate() {
     if (!data || !/^\d+$/.test(limit) || !/^\d+$/.test(throttle)) return;
     const command: ConnectionRequest = { action: "activate", expectedRevision: data.revision,
-      payload: { limitUnits: Number(limit), throttleSeconds: Number(throttle), mediaEnabled: media, automateNewConversations: automateNew } };
+      payload: { limitUnits: Number(limit), throttleSeconds: Number(throttle), mediaEnabled: media, automateNewConversations: false } };
     if (Number(limit) < data.usedUnits || !validConnectionRequest(command)) { setNotice("Enter a valid total allowance at least equal to used units, and a send interval from 1 to 86400 seconds."); return; }
     void send(command);
   }
@@ -172,8 +171,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
             <label className="block text-xs">Total send allowance, including {data.usedUnits} already used<input data-of-connection-limit className={inputClass} type="number" min={Math.max(1, data.usedUnits)} max={10000} step={1} value={limit} onChange={event => setLimit(event.target.value)} required /></label>
             <label className="block text-xs">Minimum seconds between sends<input data-of-connection-throttle className={inputClass} type="number" min={1} max={86400} step={1} value={throttle} onChange={event => setThrottle(event.target.value)} required /></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-media type="checkbox" checked={media} onChange={event => setMedia(event.target.checked)} /><span>Allow eligible paid media sends</span></label>
-            <label className="flex items-start gap-2 text-xs"><input data-of-connection-automate-new type="checkbox" checked={automateNew} onChange={event => setAutomateNew(event.target.checked)} /><span>Automatically reply to new conversations</span></label>
-            <p className="text-xs text-muted">Automatic replies require a saved matching model credential and creator settings. This option applies to new conversations received after activation; existing paused, takeover and no-contact conversations keep their saved state.</p>
+            <p className="text-xs text-muted" data-of-connection-automate-new-note>New conversations are never enabled automatically; enable each fan in the inbox.</p>
             <p className="text-xs text-muted">Enabling outgoing permits this account’s worker to send messages within these limits. Used allowance is retained.</p>
             <button type="submit" className={buttonClass} data-of-connection-activate disabled={state !== "connected"}>Enable outgoing messages</button>
           </fieldset>
