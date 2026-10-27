@@ -23,10 +23,24 @@ async function main() {
   let tokenRequests = 0;
   let logoutScope = "";
   let passwordUpdates = 0;
+  const adminSessions = new Set<string>();
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     let body: unknown;
-    if (url.pathname === `/auth/v1/admin/users/${userId}`) {
+    if (url.pathname.startsWith("/rest/v1/rpc/dashboard_")) {
+      assert.equal(init?.method, "POST");
+      assert.equal(init?.cache, "no-store");
+      const payload = JSON.parse(String(init?.body));
+      assert.deepEqual(Object.keys(payload), ["p_session_hash"]);
+      assert.match(payload.p_session_hash, /^[a-f0-9]{64}$/);
+      if (url.pathname.endsWith("/dashboard_admin_session_create")) {
+        adminSessions.add(payload.p_session_hash); body = true;
+      } else if (url.pathname.endsWith("/dashboard_owner_session_verify")) {
+        body = adminSessions.has(payload.p_session_hash);
+      } else if (url.pathname.endsWith("/dashboard_owner_session_revoke")) {
+        adminSessions.delete(payload.p_session_hash); body = true;
+      } else throw new Error("Unexpected session RPC");
+    } else if (url.pathname === `/auth/v1/admin/users/${userId}`) {
       assert.equal(init?.method,"PUT");
       assert.deepEqual(JSON.parse(String(init?.body)),{password:"test-new-lynq-password"});
       passwordUpdates++;

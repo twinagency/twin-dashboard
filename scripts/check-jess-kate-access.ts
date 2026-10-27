@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { POST as login, GET as loginEntry } from "../app/jess-and-kate-ai/auth/route";
@@ -19,6 +20,7 @@ async function main(){
   const oldFetch=globalThis.fetch;
   let active=true,agencyActive=true,wrongUser=false,wrongAgency=false,emptyScope=false,tokenRequests=0,passwordUpdates=0;
   globalThis.fetch=async(input,init)=>{
+    const rpc = syntheticAdminSessionRpc(input, init); if (rpc) return rpc;
     const url=new URL(String(input));let body:unknown;
     if(url.pathname==="/auth/v1/token"){
       tokenRequests++;const credentials=JSON.parse(String(init?.body));assert.equal(credentials.email,portal.loginEmail);

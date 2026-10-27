@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 // ── Checks for master-admin "View as" (dashboard) and "act as" (admin API) ──
 // Run: npm run test:view-as
 //
@@ -46,6 +47,7 @@ async function main() {
   let creatorStatus: string | null = "active";
   const oldFetch = globalThis.fetch;
   globalThis.fetch = (async (input: unknown, init?: RequestInit) => {
+    const rpc = syntheticAdminSessionRpc(input, init); if (rpc) return rpc;
     const url = new URL(String(input));
     let body: unknown = null;
     if (url.pathname === "/rest/v1/partner_agencies") {

@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 import { execFileSync as runSidebarRegression } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -23,6 +24,7 @@ async function main() {
   const previous=globalThis.fetch;
   let active=true, memberActive=true, signedInAgency=moxyId, authCalls=0, signoutScope="", expectedEmail="moxy@example.test";
   globalThis.fetch=async(input,init)=>{
+    const rpc = syntheticAdminSessionRpc(input, init); if (rpc) return rpc;
     const url=new URL(String(input)); let body:unknown;
     if(url.pathname==="/auth/v1/token") {
       authCalls++;
