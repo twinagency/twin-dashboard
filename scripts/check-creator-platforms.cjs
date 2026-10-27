@@ -15,6 +15,7 @@ async function main(){
  f.attempt={id:'a'.repeat(8)+'-aaaa-4aaa-aaaa-'+ 'a'.repeat(12),phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};
  f.connection.captureContext=async(creatorId,accountId)=>{f.calls.push({name:'capture-context',creatorId,accountId});return {ok:true,data:{accountId,ownerId:accountId?123:null,proxyUrl:accountId?'http://synthetic-private-proxy.example':null,fingerprint:'a'.repeat(64)}}};
  f.signIn={async start(scope,startKey,network){f.calls.push({name:'signin-start',scope,startKey,network});return f.attempt},async status(scope,id){f.calls.push({name:'signin-status',scope,id});return f.attempt},async input(scope,id,input){f.calls.push({name:'signin-input',scope,id,input});return f.attempt},async frame(scope,id){f.calls.push({name:'signin-frame',scope,id});return new Uint8Array([255,216,255,217]).buffer},async cancel(){throw new f.SignInBackendError(410,'Your sign-in expired. Start again.')},async capture(scope,id){f.calls.push({name:'signin-capture',scope,id});return f.signInCapture},async acknowledge(scope,id,enrollmentId){f.calls.push({name:'signin-ack',scope,id,enrollmentId});if(f.ackFail)throw new Error('synthetic lost acknowledgment');return {...f.attempt,phase:'submitted',enrollmentId}}};
+ f.broker={async assign(creatorId,selection,actor){f.calls.push({name:'proxy-assignment',creatorId,selection,actor});return 'http://fixture:secret@8.8.4.4:12323'}};
  const stubs={
   'server-only':'',
   'next/headers':`export async function cookies(){return {get(name){return name==='creator_session'?{value:globalThis.__creatorPlatformsTest.token}:undefined}}}`,
@@ -25,6 +26,7 @@ async function main(){
   '@/lib/view-as-banner':`export async function getViewAsBannerInfo(){return globalThis.__creatorPlatformsTest.viewAs?{}:null}`,
   '@/lib/onlyfans/backend':`export function configuredOnlyFansBackend(){return globalThis.__creatorPlatformsTest.read}`,
   '@/lib/onlyfans-connections/backend':`export function configuredConnectionBackend(){return globalThis.__creatorPlatformsTest.connection}`,
+  '@/lib/onlyfans-managed-proxy/backend':`export class ManagedProxyError extends Error{constructor(status,message){super(message);this.status=status}};export function configuredManagedProxyBackend(){return globalThis.__creatorPlatformsTest.broker}`,
   '@/lib/onlyfans-sign-in/backend':`export const SignInBackendError=globalThis.__creatorPlatformsTest.SignInBackendError;export function configuredSignInBackend(){return globalThis.__creatorPlatformsTest.signIn}`,
  };
  try{
@@ -179,15 +181,24 @@ async function main(){
     assert.equal(chosenSnapshot.telegram.configured,kind==='existing-telegram');
     for(const q of f.queries.filter(q=>q.table==='creator_accounts'))assert.deepEqual(q.filters,[['id',f.creator.accountId],['auth_user_id',f.creator.userId]]);
     f.attempt={...f.attempt,phase:'waiting',enrollmentId:null,handle:null};
-    const nextStart=await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id});assert.equal(nextStart.status,409);
-    assert.match((await nextStart.json()).error,/needs setup before sign-in/);
-    assert.equal(f.calls.some(c=>c.name==='signin-start'),false,'Missing fixed network is refused before opening a direct browser');
+    const nextStart=await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id});assert.equal(nextStart.status,200);
+    assert(!JSON.stringify(await nextStart.json()).includes('secret'),'First-connect credentials stay server-side');
+    const assignment=f.calls.find(c=>c.name==='proxy-assignment');
+    assert.equal(assignment.creatorId,f.profile);assert.equal(assignment.selection.countryCode,'auto');
+    assert.equal(assignment.selection.handle,'pending_'+require('node:crypto').createHash('sha256').update(f.profile).digest('hex').slice(0,32));
+    assert.match(assignment.actor,/^creator-session:[a-f0-9]{64}$/);
+    assert.equal(f.calls.find(c=>c.name==='signin-start').network.proxyUrl,'http://fixture:secret@8.8.4.4:12323');
+    const broker=f.broker;f.broker=null;
+    const count=f.calls.filter(c=>c.name==='signin-start').length;
+    assert.equal((await sendSignIn({action:'start',profileId:f.profile,accountId:null,startKey:f.attempt.id})).status,503);
+    assert.equal(f.calls.filter(c=>c.name==='signin-start').length,count,'No broker means no direct browser fallback');
+    f.broker=broker;
     actors.add('creator-session:'+require('node:crypto').createHash('sha256').update(f.creator.accountId).digest('hex'));
     assert.equal(f.calls.some(c=>c.name==='enroll'||c.name==='command'),false,'Starting login is not account enrollment or delivery activation');
     assert.equal((await m.account.GET(request('/'),accountContext('someone-elses-account'))).status,404);
   }
   assert.equal(actors.size,3,'Each creator has their own private sign-in actor');
-  console.log('PASS creator platforms: current/future and agency creator identities, opt-in without migration, Telegram preservation, owner-isolated reconnect and explicit first-connection setup gate, authenticated frame/confirmation, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, no creator activation, read-only owned history and middleware routes.');
+  console.log('PASS creator platforms: current/future and agency creator identities, opt-in without migration, Telegram preservation, owner-isolated reconnect and server-prepared standalone first connection, authenticated frame/confirmation, expired restart, exact lost-ack retry, cookie identity, view-as/origin/body guards, no creator activation, read-only owned history and middleware routes.');
  }finally{delete globalThis.__creatorPlatformsTest;rmSync(dir,{recursive:true,force:true})}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

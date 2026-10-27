@@ -4,7 +4,17 @@ import { revokeOwnerSession } from "../lib/owner-auth";
 async function main() {
   process.env.SUPABASE_URL="https://sessions.invalid";
   process.env.SUPABASE_SERVICE_KEY="synthetic-server-only";
-  process.env.DASHBOARD_SERVER_ADMIN_SESSIONS="1";
+  process.env.DASHBOARD_SESSION_SECRET="synthetic-cutover-secret";
+  Object.assign(process.env,{NODE_ENV:"development"});
+  delete process.env.DASHBOARD_SERVER_ADMIN_SESSIONS;
+  delete process.env.DASHBOARD_ALLOW_LEGACY_ADMIN_SESSIONS;
+  const legacy=await signSession();
+  assert(await verifySessionToken(legacy),"fixture must be a valid legacy HMAC cookie");
+  Object.assign(process.env,{NODE_ENV:"production"});
+  assert(!(await verifySessionToken(legacy)),"default hard cutover must reject a valid legacy cookie");
+  process.env.DASHBOARD_ALLOW_LEGACY_ADMIN_SESSIONS="1";
+  assert(await verifySessionToken(legacy),"rejection must be the policy, not malformed input");
+  delete process.env.DASHBOARD_ALLOW_LEGACY_ADMIN_SESSIONS;
   const original=globalThis.fetch, sessions=new Set<string>();
   let unavailable=false, lastBody:Record<string,string>={};
   globalThis.fetch=async (url, init)=>{
@@ -26,12 +36,13 @@ async function main() {
     assert(await revokeOwnerSession(a)); assert(!(await verifySessionToken(a)));
     assert(await revokeOwnerSession(a)); assert(await verifySessionToken(b));
     assert(await revokeOwnerSession(undefined));
-    assert(!(await revokeOwnerSession("legacy.stateless")));
+    assert(!(await revokeOwnerSession(legacy)));
+    assert(!(await verifySessionToken(legacy)));
     unavailable=true;
     assert(!(await revokeOwnerSession(b)));
     await assert.rejects(signSession(),/session service is unavailable/);
     assert(!(await verifySessionToken(b)));
-    console.log("Session revocation PASS: distinct server sessions, copied-token replay refused, other session preserved, repeated logout, invalid legacy and visible outage.");
+    console.log("Session revocation PASS: distinct server sessions, copied-token replay refused, other session preserved, repeated logout, valid legacy HMAC hard cutover and visible outage.");
   } finally {globalThis.fetch=original;}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
