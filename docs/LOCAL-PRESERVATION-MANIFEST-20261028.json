@@ -1,0 +1,664 @@
+{
+  "status": "PREPARED LOCALLY; SOURCE UPLOAD BLOCKED PENDING EXPLICIT APPROVAL",
+  "destinationRepository": "twinagency/twin-dashboard",
+  "destinationBranch": "archive/local-work-20261028",
+  "files": [
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": ".github/workflows/ci.yml",
+      "savedPath": "agency-onboarding-20261022/.github/workflows/ci.yml.source.txt",
+      "sha256": "b90c79b89db3ffecc7bc05bf66bf1181569de59aefc75bb66ce9de8064a3eb9b",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency-admin/page.tsx",
+      "savedPath": "agency-onboarding-20261022/app/agency-admin/page.tsx.source.txt",
+      "sha256": "e7881ff8670f94892a35bed22cbbae3cbe8ce068d86b0229685ae6d8974327ef",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency-admin/provision/route.ts",
+      "savedPath": "agency-onboarding-20261022/app/agency-admin/provision/route.ts.source.txt",
+      "sha256": "0be3d405c6ce1194dce0175da2ca82f4d6233ffe392c78c326d0677a84db1b7e",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/layout.tsx",
+      "savedPath": "agency-onboarding-20261022/app/layout.tsx.source.txt",
+      "sha256": "6c1980c08c244025220a9f62671686c3e7db97135d49b192f4ee980b212132cf",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "components/Sidebar.tsx",
+      "savedPath": "agency-onboarding-20261022/components/Sidebar.tsx.source.txt",
+      "sha256": "2095d460bca25304ff182b7052d6aff27af7c109aa0cc61f11fa0d25a5a2f113",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "components/TwinTeamAccess.tsx",
+      "savedPath": "agency-onboarding-20261022/components/TwinTeamAccess.tsx.source.txt",
+      "sha256": "e6f88876014461e6650a2f5e51a958e738743f96215b2ee9a932ae26d8837aa6",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "lib/agency-policy.ts",
+      "savedPath": "agency-onboarding-20261022/lib/agency-policy.ts.source.txt",
+      "sha256": "6b9266eb7050d4553184a28a3e6035355d3e2e900dc2d8e8a8fe280864abc898",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "middleware.ts",
+      "savedPath": "agency-onboarding-20261022/middleware.ts.source.txt",
+      "sha256": "927cfe637880aecba54ddf27b13816507ce0db93a7847280191eee82140ad11f",
+      "untracked": false
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency-admin/team-owner/route.ts",
+      "savedPath": "agency-onboarding-20261022/app/agency-admin/team-owner/route.ts.source.txt",
+      "sha256": "801695b1bffa553bc660dfb1b794816ea5c58147c9449abb79b4ee53ff79ff50",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency-team.css",
+      "savedPath": "agency-onboarding-20261022/app/agency-team.css.source.txt",
+      "sha256": "03e2cf2e851dfcbcfe2bbd5c2389cb7008652341b711ace31173ed8ee8096092",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/join/accept/route.ts",
+      "savedPath": "agency-onboarding-20261022/app/agency/join/accept/route.ts.source.txt",
+      "sha256": "954d88777c800b3292b23dc45053a301a524b627dc47e073eff19e925cfa1190",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/join/email/route.ts",
+      "savedPath": "agency-onboarding-20261022/app/agency/join/email/route.ts.source.txt",
+      "sha256": "4ba11d59e8fab1e50175ddfeecb228385417836eb6167ddab12f585fa9cf8cb4",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/join/page.tsx",
+      "savedPath": "agency-onboarding-20261022/app/agency/join/page.tsx.source.txt",
+      "sha256": "9ac3e7cf5ad3b0fa00afafbec1cb6744c43f2ecb546fce89fa6f7be01590888d",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/setup/page.tsx",
+      "savedPath": "agency-onboarding-20261022/app/agency/setup/page.tsx.source.txt",
+      "sha256": "09b1ac4cb553a85b4821c44b8ec52e23a5be57f733ebaaf180e804036424351b",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/team/manage/route.ts",
+      "savedPath": "agency-onboarding-20261022/app/agency/team/manage/route.ts.source.txt",
+      "sha256": "88e23fb5b52be984e7059c894a217d9007a59a0eab6ac206c899e153b7db92af",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "app/agency/team/page.tsx",
+      "savedPath": "agency-onboarding-20261022/app/agency/team/page.tsx.source.txt",
+      "sha256": "79ea124fc97298bdeb248899de1ee2aadc191a32879aeb45dfe263e5b8619f8a",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "components/AgencyJoin.tsx",
+      "savedPath": "agency-onboarding-20261022/components/AgencyJoin.tsx.source.txt",
+      "sha256": "395706e64276bf6fa9fff3cd31195f6e4a797034190b4bb69566a0222f862fca",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "components/AgencyTeamForm.tsx",
+      "savedPath": "agency-onboarding-20261022/components/AgencyTeamForm.tsx.source.txt",
+      "sha256": "243756f02ac32b04c1d603c631da89417c22124d9f5720378e8cb24206a23b36",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "lib/agency-team-command.ts",
+      "savedPath": "agency-onboarding-20261022/lib/agency-team-command.ts.source.txt",
+      "sha256": "2b312205bdfa11d7bd7d6f64107db8df2ba740da7218da4c0b5f119070a281b7",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "lib/agency-team.ts",
+      "savedPath": "agency-onboarding-20261022/lib/agency-team.ts.source.txt",
+      "sha256": "d7932107e7d01afe7ffa33f7dff6498b32ff4d1841f0df715ca4971fbee41434",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "scripts/check-agency-team-onboarding.cjs",
+      "savedPath": "agency-onboarding-20261022/scripts/check-agency-team-onboarding.cjs.source.txt",
+      "sha256": "83b1f8cdea01635d65f30f5e64c1e54a396580a963f29c970998a94741e5d6ce",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "scripts/check-agency-team-onboarding.sql",
+      "savedPath": "agency-onboarding-20261022/scripts/check-agency-team-onboarding.sql.source.txt",
+      "sha256": "e5d348a1297a872dc7923bbbe2db0352f466c4eeb6bdcef8f61d082bd3f2a55c",
+      "untracked": true
+    },
+    {
+      "worktree": "agency-onboarding-20261022",
+      "base": "e33928b40c84567885a32d6c6bdb33f8b805cead",
+      "branch": "refs/heads/codex/agency-onboarding-20261022",
+      "originalPath": "scripts/check-agency-team-ui.cjs",
+      "savedPath": "agency-onboarding-20261022/scripts/check-agency-team-ui.cjs.source.txt",
+      "sha256": "84a7f6a5f6012f746d5d1bb058a1be4d0cbceae60baad281f9b89cc40d058a29",
+      "untracked": true
+    },
+    {
+      "worktree": "moxy-onboarding-audit-20261024",
+      "base": "884d7320fea225287a783670b7d928ec2aba2a7d",
+      "branch": "refs/heads/codex/moxy-upload-reload-20261025",
+      "originalPath": "deployment/creator-flow-live-check.audit.py",
+      "savedPath": "moxy-onboarding-audit-20261024/deployment/creator-flow-live-check.audit.py.source.txt",
+      "sha256": "3af0ca766ce08ed1b072e80b5e3a3187224de6b55d7eae09bd4c52cbb7e8f7ce",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": ".github/workflows/ci.yml",
+      "savedPath": "shared-media-staff-scope-20261022/.github/workflows/ci.yml.source.txt",
+      "sha256": "77e308da0a9f9932cb181052744b978f3ccbd80b2aedd2e4b89178d97c986eed",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency-admin/page.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency-admin/page.tsx.source.txt",
+      "sha256": "f5838a7f75bf0b5249599b3121d4e520a9e3e02169b2219fc261fcf7bdfac4ed",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency/creator-invites/manage/route.ts",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency/creator-invites/manage/route.ts.source.txt",
+      "sha256": "ba8fad687c88e41c1277ce7d75374743d560629141ddcef5cd16580020b25f40",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency/creator-invites/page.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency/creator-invites/page.tsx.source.txt",
+      "sha256": "c2d0e7759649874bd5b0500640ca5f4b3bcb58bc4a0639dd64df578654378a33",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency/creator-split/page.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency/creator-split/page.tsx.source.txt",
+      "sha256": "c91d84a44a5b85e7564ffcaff3415649144a2d3c3bdfc0bc585fda7701e7adc4",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency/creators/link/route.ts",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency/creators/link/route.ts.source.txt",
+      "sha256": "a57eb744f18d5bb6ee70b3f241869c853e6d8f4ad3d744cf6dd244e5c2bad508",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency/creators/page.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency/creators/page.tsx.source.txt",
+      "sha256": "78877aad5db368065b7494f65794f9e4cb068a07ad79e8693b92bfec0862e3bc",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/media/MediaManager.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/app/media/MediaManager.tsx.source.txt",
+      "sha256": "fa11942fa8bf4df811028f8ae440585a5d9f6320161b163b115f895203b26a55",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "components/TwinTeamAccess.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/components/TwinTeamAccess.tsx.source.txt",
+      "sha256": "b2fe554b489376fa0ef45e7350971579b3ea7b866abb0610cca4866846de8d6b",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "lib/agency-identity.ts",
+      "savedPath": "shared-media-staff-scope-20261022/lib/agency-identity.ts.source.txt",
+      "sha256": "d8e834fed2bf61605f2181db4995738d0f4c20831b15699727c6e41121102264",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "lib/agency-overview.ts",
+      "savedPath": "shared-media-staff-scope-20261022/lib/agency-overview.ts.source.txt",
+      "sha256": "63971cb7d8ea6b6bf1893503aa99579441c21921b50e42d4403eb3dac7544d48",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-agency-access.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-agency-access.ts.source.txt",
+      "sha256": "acd8b7f1847296ec82750f346c0f265a67f4fef6bd7f7db02bd4940299a4da65",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-agency-session.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-agency-session.ts.source.txt",
+      "sha256": "a0046de8055e2e2874bca009b826bd29f05d859db8fc3cdae51b5e331a83a6f1",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-agency-team.cjs",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-agency-team.cjs.source.txt",
+      "sha256": "97d071bda2c38a44fa8424cc3d505754a27e6c3e6a3c8cfba27bfd612e4f12bf",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-jess-kate-access.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-jess-kate-access.ts.source.txt",
+      "sha256": "a8f52682df3d18d1126e58889157714c5ae936521a3e3f7f4b69601bcd12d938",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-lynq-login.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-lynq-login.ts.source.txt",
+      "sha256": "e4560543de8ce0e1fdf67e296dc20498e979ef9848cb7246eb9286dc6b74fc8f",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-lynq-management.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-lynq-management.tsx.source.txt",
+      "sha256": "359715b296621ccf4b97ada2f50f153de7cf1b835818b055ac614026ed4c7701",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-moxy-access.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-moxy-access.ts.source.txt",
+      "sha256": "60a72c0640ba788bd0b6578f453f8558af7ac7fe4e9555a9da911665bc9bb74a",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-moxy-owner-access.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-moxy-owner-access.ts.source.txt",
+      "sha256": "264fc3ba777591b3407147fa94134160b1cf1809fd61718cf6dc96916e58418d",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-onlyfans-agency-http.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-onlyfans-agency-http.ts.source.txt",
+      "sha256": "d8668c75b8819c3a84cbe992585196694562621365408b69efde3f8abe46fecc",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-tether-access.ts",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-tether-access.ts.source.txt",
+      "sha256": "bca406f4b49bc9be4ca18ac1e55915971b658e7604249f331ff5fdd31cf4dec4",
+      "untracked": false
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/agency-admin/creator-access/route.ts",
+      "savedPath": "shared-media-staff-scope-20261022/app/agency-admin/creator-access/route.ts.source.txt",
+      "sha256": "8d697cfaa8439b5c9ba6f28ce7e43110c02a9f6480a2ffc3c0cbbf47d275c122",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "app/api/onlyfans-content/accounts/[accountId]/shared-media/route.ts",
+      "savedPath": "shared-media-staff-scope-20261022/app/api/onlyfans-content/accounts/[accountId]/shared-media/route.ts.source.txt",
+      "sha256": "c5d3c84fa4816029ccc68d3298c950df1c2ea3579b02085955c2a10b23faf35c",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "components/SharedMediaPanel.tsx",
+      "savedPath": "shared-media-staff-scope-20261022/components/SharedMediaPanel.tsx.source.txt",
+      "sha256": "54a4251c8d8717fc6bf8080185f59e46876e0a6a7a8cfbd8ba3b6ddd6b369fe7",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "lib/shared-media.ts",
+      "savedPath": "shared-media-staff-scope-20261022/lib/shared-media.ts.source.txt",
+      "sha256": "87c275f3d18654872ca91705ea103b1c6f0d9b955e17a97e6658fcd7e274dfc3",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "lib/staff-creator-scope.ts",
+      "savedPath": "shared-media-staff-scope-20261022/lib/staff-creator-scope.ts.source.txt",
+      "sha256": "0a93f38b960c9544a34c7058ce70cdbe806f8009641d4693bc03079b069a20b2",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-shared-media.cjs",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-shared-media.cjs.source.txt",
+      "sha256": "a4f7636588114afcdebeae877c103096d25776e71320e6bfe13fed7fdf902084",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-staff-creator-scope.cjs",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-staff-creator-scope.cjs.source.txt",
+      "sha256": "a3031805f24af87bcde600ac71eea6790d632de88769129331b2e9f0bb1e5b8f",
+      "untracked": true
+    },
+    {
+      "worktree": "shared-media-staff-scope-20261022",
+      "base": "e39444e3faea52f329418b51ef084c0a69bf0566",
+      "branch": "refs/heads/codex/shared-media-staff-scope-20261022",
+      "originalPath": "scripts/check-staff-media-schema.sql",
+      "savedPath": "shared-media-staff-scope-20261022/scripts/check-staff-media-schema.sql.source.txt",
+      "sha256": "1b131f4953666e0adb670ec0391a584b1736713c8be0231bd5bbedb4479ab6c4",
+      "untracked": true
+    },
+    {
+      "worktree": "twin-dashboard-control-plane",
+      "base": "e5389e5311b840d20a4d9fa30a5d67bb2dfdc64c",
+      "branch": "refs/heads/codex/earnings-enterprise-console",
+      "originalPath": "components/Sidebar.tsx",
+      "savedPath": "twin-dashboard-control-plane/components/Sidebar.tsx.source.txt",
+      "sha256": "4b73845aada9dac78f12827d6b8fa908c6f73be6be8772c399503d313a87ff85",
+      "untracked": false
+    },
+    {
+      "worktree": "twin-dashboard-control-plane",
+      "base": "e5389e5311b840d20a4d9fa30a5d67bb2dfdc64c",
+      "branch": "refs/heads/codex/earnings-enterprise-console",
+      "originalPath": "scripts/check-sidebar-layout.tsx",
+      "savedPath": "twin-dashboard-control-plane/scripts/check-sidebar-layout.tsx.source.txt",
+      "sha256": "167bc379cfaecb4ca64c8aeecd364dee0ff0ba7c5b6f5b18f26977e6be96d71b",
+      "untracked": false
+    },
+    {
+      "worktree": "twin-dashboard-crm-core-20261021",
+      "base": "31dba9d94c3a77e43d603f1da43993150d73d8a8",
+      "branch": "refs/heads/codex/crm-core-completion-20261021",
+      "originalPath": "scripts/check-live-overview-ui.mjs",
+      "savedPath": "twin-dashboard-crm-core-20261021/scripts/check-live-overview-ui.mjs.source.txt",
+      "sha256": "a88693c52edede317bebb3099e8aa07710a3ae9c49635ccfab5f4e806e39c256",
+      "untracked": false
+    },
+    {
+      "worktree": "twin-dashboard-platforms-20261019",
+      "base": "34d2cb271b807909c9d3d02dee9bfde3c148e7a5",
+      "branch": "refs/heads/codex/creator-seamless-connect-20261020",
+      "originalPath": "deployment/creator-sign-in-input-fix.cjs",
+      "savedPath": "twin-dashboard-platforms-20261019/deployment/creator-sign-in-input-fix.cjs.source.txt",
+      "sha256": "2e7bc5ab6bf05cfdd5c3b69b269297e5dbc2d81da9b633a238e5e62dabb50d39",
+      "untracked": true
+    },
+    {
+      "worktree": "twin-dashboard-platforms-20261019",
+      "base": "34d2cb271b807909c9d3d02dee9bfde3c148e7a5",
+      "branch": "refs/heads/codex/creator-seamless-connect-20261020",
+      "originalPath": "deployment/creator-sign-in-input-fix.py",
+      "savedPath": "twin-dashboard-platforms-20261019/deployment/creator-sign-in-input-fix.py.source.txt",
+      "sha256": "ef91fbac074d95480c2ba8c0db4c693ef42d95616eb97134e27034601d2324a4",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/CampaignManager.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/CampaignManager.tsx.source.txt",
+      "sha256": "9585fa4561bd21abf0b3ab92b84da2cf3a0efde2f88a6194ba917c1f36804952",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/CampaignWorkspace.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/CampaignWorkspace.tsx.source.txt",
+      "sha256": "756e93a61f45b9591525d5eff81e7c8bef141b7ce3cb42e58d92abc565159aeb",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/ContentLibrary.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/ContentLibrary.tsx.source.txt",
+      "sha256": "c254e9323525cc27422e250ae32005b47b0864b5bfd603cd7aed7f87e860b7da",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/InboxView.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/InboxView.tsx.source.txt",
+      "sha256": "65301ec2c8ca5d81669ff4c9665e3231e4e3cd77d4933517f489af0b9fe1432c",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "lib/onlyfans/campaigns.ts",
+      "savedPath": "onlyfans-priority-ui-20261026/lib/onlyfans/campaigns.ts.source.txt",
+      "sha256": "34b656deed3f5b03569cc3b6476ccd796581d8bab6d8515c7df27503441b9078",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "package.json",
+      "savedPath": "onlyfans-priority-ui-20261026/package.json.source.txt",
+      "sha256": "10d6a8d251dfbf10e0d5b1dae6697e31c116d20a602b7ef5602cf4186da688c7",
+      "untracked": false
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "app/api/onlyfans-content/accounts/[accountId]/intelligence/[resource]/route.ts",
+      "savedPath": "onlyfans-priority-ui-20261026/app/api/onlyfans-content/accounts/[accountId]/intelligence/[resource]/route.ts.source.txt",
+      "sha256": "3c51a76c7b6d77b5aa895ca41f2c21d7ee203c8bc217d01437ebb60f9567ce0a",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/AudienceCampaignPicker.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/AudienceCampaignPicker.tsx.source.txt",
+      "sha256": "235062b738accd3972c9e07376a64ad03017f51865b2078d701c4f7047a796c2",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/AudiencesPanel.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/AudiencesPanel.tsx.source.txt",
+      "sha256": "cd1194a94289425a30e5da57b00ae0e36ff7800f10ea292a4510bd6aead01cef",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/CampaignsWithAudiences.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/CampaignsWithAudiences.tsx.source.txt",
+      "sha256": "4eb6ba832d73d4f9b3cb5d933191102211aeeac367f59ec408fde4c179871b3a",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "components/onlyfans-preview/VaultIntelligencePanel.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/components/onlyfans-preview/VaultIntelligencePanel.tsx.source.txt",
+      "sha256": "78ee29132b6d57e7da4385a18fbe0a080f218870b6004fcabe5bdd1f4b9da8ba",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "lib/onlyfans/intelligence-backend.ts",
+      "savedPath": "onlyfans-priority-ui-20261026/lib/onlyfans/intelligence-backend.ts.source.txt",
+      "sha256": "4f7db08f984715914c04a052b0d7f017db4bd5b1abbd42b53dd3c455d6830833",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "lib/onlyfans/intelligence.ts",
+      "savedPath": "onlyfans-priority-ui-20261026/lib/onlyfans/intelligence.ts.source.txt",
+      "sha256": "d113713b06641e64235ab86bf5f0e7a5200695808b4403ff91dbb4d767c009d7",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "scripts/check-onlyfans-intelligence-lifecycle.tsx",
+      "savedPath": "onlyfans-priority-ui-20261026/scripts/check-onlyfans-intelligence-lifecycle.tsx.source.txt",
+      "sha256": "9ef3da932ca79b61966fe82118474a7f20473c17a8e5314a9ee30f40ec280f6c",
+      "untracked": true
+    },
+    {
+      "worktree": "onlyfans-priority-ui-20261026",
+      "base": "6cad9f610027d3ed0c60a22fd7204fbbf7b09b17",
+      "branch": "refs/heads/codex/onlyfans-priority-ui-20261026",
+      "originalPath": "scripts/check-onlyfans-intelligence.ts",
+      "savedPath": "onlyfans-priority-ui-20261026/scripts/check-onlyfans-intelligence.ts.source.txt",
+      "sha256": "e69f16e28e8ac94b7a43e2de878376f6ff20d8f0ebd749d0faabd9fb8ea4cd6b",
+      "untracked": true
+    }
+  ]
+}
