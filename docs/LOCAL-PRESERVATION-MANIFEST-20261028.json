@@ -1,5 +1,5 @@
 {
-  "status": "PREPARED LOCALLY; SOURCE UPLOAD BLOCKED PENDING EXPLICIT APPROVAL",
+  "status": "UPLOADED AND VERIFIED",
   "destinationRepository": "twinagency/twin-dashboard",
   "destinationBranch": "archive/local-work-20261028",
   "files": [
@@ -660,5 +660,7 @@
       "sha256": "e69f16e28e8ac94b7a43e2de878376f6ff20d8f0ebd749d0faabd9fb8ea4cd6b",
       "untracked": true
     }
-  ]
+  ],
+  "archiveCommit": "d27a0fce51ad25dc740d30c0be633405e4dde5f4",
+  "archiveUrl": "https://github.com/twinagency/twin-dashboard/tree/archive/local-work-20261028/docs/handover-local-20261028"
 }
