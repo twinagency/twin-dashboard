@@ -74,6 +74,7 @@ export type OnlyFansBackend = {
   listConversations(
     accountId: string,
     cursor: string | null,
+    aiOnly?: boolean,
   ): Promise<BackendResult<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
@@ -262,7 +263,7 @@ export function createHttpOnlyFansBackend(options: {
       }, creatorId !== null);
     },
 
-    listConversations(accountId, cursor) {
+    listConversations(accountId, cursor, aiOnly) {
       if (!ID_PATTERN.test(accountId)) {
         return Promise.resolve({
           ok: false,
@@ -271,7 +272,10 @@ export function createHttpOnlyFansBackend(options: {
           error: "That account reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+      const params = new URLSearchParams();
+      if (cursor) params.set("cursor", cursor);
+      if (aiOnly) params.set("filter", "ai");
+      const query = params.size ? `?${params}` : "";
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations${query}`, (body) => {
         if (!isRecord(body) || !isRecord(body.page)) return null;
         const page = body.page;
