@@ -15,11 +15,12 @@ test('live access requires the complete verified assignment', () => {
     '3484f7d9-0cda-4f52-84de-e104c238ce5e',
     '7c2e9452-1d4e-475c-86ef-07a797f52ce5',
     '7626a96d-809e-47f1-b96b-d2e3bc583328',
+    'fe9dad6f-33a0-402e-84fd-03dc3b0158ba',
   ]);
   assert.equal(live.isLiveAccess(access), true);
   for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: [...access.cloneIds.slice(1), '11111111-1111-1111-1111-111111111111'] }, { ...access, cloneIds: Array(access.cloneIds.length).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
   access.cloneIds.length = 0;
-  assert.equal(live.identity().cloneIds.length, 10);
+  assert.equal(live.identity().cloneIds.length, 11);
 });
 test('configuration cannot connect to another project or an anonymous key', () => {
   const env = { FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', FLIRT_LIVE_TWIN_URL: `https://${live.PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) };
@@ -62,3 +63,43 @@ test('Olivia existing login stays scoped to her own clone after agency assignmen
 });
 
 
+
+test('each FLIRT creator scope accepts only its assigned clone', () => {
+  const pairs = [
+  [
+    "3c085488-7c7a-40dc-bf51-a5834ca991e8",
+    "dd1869c2-d1e2-490f-9fae-45200232cc30"
+  ],
+  [
+    "b6cc8388-1f48-40b4-bb1b-91ec8c2c672e",
+    "64d9532d-aac9-4e60-a48c-a3e5c53bb00a"
+  ],
+  [
+    "7543263e-4a1e-48b7-82e8-9de2388b515f",
+    "e0464c19-d5b7-4154-ba46-a60a2ed2a8a3"
+  ],
+  [
+    "e6d4e9c2-9fb0-47df-80d0-46c7746a619c",
+    "bfaf6235-6c3b-4369-8d5c-c7068b08bea2"
+  ],
+  [
+    "7cfbddae-ad3e-4c44-b247-3f24ff3c5a4b",
+    "4fff7866-c7e9-4af2-926a-36e727c0a77f"
+  ],
+  [
+    "9f078a5e-5a2e-4e84-b123-19290751025a",
+    "7626a96d-809e-47f1-b96b-d2e3bc583328"
+  ],
+  [
+    "405303ac-059c-42a5-abef-8628ecb7dd71",
+    "fe9dad6f-33a0-402e-84fd-03dc3b0158ba"
+  ]
+];
+  for (const [accountId, cloneId] of pairs) {
+    const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
+    assert.equal(live.scopedCreator(accountId).cloneId, cloneId);
+    assert.equal(live.isScopedLiveCreator(access), true);
+    for (const other of live.CLONES.filter(id => id !== cloneId)) assert.equal(live.isScopedLiveCreator({ ...access, cloneIds: [other] }), false);
+    assert.equal(live.isScopedLiveCreator({ ...access, cloneIds: [cloneId, live.CLONES.find(id => id !== cloneId)] }), false);
+  }
+});
