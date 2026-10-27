@@ -30,8 +30,8 @@ begin
     -- Do not create creator_clone_links: existing intake/content remain intact.
     profile := account.id;
     if exists(select 1 from public.clones where id=profile) then raise exception 'platform_identity_conflict'; end if;
-    insert into public.clones(id,slug,name,bot_token,status,engine,voice_enabled,charge_messages,drip_enabled,uses_default_config)
-      values(profile,'creator-'||account.id::text,account.display_name,'','paused','live',false,false,false,false);
+    insert into public.clones(id,slug,name,bot_token,status,voice_enabled,charge_messages,drip_enabled,uses_default_config)
+      values(profile,'creator-'||account.id::text,account.display_name,'','paused',false,false,false,false);
   end if;
   if not exists(select 1 from public.clones where id=profile) then raise exception 'platform_identity_unavailable'; end if;
   update public.creator_accounts set platform_creator_id=profile,requested_channels=p_channels,updated_at=now() where id=account.id;
