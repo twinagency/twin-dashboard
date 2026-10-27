@@ -98,6 +98,11 @@ async function routeMiddleware(req: NextRequest) {
     return privateResponse(withPathname(req));
   }
   if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
+  // These creator-scoped routes authenticate each read, frame and command.
+  if (pathname === "/creator-auth/platforms" || pathname === "/creator-auth/platforms/onlyfans/sign-in") {
+    if (!["GET", "POST"].includes(req.method) || req.headers.has("next-action") || (req.method === "POST" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
+    return privateResponse(withPathname(req));
+  }
   if (isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
