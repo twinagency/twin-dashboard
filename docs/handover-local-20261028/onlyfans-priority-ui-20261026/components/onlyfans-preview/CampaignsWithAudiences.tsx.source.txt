@@ -1,0 +1,8 @@
+"use client";
+import { useState } from "react";
+import AudiencesPanel from "./AudiencesPanel";
+import CampaignManager from "./CampaignManager";
+export default function CampaignsWithAudiences({ accountId, readOnly }: { accountId: string; readOnly: boolean }) {
+  const [revision, setRevision] = useState(0);
+  return <div className="space-y-5"><AudiencesPanel accountId={accountId} readOnly={readOnly} onChanged={() => setRevision(x => x + 1)} /><CampaignManager accountId={accountId} readOnly={readOnly} audienceRevision={revision} /></div>;
+}

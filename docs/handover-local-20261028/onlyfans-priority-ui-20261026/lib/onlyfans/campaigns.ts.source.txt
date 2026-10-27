@@ -1,0 +1,119 @@
+import { validSelection, type AudienceSelection } from "./intelligence";
+/** Scoped campaign contract. Delivery counts describe individual recorded attempts. */
+export const CAMPAIGN_SCHEMA = "of-campaigns.v2";
+export const CAMPAIGN_HEADER = "X-OnlyFans-Campaign-Version";
+export const CAMPAIGN_STATUSES = ["scheduled", "running", "paused", "cancelled", "completed"] as const;
+export const RECIPIENT_STATUSES = ["pending", "queued", "dispatching", "accepted", "notAccepted", "unknown", "cancelled", "refused", "skipped"] as const;
+export const CAMPAIGN_ACTIONS = ["pause", "resume", "cancel"] as const;
+export type CampaignAction = typeof CAMPAIGN_ACTIONS[number];
+export type RecipientStatus = typeof RECIPIENT_STATUSES[number];
+export type CampaignOffer = { catalogItemId: number; label: string; priceCents: number; currency: "USD";
+  mediaIds: string[]; previewIds: string[]; snapshotHash: string };
+export const REVENUE_STATUSES = ["available", "detail_required", "ledger_unavailable", "ledger_held", "outside_coverage", "purchase_link_unverified"] as const;
+export type CampaignReporting = { replies: number | null; replyWindowHours: 24; purchases: number | null;
+  refundedPurchases: number | null; revenueCents: number | null; currency: "USD" | null;
+  ledgerAsOf: string | null; revenueStatus: typeof REVENUE_STATUSES[number] };
+export type Campaign = {
+  campaignId: string; accountId: string; name: string; body: string;
+  audience: { kind: "explicit" | "all_known"; count: number; snapshotHash: string };
+  scheduledAt: string; createdAt: string; updatedAt: string;
+  status: typeof CAMPAIGN_STATUSES[number]; revision: number;
+  counts: Record<RecipientStatus, number>; recipientCount: number;
+  deliveryMode: "individual_messages";
+  reporting: CampaignReporting;
+  offer: CampaignOffer | null;
+};
+export type CampaignRecipient = { conversationId: string; status: RecipientStatus; reason: string | null;
+  intentId: string | null; providerMessageId: string | null; updatedAt: string };
+export type CampaignCreate = { requestKey: string; name: string; body: string;
+  audience: { kind: "explicit"; conversationIds: string[] } | { kind: "all_known" } | { kind: "segment"; selection: AudienceSelection; snapshotHash: string }; scheduledAt: string | null; catalogItemId?: number | null };
+export type CampaignChange = { action: CampaignAction; expectedRevision: number };
+export type CampaignAck = { schemaVersion: typeof CAMPAIGN_SCHEMA; ok: true; commandKey: string;
+  accountId: string; campaignId: string; recordedRevision: number; action?: CampaignAction };
+export type CampaignFailure = { ok: false; status: number; outcome: "refused" | "unconfirmed"; error: string };
+export const campaignObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+const exact = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).sort().join(",") === [...keys].sort().join(",");
+export const campaignId = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
+const hash = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
+const text = (value: unknown, max: number): value is string => typeof value === "string" && new TextEncoder().encode(value).length <= max;
+const integer = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) < 2 ** 31 - 1;
+const timestamp = (value: unknown): value is string => typeof value === "string" && value.length <= 64 && /(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
+const reference = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(value);
+export function validCampaignCreate(value: unknown): value is CampaignCreate {
+  if (!campaignObject(value) || !exact(value, ["requestKey", "name", "body", "audience", "scheduledAt", ...(Object.hasOwn(value, "catalogItemId") ? ["catalogItemId"] : [])]) ||
+      !campaignId(value.requestKey) || typeof value.name !== "string" || value.name.length > 128 || !value.name.trim() ||
+      !text(value.body, 20_000) || !value.body.trim() || !(value.scheduledAt === null || timestamp(value.scheduledAt)) || !campaignObject(value.audience) ||
+      (Object.hasOwn(value, "catalogItemId") && value.catalogItemId !== null && (!Number.isSafeInteger(value.catalogItemId) || (value.catalogItemId as number) <= 0))) return false;
+  const audience = value.audience;
+  if (audience.kind === "segment") return exact(audience, ["kind", "selection", "snapshotHash"]) && validSelection(audience.selection) && hash(audience.snapshotHash);
+  if (audience.kind === "all_known") return exact(audience, ["kind"]);
+  return audience.kind === "explicit" && exact(audience, ["kind", "conversationIds"]) &&
+    Array.isArray(audience.conversationIds) && audience.conversationIds.length > 0 && audience.conversationIds.length <= 1000 &&
+    audience.conversationIds.every(reference) && new Set(audience.conversationIds).size === audience.conversationIds.length;
+}
+export function validCampaignChange(value: unknown): value is CampaignChange {
+  return campaignObject(value) && exact(value, ["action", "expectedRevision"]) &&
+    (CAMPAIGN_ACTIONS as readonly unknown[]).includes(value.action) && integer(value.expectedRevision);
+}
+export function parseCampaign(value: unknown, accountId: string): Campaign | null {
+  if (!campaignObject(value) || !exact(value, ["campaignId", "accountId", "name", "body", "audience", "scheduledAt", "createdAt", "updatedAt", "status", "revision", "counts", "recipientCount", "deliveryMode", "reporting", "offer"]) ||
+      !campaignId(value.campaignId) || value.accountId !== accountId || typeof value.name !== "string" || value.name.length > 128 || !value.name.trim() ||
+      !text(value.body, 20_000) || !value.body.trim() || ![value.scheduledAt, value.createdAt, value.updatedAt].every(timestamp) ||
+      !(CAMPAIGN_STATUSES as readonly unknown[]).includes(value.status) || !integer(value.revision) || !integer(value.recipientCount) || value.recipientCount > 1000 ||
+      !campaignObject(value.audience) || !exact(value.audience, ["kind", "count", "snapshotHash"]) ||
+      !["explicit", "all_known"].includes(value.audience.kind as string) || value.audience.count !== value.recipientCount || !hash(value.audience.snapshotHash) ||
+      value.deliveryMode !== "individual_messages" || !campaignObject(value.reporting) || !validReporting(value.reporting, value.recipientCount as number) ||
+      !campaignObject(value.counts) || !exact(value.counts, [...RECIPIENT_STATUSES]) ||
+      Object.values(value.counts).some(item => !integer(item)) || Object.values(value.counts).reduce<number>((sum, item) => sum + (item as number), 0) !== value.recipientCount) return null;
+  if (value.offer !== null) {
+    const offer = value.offer, mediaId = (item: unknown): item is string => typeof item === "string" && /^[1-9][0-9]{0,18}$/.test(item);
+    if (!campaignObject(offer) || !exact(offer, ["catalogItemId", "label", "priceCents", "currency", "mediaIds", "previewIds", "snapshotHash"]) ||
+        !Number.isSafeInteger(offer.catalogItemId) || (offer.catalogItemId as number) <= 0 || typeof offer.label !== "string" || offer.label.length > 160 ||
+        !integer(offer.priceCents) || offer.priceCents < 300 || offer.priceCents > 20000 || offer.currency !== "USD" || !hash(offer.snapshotHash) ||
+        !Array.isArray(offer.mediaIds) || !offer.mediaIds.length || offer.mediaIds.length > 35 || !offer.mediaIds.every(mediaId) || new Set(offer.mediaIds).size !== offer.mediaIds.length ||
+        !Array.isArray(offer.previewIds) || offer.previewIds.length >= offer.mediaIds.length || !offer.previewIds.every(mediaId) || new Set(offer.previewIds).size !== offer.previewIds.length) return null;
+    const media = offer.mediaIds;
+    if (offer.previewIds.some(id => !media.includes(id))) return null;
+  }
+  return value as Campaign;
+}
+
+function validReporting(value: Record<string, unknown>, recipients: number): boolean {
+  if (!exact(value, ["replies", "replyWindowHours", "purchases", "refundedPurchases", "revenueCents", "currency", "ledgerAsOf", "revenueStatus"]) ||
+      value.replyWindowHours !== 24 || !(REVENUE_STATUSES as readonly unknown[]).includes(value.revenueStatus) ||
+      !(value.replies === null || integer(value.replies) && value.replies <= recipients)) return false;
+  if (value.revenueStatus !== "available") return [value.purchases, value.refundedPurchases, value.revenueCents, value.currency, value.ledgerAsOf].every(item => item === null);
+  return integer(value.purchases) && integer(value.refundedPurchases) && value.purchases + value.refundedPurchases <= recipients &&
+    integer(value.revenueCents) && value.currency === "USD" && timestamp(value.ledgerAsOf);
+}
+export function parseCampaignList(value: unknown, accountId: string): { campaigns: Campaign[]; truncated: boolean } | null {
+  if (!campaignObject(value) || !exact(value, ["schemaVersion", "ok", "accountId", "campaigns", "truncated"]) ||
+      value.schemaVersion !== CAMPAIGN_SCHEMA || value.ok !== true || value.accountId !== accountId || typeof value.truncated !== "boolean" ||
+      !Array.isArray(value.campaigns) || value.campaigns.length > 100) return null;
+  const campaigns = value.campaigns.map(item => parseCampaign(item, accountId));
+  return campaigns.some(item => item === null) || new Set(campaigns.map(item => item?.campaignId)).size !== campaigns.length ? null : { campaigns: campaigns as Campaign[], truncated: value.truncated };
+}
+export function parseCampaignDetail(value: unknown, accountId: string, id: string): { campaign: Campaign; recipients: CampaignRecipient[] } | null {
+  if (!campaignObject(value) || !exact(value, ["schemaVersion", "ok", "accountId", "campaign", "recipients"]) ||
+      value.schemaVersion !== CAMPAIGN_SCHEMA || value.ok !== true || value.accountId !== accountId || !Array.isArray(value.recipients) || value.recipients.length > 1000) return null;
+  const campaign = parseCampaign(value.campaign, accountId);
+  if (!campaign || campaign.campaignId !== id || value.recipients.length !== campaign.recipientCount) return null;
+  const recipients = value.recipients;
+  if (recipients.some(item => !campaignObject(item) || !exact(item, ["conversationId", "status", "reason", "intentId", "providerMessageId", "updatedAt"]) ||
+      !reference(item.conversationId) || !(RECIPIENT_STATUSES as readonly unknown[]).includes(item.status) ||
+      !(item.reason === null || text(item.reason, 1000)) || !(item.intentId === null || text(item.intentId, 128)) ||
+      !(item.providerMessageId === null || text(item.providerMessageId, 128)) || !timestamp(item.updatedAt)) ||
+      new Set(recipients.map(item => item.conversationId)).size !== recipients.length) return null;
+  return { campaign, recipients: recipients as CampaignRecipient[] };
+}
+export function parseCampaignAck(value: unknown, expected: { accountId: string; commandKey?: string; campaignId?: string; action?: CampaignAction; expectedRevision?: number }): CampaignAck | null {
+  if (!campaignObject(value) || !exact(value, ["schemaVersion", "ok", "commandKey", "accountId", "campaignId", "recordedRevision", ...(expected.action ? ["action"] : [])]) ||
+      value.schemaVersion !== CAMPAIGN_SCHEMA || value.ok !== true || value.accountId !== expected.accountId || !hash(value.commandKey) || !campaignId(value.campaignId) ||
+      !integer(value.recordedRevision) || (expected.commandKey !== undefined && value.commandKey !== expected.commandKey) ||
+      (expected.campaignId !== undefined && value.campaignId !== expected.campaignId) || (expected.action !== undefined && value.action !== expected.action) ||
+      (expected.expectedRevision !== undefined && value.recordedRevision !== expected.expectedRevision + 1)) return null;
+  return value as CampaignAck;
+}
+export function canonicalCampaign(value: unknown): string {
+  return JSON.stringify(value, (_key, item) => campaignObject(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
+}

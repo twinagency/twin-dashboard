@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import { intelligenceBody, parseAudienceList, parseAudiencePreview, parseContentPerformance, parseVaultIntelligence,
+  validAudienceWrite, validSelection, validRules } from "../lib/onlyfans/intelligence";
+import { createIntelligenceBackend } from "../lib/onlyfans/intelligence-backend";
+import { validCampaignCreate } from "../lib/onlyfans/campaigns";
+
+export const at = "2026-10-26T00:00:00.000Z", hash = "a".repeat(64);
+export const coverage = { status: "current", completeSince: "2026-07-28T00:00:00.000Z", ledgerAsOf: at,
+  historyComplete: false, historyLimited: true, conversationAsOf: at, conversationCurrent: true };
+export const rules = { match: "all", rules: [{ field: "purchase_count", op: "==", value: 0, days: 30 }] };
+export const audience = { id: "1", name: "Current audience", rules, revision: hash, valid: true, updatedAt: at };
+export const list = { audiences: [audience], truncated: false, asOf: at, coverage, presets: ["VIPs", "Recent buyers", "Expired subscribers", "Inactive spenders", "Non-buyers"].map((name, i) => ({ key: String(i), name, description: "Editable preset", rules })) };
+export const preview = { total: 3, matched: 2, unknown: 1, eligible: 1, suppressed: 1, asOf: at, coverage, snapshotHash: hash, sample: [{ fanId: "101", name: "Synthetic fan" }] };
+export const performance = { asOf: at, coverage, revenueMeaning: "cleared_gross_per_catalogue_unit", items: [{ itemId: "1", label: "Two-media bundle", sentCount: 1, uniqueRecipients: 1, purchases: 1, refunds: 0, clearedGrossCents: 1000, conversion: 1 }], nextCursor: null };
+export const history = { fanId: "101", asOf: at, coverage, sentHistoryComplete: false, purchaseHistoryComplete: false, items: [{ mediaId: "11", kind: "photo", description: "Synthetic image", sentCount: 1, uniqueRecipients: 1, lastSentAt: at, purchaseCount: 0, refundCount: 0, ownership: "unknown", sentHistory: "partial", lastOfferedUnitPriceCents: 1000, lastPurchasedUnitPriceCents: null }], nextCursor: null, priceMeaning: "message_or_bundle_total" };
+export const envelope = (data: unknown, accountId = "acc-a") => ({ schemaVersion: "of-content.v1", ok: true, accountId, analyticsVersion: "of-intelligence.v1", data });
+
+async function main() {
+  assert(validRules(rules)); assert(!validRules({ ...rules, rules: [{ ...rules.rules[0], value: NaN }] }));
+  assert(!validRules({ ...rules, rules: [{ ...rules.rules[0], days: 0 }] }));
+  assert(parseAudienceList(list)); assert(!parseAudienceList({ ...list, audiences: [audience, audience] }));
+  assert(parseAudiencePreview(preview)); assert(!parseAudiencePreview({ ...preview, matched: 3 }));
+  assert.equal(intelligenceBody(envelope(list, "acc-b"), "acc-a"), null);
+  assert.equal(intelligenceBody({ ...envelope(list), analyticsVersion: "unknown" }, "acc-a"), null);
+  assert(parseVaultIntelligence(history)); assert(!parseVaultIntelligence({ ...history, items: [{ ...history.items[0], ownership: false }] }));
+  assert(parseContentPerformance(performance)); assert(!parseContentPerformance({ ...performance, items: [{ ...performance.items[0], conversion: 2 }] }));
+  const selection = { include: [{ id: "1", revision: hash }], exclude: [] };
+  assert(validSelection(selection)); assert(!validSelection({ include: [], exclude: [] }));
+  assert(!validSelection({ ...selection, include: [...selection.include, ...selection.include] }));
+  assert(validCampaignCreate({ requestKey: "11111111-1111-4111-8111-111111111111", name: "Segment campaign", body: "Exact approved text", audience: { kind: "segment", selection, snapshotHash: hash }, scheduledAt: null }));
+  const command = { action: "save" as const, id: null, expectedRevision: null, name: audience.name, rules: rules as never };
+  assert(validAudienceWrite(command)); assert(!validAudienceWrite({ ...command, actor: "browser-spoof" }));
+  let reply: unknown = envelope(list), sent = "";
+  const backend = createIntelligenceBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic-content", fetchImpl: (async (url, init) => {
+    assert.match(String(url), /\/onlyfans\/content\/v1\/accounts\/acc-a\/intelligence\/audiences$/);
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("authorization"), "Bearer synthetic-content"); assert.equal(headers.get("cookie"), null);
+    if (init?.method === "POST") sent = String(init.body);
+    return Response.json(reply);
+  }) as typeof fetch });
+  assert((await backend.get("acc-a", "audiences", new URLSearchParams())).ok);
+  reply = envelope(list, "acc-b"); assert(!(await backend.get("acc-a", "audiences", new URLSearchParams())).ok);
+  reply = envelope({ removedId: null, audience });
+  assert((await backend.save("acc-a", { ...command, actor: "server-actor" })).ok);
+  assert.equal(JSON.parse(sent).actor, "server-actor");
+  reply = envelope({ removedId: null, audience: { ...audience, name: "Wrong acknowledgement" } });
+  assert.equal((await backend.save("acc-a", { ...command, actor: "server-actor" })).ok, false);
+  console.log("PASS intelligence contracts and transport: scoped data, unknown coverage, bounded segment requests and verified save acknowledgements");
+}
+if (process.argv[1]?.endsWith("check-onlyfans-intelligence.ts")) main().catch(e => { console.error(e); process.exitCode = 1; });

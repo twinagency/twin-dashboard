@@ -1,0 +1,41 @@
+import { configuredBackendPurpose, createBackendTransport } from "./backend-transport";
+import { CONTENT_HEADER, CONTENT_SCHEMA, canonicalContent } from "./content";
+import { intelligenceBody, parseResource, parseAudienceAck, type Resource, type AudienceWrite } from "./intelligence";
+
+export function createIntelligenceBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
+  const call = createBackendTransport(options.fetchImpl);
+  const base = (account: string, resource: Resource) => options.baseUrl.replace(/\/+$/, "") + `/onlyfans/content/v1/accounts/${encodeURIComponent(account)}/intelligence/${resource}`;
+  const headers = { Authorization: `Bearer ${options.token}`, [CONTENT_HEADER]: CONTENT_SCHEMA };
+  return {
+    async get(account: string, resource: Resource, query: URLSearchParams) {
+      try {
+        const response = await call(base(account, resource) + (query.size ? `?${query}` : ""), { method: "GET", headers });
+        if (response.ok) {
+          const envelope: unknown = await response.json();
+          if (parseResource(resource, intelligenceBody(envelope, account))) return { ok: true as const, envelope };
+        }
+        return { ok: false as const, status: [400, 401, 403, 404, 409].includes(response.status) ? response.status : 503,
+          error: response.status === 409 ? "The audience changed or its evidence is unavailable. Refresh and review the preview." : "The audience or vault evidence could not be read." };
+      } catch { return { ok: false as const, status: 503, error: "The audience or vault evidence could not be read." }; }
+    },
+    async save(account: string, command: AudienceWrite & { actor: string }) {
+      try {
+        const response = await call(base(account, "audiences"), { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(command) });
+        if (response.ok) {
+          const envelope: unknown = await response.json();
+          const ack = parseAudienceAck(intelligenceBody(envelope, account));
+          if (ack && (command.action === "remove" ? ack.removedId === command.id : ack.audience &&
+            (command.id === null || ack.audience.id === command.id) && ack.audience.name === command.name?.trim() &&
+            canonicalContent(ack.audience.rules) === canonicalContent(command.rules))) return { ok: true as const, envelope };
+        }
+        if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) return { ok: false as const, status: response.status,
+          error: "The audience was not saved. Refresh its current definition and review your changes.", outcome: "refused" as const };
+      } catch { /* The same definition/revision can be retried after an uncertain acknowledgement. */ }
+      return { ok: false as const, status: 502, error: "The save outcome is uncertain. Refresh before editing again.", outcome: "unconfirmed" as const };
+    },
+  };
+}
+export function configuredIntelligenceBackend(fetchImpl?: typeof fetch) {
+  const options = configuredBackendPurpose("CONTENT");
+  return options ? createIntelligenceBackend({ ...options, fetchImpl }) : null;
+}

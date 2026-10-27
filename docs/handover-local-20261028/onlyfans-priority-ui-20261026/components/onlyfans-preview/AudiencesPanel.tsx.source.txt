@@ -1,0 +1,90 @@
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { intelligenceBody, parseAudienceList, parseAudiencePreview, parseAudienceAck, validRules, coverageText,
+  type Audience, type AudienceList, type AudiencePreview, type Rule, type Rules, type AudienceWrite } from "@/lib/onlyfans/intelligence";
+
+const input = "rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
+const button = `${input} font-semibold hover:bg-elev`;
+const FIELDS: { value: Rule["field"]; label: string }[] = [{ value: "recent_spend", label: "Spend in window (USD)" },
+  { value: "purchase_count", label: "Purchase events in window" }, { value: "lifetime_spend", label: "Lifetime spend (USD)" },
+  { value: "last_active_days", label: "Days since last inbound" }, { value: "status", label: "Subscription status" }];
+const blank: Rules = { match: "all", rules: [{ field: "recent_spend", op: ">=", value: 10000, days: 90 }] };
+
+export default function AudiencesPanel({ accountId, readOnly = false, onChanged }: { accountId: string; readOnly?: boolean; onChanged?: () => void }) {
+  const [data, setData] = useState<AudienceList | null>(null), [selected, setSelected] = useState<Audience | null>(null);
+  const [name, setName] = useState(""), [rules, setRules] = useState<Rules>(blank), [result, setResult] = useState<AudiencePreview | null>(null);
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [denied, setDenied] = useState(false);
+  const generation = useRef(0), reading = useRef(0), scope = useRef(0), saving = useRef(false), alive = useRef(true);
+  const clearDenied = useCallback(() => { generation.current++; reading.current++; setData(null); setSelected(null); setName(""); setRules(blank); setResult(null); setDenied(true); setNotice("Sign in again to view these audiences."); }, []);
+  const base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/intelligence`;
+  const read = useCallback(async () => {
+    const request = ++reading.current, epoch = scope.current;
+    const current = () => alive.current && epoch === scope.current && request === reading.current;
+    try {
+      const response = await fetch(`${base}/audiences`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(10000) });
+      if ([401, 403].includes(response.status)) { if (current()) clearDenied(); throw Error("Sign in again to view these audiences."); }
+      const parsed = response.ok && parseAudienceList(intelligenceBody(await response.json(), accountId));
+      if (!parsed) throw Error("Saved audiences could not be loaded.");
+      if (current()) setData(parsed);
+    } catch (error) { if (current()) setNotice(error instanceof Error ? error.message : "Audiences unavailable."); }
+  }, [base, accountId, clearDenied]);
+  useEffect(() => { alive.current = true; scope.current++; setData(null); setSelected(null); setName(""); setRules(blank); setResult(null); setDenied(false); setBusy(false); setNotice(""); void read(); return () => { alive.current = false; scope.current++; generation.current++; reading.current++; }; }, [read]);
+  useEffect(() => { generation.current++; setResult(null); }, [rules]);
+  async function preview() {
+    if (!validRules(rules) || busy || denied) return;
+    const current = ++generation.current, epoch = scope.current; setBusy(true); setResult(null); setNotice("");
+    try {
+      const params = new URLSearchParams({ rules: JSON.stringify(rules) });
+      const response = await fetch(`${base}/preview?${params}`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(15000) });
+      if ([401, 403].includes(response.status)) { if (alive.current && epoch === scope.current && current === generation.current) clearDenied(); throw Error("Sign in again to view these audiences."); }
+      const parsed = response.ok && parseAudiencePreview(intelligenceBody(await response.json(), accountId));
+      if (!parsed) throw Error("This preview is unavailable. Refresh the account data or review the conditions.");
+      if (alive.current && epoch === scope.current && current === generation.current) setResult(parsed);
+    } catch (error) { if (alive.current && epoch === scope.current) setNotice(error instanceof Error ? error.message : "Preview unavailable."); }
+    finally { if (alive.current && epoch === scope.current) setBusy(false); }
+  }
+  async function save(action: "save" | "remove") {
+    if (readOnly || denied || saving.current || !name.trim() || action === "save" && !validRules(rules)) return;
+    saving.current = true; const epoch = scope.current; setBusy(true); setNotice("");
+    const command: AudienceWrite = { action, id: selected?.id ?? null, expectedRevision: selected?.revision ?? null,
+      name: action === "save" ? name : null, rules: action === "save" ? rules : null };
+    try {
+      const response = await fetch(`${base}/audiences`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
+      if ([401, 403].includes(response.status)) { if (alive.current && epoch === scope.current) clearDenied(); throw Error("Sign in again to manage these audiences."); }
+      const ack = response.ok && parseAudienceAck(intelligenceBody(await response.json(), accountId));
+      if (!ack) throw Error(response.status === 409 ? "This audience changed. Reload its current definition before saving." : "The save was not confirmed. Refresh before editing again.");
+      if (alive.current && epoch === scope.current) { setSelected(ack.audience); if (!ack.audience) { setName(""); setRules(blank); } setNotice(action === "save" ? "Audience saved. Membership updates from the latest evidence when evaluated." : "Audience removed. Existing campaign snapshots are retained."); }
+      if (alive.current && epoch === scope.current) { await read(); onChanged?.(); }
+    } catch (error) { if (alive.current && epoch === scope.current) setNotice(error instanceof Error ? error.message : "Save unavailable."); }
+    finally { saving.current = false; if (alive.current && epoch === scope.current) setBusy(false); }
+  }
+  const update = (index: number, patch: Partial<Rule>) => setRules(old => ({ ...old, rules: old.rules.map((r, i) => i === index ? { ...r, ...patch } : r) }));
+  return <section className="rounded-xl border border-line bg-card p-4" data-of-audiences>
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">Smart audiences</h2><button className={button} disabled={busy || denied} onClick={() => void read()}>Refresh audiences</button></div>
+    <p className="mt-2 text-sm text-muted">Membership follows spending, purchases, subscription observations and inbound activity. Saving an audience does not send messages.</p>
+    {data ? <p className="mt-2 text-xs text-muted">{coverageText(data.coverage)}{data.coverage.historyLimited ? " · OnlyFans limited the older import." : ""}</p> : null}
+    {notice ? <p role="status" className="my-3 text-sm">{notice}</p> : null}
+    <div className="mt-4 flex flex-wrap gap-2">{data?.presets.map(p => <button key={p.key} className={button} disabled={busy || denied} title={p.description} onClick={() => { setSelected(null); setName(p.name); setRules(p.rules); }}>{p.name}</button>)}</div>
+    <label className="mt-4 block text-sm">Saved audience<select className={`${input} ml-2 max-w-full`} value={selected?.id ?? ""} disabled={busy || denied} onChange={e => {
+      const row = data?.audiences.find(x => x.id === e.target.value) ?? null; setSelected(row); setName(row?.name ?? ""); setRules(row?.rules ?? blank);
+    }}><option value="">New audience</option>{data?.audiences.map(a => <option key={a.id} value={a.id}>{a.name}{a.valid ? "" : " · needs repair"}</option>)}</select></label>
+    <fieldset disabled={busy || denied || readOnly} className="mt-4 space-y-3">
+      <label className="block text-sm">Audience name<input className={`${input} ml-2 max-w-full`} maxLength={128} value={name} onChange={e => setName(e.target.value)} /></label>
+      <label className="block text-sm">Match<select className={`${input} ml-2`} value={rules.match} onChange={e => setRules(old => ({ ...old, match: e.target.value as "all" | "any" }))}><option value="all">All conditions</option><option value="any">Any condition</option></select></label>
+      {rules.rules.map((r, index) => <div key={index} className="flex flex-wrap items-center gap-2" data-of-audience-rule>
+        <select aria-label={`Condition ${index + 1} field`} className={input} value={r.field} onChange={e => {
+          const field = e.target.value as Rule["field"]; setRules(old => ({ ...old, rules: old.rules.map((rule, i) => i === index ? field === "status" ? { field, op: "==", value: "expired" } : { field, op: ">=", value: 0, ...(["recent_spend", "purchase_count"].includes(field) ? { days: 30 } : {}) } : rule) }));
+        }}>{FIELDS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}</select>
+        <select aria-label={`Condition ${index + 1} operator`} className={input} value={r.op} onChange={e => update(index, { op: e.target.value })}>{(r.field === "status" ? ["==", "!="] : [">=", ">", "==", "<=", "<", "!="]).map(op => <option key={op}>{op}</option>)}</select>
+        {r.field === "status" ? <select aria-label={`Condition ${index + 1} status`} className={input} value={String(r.value)} onChange={e => update(index, { value: e.target.value })}><option value="active">Active</option><option value="expired">Expired</option></select> : <input aria-label={`Condition ${index + 1} value`} type="number" min="0" step={["recent_spend", "lifetime_spend"].includes(r.field) ? "0.01" : "1"} className={`${input} w-28`} value={Number.isNaN(r.value) ? "" : ["recent_spend", "lifetime_spend"].includes(r.field) ? Number(r.value) / 100 : r.value} onChange={e => update(index, { value: e.target.value === "" ? Number.NaN : Math.round(Number(e.target.value) * (["recent_spend", "lifetime_spend"].includes(r.field) ? 100 : 1)) })} />}
+        {["recent_spend", "purchase_count"].includes(r.field) ? <label className="text-sm">in <input aria-label={`Condition ${index + 1} days`} type="number" min="1" max="3650" className={`${input} w-24`} value={r.days ?? 30} onChange={e => update(index, { days: Number(e.target.value) })} /> days</label> : null}
+        <button className={button} onClick={() => setRules(old => ({ ...old, rules: old.rules.filter((_, i) => i !== index) }))}>Remove condition</button>
+      </div>)}
+      <button className={button} disabled={rules.rules.length >= 20} onClick={() => setRules(old => ({ ...old, rules: [...old.rules, { field: "purchase_count", op: ">", value: 0, days: 30 }] }))}>Add condition</button>
+      {!rules.rules.length ? <p className="text-sm">This definition explicitly selects everyone with a saved conversation.</p> : null}
+      <div className="flex flex-wrap gap-2"><button className={button} disabled={!name.trim() || !validRules(rules)} onClick={() => void save("save")}>Save audience</button>{selected ? <button className={button} onClick={() => void save("remove")}>Delete audience</button> : null}</div>
+    </fieldset>
+    <button className={`${button} mt-4`} disabled={busy || denied || !validRules(rules)} onClick={() => void preview()}>{busy ? "Working…" : "Preview current membership"}</button>
+    {result ? <div className="mt-3 text-sm" data-of-audience-preview><p><strong>{result.matched.toLocaleString()}</strong> matching · {result.eligible.toLocaleString()} currently eligible to contact · {result.suppressed.toLocaleString()} excluded by contact controls · {result.unknown.toLocaleString()} unknown</p><p className="mt-1 text-xs text-muted">Evaluated {new Date(result.asOf).toLocaleString()}. Unknown history never counts as zero spend.</p><ul className="mt-2 flex flex-wrap gap-3">{result.sample.map(f => <li key={f.fanId}>{f.name}</li>)}</ul></div> : null}
+  </section>;
+}

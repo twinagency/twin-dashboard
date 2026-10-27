@@ -1,0 +1,48 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { intelligenceBody, parseAudienceList, parseAudiencePreview, type AudienceList, type AudienceSelection, type AudiencePreview } from "@/lib/onlyfans/intelligence";
+
+export type SegmentReady = { selection: AudienceSelection; snapshotHash: string; eligible: number };
+export default function AudienceCampaignPicker({ accountId, locked, revision, onReady }: { accountId: string; locked: boolean; revision: number; onReady: (value: SegmentReady | null) => void }) {
+  const [data, setData] = useState<AudienceList | null>(null), [selection, setSelection] = useState<AudienceSelection>({ include: [], exclude: [] });
+  const [preview, setPreview] = useState<AudiencePreview | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const active = useRef(0), base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/intelligence`;
+  useEffect(() => {
+    const generation = ++active.current; onReady(null); setData(null); setBusy(false); setPreview(null); setSelection({ include: [], exclude: [] });
+    void (async () => { try {
+      const response = await fetch(`${base}/audiences`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(10000) });
+      const parsed = response.ok && parseAudienceList(intelligenceBody(await response.json(), accountId));
+      if (!parsed) throw Error("Saved audiences could not be loaded.");
+      if (generation === active.current) { setData(parsed); setError(""); }
+    } catch (e) { if (generation === active.current) { setData(null); setError(e instanceof Error ? e.message : "Audiences unavailable."); } } })();
+    return () => { active.current++; };
+  }, [base, accountId, revision, onReady]);
+  function toggle(key: "include" | "exclude", id: string, checked: boolean) {
+    const row = data?.audiences.find(x => x.id === id); if (!row) return;
+    active.current++; onReady(null); setPreview(null);
+    setSelection(old => ({ ...old, [key]: checked ? [...old[key], { id: row.id, revision: row.revision }] : old[key].filter(x => x.id !== id) }));
+  }
+  async function check() {
+    if (!selection.include.length || busy || locked) return;
+    const generation = ++active.current; setBusy(true); setPreview(null); setError(""); onReady(null);
+    try {
+      const params = new URLSearchParams({ selection: JSON.stringify(selection) });
+      const response = await fetch(`${base}/preview?${params}`, { cache: "no-store", credentials: "same-origin", redirect: "error", signal: AbortSignal.timeout(15000) });
+      if ([401, 403].includes(response.status) && generation === active.current) { setData(null); setSelection({ include: [], exclude: [] }); }
+      const parsed = response.ok && parseAudiencePreview(intelligenceBody(await response.json(), accountId));
+      if (!parsed) throw Error("Refresh the saved audiences and their source data, then preview again.");
+      if (generation === active.current) {
+        setPreview(parsed);
+        if (parsed.snapshotHash && parsed.eligible > 0 && parsed.eligible <= 1000) onReady({ selection, snapshotHash: parsed.snapshotHash, eligible: parsed.eligible });
+      }
+    } catch (e) { if (generation === active.current) setError(e instanceof Error ? e.message : "Preview unavailable."); }
+    finally { if (generation === active.current) setBusy(false); }
+  }
+  return <div className="mt-3 space-y-3" data-of-segment-picker>
+    <div className="grid gap-3 md:grid-cols-2">{(["include", "exclude"] as const).map(key => <fieldset key={key} disabled={locked || busy} className="rounded-lg border border-line p-3"><legend className="px-1 text-sm font-medium">{key === "include" ? "Include audiences (any match)" : "Exclude audiences (any match)"}</legend>
+      {data?.audiences.map(row => <label key={row.id} className="my-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={selection[key].some(x => x.id === row.id)} disabled={!row.valid || selection[key].length >= 10 && !selection[key].some(x => x.id === row.id)} onChange={e => toggle(key, row.id, e.target.checked)} />{row.name}{!row.valid ? " · repair required" : ""}</label>)}
+      {data && !data.audiences.length ? <p className="text-sm text-muted">Save a Smart audience above first.</p> : null}</fieldset>)}</div>
+    <button type="button" className="rounded-lg border border-line px-3 py-2 text-sm font-semibold disabled:opacity-50" disabled={locked || busy || !selection.include.length} onClick={() => void check()}>{busy ? "Evaluating…" : "Preview campaign audience"}</button>
+    {error ? <p role="alert" className="text-sm">{error}</p> : null}{preview ? <p className="text-sm">{preview.eligible.toLocaleString()} eligible · {preview.suppressed.toLocaleString()} contact exclusions · {preview.unknown.toLocaleString()} unknown. {preview.eligible > 1000 ? "This run exceeds the current 1,000-recipient limit." : "Recipients are frozen when confirmed; qualification and exclusions are checked again before sending."}</p> : null}
+  </div>;
+}

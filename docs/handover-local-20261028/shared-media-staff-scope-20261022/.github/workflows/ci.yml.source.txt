@@ -1,0 +1,201 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    # Docs are not shipped and not read at runtime, so a docs-only push has
+    # nothing to test. Matches the same filter in deploy.yml.
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'archive/**'
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install browsers for interface verification
+        run: |
+          # Playwright downloads its pinned browser separately. Its OS libraries
+          # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
+          # can publish inconsistent index hashes during an update. Isolate that
+          # feed in this disposable runner; retain all signature/hash checks.
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+
+      - name: Immediate navigation feedback and page prefetch
+        run: |
+          node scripts/check-navigation-feedback.cjs
+          node scripts/check-creator-switch-feedback.cjs
+          node --import tsx scripts/check-messages-read-parallelism.cjs
+          node --import tsx scripts/check-live-telegram.ts
+          node scripts/check-navigation-ui.mjs
+
+      - name: Live dashboard overview data and interaction checks
+        run: |
+          node --import tsx scripts/check-overview-loading.cjs
+          node --import tsx scripts/check-overview-recent.cjs
+          node --import tsx scripts/check-overview-wallet.cjs
+          node --import tsx scripts/check-live-overview-ui.mjs
+
+      - name: Shared operator workspace desktop and mobile checks
+        run: |
+          node scripts/check-twin-agency-refresh.cjs
+          node --import tsx scripts/check-channel-roster.ts
+          node scripts/check-operator-workspace-ui.mjs
+
+      - name: Creator platform ownership and connection journey
+        run: |
+          node scripts/check-creator-preparation.cjs
+          node --import tsx scripts/check-onlyfans-connection-status.ts
+          node scripts/check-agency-team.cjs
+          node scripts/check-staff-creator-scope.cjs
+          node scripts/check-shared-media.cjs
+          node scripts/check-creator-platforms.cjs
+          node scripts/check-creator-platforms-ui.mjs
+          node scripts/check-creator-sign-in-ui.mjs
+
+      - name: Creator profile mobile and save navigation checks
+        run: node scripts/check-creator-profile-ui.mjs
+
+      - name: Creator content mobile and background upload checks
+        run: node scripts/check-creator-content-browser.mjs
+
+      - name: Creator profile review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creator-profile-preview
+          path: test-results/creator-profile/*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Shared operator workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-workspace-preview
+          path: test-results/operator-workspace
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Video preview encoder
+        timeout-minutes: 7
+        run: bash scripts/install-ci-video-tools.sh
+
+      - name: Creator preparation and native media recovery
+        run: node scripts/check-core-workspace-ui.mjs
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      # These checks use isolated fixtures, never production database credentials.
+      - name: Behavioural checks
+        run: npm run test:offline
+
+      - name: Production login routing smoke
+        run: node scripts/check-login-pages.mjs
+
+      - name: Public marketing access checks
+        run: npx tsx scripts/check-marketing-access.ts
+
+      - name: Moxy overview responsive and interaction checks
+        run: node --import tsx scripts/check-moxy-overview-ui.mjs
+        env:
+          MOXY_REVIEW_OUT: test-results/moxy-overview
+
+      - name: Moxy overview review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moxy-overview-preview
+          path: test-results/moxy-overview
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Alana catalogue responsive and interaction checks
+        run: node scripts/check-alana-catalogue-ui.mjs
+
+      - name: Purchased media reopening and expiry in Chromium and WebKit
+        run: node scripts/check-catalogue-ownership-ui.mjs
+
+      - name: Public site responsive and interaction checks
+        run: node scripts/check-marketing-site.mjs
+
+      - name: Ava responsive and preview integrity checks
+        run: node scripts/check-ava-site.mjs
+
+      - name: Alana catalogue review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alana-catalogue-preview
+          path: test-results/alana-catalogue
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Purchased media regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalogue-ownership-review
+          path: test-results/catalogue-ownership
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Public site review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-public-site-preview
+          path: test-results/twin-public
+          if-no-files-found: ignore
+          retention-days: 3
+
+  creator-platform-database:
+    name: Creator platform identity and ownership
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: synthetic-platform-test
+          POSTGRES_DB: creator_platforms_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise real PostgreSQL functions on isolated fixtures
+        env:
+          PGPASSWORD: synthetic-platform-test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql

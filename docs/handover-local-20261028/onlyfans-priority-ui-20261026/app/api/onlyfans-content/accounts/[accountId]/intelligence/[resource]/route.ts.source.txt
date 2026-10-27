@@ -1,0 +1,25 @@
+import { NextRequest, NextResponse } from "next/server";
+import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
+import { configuredIntelligenceBackend } from "@/lib/onlyfans/intelligence-backend";
+import { INTELLIGENCE_RESOURCES, validAudienceWrite, type Resource } from "@/lib/onlyfans/intelligence";
+import { vaultAnswer, vaultRefusal, vaultCommandContext } from "@/lib/onlyfans/vault-route";
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+type Context = { params: Promise<{ accountId: string; resource: string }> };
+
+export async function GET(request: NextRequest, context: Context) {
+  const ctx = await requireOnlyFansRead({ agency: true }); if (ctx instanceof NextResponse) return ctx;
+  const params = await context.params, account = requestId(params.accountId);
+  if (!account || !INTELLIGENCE_RESOURCES.includes(params.resource as Resource) || request.nextUrl.search.length > 32768) return vaultRefusal(400, "Invalid audience or vault request.");
+  const backend = configuredIntelligenceBackend(ctx.fetch); if (!backend) return vaultRefusal(503, "Audience and vault evidence is unavailable.");
+  const result = await backend.get(account, params.resource as Resource, request.nextUrl.searchParams);
+  return result.ok ? vaultAnswer(result.envelope) : vaultRefusal(result.status, result.error);
+}
+export async function POST(request: NextRequest, context: Context) {
+  const ctx = await vaultCommandContext(request); if (ctx instanceof NextResponse) return ctx;
+  const params = await context.params, account = requestId(params.accountId);
+  if (!account || params.resource !== "audiences" || request.nextUrl.search || !validAudienceWrite(ctx.body)) return vaultRefusal(400, "Review the audience name and conditions.");
+  const backend = configuredIntelligenceBackend(ctx.fetch); if (!backend) return vaultRefusal(503, "Audience management is unavailable.");
+  const result = await backend.save(account, { ...ctx.body, actor: ctx.identity(account, "audience").actor });
+  return result.ok ? vaultAnswer(result.envelope) : vaultRefusal(result.status, result.error);
+}

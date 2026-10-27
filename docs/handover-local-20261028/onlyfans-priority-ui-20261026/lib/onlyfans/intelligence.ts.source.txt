@@ -1,0 +1,112 @@
+/** Strict projections of canonical fan, audience and vault evidence. */
+export const INTELLIGENCE_SCHEMA = "of-intelligence.v1";
+export const INTELLIGENCE_RESOURCES = ["audiences", "preview", "vault", "performance"] as const;
+export type Resource = typeof INTELLIGENCE_RESOURCES[number];
+export type Rule = { field: "lifetime_spend" | "recent_spend" | "purchase_count" | "last_active_days" | "status";
+  op: string; value: number | string; days?: number };
+export type Rules = { match: "all" | "any"; rules: Rule[] };
+export type AudienceRef = { id: string; revision: string };
+export type AudienceSelection = { include: AudienceRef[]; exclude: AudienceRef[] };
+export type Coverage = { status: "current" | "stale" | "unavailable"; completeSince: string | null; ledgerAsOf: string | null;
+  historyComplete: boolean; historyLimited: boolean; conversationAsOf: string | null; conversationCurrent: boolean };
+export type Audience = { id: string; name: string; revision: string; rules: Rules | null; valid: boolean; updatedAt: string };
+export type AudienceList = { audiences: Audience[]; truncated: boolean; asOf: string; coverage: Coverage;
+  presets: { key: string; name: string; description: string; rules: Rules }[] };
+export type AudiencePreview = { total: number; matched: number; unknown: number; eligible: number; suppressed: number;
+  asOf: string; coverage: Coverage; snapshotHash: string | null; sample: { fanId: string; name: string }[] };
+export type AudienceWrite = { action: "save" | "remove"; id: string | null; expectedRevision: string | null; name: string | null; rules: Rules | null };
+export type AudienceAck = { removedId: string | null; audience: Audience | null };
+export type VaultEvidence = { mediaId: string; kind: string; description: string; sentCount: number; uniqueRecipients: number;
+  lastSentAt: string | null; purchaseCount: number; refundCount: number; ownership: "purchased" | "not_purchased" | "unknown";
+  sentHistory: "complete" | "partial"; lastOfferedUnitPriceCents: number | null; lastPurchasedUnitPriceCents: number | null };
+export type VaultIntelligence = { fanId: string | null; asOf: string; coverage: Coverage; sentHistoryComplete: boolean;
+  purchaseHistoryComplete: boolean; items: VaultEvidence[]; nextCursor: string | null; priceMeaning: "message_or_bundle_total" };
+export type ContentPerformance = { asOf: string; coverage: Coverage; revenueMeaning: "cleared_gross_per_catalogue_unit";
+  items: { itemId: string; label: string; sentCount: number; uniqueRecipients: number; purchases: number; refunds: number;
+    clearedGrossCents: number; conversion: number | null }[]; nextCursor: string | null };
+
+const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+const exact = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).sort().join(",") === [...keys].sort().join(",");
+const text = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;
+const integer = (v: unknown): v is number => typeof v === "number" && Number.isSafeInteger(v) && v >= 0;
+const hash = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
+const stamp = (v: unknown) => typeof v === "string" && v.length <= 64 && /Z$/.test(v) && Number.isFinite(Date.parse(v));
+const nullable = (v: unknown, check: (x: unknown) => boolean) => v === null || check(v);
+export const intelligenceId = (v: unknown): v is string => typeof v === "string" && /^[1-9][0-9]{0,18}$/.test(v) && BigInt(v) < BigInt("9223372036854775808");
+
+export function validRules(v: unknown): v is Rules {
+  if (!object(v) || !exact(v, ["match", "rules"]) || !["all", "any"].includes(v.match as string) || !Array.isArray(v.rules) || v.rules.length > 20) return false;
+  return v.rules.every(r => {
+    if (!object(r) || !exact(r, ["field", "op", "value", ...(Object.hasOwn(r, "days") ? ["days"] : [])])) return false;
+    if (r.field === "tag") return false;
+    if (r.field === "status") return !Object.hasOwn(r, "days") && ["==", "!="].includes(r.op as string) && ["active", "expired"].includes(r.value as string);
+    if (!["lifetime_spend", "recent_spend", "purchase_count", "last_active_days"].includes(r.field as string) ||
+      ![">", ">=", "<", "<=", "==", "!="].includes(r.op as string) || typeof r.value !== "number" || !Number.isFinite(r.value) || r.value < 0) return false;
+    return ["recent_spend", "purchase_count"].includes(r.field as string) ? integer(r.days) && r.days >= 1 && r.days <= 3650 : !Object.hasOwn(r, "days");
+  });
+}
+export function validSelection(v: unknown): v is AudienceSelection {
+  if (!object(v) || !exact(v, ["include", "exclude"])) return false;
+  return ["include", "exclude"].every(key => Array.isArray(v[key]) && (v[key] as unknown[]).length <= 10 &&
+    (key !== "include" || (v[key] as unknown[]).length > 0) && (v[key] as unknown[]).every(x => object(x) && exact(x, ["id", "revision"]) && intelligenceId(x.id) && hash(x.revision)) &&
+    new Set((v[key] as AudienceRef[]).map(x => x.id)).size === (v[key] as unknown[]).length);
+}
+export function validAudienceWrite(v: unknown): v is AudienceWrite {
+  if (!object(v) || !exact(v, ["action", "id", "expectedRevision", "name", "rules"]) ||
+    !nullable(v.id, intelligenceId) || !nullable(v.expectedRevision, hash) || (v.id === null) !== (v.expectedRevision === null)) return false;
+  return v.action === "remove" ? v.id !== null && v.name === null && v.rules === null : v.action === "save" &&
+    text(v.name, 128) && !!v.name.trim() && validRules(v.rules);
+}
+function validCoverage(v: unknown): v is Coverage {
+  return object(v) && exact(v, ["status", "completeSince", "ledgerAsOf", "historyComplete", "historyLimited", "conversationAsOf", "conversationCurrent"]) &&
+    ["current", "stale", "unavailable"].includes(v.status as string) && nullable(v.completeSince, stamp) && nullable(v.ledgerAsOf, stamp) &&
+    nullable(v.conversationAsOf, stamp) && [v.historyComplete, v.historyLimited, v.conversationCurrent].every(x => typeof x === "boolean");
+}
+function validAudience(v: unknown): v is Audience {
+  return object(v) && exact(v, ["id", "name", "revision", "rules", "valid", "updatedAt"]) && intelligenceId(v.id) && text(v.name, 128) && hash(v.revision) && stamp(v.updatedAt) &&
+    typeof v.valid === "boolean" && (v.valid ? validRules(v.rules) : v.rules === null);
+}
+export function intelligenceBody(v: unknown, account: string): unknown | null {
+  return object(v) && exact(v, ["schemaVersion", "ok", "accountId", "analyticsVersion", "data"]) && v.schemaVersion === "of-content.v1" &&
+    v.ok === true && v.accountId === account && v.analyticsVersion === INTELLIGENCE_SCHEMA && object(v.data) ? v.data : null;
+}
+export function parseAudienceList(v: unknown): AudienceList | null {
+  if (!object(v) || !exact(v, ["audiences", "truncated", "asOf", "coverage", "presets"]) || !stamp(v.asOf) || !validCoverage(v.coverage) ||
+    typeof v.truncated !== "boolean" || !Array.isArray(v.audiences) || v.audiences.length > 200 || !v.audiences.every(validAudience) ||
+    new Set(v.audiences.map(x => x.id)).size !== v.audiences.length || !Array.isArray(v.presets) || v.presets.length !== 5 ||
+    !v.presets.every(x => object(x) && exact(x, ["key", "name", "description", "rules"]) && text(x.key, 32) && text(x.name, 128) && text(x.description, 300) && validRules(x.rules))) return null;
+  return v as AudienceList;
+}
+export function parseAudiencePreview(v: unknown): AudiencePreview | null {
+  if (!object(v) || !exact(v, ["total", "matched", "unknown", "eligible", "suppressed", "asOf", "coverage", "sample", "snapshotHash"]) ||
+    ![v.total, v.matched, v.unknown, v.eligible, v.suppressed].every(integer) || !stamp(v.asOf) || !validCoverage(v.coverage) || !nullable(v.snapshotHash, hash) ||
+    !Array.isArray(v.sample) || v.sample.length > 25 || !v.sample.every(x => object(x) && exact(x, ["fanId", "name"]) && intelligenceId(x.fanId) && text(x.name, 160))) return null;
+  const p = v as AudiencePreview;
+  return p.matched + p.unknown <= p.total && p.eligible + p.suppressed === p.matched ? p : null;
+}
+export function parseAudienceAck(v: unknown): AudienceAck | null {
+  return object(v) && exact(v, ["removedId", "audience"]) && nullable(v.removedId, intelligenceId) && nullable(v.audience, validAudience) &&
+    (v.removedId === null) !== (v.audience === null) ? v as AudienceAck : null;
+}
+export function parseVaultIntelligence(v: unknown): VaultIntelligence | null {
+  if (!object(v) || !exact(v, ["fanId", "asOf", "coverage", "sentHistoryComplete", "purchaseHistoryComplete", "items", "nextCursor", "priceMeaning"]) ||
+    !nullable(v.fanId, intelligenceId) || !stamp(v.asOf) || !validCoverage(v.coverage) || ![v.sentHistoryComplete, v.purchaseHistoryComplete].every(x => typeof x === "boolean") ||
+    !nullable(v.nextCursor, intelligenceId) || v.priceMeaning !== "message_or_bundle_total" || !Array.isArray(v.items) || v.items.length > 48) return null;
+  if (!v.items.every(x => object(x) && exact(x, ["mediaId", "kind", "description", "sentCount", "uniqueRecipients", "lastSentAt", "purchaseCount", "refundCount", "ownership", "sentHistory", "lastOfferedUnitPriceCents", "lastPurchasedUnitPriceCents"]) &&
+    intelligenceId(x.mediaId) && text(x.kind, 32) && text(x.description, 500) && [x.sentCount, x.uniqueRecipients, x.purchaseCount, x.refundCount].every(integer) && nullable(x.lastSentAt, stamp) &&
+    ["purchased", "not_purchased", "unknown"].includes(x.ownership as string) && ["complete", "partial"].includes(x.sentHistory as string) &&
+    nullable(x.lastOfferedUnitPriceCents, integer) && nullable(x.lastPurchasedUnitPriceCents, integer)) || new Set(v.items.map(x => x.mediaId)).size !== v.items.length) return null;
+  return v as VaultIntelligence;
+}
+export function parseContentPerformance(v: unknown): ContentPerformance | null {
+  if (!object(v) || !exact(v, ["asOf", "coverage", "revenueMeaning", "items", "nextCursor"]) || !stamp(v.asOf) || !validCoverage(v.coverage) ||
+    v.revenueMeaning !== "cleared_gross_per_catalogue_unit" || !nullable(v.nextCursor, intelligenceId) || !Array.isArray(v.items) || v.items.length > 50 ||
+    !v.items.every(x => object(x) && exact(x, ["itemId", "label", "sentCount", "uniqueRecipients", "purchases", "refunds", "clearedGrossCents", "conversion"]) &&
+      intelligenceId(x.itemId) && text(x.label, 160) && [x.sentCount, x.uniqueRecipients, x.purchases, x.refunds, x.clearedGrossCents].every(integer) &&
+      nullable(x.conversion, n => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1))) return null;
+  return v as ContentPerformance;
+}
+export const parseResource = (resource: Resource, v: unknown) => resource === "audiences" ? parseAudienceList(v) : resource === "preview" ? parseAudiencePreview(v) : resource === "vault" ? parseVaultIntelligence(v) : parseContentPerformance(v);
+export function coverageText(c: Coverage) {
+  return c.historyComplete ? "Complete imported payment history" : c.status === "current" ? `Payment coverage from ${c.completeSince ? new Date(c.completeSince).toLocaleDateString() : "an unknown date"}` : "Payment history is incomplete or awaiting refresh";
+}

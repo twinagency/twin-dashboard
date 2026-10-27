@@ -1,0 +1,68 @@
+"use client";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { intelligenceBody, parseContentPerformance, parseVaultIntelligence, coverageText, type ContentPerformance, type VaultIntelligence } from "@/lib/onlyfans/intelligence";
+import VaultAssetPreview from "./VaultAssetPreview";
+
+const button = "rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
+const money = (amount: number | null) => amount === null ? "Unknown" : new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(amount / 100);
+
+export function FanVaultHistory({ accountId, fanId, readOnly = true }: { accountId: string; fanId: string; readOnly?: boolean }) {
+  const [open, setOpen] = useState(false), [data, setData] = useState<VaultIntelligence | null>(null), [state, setState] = useState("all"), [kind, setKind] = useState("all");
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
+  const active = useRef(0);
+  const load = useCallback(async (after?: string) => {
+    const generation = ++active.current; setBusy(true); setError(""); if (!after) setData(null);
+    try {
+      const params = new URLSearchParams({ fanId, state, kind, ...(after ? { after } : {}) });
+      const response = await fetch(`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/intelligence/vault?${params}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+      const parsed = response.ok && parseVaultIntelligence(intelligenceBody(await response.json(), accountId));
+      if (!parsed || parsed.fanId !== fanId) throw Error("This fan’s media history could not be read.");
+      if (generation === active.current) setData(old => after && old ? { ...parsed, items: [...new Map([...old.items, ...parsed.items].map(item => [item.mediaId, item])).values()] } : parsed);
+    } catch (e) { if (generation === active.current) { setData(null); setError(e instanceof Error ? e.message : "Media history unavailable."); } }
+    finally { if (generation === active.current) setBusy(false); }
+  }, [accountId, fanId, state, kind]);
+  useEffect(() => { setData(null); if (open) void load(); return () => { active.current++; }; }, [open, load]);
+  return <details className="mt-3 rounded-lg border border-line p-3" open={open} onToggle={e => setOpen(e.currentTarget.open)} data-of-fan-vault-history>
+    <summary className="cursor-pointer text-sm font-semibold">Media sent, purchases and prices</summary>
+    {open ? <div className="mt-3 space-y-3">
+      <div className="flex flex-wrap gap-2"><select className={button} aria-label="Fan content history filter" value={state} onChange={e => setState(e.target.value)}><option value="all">All content</option><option value="sent">Sent to this fan</option><option value="purchased">Purchased</option><option value="not_sent">Not sent · complete history only</option><option value="not_purchased">Not purchased · complete history only</option></select>
+        <select className={button} aria-label="Fan content type" value={kind} onChange={e => setKind(e.target.value)}><option value="all">All media</option><option value="photo">Photos</option><option value="video">Videos</option></select><button className={button} disabled={busy} onClick={() => void load()}>Refresh history</button></div>
+      {data ? <p className="text-xs text-muted">{coverageText(data.coverage)}. {!data.sentHistoryComplete || !data.purchaseHistoryComplete ? "Incomplete history stays unknown; negative filters omit uncertain content." : "Complete imported history is available."} Prices below are the whole message or bundle price.</p> : null}
+      {error ? <p role="alert" className="text-sm">{error}</p> : null}
+      {busy ? <p role="status" className="text-sm text-muted">Reading media history…</p> : null}
+      {data?.items.map(row => <article key={row.mediaId} className="flex gap-3 border-t border-line pt-3 text-sm">
+        <VaultAssetPreview accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly} />
+        <div className="min-w-0"><strong>{row.description || `${row.kind} #${row.mediaId}`}</strong><p>{row.sentCount} recorded sends{row.lastSentAt ? ` · last ${new Date(row.lastSentAt).toLocaleDateString()}` : ""}</p>
+          <p>{row.ownership === "purchased" ? "Recorded ownership: purchased" : row.ownership === "not_purchased" ? "Not purchased in complete imported history" : "Purchase ownership unknown"}</p>
+          <p>Last offered: {money(row.lastOfferedUnitPriceCents)} · Last purchased: {money(row.lastPurchasedUnitPriceCents)}</p>
+          {row.refundCount ? <p>{row.refundCount} linked refunded or charged-back purchase(s)</p> : null}</div>
+      </article>)}
+      {data && !data.items.length && !busy ? <p className="text-sm text-muted">No verified content matches this filter.</p> : null}
+      {data?.nextCursor ? <button className={button} disabled={busy} onClick={() => void load(data.nextCursor!)}>Load more media history</button> : null}
+    </div> : null}
+  </details>;
+}
+
+export default function VaultIntelligencePanel({ accountId }: { accountId: string }) {
+  const [data, setData] = useState<ContentPerformance | null>(null), [error, setError] = useState(""), [busy, setBusy] = useState(false);
+  const generation = useRef(0);
+  const read = useCallback(async (after?: string) => {
+    const current = ++generation.current; setBusy(true); setError(""); if (!after) setData(null);
+    try {
+      const response = await fetch(`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/intelligence/performance${after ? `?after=${encodeURIComponent(after)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15000) });
+      const parsed = response.ok && parseContentPerformance(intelligenceBody(await response.json(), accountId));
+      if (!parsed) throw Error("Content sales performance could not be read.");
+      if (current === generation.current) setData(old => after && old ? { ...parsed, items: [...new Map([...old.items, ...parsed.items].map(item => [item.itemId, item])).values()] } : parsed);
+    } catch (e) { if (current === generation.current) { setData(null); setError(e instanceof Error ? e.message : "Content performance unavailable."); } }
+    finally { if (current === generation.current) setBusy(false); }
+  }, [accountId]);
+  useEffect(() => { void read(); return () => { generation.current++; }; }, [read]);
+  return <section className="rounded-xl border border-line p-4" data-of-vault-performance><div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Content sales performance</h2><button className={button} disabled={busy} onClick={() => void read()}>Refresh performance</button></div>
+    <p className="mt-2 text-sm text-muted">Recorded catalogue units ranked by cleared gross revenue. A bundle sale counts once, regardless of its number of media files. Purchase conversion uses confirmed linked purchases divided by recorded sends.</p>
+    {data ? <p className="mt-2 text-xs text-muted">{coverageText(data.coverage)} · {new Date(data.asOf).toLocaleString()}. Unlinked payments and content without an exact catalogue association are not assigned revenue here. Open a fan in the inbox for their sent and purchased media history.</p> : null}
+    {error ? <p role="alert" className="mt-3">{error}</p> : null}{busy ? <p role="status" className="mt-3 text-sm text-muted">Reading sales evidence…</p> : null}
+    <div className="mt-4 overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th className="p-2">Content unit</th><th className="p-2">Sends</th><th className="p-2">Fans</th><th className="p-2">Purchases</th><th className="p-2">Refunds</th><th className="p-2">Cleared gross</th><th className="p-2">Conversion</th></tr></thead><tbody>{data?.items.map(row => <tr key={row.itemId} className="border-t border-line"><td className="p-2">{row.label}</td><td className="p-2">{row.sentCount}</td><td className="p-2">{row.uniqueRecipients}</td><td className="p-2">{row.purchases}</td><td className="p-2">{row.refunds}</td><td className="p-2">{money(row.clearedGrossCents)}</td><td className="p-2">{row.conversion === null ? "Unknown" : `${(row.conversion * 100).toFixed(1)}%`}</td></tr>)}</tbody></table></div>
+    {data && !data.items.length && !busy ? <p className="mt-3 text-sm text-muted">No catalogue sales with a verified message association are recorded yet.</p> : null}
+    {data?.nextCursor ? <button className={`${button} mt-3`} disabled={busy} onClick={() => void read(data.nextCursor!)}>Load more content</button> : null}
+  </section>;
+}
