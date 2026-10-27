@@ -54,3 +54,27 @@ export function parseControlAck(value: unknown, expected: {
   if (body.action !== "manual_message" && ("intentId" in body || "outcome" in body)) return null;
   return body as ControlAck;
 }
+
+
+/** Only known dashboard messages may be displayed; never echo upstream errors. */
+const DASHBOARD_CONTROL_REFUSALS: Record<number, readonly string[]> = {
+  400: ["That conversation reference is invalid.", "That conversation control request is invalid.", "That conversation control is unavailable."],
+  403: ["Your team access is read-only.", "This change must be requested from this dashboard."],
+  409: ["The conversation changed or has an active hold. Refresh before trying again."],
+  413: ["That conversation control request is invalid."],
+  503: ["Conversation controls are not configured."],
+};
+export function controlRefusalNote(status: number, value: unknown): string {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const body = value as Record<string, unknown>;
+    if (body.schemaVersion === CONTROL_SCHEMA && body.ok === false && body.outcome === "refused" &&
+        typeof body.error === "string" && DASHBOARD_CONTROL_REFUSALS[status]?.includes(body.error)) return body.error;
+  }
+  if (status === 401) return "Your dashboard session has expired. Sign in again before changing reply control.";
+  if (status === 403) return "Your session cannot change this conversation. Check your team access and refresh.";
+  if (status === 404) return "This conversation is no longer available. Refresh the inbox.";
+  if (status === 409) return "The conversation changed or has an active hold. Refresh before trying again.";
+  if (status === 413) return "This request is too large. Shorten the reply and try again.";
+  if (status === 503) return "Conversation controls are unavailable. The server connection or configuration needs attention.";
+  return "The change was not accepted. Refresh the conversation before trying again.";
+}

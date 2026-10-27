@@ -305,6 +305,7 @@ function Composer({
   viewer,
   account,
   onSubmit,
+  onTakeover,
   disabledReason,
   simulated,
   pending,
@@ -314,6 +315,7 @@ function Composer({
   viewer: PreviewViewer;
   account: OfAccount;
   onSubmit: (body: string, catalogItemId?: number) => void;
+  onTakeover: () => void;
   disabledReason: string | null;
   simulated: boolean;
   pending: boolean;
@@ -337,6 +339,8 @@ function Composer({
   }, [account.accountId, account.capabilities.sendManualMessage, simulated]);
   useEffect(() => { catalogueActive.current = true; void loadCatalogue(); return () => { catalogueActive.current = false; }; }, [loadCatalogue]);
   const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason && !pending;
+  const takeoverAvailable = canSubmitCommand(viewer, actionSet, "request_takeover");
+  const takeoverDisabled = pending || (!result?.simulated && result?.outcome === "unconfirmed");
   const sendBlockedReason = disabledReason ?? actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason;
   useEffect(() => {
     if (result && !result.simulated && result.outcome === "recorded" && result.intentId &&
@@ -359,6 +363,10 @@ function Composer({
   return (
     <div className="of-composer border-t border-line p-3">
       <form onSubmit={handleSubmit} className="space-y-2">
+        {takeoverAvailable ? <button type="button" data-of-composer-takeover onClick={onTakeover}
+          disabled={takeoverDisabled} className="of-control-button of-primary">
+          <UserRound size={16} aria-hidden="true" />{pending ? "Updating reply control…" : "Take over to reply"}
+        </button> : null}
         {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
           <label className="block text-[11px] font-medium text-muted">Paid content
             <select data-of-manual-offer value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)} disabled={!canSend}
@@ -478,6 +486,37 @@ function ActionColumn({
         </div>
       ) : null}
 
+      {result ? (
+        <div
+          data-of-command-result
+          role={result.accepted ? "status" : "alert"}
+          data-of-command-accepted={result.accepted}
+          className={`rounded-xl border p-3 text-xs leading-5 ${
+            result.accepted
+              ? "border-[#e3c98b] bg-[#fffaee] text-[#8a5f06]"
+              : "border-[#f0c3cb] bg-[#fff5f6] text-[#9b2f62]"
+          }`}
+        >
+          <div className="font-semibold">
+            {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
+              : result.outcome === "recorded" ? result.intentId ? "Message queued" : "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
+          </div>
+          <p className="mt-1">{result.note}</p>
+          {!result.simulated && result.intentId && result.request.payload.kind === "manual_message" ?
+            <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 text-ink">{result.request.payload.body}</p> : null}
+          {result.simulated ? <p className="mt-1">
+            <code className="font-mono">{result.request.command}</code> on account{" "}
+            <code className="font-mono">{result.request.accountId}</code> against revision{" "}
+            <code className="font-mono">{result.request.expectedRevision}</code>, idempotency key{" "}
+            <code className="font-mono">{result.request.idempotencyKey}</code>.
+          </p> : null}
+          {!result.simulated && result.outcome === "unconfirmed" ? (
+            <button type="button" data-of-retry-control disabled={pending} onClick={onRetry}
+              className="mt-2 rounded-lg border border-current px-2 py-1 disabled:opacity-50">Retry same request</button>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="of-reply-actions" data-of-actions>
         {actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action)).map(entry => {
           const resolution = entry.action === "resolve_delivery_evidence";
@@ -508,37 +547,6 @@ function ActionColumn({
           </div>
         </details>
       ) : null}
-
-      {result ? (
-        <div
-          data-of-command-result
-          data-of-command-accepted={result.accepted}
-          className={`rounded-xl border p-3 text-xs leading-5 ${
-            result.accepted
-              ? "border-[#e3c98b] bg-[#fffaee] text-[#8a5f06]"
-              : "border-[#f0c3cb] bg-[#fff5f6] text-[#9b2f62]"
-          }`}
-        >
-          <div className="font-semibold">
-            {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
-              : result.outcome === "recorded" ? result.intentId ? "Message queued" : "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
-          </div>
-          <p className="mt-1">{result.note}</p>
-          {!result.simulated && result.intentId && result.request.payload.kind === "manual_message" ?
-            <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 text-ink">{result.request.payload.body}</p> : null}
-          {result.simulated ? <p className="mt-1">
-            <code className="font-mono">{result.request.command}</code> on account{" "}
-            <code className="font-mono">{result.request.accountId}</code> against revision{" "}
-            <code className="font-mono">{result.request.expectedRevision}</code>, idempotency key{" "}
-            <code className="font-mono">{result.request.idempotencyKey}</code>.
-          </p> : null}
-          {!result.simulated && result.outcome === "unconfirmed" ? (
-            <button type="button" data-of-retry-control disabled={pending} onClick={onRetry}
-              className="mt-2 rounded-lg border border-current px-2 py-1 disabled:opacity-50">Retry same request</button>
-          ) : null}
-        </div>
-      ) : null}
-
 
     </div>
   );
@@ -761,6 +769,7 @@ export default function InboxView({
                   actionSet={actionSet}
                   viewer={viewer}
                   account={activeAccount}
+                  onTakeover={() => onCommand("request_takeover", NO_PAYLOAD)}
                   onSubmit={(body, catalogItemId) => onCommand("send_manual_message", { kind: "manual_message", body,
                     ...(catalogItemId === undefined ? {} : { catalogItemId }) })}
                   disabledReason={connectionReason ?? (!commandResult?.simulated && commandResult?.outcome === "unconfirmed"
