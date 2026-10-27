@@ -65,11 +65,12 @@ try {
   const manual = page.locator('[data-of-message-id="3"]');
   await manual.getByText("Synthetic manual reply through the shared authority", { exact: true }).waitFor({ timeout: 15000 });
   assert.equal(await manual.getAttribute("data-of-message-delivery"), "sent");
-  assert(await page.getByText("from an operator", { exact: true }).count());
-  assert(await page.getByText("Sent", { exact: true }).count());
+  assert.equal(await manual.locator("..").locator(".of-sent-receipt").getAttribute("title"), "Provider accepted this message from an operator. Read and purchase status are not confirmed. Receipt recorded.");
+  assert.equal(await manual.locator("..").getByText("Sent to provider", { exact: true }).count(), 1);
   await page.getByText("Retracted synthetic message", { exact: true }).first().waitFor({ timeout: 15000 });
   assert(await page.getByText("Retracted", { exact: true }).count());
-  assert(await page.getByText(/Synchronization is incomplete/).count());
+  assert.equal(await page.getByText("Sync needs attention.", { exact: true }).count(), 1);
+  assert.match(await page.getByRole("status").filter({ hasText: "Sync needs attention." }).innerText(), /Newer activity may be missing\./);
   assert.equal(external.length, 0, "UI attempted an external request");
   if (process.env.ONLYFANS_TEST_EVIDENCE) {
     await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-inbox.png"), fullPage: true });
@@ -84,7 +85,11 @@ try {
   // Local controls work on the explicitly disconnected account. Every control
   // is followed by the real canonical read, rather than an optimistic badge.
   const action = name => page.locator(`[data-of-action="${name}"]`);
+  const reveal = async name => {
+    if (name === "mark_no_contact" && !await action(name).isVisible()) await page.locator("details.of-more-actions > summary").click();
+  };
   const recorded = async name => {
+    await reveal(name);
     await action(name).click();
     await page.getByText("Change saved", { exact: true }).waitFor({ timeout: 15000 });
   };
@@ -111,18 +116,23 @@ try {
   await recorded("resume_automation");
   await action("pause_automation").waitFor({ timeout: 15000 });
   await recorded("mark_no_contact");
-  await page.getByText("No action is available for this conversation right now.", { exact: true }).waitFor({ timeout: 15000 });
+  await page.getByText("No reply changes are available right now.", { exact: true }).waitFor({ timeout: 15000 });
   await page.locator('[data-of-conversation-id="acc-a:202"]').click();
   await recorded("request_takeover");
   await page.locator("[data-of-incident]").waitFor();
+  await page.locator("[data-of-handover]").getByRole("status").filter({ hasText: /^Takeover requested$/ }).waitFor({ timeout: 15000 });
+  assert.equal(await page.locator("[data-of-handover]").getByRole("status").innerText(), "Takeover requested");
+  assert.equal(await page.locator("[data-of-handover]").getByText("Waiting for the current delivery to settle. Manual replies stay paused until handover completes.", { exact: true }).count(), 1);
+  assert.equal(await page.locator("[data-of-incident]").getByText("Outcome unknown", { exact: true }).count(), 1);
   assert.equal(await action("release_takeover").count(), 0, "unknown send allowed hand-back");
   assert.equal(await action("resume_automation").count(), 0, "unknown send allowed resume");
+  await reveal("mark_no_contact");
   await page.locator('[data-of-action="mark_no_contact"]:enabled').waitFor({ timeout: 15000 });
   await context.clearCookies();
   await action("mark_no_contact").click();
   await page.locator("[data-of-incident]").waitFor({ state: "detached", timeout: 15000 });
   assert.equal(await page.locator("[data-of-incident]").count(), 0, "session loss left private conversation evidence visible");
-  assert.equal(await page.locator("[data-of-actions] button").count(), 0);
+  assert.equal(await page.locator("[data-of-action]").count(), 0, "session loss left private control actions available");
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   for (const section of ["settings", "content", "sales"]) {
     await page.goto(origin + `/onlyfans/${section}?account=acc-a`, { waitUntil: "domcontentloaded" });

@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ accountId: string; conversationId: string }> },
 ) {
   const context = await requireOnlyFansRead({ agency: true });
@@ -21,6 +21,9 @@ export async function GET(
   if (!requestId(accountId)) return badRequest("That account reference is not valid.");
   if (!requestId(conversationId)) return badRequest("That conversation reference is not valid.");
 
-  const result = await readConversation(context, { accountId, conversationId });
+  const query = new URL(request.url).searchParams;
+  const cursor = query.get("cursor");
+  if (query.getAll("cursor").length > 1 || (cursor !== null && (!/^[A-Za-z0-9_-]{1,512}={0,2}$/.test(cursor)))) return badRequest("That history cursor is not valid.");
+  const result = await readConversation(context, { accountId, conversationId, cursor });
   return readResponse(result);
 }

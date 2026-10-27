@@ -1,3 +1,4 @@
+import {prepareManagedNetwork} from '@/lib/onlyfans-managed-proxy/prepare';
 import {createHash} from 'node:crypto';
 import {NextRequest,NextResponse} from 'next/server';
 import {PRIVATE_HEADERS} from '@/lib/onlyfans/route';
@@ -5,7 +6,7 @@ import {connectionAnswer,connectionRefusal} from '@/lib/onlyfans-connections/rou
 import {configuredConnectionBackend} from '@/lib/onlyfans-connections/backend';
 import {resolveConnectionCreator,connectionAccess,connectionSignInCommand} from '@/lib/onlyfans/connection-creators';
 import {normalizeProxyInput} from '@/lib/onlyfans-connections/proxy';
-import {configuredManagedProxyBackend,ManagedProxyError} from '@/lib/onlyfans-managed-proxy/backend';
+import {ManagedProxyError} from '@/lib/onlyfans-managed-proxy/backend';
 import {publicProxy} from '@/lib/onlyfans-managed-proxy/public';
 import {validManagedProxySelection} from '@/lib/onlyfans-managed-proxy/model';
 import {configuredSignInBackend,SignInBackendError,type SignInNetwork} from '@/lib/onlyfans-sign-in/backend';
@@ -86,10 +87,7 @@ export async function POST(request:NextRequest,context:Context){
     let network:SignInNetwork=existing.data;
     if(c.accountId===null){
       if(managed){
-        const broker=configuredManagedProxyBackend();
-        if(!broker)return connectionRefusal(503,'Automatic connection setup is unavailable. Please contact support.');
-        const proxyUrl=await broker.assign(creator.id,c.managedProxy as import('@/lib/onlyfans-managed-proxy/model').ManagedProxySelection,ctx.actor);
-        network={accountId:null,ownerId:null,proxyUrl,fingerprint:fingerprint(proxyUrl)};
+        network=await prepareManagedNetwork(creator.id,c.managedProxy as import('@/lib/onlyfans-managed-proxy/model').ManagedProxySelection,ctx.actor);
       }else{
         const entry=normalizeProxyInput(c.proxyUrl??'');
         if(!entry.ok||!entry.url||!['http:','https:','socks5:'].includes(new URL(entry.url).protocol))return connectionRefusal(400,'Enter this creator’s fixed HTTP, HTTPS or SOCKS5 proxy before signing in.');

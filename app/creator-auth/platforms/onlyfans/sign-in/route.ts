@@ -1,3 +1,4 @@
+import {prepareCreatorNetwork} from '@/lib/onlyfans-managed-proxy/prepare';
 import {createHash} from 'node:crypto';
 import {NextRequest,NextResponse} from 'next/server';
 import {configuredSignInBackend,SignInBackendError} from '@/lib/onlyfans-sign-in/backend';
@@ -40,7 +41,8 @@ export async function POST(request:NextRequest){
       if(b.accountId!==null&&!(await ownedPlatformAccounts(profile.id)).some(a=>a.accountId===b.accountId))return platformFailure(404,'That account is unavailable.');
       const context=await native.captureContext(profile.id,b.accountId as string|null);
       if(!context.ok)return platformFailure(503,'Your account connection could not be prepared. Please try again.');
-      return platformResponse({ok:true,attempt:await backend.start(scope,b.startKey as string,context.data)});
+      const network=b.accountId===null?await prepareCreatorNetwork(profile.id,scope.actor):context.data;
+      return platformResponse({ok:true,attempt:await backend.start(scope,b.startKey as string,network)});
     }
     const identity=b.attempt as string;
     if(b.action==='input'){
@@ -68,7 +70,12 @@ export async function POST(request:NextRequest){
     const status=await backend.status(scope,identity);
     if(status.phase==='submitted'&&status.enrollmentId)return platformResponse({ok:true,attempt:status});
     const capture=await backend.capture(scope,identity);
-    const command={creatorId:profile.id,creatorName:ctx.creator.creatorName,handle:capture.handle,session:capture.session};
+    const saved=await native.captureContext(profile.id,'of-'+capture.session.ownerId);
+    const network=saved.ok&&saved.data.proxyUrl?saved.data:await prepareCreatorNetwork(profile.id,scope.actor);
+    if(capture.session.networkFingerprint!==network.fingerprint||(network.ownerId!==null&&network.ownerId!==capture.session.ownerId))
+      return platformFailure(409,'The account or fixed network changed. Start sign-in again.');
+    const command={creatorId:profile.id,creatorName:ctx.creator.creatorName,handle:capture.handle,session:capture.session,
+      ...(network.accountId===null?{initialProxyUrl:network.proxyUrl}:{})};
     const result=await native.enroll({...command,...ctx.identity('enroll-account',command)});
     if(!result.ok)return platformFailure(result.status,result.error);
     // Durable native acceptance comes first. If this acknowledgement is lost,

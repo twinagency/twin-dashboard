@@ -47,7 +47,9 @@ import { createOnlyFansDataSource } from "@/lib/onlyfans-preview/sources";
 import {
   applyAccounts,
   applyConversation,
+  appendOlderConversation,
   applyConversations,
+  applyConversationRefresh,
   appendConversations,
   beginAccounts,
   beginScope,
@@ -221,6 +223,8 @@ export default function OnlyFansWorkspace({
   const [commandResult, setCommandResult] = useState<CommandResult | null>(null);
   const [commandPending, setCommandPending] = useState(false);
   const commandBusy = useRef(false);
+  const olderBusy = useRef(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
 
   const { state, ref, commit } = useSelectionStore();
   const [aiOnly, setAiOnly] = useState(false);
@@ -281,8 +285,8 @@ export default function OnlyFansWorkspace({
           items: page.items.map((summary) => withSummaryOverrides(summary, controls)),
         }));
       },
-      async getConversation(accountId, conversationId) {
-        return mapState(await base.getConversation(accountId, conversationId), (detail) =>
+      async getConversation(accountId, conversationId, cursor) {
+        return mapState(await base.getConversation(accountId, conversationId, cursor), (detail) =>
           withDetailOverrides(detail, controls),
         );
       },
@@ -390,6 +394,43 @@ export default function OnlyFansWorkspace({
     });
   }, [state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly]);
 
+  // A single outstanding visible-tab read. Every result still passes the
+  // existing account generation/sequence gates; no poll can select an account.
+  useEffect(() => {
+    const accountId = state.selectedAccountId;
+    if (sourceMode !== "server" || view !== "inbox" || !accountId ||
+        !authorizedIds.includes(accountId)) return;
+    let active = true, busy = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const schedule = () => { if (active) timer = setTimeout(() => void refresh(), 3000); };
+    const refresh = async () => {
+      if (!active || busy) return;
+      const entry = ref.current.byAccount[accountId];
+      if (document.visibilityState !== "visible" || commandBusy.current ||
+          ref.current.selectedAccountId !== accountId || !entry ||
+          entry.conversations.status === "loading" || entry.loadingMore) {
+        schedule(); return;
+      }
+      busy = true;
+      const pending = requestConversations(ref.current, accountId, { background: true });
+      commit(pending.state);
+      try {
+        const result = await source.listConversations(accountId, null, aiOnly);
+        if (active) commit(applyConversationRefresh(ref.current, accountId,
+          pending.generation, pending.seq, result).state);
+      } finally { busy = false; schedule(); }
+    };
+    const visible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (timer) clearTimeout(timer);
+      void refresh();
+    };
+    schedule();
+    document.addEventListener("visibilitychange", visible);
+    return () => { active = false; if (timer) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", visible); };
+  }, [sourceMode, view, state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly]);
+
   // The selected thread.
   useEffect(() => {
     const accountId = state.selectedAccountId;
@@ -450,8 +491,8 @@ export default function OnlyFansWorkspace({
   const actionViewer = useMemo(() => ({ ...viewer, ...(agencyViewer ? { canActAsOwner: !!handoverCurrent?.canActAsOwner } : {}) }), [viewer, agencyViewer, handoverCurrent]);
   const refreshHandover = useCallback(() => {
     setHandoverRefresh(value => value + 1);
-    if (!handoverAccount || !handoverConversation) return;
-    const pending = requestConversation(ref.current, handoverAccount, handoverConversation);
+    if (!handoverAccount || !handoverConversation || olderBusy.current) return;
+    const pending = requestConversation(ref.current, handoverAccount, handoverConversation, { background: true });
     commit(pending.state);
     void source.getConversation(handoverAccount, handoverConversation).then(result => {
       commit(applyConversation(ref.current, handoverAccount, handoverConversation, pending.generation, pending.seq, result).state);
@@ -459,7 +500,7 @@ export default function OnlyFansWorkspace({
   }, [handoverAccount, handoverConversation, source, ref, commit]);
   useEffect(() => {
     if (sourceMode !== "server" || view !== "inbox" || !handoverConversation) return;
-    const timer = setInterval(refreshHandover, 15000);
+    const timer = setInterval(() => { if (document.visibilityState === "visible" && !commandBusy.current) refreshHandover(); }, 15000);
     return () => clearInterval(timer);
   }, [sourceMode, view, handoverConversation, refreshHandover]);
 
@@ -494,6 +535,24 @@ export default function OnlyFansWorkspace({
     },
     [commit, ref],
   );
+
+  const handleLoadOlder = useCallback(async () => {
+    const snapshot = ref.current;
+    const accountId = snapshot.selectedAccountId;
+    const current = currentConversationState(snapshot);
+    if (!accountId || olderBusy.current || !current || (current.status !== "ready" && current.status !== "stale") || !current.data.previousCursor) return;
+    const { conversationId, previousCursor } = current.data;
+    olderBusy.current = true; setLoadingOlder(true);
+    const pending = requestConversation(snapshot, accountId, conversationId, { background: true });
+    commit(pending.state);
+    try {
+      const result = await source.getConversation(accountId, conversationId, previousCursor);
+      commit(appendOlderConversation(ref.current, accountId, conversationId, pending.generation, pending.seq, result).state);
+    } catch {
+      commit(appendOlderConversation(ref.current, accountId, conversationId, pending.generation, pending.seq,
+        { status: "error", message: "Older messages could not be loaded. Reopen the conversation to retry." }).state);
+    } finally { olderBusy.current = false; setLoadingOlder(false); }
+  }, [source, ref, commit]);
 
   /** Fetch the next page and append it, keeping the rows already on screen. */
   const handleLoadMore = useCallback(() => {
@@ -546,7 +605,7 @@ export default function OnlyFansWorkspace({
           commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
           if (generation === ref.current.scopeGeneration && selected()) {
             requested.current.details.add(`${request.accountId}:${request.conversationId}`);
-            const detail = requestConversation(ref.current, request.accountId, request.conversationId);
+            const detail = requestConversation(ref.current, request.accountId, request.conversationId, { background: true });
             commit(detail.state);
             const read = await source.getConversation(request.accountId, request.conversationId);
             commit(applyConversation(ref.current, request.accountId, request.conversationId,
@@ -683,6 +742,8 @@ export default function OnlyFansWorkspace({
       }
       onSelectConversation={handleSelectConversation}
       detailState={detailState}
+      loadingOlder={loadingOlder}
+      onLoadOlder={handleLoadOlder}
       viewer={actionViewer}
       aiOnly={aiOnly}
       onAiFilterChange={enabled => {

@@ -30,6 +30,7 @@ import type {
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
 import { parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
+import { parseMessageAttachments } from "./message-attachments";
 import { parseOperations, type OperationsSnapshot } from "./operations";
 import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
 
@@ -78,6 +79,7 @@ export type OnlyFansBackend = {
   getConversation(
     accountId: string,
     conversationId: string,
+    cursor?: string | null,
   ): Promise<BackendResult<ConversationDetail>>;
   getEarnings?(window:EarningsWindow):Promise<BackendResult<NativeEarnings>>;
   getOperations?(accountId: string): Promise<BackendResult<OperationsSnapshot>>;
@@ -286,7 +288,7 @@ export function createHttpOnlyFansBackend(options: {
       });
     },
 
-    getConversation(accountId, conversationId) {
+    getConversation(accountId, conversationId, cursor) {
       if (!ID_PATTERN.test(accountId) || !ID_PATTERN.test(conversationId)) {
         return Promise.resolve({
           ok: false,
@@ -295,8 +297,10 @@ export function createHttpOnlyFansBackend(options: {
           error: "That conversation reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}`, (body) => {
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, (body) => {
         if (!isRecord(body) || !isRecord(body.conversation)) return null;
+        const messages = body.conversation.messages;
+        if (Array.isArray(messages) && messages.some(message => isRecord(message) && message.attachments !== undefined && !parseMessageAttachments(message.attachments))) return null;
         return body.conversation as ConversationDetail;
       });
     },

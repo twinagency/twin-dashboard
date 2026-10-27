@@ -23,7 +23,9 @@ export async function GET(request:NextRequest,context:{params:Promise<{path?:str
       return platformResponse({schemaVersion:ONLYFANS_PREVIEW_SCHEMA_VERSION,accountId,page:result.data});
     }
     if(path.length===4&&path[2]==="conversations"){
-      const conversationId=path[3],result=await backend.getConversation(accountId,conversationId);if(!result.ok)return platformFailure(result.status,"That conversation could not be loaded.");
+      const cursor=params.get("cursor");
+      if(params.getAll("cursor").length>1 || (cursor!==null && !/^[A-Za-z0-9_-]{1,512}={0,2}$/.test(cursor)))return platformFailure(400,"That history page is invalid.");
+      const conversationId=path[3],result=await backend.getConversation(accountId,conversationId,cursor);if(!result.ok)return platformFailure(result.status,"That conversation could not be loaded.");
       const row=result.data;
       if(row.accountId!==accountId||row.conversationId!==conversationId||row.summary.accountId!==accountId||row.summary.conversationId!==conversationId||row.messages.some(message=>message.conversationId!==conversationId))return platformFailure(502,"Conversation ownership could not be verified.");
       return platformResponse({schemaVersion:ONLYFANS_PREVIEW_SCHEMA_VERSION,accountId,conversation:row});

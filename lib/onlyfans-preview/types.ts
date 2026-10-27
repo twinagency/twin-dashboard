@@ -143,6 +143,13 @@ export type ConversationSummary = {
 
 export type MessageOrigin = "fan" | "ai" | "human" | "imported";
 
+export type MessageAttachments = {
+  count: number;
+  media: { mediaId: string; kind: "photo" | "video" | "audio" | "unknown"; source?: "message" }[];
+  price: Money;
+  purchaseStatus: "not_applicable" | "unconfirmed" | "not_purchased" | "purchased";
+};
+
 export type ConversationMessage = {
   messageId: string;
   conversationId: string;
@@ -153,6 +160,8 @@ export type ConversationMessage = {
   delivery: DeliveryOutcome;
   /** Present only when a resolution workflow should cite evidence. */
   evidenceRef: string | null;
+  /** Optional during rollout and for older saved conversations. */
+  attachments?: MessageAttachments;
 };
 
 export type FanContextFact = {
@@ -175,6 +184,8 @@ export type ConversationDetail = {
   accountId: string;
   summary: ConversationSummary;
   messages: ConversationMessage[];
+  /** Keyset position for the older page in this exact account and thread. */
+  previousCursor?: string | null;
   facts: FanContextFact[];
   ownedMedia: OwnedMediaItem[];
   /** A summary of a structured resolution path when delivery is unresolved. */

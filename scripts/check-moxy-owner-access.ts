@@ -56,6 +56,19 @@ async function main() {
     assert.deepEqual(readonly, { id: MOXY_MANAGEMENT_AGENCY_ID, name: "Moxy", userId: "verified-user", canManage: false, cloneIds: [assigned] });
     assert.equal(agencyCanManage(readonly), false, "spoofed Auth metadata does not grant management");
     assert.equal((await middleware(request("/users"))).status, 403, "cookies/headers cannot promote read-only Moxy");
+    // Moxy read-only must apply before agency/public route shortcuts.
+    for (const path of ["/agency/creator-invites/manage", "/agency/creators/link", "/agency/team/manage", "/creator-auth/signup", "/api/onlyfans-connections/creators", "/api/onlyfans-controls/accounts/acc-a"]) {
+      const before = calls.length;
+      const response = await middleware(new NextRequest(origin + path, { method: "POST", headers: { cookie: headers.cookie, origin } }));
+      assert.equal(response.status, 403, path);
+      assert(!calls.slice(before).some(call => call.method !== "GET"), "no mutation reaches the database");
+    }
+    for (const path of ["/revenue", "/clones", "/onlyfans/accounts", "/onlyfans/inbox", "/onlyfans/campaigns", "/onlyfans/content", "/onlyfans/sales", "/onlyfans/settings", "/agency/creators"]) {
+      assert.equal((await middleware(new NextRequest(origin + path, { headers: { cookie: headers.cookie } }))).status, 200, "read-only navigation: " + path);
+    }
+    for (const path of ["/agency/logout", "/agency/clone-scope"]) {
+      assert.equal((await middleware(new NextRequest(origin + path, { method: "POST", headers: { cookie: headers.cookie, origin } }))).status, 200, "session navigation: " + path);
+    }
     canManage = "true";
     assert.equal((await agencyIdentity("verified-token"))?.canManage, false, "permission must be boolean true");
     canManage = true;

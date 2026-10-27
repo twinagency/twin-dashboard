@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -7,10 +8,11 @@ import { SESSION_COOKIE, signSession } from "../lib/session";
 
 async function main() {
   Object.assign(process.env, { NODE_ENV: "production", DASHBOARD_PASSWORD: "offline-public-site-test" });
-  const admin = await signSession();
+  process.env.SUPABASE_URL="https://session-fixture.invalid"; process.env.SUPABASE_SERVICE_KEY="synthetic-only";
   const originalFetch = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => { calls++; throw new Error("Public marketing must not fetch private data"); };
+  globalThis.fetch = async (input, init) => { const rpc = syntheticAdminSessionRpc(input, init); if(rpc) return rpc; calls++; throw new Error("Public marketing must not fetch private data"); };
+  const admin = await signSession();
   try {
     for (const path of ["/twin-agency", "/twin-agency/", "/ava", "/ava/"]) assert.equal(isMarketingPath(path), true);
     for (const path of ["/", "/twin", "/twin-agency-secret", "/twin-agency/revenue", "/twin-agency/api", "/ava-secret", "/ava/revenue", "/revenue", "/api/dashboard", undefined, null]) assert.equal(isMarketingPath(path), false);

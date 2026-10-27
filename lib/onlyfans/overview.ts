@@ -39,5 +39,5 @@ export const PAYMENT_LABELS: Record<string, string> = { cleared: "Cleared", pend
 export const paymentLabel = (status: string) => Object.hasOwn(PAYMENT_LABELS, status) ? PAYMENT_LABELS[status] : status;
 export function recordedTime(value: string) {
   const date = new Date(value);
-  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(date) : value;
+  return Number.isFinite(date.getTime()) ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" }).format(date) : value;
 }

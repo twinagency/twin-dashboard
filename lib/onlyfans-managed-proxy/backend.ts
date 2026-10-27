@@ -30,7 +30,7 @@ export function createManagedProxyBackend(options:{baseUrl:string;token:string;d
       return body.countries;
     },
     async assign(creatorId:string,selection:ManagedProxySelection,actor:string):Promise<string>{
-      if(!/^[A-Za-z0-9._:-]{1,64}$/.test(creatorId)||!validManagedProxySelection(selection)||!/^op-session:[a-f0-9]{64}$/.test(actor))throw new ManagedProxyError(400,'Review the creator and OnlyFans handle.');
+      if(!/^[A-Za-z0-9._:-]{1,64}$/.test(creatorId)||!validManagedProxySelection(selection)||!/^(?:op-session|creator-session):[a-f0-9]{64}$/.test(actor))throw new ManagedProxyError(400,'Review the creator and OnlyFans handle.');
       // The agency supplies only a handle. The platform chooses the inventory
       // region, keeping retries stable even when the last unused IP is claimed.
       const countryCode=selection.countryCode==='auto'?options.defaultCountry:selection.countryCode;
