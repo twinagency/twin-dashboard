@@ -29,6 +29,13 @@ const SCOPED_CREATORS = Object.freeze({
   "c9c6d09d-71e4-424d-9150-07147c9bd5d2": Object.freeze({ cloneId: "2e5eb05f-cc88-4ba6-870a-924948d4b09a", name: "Mrs Callace" }), // Mrs Callace
   "eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a": Object.freeze({ cloneId: "0328e7b3-a1e5-465a-9a30-c9cf6519cba1", name: "Briana Redd" }), // Briana Redd
   "f003afbf-d57a-4a24-8376-234e2abfb4fb": Object.freeze({ cloneId: "3484f7d9-0cda-4f52-84de-e104c238ce5e", name: "trashy", source: "twin" }), // trashy, her own signup login (trashybagqueen)
+  "3c085488-7c7a-40dc-bf51-a5834ca991e8": Object.freeze({ cloneId: "dd1869c2-d1e2-490f-9fae-45200232cc30", name: "Sania Mallory" }), // Sania Mallory
+  "b6cc8388-1f48-40b4-bb1b-91ec8c2c672e": Object.freeze({ cloneId: "64d9532d-aac9-4e60-a48c-a3e5c53bb00a", name: "Johnny Coco" }), // Johnny Coco
+  "7543263e-4a1e-48b7-82e8-9de2388b515f": Object.freeze({ cloneId: "e0464c19-d5b7-4154-ba46-a60a2ed2a8a3", name: "Allison Parker" }), // Allison Parker
+  "e6d4e9c2-9fb0-47df-80d0-46c7746a619c": Object.freeze({ cloneId: "bfaf6235-6c3b-4369-8d5c-c7068b08bea2", name: "Toochi" }), // Toochi
+  "7cfbddae-ad3e-4c44-b247-3f24ff3c5a4b": Object.freeze({ cloneId: "4fff7866-c7e9-4af2-926a-36e727c0a77f", name: "Zoey Foxx" }), // Zoey Foxx
+  "9f078a5e-5a2e-4e84-b123-19290751025a": Object.freeze({ cloneId: "7626a96d-809e-47f1-b96b-d2e3bc583328", name: "Amber Richardson" }), // Amber Richardson
+  "405303ac-059c-42a5-abef-8628ecb7dd71": Object.freeze({ cloneId: "fe9dad6f-33a0-402e-84fd-03dc3b0158ba", name: "Brooke Aries" }), // Brooke Aries
 });
 // Additional creator-only records; all current scoped creators are also agency-assigned.
 const SCOPED_ONLY_CLONES = Object.freeze([]);
