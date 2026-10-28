@@ -81,7 +81,7 @@ function AccountChips({
         data-of-account-chip={account.accountId} aria-pressed={account.accountId === activeAccountId}
         onClick={() => onSelectAccount(account.accountId)} title={`${account.binding.creatorName} · @${account.binding.handle}`}
         className="of-account" aria-label={account.binding.creatorName + " @" + account.binding.handle}>
-        <span className="creator-name"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} /></span>
+        <span className="creator-name"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} /></span>
         <span className="of-account-copy"><strong className="creator-name">{account.binding.creatorName}</strong><small>@{account.binding.handle}</small></span>
         <span className="of-health" data-health={account.health} aria-label={account.health} title={account.healthReason ?? account.health} />
       </button>)}

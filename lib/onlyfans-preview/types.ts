@@ -108,9 +108,10 @@ export type OfAccount = {
   automationMode: AutomationMode;
   capabilities: AccountCapabilities;
   syncFreshness: Freshness;
+  creatorProfile?: { name?: string | null; handle?: string | null; avatarUrl?: string | null; observedAt?: string | null };
   runtime?: { enabled: boolean; deliveryEnabled: boolean; sender: { state: string; observedAt: string | null; reason: string | null } };
   needsAttention?: boolean;
-  syncHealth?: Record<string, { lastSuccessAt?: string | null; latestMessageAt?: string | null; pending?: number; pendingConversations?: number; quarantined?: number; fullHistoryAt?: string | null; state?: string; observedAt?: string | null; reason?: string | null }>;
+  syncHealth?: Record<string, { lastSuccessAt?: string | null; latestMessageAt?: string | null; pending?: number; pendingConversations?: number; quarantined?: number; fullHistoryAt?: string | null; state?: string; observedAt?: string | null; reason?: string | null; coverage?: string }>;
 
 };
 
