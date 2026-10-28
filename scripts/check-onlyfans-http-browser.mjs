@@ -71,8 +71,8 @@ try {
   assert(await page.getByText("Retracted", { exact: true }).count());
   const syncWarning = page.locator("[data-of-sync-warning]");
   assert.equal(await syncWarning.count(), 1);
-  assert.match(await syncWarning.innerText(), /sync|history|recovery/i);
-  assert.match(await syncWarning.innerText(), /missing|incomplete|not.*recorded/i);
+  assert.match(await syncWarning.innerText(), /Connection needs attention\./);
+  assert.match(await syncWarning.innerText(), /No verified connection record is available/);
   assert.match(await syncWarning.getByRole("link").getAttribute("href"), /account=acc-a/);
   assert.equal(external.length, 0, "UI attempted an external request");
   if (process.env.ONLYFANS_TEST_EVIDENCE) {
