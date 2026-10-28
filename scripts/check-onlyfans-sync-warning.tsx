@@ -44,6 +44,8 @@ async function main() {
 
   const dom = new JSDOM("<div id='root'></div>", { url: "https://dashboard.invalid/onlyfans/accounts" });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, React, IS_REACT_ACT_ENVIRONMENT: true });
+  const scrolled: string[] = [];
+  dom.window.HTMLElement.prototype.scrollIntoView = function(this: HTMLElement) { scrolled.push(this.id); };
   const requests: { url: string; method: string }[] = [];
   globalThis.fetch = async (input, init) => {
     requests.push({ url: String(input), method: init?.method ?? "GET" });
@@ -54,6 +56,8 @@ async function main() {
   const root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(<AppRouterContext.Provider value={router}><ConnectionEditor accountId={account.accountId} initiallyOpen /></AppRouterContext.Provider>); });
   assert.equal(document.querySelector("[data-of-connection-open]")?.getAttribute("aria-expanded"), "true");
+  assert.equal(document.activeElement?.id, "connection-" + account.accountId, "Focus the loaded status, not the top of its account card");
+  assert(scrolled.includes("connection-" + account.accountId), "Bring the actual connection and import status into view after it loads");
   assert.match(document.querySelector("[data-of-connection-status]")?.textContent ?? "", /Connected/);
   assert.match(document.querySelector("[data-of-sync-progress]")?.textContent ?? "", /5410 remaining/);
   assert.match(document.querySelector("[data-of-ai-live]")?.textContent ?? "", /AI replies are switched off/);

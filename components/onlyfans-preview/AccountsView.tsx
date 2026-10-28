@@ -36,10 +36,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome, openConnection }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean; openConnection: boolean }) {
   const card = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (openConnection) { card.current?.scrollIntoView({ block: "start" }); card.current?.focus({ preventScroll: true }); }
-  }, [openConnection]);
+    if (openConnection && !connectionEditable) { card.current?.scrollIntoView({ block: "start" }); card.current?.focus({ preventScroll: true }); }
+  }, [openConnection, connectionEditable]);
   return (
-    <Card ref={card} tabIndex={-1} id={`connection-${account.accountId}`} className="flex h-full flex-col p-4 scroll-mt-6" data-of-account-id={account.accountId}>
+    <Card ref={card} tabIndex={-1} id={connectionEditable ? undefined : `connection-${account.accountId}`} className="flex h-full flex-col p-4 scroll-mt-6" data-of-account-id={account.accountId}>
       <div className="of-account-identity">
         <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
         <div className="min-w-0">
