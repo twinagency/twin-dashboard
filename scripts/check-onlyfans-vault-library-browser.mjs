@@ -42,6 +42,7 @@ try{
  await page.locator('[data-of-folder-card="7"]').click();await page.waitForFunction(()=>document.querySelectorAll('[data-of-vault-item]').length===2);assert.equal(lastQuery.get('folderId'),'7');
  assert.equal(await page.locator('[data-of-folder-card="7"]').getAttribute('aria-pressed'),'true');
  await page.locator('[data-of-folder-card=""]').click();await page.locator('[data-of-vault-item="24"]').waitFor();
+ await page.getByRole('button',{name:'New folder / add to folder',exact:true}).click();
  await page.locator('[data-of-vault-folder-filter]').selectOption('7');await page.waitForFunction(()=>document.querySelectorAll('[data-of-vault-item]').length===2);assert.equal(lastQuery.get('folderId'),'7');
  await page.locator('[data-of-vault-folder-filter]').selectOption('');await page.locator('[data-of-vault-item="24"]').waitFor();
  await page.getByLabel('Search your media').fill('landscape 50');await page.locator('[data-of-vault-search]').click();await page.locator('[data-of-vault-item="50"]').waitFor();assert.equal(await page.locator('[data-of-vault-item]').count(),1);
