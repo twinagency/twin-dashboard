@@ -6,10 +6,14 @@
 // capability, ownership and delivery gates decide which commands can be used.
 // Compact rendering changes presentation only; stale reads remain visible.
 
-import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
 import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
+import { parseFanFinancials } from "@/lib/onlyfans/fan-financials";
+import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
+import { draftKey, readDraft, writeDraft, subscribeDraft, emptyDraft } from "@/lib/onlyfans/inbox-drafts";
+import BMemoryPanel from "@/components/onlyfans-launch/memory/BMemoryPanel";
 import { inboxSyncNotice } from "@/lib/onlyfans/inbox-sync";
 import CreatorPortrait from "./CreatorPortrait";
 import MessageAttachments from "./MessageAttachments";
@@ -101,6 +105,8 @@ function ConversationList({
   onLoadMore,
   aiOnly,
   onAiFilterChange,
+  inboxSearch,
+  onInboxSearchChange,
 }: {
   conversations: RequestState<CursorPage<ConversationSummary>>;
   selectedConversationId: string | null;
@@ -110,19 +116,21 @@ function ConversationList({
   onLoadMore: () => void;
   aiOnly: boolean;
   onAiFilterChange: (enabled: boolean) => void;
+  inboxSearch: InboxSearch;
+  onInboxSearchChange: (search: InboxSearch) => void;
 }) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "unread" | "attention" | "ai">("all");
-  const chooseFilter = (value: typeof filter) => { setFilter(value); onAiFilterChange(value === "ai"); };
-  const matches = (conversation: ConversationSummary) =>
-    (!query.trim() || `${conversation.fan.displayName} ${conversation.fan.shortRef} ${onlyFansMessageText(conversation.lastMessagePreview)}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase())) &&
-    (filter === "ai" || aiOnly ? isAiChatting(conversation) : filter === "all" || (filter === "unread" ? conversation.unreadCount > 0 : conversation.requiresAttention));
+  const [query, setQuery] = useState(inboxSearch.query);
+  const filter = inboxSearch.filter;
+  const searchChange = useRef(onInboxSearchChange);
+  searchChange.current = onInboxSearchChange;
+  useEffect(() => { const timer = setTimeout(() => searchChange.current({ query, filter }), 250); return () => clearTimeout(timer); }, [query, filter]);
+  const chooseFilter = (value: InboxSearch["filter"]) => { onInboxSearchChange({ query, filter: value }); onAiFilterChange(value === "ai"); };
   return (
     <div className="of-list-content">
     <div className="of-list-heading"><h2>Conversations</h2></div>
-    <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search loaded conversations</span><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search conversations" /></label>
+    <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search fan name, username or ID</span><input type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder="Search fan name, username or ID" /></label>
     <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Attention"], ["ai", "AI chatting"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
-    {(query || filter === "unread" || filter === "attention") && nextCursor ? <p className="of-filter-note">Filtering loaded conversations. Load more to search further.</p> : null}
+    <p className="of-filter-note">Searches saved fan names, usernames and IDs across this account. Message contents are not searched.</p>
     <RequestStateBlock
       showStaleWarning={false}
       state={conversations}
@@ -134,9 +142,9 @@ function ConversationList({
           </div>
         ) : (
           <div data-of-conversation-list>
-            {page.items.length > 0 && !page.items.some(matches) ? <p className="of-filter-note px-4 py-6" role="status">No matching conversations in the loaded results.</p> : null}
+            {page.items.length === 0 ? <p className="of-filter-note px-4 py-6" role="status">No saved conversations match this search.</p> : null}
             <div className="divide-y divide-line/80">
-              {page.items.filter(matches).map((conversation) => {
+              {page.items.map((conversation) => {
                 const active = conversation.conversationId === selectedConversationId;
                 const priority = PRIORITY_LABEL[conversation.priority];
                 return (
@@ -302,6 +310,7 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
 }
 
 function Composer({
+  draftId,
   actionSet,
   viewer,
   account,
@@ -312,6 +321,7 @@ function Composer({
   pending,
   result,
 }: {
+  draftId: string;
   actionSet: ActionSet;
   viewer: PreviewViewer;
   account: OfAccount;
@@ -322,8 +332,11 @@ function Composer({
   pending: boolean;
   result: CommandResult | null;
 }) {
-  const [text, setText] = useState("");
-  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]), [catalogItemId, setCatalogItemId] = useState("");
+  const draft = useSyncExternalStore(subscribeDraft, () => readDraft(draftId), emptyDraft);
+  const text = draft.body, catalogItemId = draft.catalogItemId;
+  const setText = (body: string) => writeDraft(draftId, { body });
+  const setCatalogItemId = (catalogItemId: string) => writeDraft(draftId, { catalogItemId });
+  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]);
   const [catalogueCursor, setCatalogueCursor] = useState<string | null>(null), [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState("");
   const catalogueActive = useRef(true), catalogueRequest = useRef(false);
   const loadCatalogue = useCallback(async (cursor: string | null = null) => {
@@ -343,10 +356,6 @@ function Composer({
   const takeoverAvailable = canSubmitCommand(viewer, actionSet, "request_takeover");
   const takeoverDisabled = pending || (!result?.simulated && result?.outcome === "unconfirmed");
   const sendBlockedReason = disabledReason ?? actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason;
-  useEffect(() => {
-    if (result && !result.simulated && result.outcome === "recorded" && result.intentId &&
-        result.request.payload.kind === "manual_message") { setText(""); setCatalogItemId(""); }
-  }, [result]);
   const bodyProblem =
     text.trim().length === 0
       ? null
@@ -364,6 +373,7 @@ function Composer({
   return (
     <div className="of-composer border-t border-line p-3">
       <form onSubmit={handleSubmit} className="space-y-2">
+        <p className="text-xs text-muted">Replying as {account.binding.creatorName} · @{account.binding.handle}. Draft kept in this tab for up to 8 hours, until reload or sign-out.</p>
         {takeoverAvailable ? <button type="button" data-of-composer-takeover onClick={onTakeover}
           disabled={takeoverDisabled} className="of-control-button of-primary">
           <UserRound size={16} aria-hidden="true" />{pending ? "Updating reply control…" : "Take over to reply"}
@@ -553,12 +563,27 @@ function ActionColumn({
   );
 }
 
+function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId: string; canCorrect: boolean }) {
+  const [opened, setOpened] = useState(false);
+  return <details onToggle={event => { if (event.currentTarget.open) setOpened(true); }}><summary className="of-section-heading">Edit fan notes and facts</summary>{opened ? <BMemoryPanel canManage={canCorrect} selectedAccountId={accountId} selectedFanId={fanId} /> : null}</details>;
+}
+
 function FanMetrics({detail}: {detail:ConversationDetail}) {
-  return <div className="of-fan-metrics">
-    <div><strong>Unavailable</strong><span>Recorded spend</span></div>
-    <div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div>
+  const financials = parseFanFinancials(detail.financials);
+  return <div>
+    <div className="of-fan-metrics"><div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
+    <h3 className="of-section-heading">Recorded spend</h3>
+    {!financials ? <p className="of-empty-context">Financial evidence unavailable. Refresh after the account read service recovers.</p> : <>
+      {financials.totals.length ? <ul className="text-xs space-y-2">{financials.totals.map(row => <li key={`${row.currency}:${row.status}`}>
+        <strong>{formatRecordedMoney(row.grossCents, row.currency)}</strong> gross · {row.status.replaceAll("_", " ")} · {row.transactions} transactions.
+        <span className="block">Net: {row.netCents === null ? "Unavailable" : formatRecordedMoney(row.netCents, row.currency)}. Last transaction: {new Date(row.lastTransactionAt).toLocaleString()}.</span>
+      </li>)}</ul> : <p className="of-empty-context">No canonical transactions recorded for this fan.</p>}
+      <p className="text-xs text-muted">Coverage through {financials.coverageAt ? new Date(financials.coverageAt).toLocaleString() : "an unknown cutoff"}. {financials.coverageComplete ? "Completed supported scan; later activity may be missing." : "Partial or unverified history; recorded totals are not lifetime spend."}</p>
+      {financials.commerceHeld ? <p role="note" className="text-xs">Commerce is held for this fan. Ownership and payment reconciliation must be verified before paid content is sent.</p> : null}
+    </>}
   </div>;
 }
+
 function FanContext({detail}:{detail:ConversationDetail}) {
   const notes=detail.facts.filter(fact=>/^(notes?|conversation notes?)$/i.test(fact.label.trim()));
   const facts=detail.facts.filter(fact=>!notes.includes(fact) && !(/^display name$/i.test(fact.label) && fact.value===fanName(detail.summary.fan)));
@@ -611,6 +636,7 @@ function DeliveryLedger({ messages }: { messages: ConversationMessage[] }) {
 }
 
 export default function InboxView({
+  draftPrincipal = "fixture",
   controls,
   accountControls,
   accountsState,
@@ -636,7 +662,10 @@ export default function InboxView({
   handoverHistory,
   aiOnly = false,
   onAiFilterChange = () => {},
+  inboxSearch = EMPTY_INBOX_SEARCH,
+  onInboxSearchChange = () => {},
 }: {
+  draftPrincipal?: string;
   controls?: ReactNode;
   accountControls?: ReactNode;
   handover?: ReactNode;
@@ -666,6 +695,8 @@ export default function InboxView({
   onLoadMore: () => void;
   aiOnly?: boolean;
   onAiFilterChange?: (enabled: boolean) => void;
+  inboxSearch?: InboxSearch;
+  onInboxSearchChange?: (search: InboxSearch) => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
   const {setIdentity}=useInboxIdentity();
@@ -706,7 +737,7 @@ export default function InboxView({
         </div>
       </header>
       {syncNotice ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span className="of-sync-copy"><strong>{syncNotice.title}</strong> {syncNotice.detail}{syncNotice.asOf ? <> Last complete sync: <time dateTime={syncNotice.asOf}>{formatAge(syncNotice.asOf)}</time>.</> : null}</span><a href={syncNotice.href}>View account status <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
-      {!viewer.canManage ? (
+      {!viewer.canManage && !viewer.canChat ? (
         <div
           data-of-readonly
           className="mb-3 rounded-xl border border-[#dce8fb] bg-[#edf3fc] p-3 text-xs leading-5 text-[#2f6fed]"
@@ -736,6 +767,8 @@ export default function InboxView({
               onLoadMore={onLoadMore}
               aiOnly={aiOnly}
               onAiFilterChange={onAiFilterChange}
+              inboxSearch={inboxSearch}
+              onInboxSearchChange={onInboxSearchChange}
             />
           </div>
         </Card>
@@ -769,7 +802,8 @@ export default function InboxView({
 
               {actionSet ? (
                 <Composer
-                  key={detail.conversationId}
+                  key={draftKey(draftPrincipal, activeAccount.accountId, detail.conversationId)}
+                  draftId={draftKey(draftPrincipal, activeAccount.accountId, detail.conversationId)}
                   actionSet={actionSet}
                   viewer={viewer}
                   account={activeAccount}
@@ -813,6 +847,7 @@ export default function InboxView({
               </div>
 
               <FanMetrics detail={detail} />
+              {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}
               <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn

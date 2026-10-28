@@ -150,6 +150,7 @@ export type Personality = {
   };
   configurationRevision?: number;
   configurationCurrent?: boolean;
+  configurationDrift?: unknown;
   configurationFingerprint?: string;
   conflicts?: Conflict[];
   requiresFactResolution?: FactKey[];

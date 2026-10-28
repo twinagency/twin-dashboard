@@ -255,7 +255,7 @@ async function routeMiddleware(req: NextRequest) {
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
     const ofManage = canManage && identity.canManage === true;
-    if (identity.userId && identity.name !== "Twin Technologies" && !viewAs && agencyOnlyFansRequest(pathname, req.method, serverAction, ofManage)) {
+    if (identity.userId && identity.name !== "Twin Technologies" && !viewAs && agencyOnlyFansRequest(pathname, req.method, serverAction, ofManage, identity.canChat === true)) {
       if (!["GET", "HEAD"].includes(req.method) && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", { status: 403 });
       return privateResponse(withPathname(req));
     }

@@ -20,21 +20,24 @@ export const launchBase = (accountId: string) => `/api/onlyfans-launch/abc/accou
 /** Reads one resource. A response for an earlier account or request can never overwrite a newer one. */
 export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null, unwrap = true) {
   const [state, setState] = useState<Load<T>>({ kind: "loading" });
+  const [lastSuccess, setLastSuccess] = useState<{ url: string; checkedAt: string } | null>(null);
+  const [attempt, setAttempt] = useState(0);
   const generation = useRef(0), controller = useRef<AbortController | null>(null);
   const load = useCallback(async () => {
     const mine = ++generation.current;
     controller.current?.abort();
     const ac = new AbortController(); controller.current = ac;
-    setState({ kind: "loading" });
+    setState({ kind: "loading" }); setAttempt(previous => previous + 1);
     try {
-      const r = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: ac.signal });
+      const r = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.any([ac.signal, AbortSignal.timeout(15_000)]) });
       const j = await r.json().catch(() => null) as { schemaVersion?: string; accountId?: string; ok?: boolean; data?: unknown; error?: string; outcome?: string } | null;
       if (mine !== generation.current) return;
-      if (r.status === 401 || r.status === 403) { setState({ kind: "denied", error: j?.error ?? "Your session cannot read this." }); return; }
+      if (r.status === 401 || r.status === 403) { setLastSuccess(null); setState({ kind: "denied", error: j?.error ?? "Your session cannot read this." }); return; }
       if (r.status === 503 || j?.outcome === "unavailable") { setState({ kind: "pending", error: j?.error ?? "The backend contract is not available." }); return; }
       const requestedAccount = url.match(/\/api\/onlyfans-launch\/abc\/accounts\/([^/]+)/)?.[1];
       if (!r.ok || (unwrap && (!j?.ok || j.schemaVersion !== LAUNCH_SCHEMA || !requestedAccount || j.accountId !== decodeURIComponent(requestedAccount))) || j === null) { setState({ kind: "error", error: j?.error ?? "This could not be read." }); return; }
       const data = parse(unwrap ? j!.data : j);
+      if (data !== null) setLastSuccess({ url, checkedAt: new Date().toISOString() });
       setState(data === null ? { kind: "error", error: "The backend answer was not in the expected shape, so nothing is shown." } : { kind: "ok", data });
     } catch (e) {
       if (mine !== generation.current || (e as Error)?.name === "AbortError") return;
@@ -42,7 +45,7 @@ export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null,
     }
   }, [url, parse, unwrap]);
   useEffect(() => { void load(); return () => { generation.current++; controller.current?.abort(); }; }, [load]);
-  return { state, reload: load };
+  return { state, reload: load, lastSuccess: lastSuccess?.url === url ? lastSuccess : null, attempt };
 }
 
 export type Post = { ok: true } | { ok: false; outcome: "refused" | "unconfirmed" | "unavailable" | "denied"; error: string };

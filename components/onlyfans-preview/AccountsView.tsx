@@ -187,7 +187,8 @@ export default function AccountsView({
             <div className="of-account-counts">
               <Stat label="Accounts" value={String(list.length)} />
               <Stat label="Connected" value={String(connected)} />
-              <Stat label="Need attention" value={String(needsAttention)} />
+              <Stat label="Connection issues" value={String(needsAttention)} />
+              <Stat label="History freshness issues" value={String(accounts.filter(account => account.syncFreshness.stale).length)} />
             </div>
 
             {list.length === 0 ? (

@@ -1,4 +1,5 @@
 "use client";
+import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
 
 // The OnlyFans workspace: which account is selected, which conversation is
 // open, the last modelled command, and the data source behind all of it.
@@ -27,6 +28,7 @@
 // The explicit source selects synthetic preview data or authenticated dashboard
 // handlers. Neither browser path imports database or provider code.
 
+import { clearSubmittedDraft, draftKey, readDraft, type InboxDraft } from "@/lib/onlyfans/inbox-drafts";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
@@ -195,6 +197,8 @@ export default function OnlyFansWorkspace({
   connectionsConfigured = false,
   connectionCreators = [],
   canManage = true,
+  canChat = false,
+  draftPrincipal = "fixture",
   agencyViewer = false,
 }: {
   view: OnlyFansView;
@@ -206,8 +210,11 @@ export default function OnlyFansWorkspace({
   connectionsConfigured?: boolean;
   connectionCreators?: ConnectionCreator[];
   canManage?: boolean;
+  canChat?: boolean;
+  draftPrincipal?: string;
   agencyViewer?: boolean;
 }) {
+  const submittedDrafts = useRef(new Map<string, InboxDraft>());
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -227,6 +234,9 @@ export default function OnlyFansWorkspace({
   const [loadingOlder, setLoadingOlder] = useState(false);
 
   const { state, ref, commit } = useSelectionStore();
+  const [inboxSearch, setInboxSearch] = useState<InboxSearch>(EMPTY_INBOX_SEARCH);
+  const searchRef = useRef(inboxSearch);
+  searchRef.current = inboxSearch;
   const [aiOnly, setAiOnly] = useState(false);
   const aiOnlyRef = useRef(false);
   const [handover, setHandover] = useState<Handover | null>(null);
@@ -250,8 +260,8 @@ export default function OnlyFansWorkspace({
     () =>
       sourceMode === "creator" ? { kind: "view_as", label: "Your OnlyFans account", canManage: false, scopedAccountIds: [] } : controls.viewAs
         ? readOnlyView(fixtureAccountIdsForCreator(requestedScope.creatorId))
-        : { ...operatorViewer(), canManage, label: agencyViewer ? "Agency team" : "Operator" },
-    [controls.viewAs, requestedScope.creatorId, sourceMode, canManage, agencyViewer],
+        : { ...operatorViewer(), canManage, canChat, label: agencyViewer ? "Agency team" : "Operator" },
+    [controls.viewAs, requestedScope.creatorId, sourceMode, canManage, canChat, agencyViewer],
   );
 
   const scenarios = useMemo(() => buildScenarios(controls, viewer), [controls, viewer]);
@@ -279,8 +289,8 @@ export default function OnlyFansWorkspace({
           withAccountOverrides(account, controls),
         );
       },
-      async listConversations(accountId, cursor, aiOnly) {
-        return mapState(await base.listConversations(accountId, cursor, aiOnly), (page) => ({
+      async listConversations(accountId, cursor, aiOnly, search) {
+        return mapState(await base.listConversations(accountId, cursor, aiOnly, search), (page) => ({
           ...page,
           items: page.items.map((summary) => withSummaryOverrides(summary, controls)),
         }));
@@ -389,10 +399,10 @@ export default function OnlyFansWorkspace({
     requested.current.conversations.add(accountId);
     const pending = requestConversations(ref.current, accountId);
     commit(pending.state);
-    void source.listConversations(accountId, null, aiOnly).then((result) => {
+    void source.listConversations(accountId, null, aiOnly, inboxSearch).then((result) => {
       commit(applyConversations(ref.current, accountId, pending.generation, pending.seq, result).state);
     });
-  }, [state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly]);
+  }, [state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly, inboxSearch]);
 
   // A single outstanding visible-tab read. Every result still passes the
   // existing account generation/sequence gates; no poll can select an account.
@@ -415,7 +425,7 @@ export default function OnlyFansWorkspace({
       const pending = requestConversations(ref.current, accountId, { background: true });
       commit(pending.state);
       try {
-        const result = await source.listConversations(accountId, null, aiOnly);
+        const result = await source.listConversations(accountId, null, aiOnly, inboxSearch);
         if (active) commit(applyConversationRefresh(ref.current, accountId,
           pending.generation, pending.seq, result).state);
       } finally { busy = false; schedule(); }
@@ -429,7 +439,7 @@ export default function OnlyFansWorkspace({
     document.addEventListener("visibilitychange", visible);
     return () => { active = false; if (timer) clearTimeout(timer);
       document.removeEventListener("visibilitychange", visible); };
-  }, [sourceMode, view, state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly]);
+  }, [sourceMode, view, state.selectedAccountId, authorizedIds, source, commit, ref, aiOnly, inboxSearch]);
 
   // The selected thread.
   useEffect(() => {
@@ -562,7 +572,7 @@ export default function OnlyFansWorkspace({
     if (!cursor) return;
     const pending = requestMoreConversations(ref.current, accountId);
     commit(pending.state);
-    void source.listConversations(accountId, cursor, aiOnlyRef.current).then((result) => {
+    void source.listConversations(accountId, cursor, aiOnlyRef.current, searchRef.current).then((result) => {
       commit(appendConversations(ref.current, accountId, pending.generation, pending.seq, result).state);
     });
   }, [commit, ref, source]);
@@ -576,6 +586,11 @@ export default function OnlyFansWorkspace({
    */
   const executeCommand = useCallback(async (request: CommandRequest) => {
     if (commandBusy.current) return;
+    const draftId = draftKey(draftPrincipal, request.accountId, request.conversationId);
+    if (request.payload.kind === "manual_message" && !submittedDrafts.current.has(request.idempotencyKey)) {
+      const draft = readDraft(draftId);
+      if (draft.body === request.payload.body && draft.catalogItemId === String(request.payload.catalogItemId ?? "")) submittedDrafts.current.set(request.idempotencyKey, draft);
+    }
     commandBusy.current = true;
     setCommandPending(true);
     setCommandResult(null);
@@ -585,6 +600,11 @@ export default function OnlyFansWorkspace({
       try { result = await source.submitCommand(request); }
       catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request,
         note: "The outcome is not confirmed. Refresh the conversation or retry this same request." }; }
+      const submitted = submittedDrafts.current.get(request.idempotencyKey);
+      if (!result.simulated && result.outcome === "recorded" && result.intentId && submitted) {
+        clearSubmittedDraft(draftId, submitted);
+        submittedDrafts.current.delete(request.idempotencyKey);
+      }
       if (generation !== ref.current.scopeGeneration) return;
       const selected = () => ref.current.selectedAccountId === request.accountId &&
         ref.current.byAccount[request.accountId]?.selectedConversationId === request.conversationId;
@@ -601,7 +621,7 @@ export default function OnlyFansWorkspace({
           requested.current.details.add(`${request.accountId}:${request.conversationId}`);
           const list = requestConversations(ref.current, request.accountId);
           commit(list.state);
-          const listRead = await source.listConversations(request.accountId, null, aiOnlyRef.current);
+          const listRead = await source.listConversations(request.accountId, null, aiOnlyRef.current, searchRef.current);
           commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
           if (generation === ref.current.scopeGeneration && selected()) {
             requested.current.details.add(`${request.accountId}:${request.conversationId}`);
@@ -617,7 +637,7 @@ export default function OnlyFansWorkspace({
       commit(applyAccounts(ref.current, generation, { status: "unavailable",
         message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
     } finally { commandBusy.current = false; setCommandPending(false); }
-  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId]);
+  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal]);
 
   const submitAction = useCallback(
     async (action: AvailableAction, payload: CommandPayload) => {
@@ -717,10 +737,11 @@ export default function OnlyFansWorkspace({
 
   return (
     <InboxView
+      draftPrincipal={draftPrincipal}
       accountControls={sourceMode === "server" && activeAccount && actionViewer.canManage ? <AllFansControl key={activeAccount.accountId} account={activeAccount} viewer={actionViewer} source={source} onChanged={() => {
         const id = ref.current.selectedAccountId; if (!id) return;
         const pending = requestConversations(ref.current, id); commit(pending.state);
-        void source.listConversations(id, null, aiOnlyRef.current).then(result => commit(applyConversations(ref.current, id, pending.generation, pending.seq, result).state));
+        void source.listConversations(id, null, aiOnlyRef.current, searchRef.current).then(result => commit(applyConversations(ref.current, id, pending.generation, pending.seq, result).state));
         refreshHandover();
       }} /> : undefined}
       controls={showPreviewChrome ? developerControls : undefined}
@@ -747,6 +768,13 @@ export default function OnlyFansWorkspace({
       onLoadOlder={handleLoadOlder}
       viewer={actionViewer}
       aiOnly={aiOnly}
+      inboxSearch={inboxSearch}
+      onInboxSearchChange={next => {
+        if (next.query === searchRef.current.query && next.filter === searchRef.current.filter) return;
+        requested.current.conversations.clear();
+        searchRef.current = next;
+        setInboxSearch(next);
+      }}
       onAiFilterChange={enabled => {
         if (aiOnlyRef.current === enabled) return;
         aiOnlyRef.current = enabled;

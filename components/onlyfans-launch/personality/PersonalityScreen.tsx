@@ -535,6 +535,7 @@ export default function PersonalityScreen({
               {state.data.configurationCurrent ? "yes" : "no"}. This document
               ready: {state.data.readiness?.ready ? "yes" : "no"}.
             </p>
+            <ConfigurationDrift value={state.data.configurationDrift} />
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <dt>Model</dt>
               <dd>{state.data.readiness?.model.modelId ?? "unset"}</dd>
@@ -561,4 +562,13 @@ export default function PersonalityScreen({
       </Section>
     </div>
   );
+}
+
+function ConfigurationDrift({ value }: { value: unknown }) {
+  const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
+  if (!object(value) || !Number.isSafeInteger(value.fromRevision) || !Number.isSafeInteger(value.toRevision) || typeof value.auditComplete !== "boolean" || !Array.isArray(value.changes) || value.changes.length > 200 || !value.changes.every(row => object(row) && Number.isSafeInteger(row.revision) && typeof row.actor === "string" && typeof row.recordedAt === "string" && object(row.before) && object(row.after))) return <p className="text-sm">Configuration difference evidence unavailable. No approval has been refreshed.</p>;
+  return <details className="rounded-lg border border-line p-3"><summary className="cursor-pointer text-sm font-semibold">Saved changes since this document: revision {String(value.fromRevision)} to {String(value.toRevision)}</summary>
+    <p className="text-sm">{value.auditComplete ? "The immutable configuration audit connects this document to the saved settings." : "The audit chain does not fully explain the saved fingerprint. Effective sender configuration still needs investigation."} These are recorded saved changes. Review substantive personality and fact changes before approving; current settings are preserved.</p>
+    {value.changes.map((row, i) => { if (!object(row) || !object(row.before) || !object(row.after)) return null; const before = row.before, after = row.after; return <div className="mt-3" key={i}><p className="text-xs">Revision {String(row.revision)} · {String(row.actor)} · {String(row.recordedAt)}</p><table className="w-full table-fixed text-xs"><thead><tr><th>Setting</th><th>Before</th><th>After</th></tr></thead><tbody>{[...new Set([...Object.keys(before), ...Object.keys(after)])].map(key => <tr key={key}><th className="break-words text-left">{key}</th><td className="whitespace-pre-wrap break-words">{JSON.stringify(before[key]) ?? "Not recorded"}</td><td className="whitespace-pre-wrap break-words">{JSON.stringify(after[key]) ?? "Not recorded"}</td></tr>)}</tbody></table></div>; })}
+  </details>;
 }

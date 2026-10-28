@@ -39,7 +39,7 @@ async function main() {
     detailState={{ status: "ready", data: bundledDetail }} viewer={operatorViewer()} onCommand={() => {}}
     commandResult={null} nextCursor={null} loadingMore={false} onLoadMore={() => {}} showPreviewChrome={false}
   />);
-  assert.match(inboxMarkup, /<strong>Unavailable<\/strong><span>Recorded spend<\/span>/,
+  assert.match(inboxMarkup, /Financial evidence unavailable\./,
     "Asset-level bundle prices cannot establish a fan's canonical spend");
   assert.match(inboxMarkup, /<strong>3<\/strong><span>Owned media items<\/span>/);
   assert.doesNotMatch(inboxMarkup, /Recorded purchases|Recent purchases|USD 30\.00/,

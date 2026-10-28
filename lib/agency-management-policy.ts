@@ -4,8 +4,7 @@ import { JESS_KATE_PORTAL, TETHER_PORTAL, TOP_ONLYFANS_AGENCY } from "./partner-
 export const LYNQ_MANAGEMENT_AGENCY_ID = "74b03b70-397e-49ab-841f-8adb8241d87d";
 export const MOXY_MANAGEMENT_AGENCY_ID = "bc670215-110b-4ea0-8f5c-af3dfe21d253";
 export function agencyCanManage(identity: { id: string; canManage?: boolean } | null | undefined): boolean {
-  return identity?.id === LYNQ_MANAGEMENT_AGENCY_ID || identity?.id === JESS_KATE_PORTAL.id || identity?.id === TETHER_PORTAL.id
-    || ((identity?.id === MOXY_MANAGEMENT_AGENCY_ID || identity?.id === TOP_ONLYFANS_AGENCY.id) && identity.canManage === true);
+  return identity?.canManage === true || identity?.id === LYNQ_MANAGEMENT_AGENCY_ID || identity?.id === JESS_KATE_PORTAL.id || identity?.id === TETHER_PORTAL.id;
 }
 
 // Existing live tools, not the separate CRM product preview.

@@ -1,4 +1,5 @@
 "use client";
+import { parseWorkspaceScope, workspaceHref } from "@/lib/onlyfans-preview/scope";
 import ChannelSwitch from "@/components/ChannelSwitch";
 import type { DashboardChannel } from "@/lib/channel-nav";
 import { useDashboardAccess } from "./DashboardAccessProvider";
@@ -271,6 +272,7 @@ const STUDIO_PATHS: Record<string, string> = {
  */
 function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNavigate?: () => void }) {
   const pathname = usePathname();
+  const params = useSearchParams();
   const rowClass = "workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
   return (
     <>
@@ -292,7 +294,7 @@ function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNav
           return (
             <Link
               key={item.key}
-              href={item.href}
+              href={channel.channel === "onlyfans" ? workspaceHref(item.href, parseWorkspaceScope(params)) : item.href}
               onClick={onNavigate}
               title={item.note}
               data-channel-link={item.key}

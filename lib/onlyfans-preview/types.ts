@@ -179,6 +179,8 @@ export type OwnedMediaItem = {
 };
 
 export type ConversationDetail = {
+  /** Validated before rendering; optional during the compatible API rollout. */
+  financials?: unknown;
   schemaVersion: OnlyFansPreviewSchemaVersion;
   conversationId: string;
   accountId: string;
@@ -242,6 +244,7 @@ export type PreviewViewer = {
   kind: "operator" | "view_as";
   label: string;
   canManage: boolean;
+  canChat?: boolean;
   /** Live staff ownership for the selected conversation; undefined in fixtures. */
   canActAsOwner?: boolean;
   /** Account ids this viewer may read. A view-as session is always narrower. */
