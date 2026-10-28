@@ -43,7 +43,10 @@ export function connectionAiStatus(connection: Connection | null | undefined): {
   const runner = connection?.runner;
   if (!connection || !runner || typeof connection.aiLive !== "boolean") return null;
   if (connection.aiLive && runner.state === "running" && !runner.stale) return { live: true, text: "AI live" };
+  if (!runner.stale && runner.state === "held" && runner.reason === "runtime-disabled") return { live: false, text: "AI replies are switched off for this account." };
+  if (!runner.stale && runner.state === "held" && runner.reason === "policy-disabled") return { live: false, text: "AI replies are paused because outgoing messages are disabled." };
   const why = runner.stale ? "status out of date" : runner.state === "unknown" ? "status unknown" : runner.state === "running" ? "sending is off"
     : runner.state === "not_supervised" ? "not started" : runner.state === "held" && runner.reason ? "held: " + runner.reason.replace(/[_:]/g, " ") : runner.state;
   return { live: false, text: "AI not running (" + why + ")" };
 }
+

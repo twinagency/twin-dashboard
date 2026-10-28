@@ -1,7 +1,8 @@
 .workspace { --inbox-blue:#079cf4; --inbox-ink:#14263d; --inbox-muted:#728096; color:var(--inbox-ink); display:flex; flex-direction:column; min-width:0; min-height:0; gap:12px; padding:0; }
 .workspace :global(button), .workspace :global(a), .workspace :global(summary), .workspace :global(input), .workspace :global(textarea) { -webkit-tap-highlight-color:transparent; }
 .workspace :global(button:focus-visible), .workspace :global(a:focus-visible), .workspace :global(summary:focus-visible) { outline:3px solid #76caff; outline-offset:3px; }
-.workspace :global(.of-sync-notice) { display:flex; align-items:center; gap:9px; padding:9px 14px; background:#fff8e9; color:#916013; border:1px solid #f4e5c3; border-radius:9px; font-size:12px; line-height:1.5; }
+.workspace :global(.of-sync-notice) { display:flex; align-items:flex-start; flex-wrap:wrap; gap:9px; padding:9px 14px; background:#fff8e9; color:#916013; border:1px solid #f4e5c3; border-radius:9px; font-size:12px; line-height:1.5; }
+.workspace :global(.of-sync-copy) { flex:1; min-width:min(220px,100%); overflow-wrap:anywhere; }
 .workspace :global(.of-sync-notice > svg) { flex-shrink:0; }
 .workspace :global(.of-sync-notice a) { margin-left:auto; white-space:nowrap; display:flex; align-items:center; gap:5px; color:#87590b; font-weight:600; }
 .workspace :global(.of-layout) { display:grid; min-height:0; gap:10px; flex:1; }
@@ -159,3 +160,4 @@
 .workspace :global(.of-ai-badge)::before { content:""; width:5px; height:5px; margin-right:5px; border-radius:50%; background:#2b7de9; }
 .workspace :global(.of-control-event) { display:flex; flex-wrap:wrap; justify-content:center; align-self:center; gap:6px; margin:12px 0; padding:6px 10px; border-radius:12px; background:#e8f2ff; color:#275e99; font-size:11px; line-height:1.5; text-align:center; }
 .workspace :global(.of-control-event time) { color:#577d9f; font-size:10px; }
+

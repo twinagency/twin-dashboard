@@ -703,6 +703,7 @@ export default function OnlyFansWorkspace({
         showPreviewChrome={showPreviewChrome}
         accountsState={scopedAccounts}
         activeAccountId={state.selectedAccountId}
+        openConnectionAccountId={searchParams.get("connection") === "1" ? requestedScope.accountId : null}
         onSelectAccount={handleSelectAccount}
         readOnly={!viewer.canManage}
         creatorName={creatorName}
@@ -770,3 +771,4 @@ export default function OnlyFansWorkspace({
     />
   );
 }
+

@@ -10,6 +10,7 @@ import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, t
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
 import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
+import { inboxSyncNotice } from "@/lib/onlyfans/inbox-sync";
 import CreatorPortrait from "./CreatorPortrait";
 import MessageAttachments from "./MessageAttachments";
 import { useInboxIdentity } from "./InboxIdentity";
@@ -690,6 +691,9 @@ export default function InboxView({
 
   const connectionReason =
     activeAccount && activeAccount.health !== "connected" ? activeAccount.healthReason : null;
+  const syncNotice = inboxSyncNotice(activeAccount,
+    conversations.status === "stale" ? conversations.freshness : null,
+    detailState?.status === "stale" ? detailState.freshness : null);
 
   return (
     <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
@@ -701,7 +705,7 @@ export default function InboxView({
           <a href="/onlyfans/accounts" className="of-manage-accounts">Manage accounts <ArrowUpRight size={14} aria-hidden="true" /></a>
         </div>
       </header>
-      {[accountsState.status, conversations.status, detailState?.status].includes("stale") ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span><strong>Sync needs attention.</strong> Newer activity may be missing.</span><a href="/onlyfans/accounts">Check connection <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
+      {syncNotice ? <div className="of-sync-notice" role="status" data-of-sync-warning><AlertTriangle size={16} aria-hidden="true" /><span className="of-sync-copy"><strong>{syncNotice.title}</strong> {syncNotice.detail}{syncNotice.asOf ? <> Last complete sync: <time dateTime={syncNotice.asOf}>{formatAge(syncNotice.asOf)}</time>.</> : null}</span><a href={syncNotice.href}>View account status <ArrowUpRight size={13} aria-hidden="true" /></a></div> : null}
       {!viewer.canManage ? (
         <div
           data-of-readonly
@@ -844,3 +848,4 @@ export default function InboxView({
     </div>
   );
 }
+
