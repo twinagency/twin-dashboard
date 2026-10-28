@@ -103,6 +103,10 @@ test("readiness partial memory evidence is explicit and cannot become green cove
     coverage:{storedMessages:10000,processedMessages:null,memorySample:{inspectedMessages:50,processedCurrentMessages:49,complete:false},providerTotalMessages:null,archiveComplete:false,pendingArchiveConversations:2},
     catalogue:{usableInspectedItems:0,inspectedItems:0,hasMore:false},autonomy:{accountEnabled:false,deliveryEnabled:false,existingAutomatedConversations:0,automateNewConversations:false,engagementEnabled:false,workerCapabilities:{}},limits:[] };
   assert(parseNativeReadiness(sample));
+  const unknownCount = {...sample, coverage:{...sample.coverage,storedMessages:null,storedCountStatus:"unavailable"}};
+  assert(parseNativeReadiness(unknownCount));
+  assert.equal(parseNativeReadiness({...unknownCount,coverage:{...unknownCount.coverage,storedCountStatus:undefined}}),null);
+  assert.equal(parseNativeReadiness({...unknownCount,checks:[{...sample.checks[0],status:"ready"}]}),null);
   assert.equal(parseNativeReadiness({...sample,coverage:{...sample.coverage,memorySample:undefined}}),null);
   assert.equal(parseNativeReadiness({...sample,checks:[{...sample.checks[0],status:"ready"}]}),null);
   assert.equal(parseNativeReadiness({...sample,coverage:{...sample.coverage,memorySample:{...sample.coverage.memorySample,processedCurrentMessages:51}}}),null);

@@ -168,7 +168,7 @@ export default function ReadinessScreen({
           <Section title="Coverage">
             <dl className="grid grid-cols-2 gap-2 text-sm">
               <dt>Stored messages</dt>
-              <dd>{r.state.data.coverage.storedMessages}</dd>
+              <dd>{r.state.data.coverage.storedMessages ?? "Full count unavailable: the bounded count timed out. Other evidence is shown below."}</dd>
               <dt>Stored messages processed into memory</dt>
               <dd>{r.state.data.coverage.processedMessages ?? "Full count unverified"}</dd>
               {r.state.data.coverage.memorySample && !r.state.data.coverage.memorySample.complete ? <>
