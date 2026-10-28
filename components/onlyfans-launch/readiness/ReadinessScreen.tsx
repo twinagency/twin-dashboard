@@ -170,7 +170,10 @@ export default function ReadinessScreen({
               <dt>Stored messages</dt>
               <dd>{r.state.data.coverage.storedMessages}</dd>
               <dt>Stored messages processed into memory</dt>
-              <dd>{r.state.data.coverage.processedMessages}</dd>
+              <dd>{r.state.data.coverage.processedMessages ?? "Full count unverified"}</dd>
+              {r.state.data.coverage.memorySample && !r.state.data.coverage.memorySample.complete ? <>
+                <dt>Bounded memory evidence</dt><dd>{r.state.data.coverage.memorySample.processedCurrentMessages} current receipts in {r.state.data.coverage.memorySample.inspectedMessages} inspected stored messages. This does not establish full coverage.</dd>
+              </> : null}
               <dt>Provider history total</dt>
               <dd>Unknown</dd>
               <dt>Available archive recovery</dt>

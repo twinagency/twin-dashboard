@@ -715,7 +715,8 @@ export type NativeReadiness = {
   accountControl: AccountControl;
   coverage: {
     storedMessages: number;
-    processedMessages: number;
+    processedMessages: number | null;
+    memorySample?: { inspectedMessages: number; processedCurrentMessages: number; complete: boolean };
     providerTotalMessages: null;
     archiveComplete: boolean;
     pendingArchiveConversations: number;
@@ -770,8 +771,8 @@ export function parseNativeReadiness(v: unknown): NativeReadiness | null {
     k = v.catalogue;
   if (
     !count(c.storedMessages) ||
-    !count(c.processedMessages) ||
-    c.processedMessages > c.storedMessages ||
+    !(count(c.processedMessages) && c.processedMessages <= c.storedMessages || c.processedMessages === null && object(c.memorySample) && c.memorySample.complete === false && v.checks.some(x => object(x) && x.key === "memory" && x.status === "unknown")) ||
+    (c.memorySample !== undefined && (!object(c.memorySample) || !count(c.memorySample.inspectedMessages) || !count(c.memorySample.processedCurrentMessages) || typeof c.memorySample.complete !== "boolean" || c.memorySample.inspectedMessages > c.storedMessages || c.memorySample.processedCurrentMessages > c.memorySample.inspectedMessages || c.memorySample.complete !== (c.memorySample.inspectedMessages === c.storedMessages) || (c.memorySample.complete && c.processedMessages !== c.memorySample.processedCurrentMessages))) ||
     c.providerTotalMessages !== null ||
     typeof c.archiveComplete !== "boolean" ||
     !count(c.pendingArchiveConversations) ||

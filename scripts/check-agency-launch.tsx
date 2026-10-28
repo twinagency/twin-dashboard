@@ -93,3 +93,17 @@ test("readiness distinguishes service refusal, invalid envelope, wrong account, 
   const timeout = createNativeReadBackend({ ...options, fetchImpl: async () => { throw new DOMException("synthetic", "TimeoutError"); } });
   const result = await timeout("acc-a", "readiness"); assert(!result.ok); assert.match(result.error, /timed out/);
 });
+
+
+test("readiness partial memory evidence is explicit and cannot become green coverage", async () => {
+  const { parseNativeReadiness } = await import("../lib/onlyfans/launch/native");
+  const sample = { readinessVersion:"of-launch-readiness.v1", observedAt:"2026-10-28T00:00:00Z", schemaRevision:"0098_ledger_exclusion", readyToEnable:false,
+    checks:[{key:"memory",status:"unknown",blocking:false,observedAt:"2026-10-28T00:00:00Z",blocker:"full_memory_coverage_not_verified_inline",action:"history_memory"}],
+    accountControl:{enabled:false,bindingId:"binding",revision:0,unresolvedOutgoing:1,fingerprint:"a".repeat(64)},
+    coverage:{storedMessages:10000,processedMessages:null,memorySample:{inspectedMessages:50,processedCurrentMessages:49,complete:false},providerTotalMessages:null,archiveComplete:false,pendingArchiveConversations:2},
+    catalogue:{usableInspectedItems:0,inspectedItems:0,hasMore:false},autonomy:{accountEnabled:false,deliveryEnabled:false,existingAutomatedConversations:0,automateNewConversations:false,engagementEnabled:false,workerCapabilities:{}},limits:[] };
+  assert(parseNativeReadiness(sample));
+  assert.equal(parseNativeReadiness({...sample,coverage:{...sample.coverage,memorySample:undefined}}),null);
+  assert.equal(parseNativeReadiness({...sample,checks:[{...sample.checks[0],status:"ready"}]}),null);
+  assert.equal(parseNativeReadiness({...sample,coverage:{...sample.coverage,memorySample:{...sample.coverage.memorySample,processedCurrentMessages:51}}}),null);
+});

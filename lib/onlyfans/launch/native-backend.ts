@@ -120,6 +120,7 @@ export function createNativeReadBackend(options: {
     try {
       const r = await send(url.toString(), {
         method: "GET",
+        timeoutMs: path === "readiness" ? 12_000 : 8_000,
         headers: { Authorization: `Bearer ${options.token}`, [ONLYFANS_SCHEMA_VERSION_HEADER]: ONLYFANS_PREVIEW_SCHEMA_VERSION },
       });
       const value: unknown = await r.json().catch(() => null);

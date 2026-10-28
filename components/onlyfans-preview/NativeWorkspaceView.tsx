@@ -28,7 +28,8 @@ export default function NativeWorkspaceView({ section, account, accounts, data, 
   const href = workspaceHref(path, { creatorId, accountId: account.accountId });
   return <div className="dashboard-page min-w-0 text-ink" data-of-native-section={section}>
     <AccountIdentity account={account} />
-    <CreatorPlatformHeading title={`${title}: ${account.binding.creatorName}`} description={description} />
+    <CreatorPlatformHeading title={title} description={description} />
+    <p className="mt-1 text-sm font-semibold text-muted" data-of-acting-creator>Acting creator: {account.binding.creatorName} · @{account.binding.handle}</p>
     <nav aria-label={`${title} account`} className="of-native-accounts">
       {accounts.map(item => <Link key={item.accountId} aria-current={item.accountId === account.accountId ? "page" : undefined}
         className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}
