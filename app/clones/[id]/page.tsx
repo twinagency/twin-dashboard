@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import CloneForm from "@/components/CloneForm";
+import { loadCreatorVault } from "@/components/onlyfans-preview/CreatorVault";
 import { supabaseAdmin } from "@/lib/supabase";
 import { assemblePromptPreview } from "@/lib/compiler";
 import type { Clone } from "@/lib/types";
@@ -14,7 +15,7 @@ export default async function EditClonePage({
 }) {
   const { id } = await params;
 
-  const [cloneRes, photosRes, videosRes, bundlesRes, catalogueBundlesRes, cloneOrderRes] = await Promise.all([
+  const [cloneRes, photosRes, videosRes, bundlesRes, catalogueBundlesRes, cloneOrderRes, onlyFansMedia] = await Promise.all([
     supabaseAdmin.from("clones").select("*").eq("id", id).maybeSingle(),
     supabaseAdmin.from("photos").select("*").eq("clone_id", id).order("created_at", { ascending: false }),
     supabaseAdmin.from("videos").select("*").eq("clone_id", id).order("created_at", { ascending: false }),
@@ -29,6 +30,7 @@ export default async function EditClonePage({
       .eq("clone_id", id)
       .order("sort_order", { ascending: true }),
     supabaseAdmin.from("clones").select("id").order("created_at", { ascending: true }),
+    loadCreatorVault(id),
   ]);
 
   if (cloneRes.error) throw new Error(cloneRes.error.message);
@@ -57,6 +59,7 @@ export default async function EditClonePage({
     <div>
       <CloneForm
         clone={clone}
+        onlyFansMedia={onlyFansMedia}
         promptPreview={promptPreview}
         photos={photosRes.data ?? []}
         videos={videosRes.data ?? []}
