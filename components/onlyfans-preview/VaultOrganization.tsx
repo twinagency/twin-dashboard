@@ -1,13 +1,14 @@
 "use client";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
+import { Folder } from "lucide-react";
 import { inputCls } from "@/components/clone/fields";
 import { parseVaultResource,parseVaultEditAck,validVaultEdit,type FolderSummary,type FolderMetadata,type VaultEditRequest,type FolderPatch } from "@/lib/onlyfans/vault-editing";
 const button="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-accent disabled:opacity-50";
 type Pending={resource:string;body:VaultEditRequest};
-export default function VaultOrganization({accountId,selectedIds,folderId,onFolderChange,onChanged,onBusy,compact=false}:{
+export default function VaultOrganization({accountId,selectedIds,folderId,onFolderChange,onChanged,onBusy,compact=false,folderCount}:{
   accountId:string;selectedIds:string[];folderId:string;
-  onFolderChange:(id:string)=>void;onChanged:()=>void;onBusy:(value:boolean)=>void;compact?:boolean;
+  onFolderChange:(id:string)=>void;onChanged:()=>void;onBusy:(value:boolean)=>void;compact?:boolean;folderCount?:number;
 }){
   const [toolsOpen,setToolsOpen]=useState(false);
   const [targetId,setTargetId]=useState(folderId);
@@ -32,7 +33,7 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
       return true;
     }catch{if(active.current&&stamp===generation.current){setFolder(null);setFolders(null);setNotice("Vault organization could not be read. Refresh to try again.");}return false;}
   },[accountId,base,targetId,router]);
-  useEffect(()=>{active.current=true;setBusy(true);void load().then(ok=>{if(active.current){setBusy(false);if(ok)setNotice("");}});return()=>{active.current=false;generation.current++;};},[load]);
+  useEffect(()=>{active.current=true;setBusy(true);void load().then(ok=>{if(active.current){setBusy(false);if(ok)setNotice("");}});return()=>{active.current=false;generation.current++;};},[load,folderCount]);
   useEffect(()=>{onBusy(busy||!!retry);return()=>onBusy(false);},[busy,retry,onBusy]);
   async function save(command:Pending){
     if(submitting.current||!validVaultEdit(command.resource,command.body))return;
@@ -62,10 +63,18 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
     void save({resource,body});
   }
   return <section className="mt-4 rounded-lg border border-line p-3" data-of-vault-organization>
-    <h3 className="text-sm font-semibold">Folders</h3>
-    {!compact ? <p className="mt-1 text-xs text-muted">Create your own categories with folders. These folders organize your Twin library; OnlyFans folders are not imported.</p> : null}
+    <h3 className="text-sm font-semibold">Folders &amp; categories{folders ? <span className="of-folder-count">{folders.length}</span> : null}</h3>
+    <p className="mt-1 text-xs text-muted">Browse categories based on saved descriptions and tags, or organise media into your own folders.</p>
     {notice?<p className="mt-2 text-xs" role="status" data-of-vault-edit-notice>{notice}</p>:null}
-    {folders?.length === 0 ? <p className="mt-2 text-xs text-muted">No folders yet. Enter a name below to create your first folder.</p> : null}
+    {folders?.length === 0 ? <p className="mt-2 text-xs text-muted">No categories yet. Media needs descriptions or tags before it can be sorted automatically. You can also create your own folder.</p> : null}
+    {!denied && folders !== null ? <nav className="of-folder-grid" aria-label="Media folders">
+      <button type="button" data-of-folder-card="" aria-pressed={!folderId} disabled={busy || !!retry} onClick={() => onFolderChange("")}>
+        <Folder size={22} aria-hidden="true" /><span>All media</span>
+      </button>
+      {folders.map(item => <button key={item.folderId} type="button" data-of-folder-card={item.folderId} aria-pressed={folderId === item.folderId} disabled={busy || !!retry} onClick={() => onFolderChange(item.folderId)}>
+        <Folder size={22} aria-hidden="true" /><span>{item.name}</span><strong>{item.count.toLocaleString()}</strong>
+      </button>)}
+    </nav> : null}
     {!denied ? <label className="mt-3 block text-sm">Browse folder<select data-of-vault-folder-filter className={`${inputCls} mt-1 w-full`} disabled={busy || !!retry || folders === null} value={folderId} onChange={event => onFolderChange(event.target.value)}><option value="">All folders</option>{folders?.map(item => <option key={item.folderId} value={item.folderId}>{item.name} ({item.count})</option>)}</select></label> : null}
     {compact && !denied ? <button type="button" className={`${button} mt-2 min-h-11`} disabled={busy||!!retry} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(value=>!value)}>{toolsOpen ? "Hide folder tools" : "New folder / add to folder"}</button> : null}
     {!denied && (!compact || toolsOpen) ? <fieldset disabled={busy || !!retry} className="mt-3 min-w-0 space-y-3">

@@ -395,3 +395,18 @@
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:1; flex-wrap:wrap; justify-content:center; gap:5px; }
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { display:none; }
 }
+
+/* Keep category browsing visible above the vault grid at every viewport. */
+.platform :global(.of-folder-browser) { margin: 0 0 20px; padding: 16px; border: 1px solid #cde4f5; border-radius: 12px; background: #f6fbff; }
+.platform :global(.of-folder-browser [data-of-vault-organization]) { margin: 0; padding: 0; border: 0; }
+.platform :global(.of-folder-browser [data-of-vault-organization] > h3) { display: flex; align-items: center; gap: 8px; font-size: 16px; color: #24445e; }
+.platform :global(.of-folder-count) { padding: 2px 8px; border-radius: 999px; background: #dff1fd; font-size: 12px; color: #087faf; }
+.platform :global(.of-folder-grid) { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr)); gap: 10px; margin-top: 14px; }
+.platform :global(.of-folder-grid > button) { display: flex; align-items: center; gap: 9px; min-height: 66px; min-width: 0; padding: 12px; border: 1px solid #d7e6f1; border-radius: 10px; background: #fff; color: #40617b; text-align: left; }
+.platform :global(.of-folder-grid > button > svg) { flex-shrink: 0; color: #209ed6; }
+.platform :global(.of-folder-grid > button > span) { min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.platform :global(.of-folder-grid > button > strong) { margin-left: auto; font-size: 12px; color: #61758e; }
+.platform :global(.of-folder-grid > button[aria-pressed="true"]) { border-color: #219fd8; background: #e3f4ff; box-shadow: 0 0 0 1px #219fd8; }
+.platform :global(.of-folder-grid > button:focus-visible) { outline: 2px solid #087faf; outline-offset: 3px; }
+.platform :global(.of-folder-grid > button:disabled) { opacity: .55; }
+.platform :global(.of-folder-browser [data-of-vault-organization] > label) { max-width: 320px; }

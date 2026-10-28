@@ -4,7 +4,7 @@ import { inputCls } from "@/components/clone/fields";
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Upload, Plus, Search, Grid2X2, List, RefreshCw, Folder, Image as ImageIcon, Video, MoreHorizontal } from "lucide-react";
+import { Upload, Plus, Search, Grid2X2, List, RefreshCw, Image as ImageIcon, Video, MoreHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
@@ -192,7 +192,6 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       </form>
       <div className="of-library-controls">
         <span>{data.summary ? `${data.summary.matching.toLocaleString()} matching files` : "Imported media"}{selected.size ? ` · ${selected.size} selected` : ""}</span>
-        {!readOnly && !picker ? <details className="of-folder-tools"><summary><Folder size={16} aria-hidden="true" />{folderId ? "Selected folder" : "Folders"}</summary><VaultOrganization compact accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/></details> : null}
         <button type="button" data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}><RefreshCw size={15} aria-hidden="true" />Refresh vault</button>
         <details className="of-sync-tools" open={data.sync?.status === "failed" || data.sync?.status === "pending" || data.sync?.status === "running"}><summary>{data.sync?.status === "complete" ? "Vault synced" : data.sync ? `Sync: ${SYNC_STATUS[data.sync.status]}` : "Sync details"}</summary>
       <div className="of-vault-sync-copy text-xs" data-of-vault-sync-status>
@@ -210,6 +209,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         </details>
         {data.connectionRevision == null ? <Link className="of-text-link" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
       </div>
+      {!readOnly && !picker ? <div className="of-folder-browser"><VaultOrganization compact accountId={accountId} folderCount={data.summary?.folders} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/></div> : null}
       {!readOnly ? <details ref={offerForm} open={offerOpen} onToggle={event => setOfferOpen(event.currentTarget.open)} className="of-offer-composer rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>
