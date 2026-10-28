@@ -21,12 +21,13 @@ export function parseLedger(v: unknown, accountId: string): Ledger | null {
   return v as Ledger;
 }
 export const parsePurchases = parseLedger;
-export const LEDGER_STATUS_TEXT: Record<Ledger["status"], string> = { not_started: "Not started", idle: "Between passes", running: "Scan running", held: "Held, needs attention" };
+export const LEDGER_STATUS_TEXT: Record<Ledger["status"], string> = { not_started: "Not started", idle: "Between passes", running: "Scan in progress (includes waiting between pages)", held: "Held, needs attention" };
 export const LEDGER_ERROR_TEXT: Record<NonNullable<Ledger["lastError"]>, string> = { connection_unavailable: "The connection was unavailable", connection_changed: "The connection changed during the scan", unsupported_ledger_response: "The provider ledger response was not accepted", unsupported_ledger_pagination: "Provider pagination was not accepted", ledger_read_failed: "The ledger read failed", provider_read_deferred: "Provider reads are deferred by the shared account budget", provider_read_stale: "The provider read was fenced after account state changed", provider_rate_limited: "Provider reads are rate limited; the shared backoff applies", unknown_error: "Unknown error category" };
 /** A UI eligibility hint only. The backend revalidates the lease, binding and exact state atomically. */
 export function retryAdvice(ledger: Ledger, canManage: boolean): { allowed: boolean; reason: string | null } {
   if (!canManage) return { allowed: false, reason: "Your team access is read-only." };
-  if (ledger.leaseActive || ledger.status === "running") return { allowed: false, reason: "A scan is running. Refresh after its lease finishes." };
+  if (ledger.leaseActive) return { allowed: false, reason: "A worker holds the scan lease. Refresh after it finishes." };
+  if (ledger.status === "running") return { allowed: false, reason: "The scan is waiting for its next page, provider backoff, or worker recovery. Next poll: " + (ledger.nextPollAt ?? "not recorded") + ". Refresh status; a retry does not bypass the worker schedule." };
   if (ledger.status !== "held") return { allowed: false, reason: ledger.status === "not_started" ? "No held scan exists. Refresh status and inspect available evidence." : "This scan is not held. Refresh status or inspect available evidence." };
   if (!ledger.connectionCurrent) return { allowed: false, reason: "The scan does not match the current usable connection. Review the connection first." };
   if (ledger.scanFingerprint === null || ledger.connectionRevision === null || ledger.connectionRevision >= 2 ** 31 - 1) return { allowed: false, reason: "Current scan and connection revision evidence is unavailable." };

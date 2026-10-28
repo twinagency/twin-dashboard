@@ -150,6 +150,7 @@ export type Personality = {
   };
   configurationRevision?: number;
   configurationCurrent?: boolean;
+  configurationDrift?: unknown;
   configurationFingerprint?: string;
   conflicts?: Conflict[];
   requiresFactResolution?: FactKey[];
@@ -713,8 +714,10 @@ export type NativeReadiness = {
   }[];
   accountControl: AccountControl;
   coverage: {
-    storedMessages: number;
-    processedMessages: number;
+    storedMessages: number | null;
+    storedCountStatus?: "exact" | "unavailable";
+    processedMessages: number | null;
+    memorySample?: { inspectedMessages: number; processedCurrentMessages: number; complete: boolean };
     providerTotalMessages: null;
     archiveComplete: boolean;
     pendingArchiveConversations: number;
@@ -768,9 +771,10 @@ export function parseNativeReadiness(v: unknown): NativeReadiness | null {
     a = v.autonomy,
     k = v.catalogue;
   if (
-    !count(c.storedMessages) ||
-    !count(c.processedMessages) ||
-    c.processedMessages > c.storedMessages ||
+    !(count(c.storedMessages) || c.storedMessages === null && c.storedCountStatus === "unavailable") ||
+    (c.storedCountStatus !== undefined && c.storedCountStatus !== (c.storedMessages === null ? "unavailable" : "exact")) ||
+    !(count(c.processedMessages) && count(c.storedMessages) && c.processedMessages <= c.storedMessages || c.processedMessages === null && object(c.memorySample) && c.memorySample.complete === false && v.checks.some(x => object(x) && x.key === "memory" && x.status === "unknown")) ||
+    (c.memorySample !== undefined && (!object(c.memorySample) || !count(c.memorySample.inspectedMessages) || !count(c.memorySample.processedCurrentMessages) || typeof c.memorySample.complete !== "boolean" || (count(c.storedMessages) && c.memorySample.inspectedMessages > c.storedMessages) || c.memorySample.processedCurrentMessages > c.memorySample.inspectedMessages || c.memorySample.complete !== (count(c.storedMessages) && c.memorySample.inspectedMessages === c.storedMessages) || (c.memorySample.complete && c.processedMessages !== c.memorySample.processedCurrentMessages))) ||
     c.providerTotalMessages !== null ||
     typeof c.archiveComplete !== "boolean" ||
     !count(c.pendingArchiveConversations) ||

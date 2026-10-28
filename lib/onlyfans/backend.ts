@@ -1,3 +1,4 @@
+import { inboxSearchParams, type InboxSearch } from "./inbox-search";
 // ── The Twin side's OnlyFans backend port ────────────────────────────────
 //
 // This is the *server-side* boundary between the dashboard and the consolidated
@@ -75,7 +76,7 @@ export type OnlyFansBackend = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
-    search?: string,
+    search?: InboxSearch | string,
   ): Promise<BackendResult<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
@@ -274,10 +275,8 @@ export function createHttpOnlyFansBackend(options: {
           error: "That account reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      const params = new URLSearchParams();
+      const params = inboxSearchParams(aiOnly, search);
       if (cursor) params.set("cursor", cursor);
-      if (aiOnly) params.set("filter", "ai");
-      if (search?.trim()) params.set("q", search.trim());
       const query = params.size ? `?${params}` : "";
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations${query}`, (body) => {
         if (!isRecord(body) || !isRecord(body.page)) return null;

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { agencyGrant, agencyOnlyFansRequest, agencyScopedFetch, AGENCY_SCOPE_HEADER, AGENCY_ACCESS_HEADER, AGENCY_ACCESS_VERSION } from "../lib/onlyfans/agency-scope";
+import { agencyGrant, agencyOnlyFansRequest, agencyScopedFetch, AGENCY_SCOPE_HEADER, AGENCY_ACCESS_HEADER, AGENCY_ACCESS_VERSION, AGENCY_CHAT_ACCESS_VERSION } from "../lib/onlyfans/agency-scope";
 import { authorizeRead } from "../lib/onlyfans/reads";
 import { handoverForViewer } from "../lib/onlyfans/handover";
 import { availableActions } from "../lib/onlyfans-preview/actions";
@@ -38,7 +38,7 @@ async function main() {
     calls.push({ url: String(url), method: init?.method ?? "GET" });
     assert(String(url).startsWith(baseUrl + "/onlyfans/agency/v1/"), "an old backend never receives a legacy write path");
     assert.deepEqual(JSON.parse(new Headers(init?.headers).get(AGENCY_SCOPE_HEADER)!), grant);
-    return Response.json({ ok: true }, { headers: { [AGENCY_ACCESS_HEADER]: AGENCY_ACCESS_VERSION } });
+    return Response.json({ ok: true }, { headers: { [AGENCY_ACCESS_HEADER]: AGENCY_CHAT_ACCESS_VERSION } });
   };
   const scoped = agencyScopedFetch(grant, { baseUrl, token: "synthetic-read" }, fake);
   assert((await scoped(baseUrl + "/onlyfans/control/v1/accounts/acc-a", { method: "POST" })).ok);

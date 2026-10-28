@@ -32,7 +32,7 @@ async function main() {
   let target = "";
   const read = createHttpOnlyFansBackend({ baseUrl: "https://backend.invalid", token: "read-only", fetchImpl: async input => { target = String(input); return Response.json({ schemaVersion: "of-preview.v2", accountId: "creator-a", page: { items: [], nextCursor: null } }); } });
   assert((await read.listConversations("creator-a", null, false, "@u318022380")).ok);
-  assert.equal(new URL(target).searchParams.get("q"), "@u318022380");
+  assert.equal(new URL(target).searchParams.get("query"), "@u318022380");
   assert.match(new URL(target).pathname, /accounts\/creator-a\/conversations$/);
   console.log("PASS: specific refusals, uncertain outcome, reconciliation acknowledgement, same-second refresh, account isolation, preview preservation, runtime pause, sender hold, Brisbane time and server search transport");
 }

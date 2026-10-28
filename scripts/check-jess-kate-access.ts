@@ -36,7 +36,7 @@ async function main(){
         assert.equal(url.searchParams.get("email"),`eq.${portal.loginEmail}`);
         body=active?{user_id:user,email:portal.loginEmail}:null;
       }else {
-        assert.equal(url.searchParams.get("select"),"agency_id,can_manage,creator_scope,creator_ids,creator_access_revision");
+        assert.equal(url.searchParams.get("select"),"agency_id,can_manage,can_chat,creator_scope,creator_ids,creator_access_revision");
         assert.equal(url.searchParams.get("user_id"),`eq.${user}`);
         body=active?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:wrongAgency?"different-agency":portal.id,can_manage:false}:null;
       }
@@ -93,3 +93,4 @@ async function main(){
   console.log("Jess and Kate AI: fixed-account login, one-creator scope, editing, cross-tenant denial, independent branding, revocation, admin password management and logout passed");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
+

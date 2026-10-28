@@ -1,4 +1,5 @@
 "use client";
+import { readWithRecovery } from "@/lib/onlyfans/read-recovery";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
@@ -74,9 +75,9 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
   const loadFans = useCallback(async (cursor: string | null = null) => {
     if (fanRequest.current) return; fanRequest.current = true; setFansBusy(true); setFanError("");
     try {
-      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
+      const response = await readWithRecovery(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
       if ([401, 403].includes(response.status)) { sessionLost(); return; }
-      if (!response.ok) throw new Error("Saved conversations could not be loaded.");
+      if (!response.ok) throw new Error(`Saved conversations could not be loaded (HTTP ${response.status}) after bounded recovery. Retry; if this persists, ask the release owner to inspect the account list request.`);
       const value = await response.json();
       if (!Array.isArray(value.page?.items) || value.page.items.some((item: ConversationSummary) => item.accountId !== accountId || typeof item.conversationId !== "string" || !item.fan || typeof item.fan.displayName !== "string")) throw new Error("The audience response was invalid.");
       if (active.current && !sessionDenied.current) { setFans(previous => cursor ? [...new Map([...previous, ...value.page.items].map(item => [item.conversationId, item])).values()] : value.page.items); setFanCursor(typeof value.page.nextCursor === "string" ? value.page.nextCursor : null); }

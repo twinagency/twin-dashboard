@@ -18,7 +18,7 @@ export const readConversations = async (accountId: string, signal?: AbortSignal)
 export const readRuntime = async (accountId: string, signal?: AbortSignal): Promise<BReply<BRuntime>> =>
   shaped(await bFetch(`/api/onlyfans/accounts/${enc(accountId)}/workspace/settings`, { signal }), v => parseRuntime(v, accountId));
 export const readFollowUps = async (accountId: string, signal?: AbortSignal): Promise<BReply<BFollowUp[]>> =>
-  shaped(await bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { signal }), v => parseFollowUps(v, accountId));
+  shaped(await bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { signal, readRecovery: true }), v => parseFollowUps(v, accountId));
 
 /** The ack proves a recorded event, not current state; callers must re-read the conversation. */
 export async function sendControl(accountId: string, conversationId: string, action: Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">, expectedRevision: number, signal?: AbortSignal): Promise<BReply<{ recordedRevision: number }>> {

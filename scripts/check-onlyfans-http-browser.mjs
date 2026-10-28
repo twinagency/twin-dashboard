@@ -69,8 +69,11 @@ try {
   assert.equal(await manual.locator("..").getByText("Sent to provider", { exact: true }).count(), 1);
   await page.getByText("Retracted synthetic message", { exact: true }).first().waitFor({ timeout: 15000 });
   assert(await page.getByText("Retracted", { exact: true }).count());
-  assert.equal(await page.getByText("Sync needs attention.", { exact: true }).count(), 1);
-  assert.match(await page.getByRole("status").filter({ hasText: "Sync needs attention." }).innerText(), /Newer activity may be missing\./);
+  const syncWarning = page.locator("[data-of-sync-warning]");
+  assert.equal(await syncWarning.count(), 1);
+  assert.match(await syncWarning.innerText(), /Connection needs attention\./);
+  assert.match(await syncWarning.innerText(), /No verified connection record is available/);
+  assert.match(await syncWarning.getByRole("link").getAttribute("href"), /account=acc-a/);
   assert.equal(external.length, 0, "UI attempted an external request");
   if (process.env.ONLYFANS_TEST_EVIDENCE) {
     await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-inbox.png"), fullPage: true });

@@ -109,7 +109,7 @@ export function availableActions(input: {
   return { available, blocked };
 
   function blockReason(action: AvailableAction): string | null {
-    if (!viewer.canManage) {
+    if (!viewer.canManage && !(viewer.canChat && ["send_manual_message", "request_takeover", "release_takeover"].includes(action))) {
       return viewer.kind === "view_as"
         ? "Read only view. Changes are made by the account owner."
         : "Your role cannot change conversations for this account.";
@@ -183,7 +183,7 @@ export function canSubmitCommand(
   actionSet: ActionSet,
   action: AvailableAction,
 ): boolean {
-  if (!viewer.canManage) return false;
+  if (!viewer.canManage && !(viewer.canChat && ["send_manual_message", "request_takeover", "release_takeover"].includes(action))) return false;
   return actionSet.available.some((entry) => entry.action === action);
 }
 

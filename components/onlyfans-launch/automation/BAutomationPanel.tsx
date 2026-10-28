@@ -1,4 +1,6 @@
 "use client";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { parseWorkspaceScope, workspaceHref } from "@/lib/onlyfans-preview/scope";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccount, type BConversation, type BRuntime } from "@/lib/onlyfans/launch/automation/b-automation";
 import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
@@ -21,7 +23,9 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
 }
 
 /** Current account controls, conversation handling and native proactive engagement. */
-export default function BAutomationPanel({ canManage = false }: { canManage?: boolean }) {
+export default function BAutomationPanel({ canManage = false, initialAccountId }: { canManage?: boolean; initialAccountId?: string }) {
+  const router = useRouter(), pathname = usePathname(), params = useSearchParams();
+  const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const [manage, setManage] = useState(canManage);
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading);
   const [accountId, setAccountId] = useState("");
@@ -38,8 +42,11 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
     const r = toLoad(await readAccounts());
     if (!r) return;
     setAccounts(r);
-    if (r.state === "ok") setAccountId(prev => prev && r.data.some(a => a.accountId === prev) ? prev : r.data[0]?.accountId ?? "");
-  }, []);
+    if (r.state === "ok") {
+      if (initialAccountId && !r.data.some(a => a.accountId === initialAccountId)) { setAccounts({ state: "denied" }); setAccountId(""); return; }
+      setAccountId(prev => initialAccountId ?? (prev && r.data.some(a => a.accountId === prev) ? prev : r.data[0]?.accountId ?? ""));
+    }
+  }, [initialAccountId]);
   useEffect(() => { void loadAccounts(); }, [loadAccounts]);
 
   const loadAccountData = useCallback(async (id: string, only?: "convs") => {
@@ -88,7 +95,7 @@ export default function BAutomationPanel({ canManage = false }: { canManage?: bo
     {accounts.state === "pending" ? <BPending title="Accounts" contract={accounts.contract} /> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
     {accounts.state === "ok" && account ? <>
-      <BAccountSwitcher id="b-auto-acct" accounts={accounts.data} value={accountId} onChange={setAccountId} />
+      <BAccountSwitcher id="b-auto-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} />
       <div aria-live="polite" className="min-h-5 text-sm" data-b-notice>{notice}</div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="account">

@@ -1,3 +1,4 @@
+import type { InboxSearch } from "./inbox-search";
 // ── The authenticated, scoped read service ───────────────────────────────
 //
 // Three reads, one authority, no writes. This module is deliberately pure: it
@@ -196,7 +197,7 @@ export async function readAccounts(
 
 export async function readConversations(
   input: ReadInput,
-  request: { accountId: string; cursor: string | null; aiOnly?: boolean; search?: string },
+  request: { accountId: string; cursor: string | null; aiOnly?: boolean; search?: InboxSearch },
 ): Promise<ReadResult<ConversationsReadBody>> {
   const denial = authorizeRead(input.auth);
   if (denial) return denial;

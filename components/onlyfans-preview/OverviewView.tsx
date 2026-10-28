@@ -29,7 +29,10 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     { label: "Cleared payments", value: count(earnings?.clearedCount), Icon: CheckCheck, period: true },
     { label: "Refunded payments", value: count(earnings?.refundedCount), Icon: RotateCcw, period: true },
     { label: "Connected accounts", value: data.accountsError ? "Unavailable" : count(connected), Icon: Users, period: false },
-    { label: "Need attention", value: data.accountsError ? "Unavailable" : count(data.accounts.length - connected), Icon: CircleAlert, period: false },
+    { label: "Connection issues", value: data.accountsError ? "Unavailable" : count(data.accounts.length - connected), Icon: CircleAlert, period: false },
+    { label: "History freshness issues", value: data.accountsError ? "Unavailable" : count(data.accounts.filter(account => account.syncFreshness.stale).length), Icon: CircleAlert, period: false },
+    { label: "Payment imports incomplete", value: history ? count(history.accountCount - history.completedAccountCount) : "Unavailable", Icon: CircleAlert, period: false },
+    { label: "Sending readiness", value: "Not verified here", Icon: CircleAlert, period: false },
   ];
   const reasons = data.earnings?.reasons.map(reason => EARNINGS_REASONS[reason]).join(" ") || data.earningsError;
   return <div className="dashboard-page of-overview" data-of-surface="onlyfans-overview">
@@ -57,6 +60,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
       <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? periodLabel : "Current account state"}</small>
     </article>)}</section>
+    <p className="of-panel-footnote">Connection status, history freshness, payment reconciliation and sending readiness are separate checks. <Link href={data.activityAccount ? workspaceHref("/onlyfans/launch", { creatorId: null, accountId: data.activityAccount.accountId }) : "/onlyfans/launch"}>Review account launch controls</Link> for operational holds and prerequisites.</p>
     {statistics ? <div className="of-overview-panels" aria-label="Earnings breakdown">
       <section className="of-panel"><h2>Earnings by creator</h2>{statistics.byAccount.map(row => <div className="of-sale-row" key={row.accountId}><div><strong>{creatorName(row.accountId)}</strong><small>{count(row.paymentCount)} payments · {periodLabel}</small></div><div><strong>{money(row.netCents)} net</strong><small>{money(row.grossCents)} gross</small></div></div>)}</section>
       <section className="of-panel"><h2>Earnings by source</h2>{statistics.byKind.map(row => <div className="of-sale-row" key={row.kind}><div><strong>{row.kind.replaceAll("_", " ")}</strong><small>{count(row.paymentCount)} payments · {periodLabel}</small></div><div><strong>{money(row.netCents)} net</strong><small>{money(row.grossCents)} gross</small></div></div>)}</section>

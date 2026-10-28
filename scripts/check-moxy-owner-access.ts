@@ -31,7 +31,7 @@ async function main() {
     } else if (url.pathname === "/rest/v1/agency_memberships") {
       assert.equal(url.searchParams.get("user_id"), "eq.verified-user");
       assert.equal(url.searchParams.get("active"), "eq.true");
-      assert.equal(url.searchParams.get("select"), "agency_id,can_manage,creator_scope,creator_ids,creator_access_revision");
+      assert.equal(url.searchParams.get("select"), "agency_id,can_manage,can_chat,creator_scope,creator_ids,creator_access_revision");
       out = memberActive ? { creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id: signedInAgency, can_manage: canManage } : null;
     } else if (url.pathname === "/rest/v1/partner_agencies") {
       assert.equal(url.searchParams.get("active"), "eq.true");
@@ -159,3 +159,4 @@ async function main() {
   console.log("MOXY OWNER ACCESS PASSED: server-owned permission, scoped mutations, unchanged readers, spoofing/CSRF/revocation defenses, private settings and separate cache keys");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+
