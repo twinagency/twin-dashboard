@@ -1,5 +1,7 @@
 name: Twin dashboard runtime package
 on:
+  push:
+    branches: ["claude/of-allfans-no-autonew-20261028"]
   workflow_dispatch:
 permissions:
   contents: read
