@@ -30,6 +30,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const statusTarget = useRef<HTMLDivElement>(null);
   const captureGeneration = useRef(0);
   const endpoint = `/api/onlyfans-connections/accounts/${encodeURIComponent(accountId)}`;
   const clearSecrets = useCallback(() => {
@@ -56,6 +57,12 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   useEffect(() => {
     if (initiallyOpen) { setOpen(true); void read(); }
   }, [initiallyOpen, read]);
+  useEffect(() => {
+    if (initiallyOpen && data?.accountId) {
+      statusTarget.current?.scrollIntoView({ block: "start" });
+      statusTarget.current?.focus({ preventScroll: true });
+    }
+  }, [initiallyOpen, data?.accountId]);
   useEffect(() => {
     if (!open || denied) return;
     const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitting.current) void read(false); }, 15000);
@@ -128,7 +135,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   }
 
   const state = connectionState(data);
-  return <div className="mt-4 min-w-0 border-t border-line pt-4" data-of-connection-editor={accountId} onClick={event => event.stopPropagation()}>
+  return <div ref={statusTarget} tabIndex={-1} id={`connection-${accountId}`} className="mt-4 min-w-0 scroll-mt-24 border-t border-line pt-4" data-of-connection-editor={accountId} onClick={event => event.stopPropagation()}>
     <button type="button" className={buttonClass} aria-expanded={open} disabled={busy || denied} data-of-connection-open
       onClick={() => { setOpen(!open); if (!open && !hasRetry) void refresh(); }}>Manage connection</button>
     {open ? <div className="mt-4 min-w-0">
