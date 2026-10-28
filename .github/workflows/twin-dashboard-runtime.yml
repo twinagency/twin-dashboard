@@ -1,39 +1,50 @@
-name: Twin dashboard runtime package
+name: Agency CRM immutable image build
 on:
-  push:
-    branches: ["claude/of-allfans-no-autonew-20261028"]
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact dashboard commit to package
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
-  package:
+  image:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-      - run: npm ci
-      - name: OnlyFans dashboard checks
-        run: |
-          node --import tsx scripts/check-onlyfans-preview.ts
-          node --import tsx scripts/check-onlyfans-launch.ts
-          node --import tsx scripts/check-onlyfans-connections.ts
-          node --import tsx scripts/check-onlyfans-activation.ts
-      - run: npm run build
+      - name: Validate immutable source
         env:
-          NEXT_TELEMETRY_DISABLED: "1"
-      - name: Package runtime (no deploy)
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
-          mkdir -p runtime/.next
-          cp -a .next/standalone/. runtime/
-          cp -a .next/static runtime/.next/static
-          cp -a public runtime/public
-          tar -czf runtime.tar.gz -C runtime .
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+      - name: Verify checkout
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build and publish candidate without deploying
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          IMAGE=323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard:agency-crm-$SOURCE_SHA
+          docker build --build-arg GIT_SHA="$SOURCE_SHA" --label org.opencontainers.image.revision="$SOURCE_SHA" -t "$IMAGE" .
+          docker push "$IMAGE"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$IMAGE")
+          jq -n --arg source "$SOURCE_SHA" --arg digest "$DIGEST" '{source:$source,digest:$digest,deployed:false}' > agency-crm-image.json
+          cat agency-crm-image.json
       - uses: actions/upload-artifact@v4
         with:
-          name: twin-dashboard-runtime
-          path: runtime.tar.gz
-          retention-days: 7
+          name: agency-crm-image
+          path: agency-crm-image.json
+          if-no-files-found: error
