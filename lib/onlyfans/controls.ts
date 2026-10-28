@@ -4,7 +4,7 @@ import type { CommandRequest } from "../onlyfans-preview/types";
 export const CONTROL_SCHEMA = "of-controls.v1";
 export const CONTROL_HEADER = "X-OnlyFans-Control-Version";
 export const CONTROL_ACTIONS = ["pause_automation", "resume_automation", "request_takeover",
-  "release_takeover", "mark_no_contact", "manual_message"] as const;
+  "release_takeover", "mark_no_contact", "manual_message", "resolve_delivery_evidence"] as const;
 export type ControlAction = typeof CONTROL_ACTIONS[number];
 export function isControlAction(value: unknown): value is ControlAction {
   return typeof value === "string" && (CONTROL_ACTIONS as readonly string[]).includes(value);
@@ -33,7 +33,7 @@ export type RecordedControlResult = {
   intentId?: string;
 };
 export type ControlReply = { ok: true; ack: ControlAck } | {
-  ok: false; status: number; outcome: "refused" | "unconfirmed"; error: string;
+  ok: false; status: number; outcome: "refused" | "unconfirmed"; error: string; code?: string;
 };
 export function parseControlAck(value: unknown, expected: {
   accountId: string; conversationId: string; action: string; expectedRevision: number; commandKey?: string;
@@ -46,7 +46,7 @@ export function parseControlAck(value: unknown, expected: {
   if (body.schemaVersion !== CONTROL_SCHEMA || body.ok !== true || body.applied !== true ||
       body.accountId !== expected.accountId || body.conversationId !== expected.conversationId ||
       body.action !== expected.action || !isControlAction(body.action) ||
-      body.recordedRevision !== expected.expectedRevision + (body.action === "manual_message" ? 0 : 1) ||
+      body.recordedRevision !== expected.expectedRevision + (["manual_message", "resolve_delivery_evidence"].includes(body.action) ? 0 : 1) ||
       typeof body.commandKey !== "string" || !/^[a-f0-9]{64}$/.test(body.commandKey) ||
       (expected.commandKey !== undefined && body.commandKey !== expected.commandKey)) return null;
   if (body.action === "manual_message" && (body.outcome !== "queued" || typeof body.intentId !== "string" ||
@@ -55,6 +55,26 @@ export function parseControlAck(value: unknown, expected: {
   return body as ControlAck;
 }
 
+
+export const CONTROL_REFUSAL_REASONS: Record<string, string> = {
+  history_repair_required: "History import requires repair. Sending is held until the conversation history is verified.",
+  revision_changed: "Conversation revision changed. The latest state has been requested. Review it before trying again.",
+  takeover_pending: "Takeover is still pending. Wait for the current delivery to finish.",
+  delivery_unresolved: "Delivery remains unresolved. Check the existing attempt before sending again.",
+  account_disabled: "Account automation is disabled. An account operator must review the intentional pause.",
+  sender_unavailable: "The sender is unavailable or disabled for this account.",
+  contact_blocked: "This conversation is intentionally paused or contact is blocked.",
+  takeover_required: "Take over this conversation before sending a manual reply.",
+  owner_changed: "Reply ownership changed. Refresh reply ownership.",
+  command_conflict: "This request key belongs to a different command. Review the existing outcome.",
+  control_conflict: "This action is blocked by the current conversation state. Refresh reply ownership and check delivery details.",
+};
+export function controlRefusalCode(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return;
+  const body = value as Record<string, unknown>;
+  if (body.schemaVersion === CONTROL_SCHEMA && body.ok === false && typeof body.code === "string" &&
+      Object.hasOwn(CONTROL_REFUSAL_REASONS, body.code)) return body.code;
+}
 
 /** Only known dashboard messages may be displayed; never echo upstream errors. */
 const DASHBOARD_CONTROL_REFUSALS: Record<number, readonly string[]> = {
@@ -65,6 +85,8 @@ const DASHBOARD_CONTROL_REFUSALS: Record<number, readonly string[]> = {
   503: ["Conversation controls are not configured."],
 };
 export function controlRefusalNote(status: number, value: unknown): string {
+  const code = controlRefusalCode(value);
+  if (status === 409 && code) return CONTROL_REFUSAL_REASONS[code];
   if (value && typeof value === "object" && !Array.isArray(value)) {
     const body = value as Record<string, unknown>;
     if (body.schemaVersion === CONTROL_SCHEMA && body.ok === false && body.outcome === "refused" &&

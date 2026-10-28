@@ -53,6 +53,7 @@ export type DeliveryOutcome =
   | "generating"
   | "queued"
   | "dispatching"
+  | "accepted_pending"
   | "sent"
   | "retracted"
   | "partial"
@@ -107,12 +108,18 @@ export type OfAccount = {
   automationMode: AutomationMode;
   capabilities: AccountCapabilities;
   syncFreshness: Freshness;
+  runtime?: { enabled: boolean; deliveryEnabled: boolean; sender: { state: string; observedAt: string | null; reason: string | null } };
+  needsAttention?: boolean;
+  syncHealth?: Record<string, { lastSuccessAt?: string | null; latestMessageAt?: string | null; pending?: number; pendingConversations?: number; quarantined?: number; fullHistoryAt?: string | null; state?: string; observedAt?: string | null; reason?: string | null }>;
+
 };
 
 export type FanRef = {
   /** Account-scoped fan identity. Two accounts never share this string. */
   fanId: string;
   displayName: string;
+  username?: string | null;
+  avatarUrl?: string | null;
   /** Short opaque reference for display when the name is unavailable. */
   shortRef: string;
 };
@@ -130,6 +137,7 @@ export type ConversationSummary = {
   revision: number;
   fan: FanRef;
   lastMessagePreview: string;
+  lastMessageId?: string | null;
   lastActivityAt: IsoTimestamp;
   unreadCount: number;
   priority: ConversationPriority;
@@ -138,6 +146,8 @@ export type ConversationSummary = {
   delivery: DeliveryOutcome;
   /** True when a human is required before the conversation can progress. */
   requiresAttention: boolean;
+  attentionReasons?: string[];
+  historyHeld?: boolean;
   freshness: Freshness;
 };
 
@@ -186,6 +196,7 @@ export type ConversationDetail = {
   messages: ConversationMessage[];
   /** Keyset position for the older page in this exact account and thread. */
   previousCursor?: string | null;
+  spend?: { minorUnits: number | null; currency: string; coverage: "unknown" | "partial" | "complete"; asOf: string | null; detail: string };
   facts: FanContextFact[];
   ownedMedia: OwnedMediaItem[];
   /** A summary of a structured resolution path when delivery is unresolved. */
@@ -272,7 +283,7 @@ export type DeliveryResolutionDecision = "delivered" | "not_delivered";
  */
 export type CommandPayload =
   | { kind: "manual_message"; body: string; catalogItemId?: number | null }
-  | { kind: "delivery_resolution"; attemptId: string; decision: DeliveryResolutionDecision }
+  | { kind: "delivery_resolution"; attemptId: string; decision: DeliveryResolutionDecision; providerMessageId?: string }
   | { kind: "none" };
 
 /** The payload for a command that carries no content. */
