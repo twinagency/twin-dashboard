@@ -193,7 +193,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       <div className="of-library-controls">
         <span>{data.summary ? `${data.summary.matching.toLocaleString()} matching files` : "Imported media"}{selected.size ? ` · ${selected.size} selected` : ""}</span>
         <button type="button" data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}><RefreshCw size={15} aria-hidden="true" />Refresh vault</button>
-        <details className="of-sync-tools" open={data.sync?.status === "failed" || data.sync?.status === "pending" || data.sync?.status === "running"}><summary>{data.sync?.status === "complete" ? "Vault synced" : data.sync ? `Sync: ${SYNC_STATUS[data.sync.status]}` : "Sync details"}</summary>
+        <details className="of-sync-tools" open={data.sync?.status === "failed"}><summary>{data.sync?.status === "complete" ? "Vault synced" : data.sync ? `Sync: ${SYNC_STATUS[data.sync.status]}${["pending", "running"].includes(data.sync.status) ? ` · ${data.sync.itemsSeen.toLocaleString()} files checked` : ""}` : "Sync details"}</summary>
       <div className="of-vault-sync-copy text-xs" data-of-vault-sync-status>
         {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? "Vault sync complete" : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
           <p className="mt-1 text-muted">{data.sync.itemsSeen.toLocaleString()} files checked in this sync. {["pending", "running"].includes(data.sync.status) ? "Totals may increase. This page updates automatically." : `Last updated ${new Date(data.sync.updatedAt).toLocaleString()}.`}</p>
