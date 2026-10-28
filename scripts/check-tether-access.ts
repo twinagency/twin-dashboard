@@ -39,7 +39,7 @@ async function main() {
     else if (url.pathname === "/rest/v1/agency_memberships") {
       assert.equal(url.searchParams.get("active"), "eq.true");
       if (url.searchParams.has("user_id")) {
-        assert.equal(url.searchParams.get("select"), "agency_id,can_manage,creator_scope,creator_ids,creator_access_revision");
+        assert.equal(url.searchParams.get("select"), "agency_id,can_manage,can_chat,creator_scope,creator_ids,creator_access_revision");
         assert.equal(url.searchParams.get("user_id"), `eq.${user}`);
         body = active ? { creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id: wrongAgency ? LYNQ_MANAGEMENT_AGENCY_ID : portal.id, can_manage: false } : null;
       } else {
@@ -142,3 +142,4 @@ async function main() {
   console.log("Tether: member-only login, one/two-creator scope, management, cross-agency denial, cache separation, revocation and logout passed");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+
