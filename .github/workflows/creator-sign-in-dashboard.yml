@@ -10,6 +10,7 @@ env:
 jobs:
   image:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4

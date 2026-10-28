@@ -27,6 +27,7 @@ jobs:
   images:
     needs: checks
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 20
     env:
       REGISTRY: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com

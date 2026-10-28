@@ -33,6 +33,7 @@ jobs:
   image:
     needs: activation
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
