@@ -1,3 +1,4 @@
+import "./check-onlyfans-creator-vault.mjs";
 /** Real UI components against isolated synthetic reads. No production URL or write is allowed. */
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
