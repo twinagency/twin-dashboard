@@ -1,28 +1,33 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { request as httpRequest, createServer } from 'node:http';
+import { once } from 'node:events';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Exercise the production build without production credentials or database writes.
 const port = 3117;
 const local = `http://127.0.0.1:${port}`;
 const publicOrigin = 'https://dashboard.tgaiclone.xyz';
-// The production session authority is mandatory. Keep this routing smoke
-// entirely offline using a narrowly scoped synthetic RPC, never a real key.
+// Local session-store fixture, not a production bypass. The production server
+// still hashes opaque tokens, calls its RPC owner and fails closed on outages.
 const sessions = new Set();
-const authority = createServer(async (req, res) => {
-  let raw = ''; for await (const chunk of req) raw += chunk;
-  let body; try { body = JSON.parse(raw); } catch { res.writeHead(400).end(); return; }
-  if (req.method !== 'POST' || req.headers.apikey !== 'offline-only' || !/^[a-f0-9]{64}$/.test(body.p_session_hash)) { res.writeHead(403).end(); return; }
-  let value = false;
-  if (req.url === '/rest/v1/rpc/dashboard_admin_session_create') { sessions.add(body.p_session_hash); value = true; }
-  else if (req.url === '/rest/v1/rpc/dashboard_owner_session_verify') value = sessions.has(body.p_session_hash);
-  else { res.writeHead(404).end(); return; }
-  res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(value));
+let sessionOutage = false;
+const sessionStore = createServer(async (req, res) => {
+  const reply = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); };
+  if (!req.url?.startsWith('/rest/v1/rpc/dashboard_') || req.method !== 'POST') return reply(401, { error: 'Synthetic endpoint unavailable' });
+  if (sessionOutage) return reply(503, false);
+  const chunks = []; for await (const chunk of req) chunks.push(chunk);
+  const body = JSON.parse(Buffer.concat(chunks).toString());
+  if (!/^[a-f0-9]{64}$/.test(body.p_session_hash) || Object.keys(body).join(',') !== 'p_session_hash') return reply(400, false);
+  if (req.url.endsWith('/dashboard_admin_session_create')) { sessions.add(body.p_session_hash); return reply(200, true); }
+  if (req.url.endsWith('/dashboard_owner_session_verify')) return reply(200, sessions.has(body.p_session_hash));
+  if (req.url.endsWith('/dashboard_owner_session_revoke')) { sessions.delete(body.p_session_hash); return reply(200, true); }
+  return reply(404, false);
 });
-await new Promise(resolve => authority.listen(0, '127.0.0.1', resolve));
+sessionStore.listen(0, '127.0.0.1'); await once(sessionStore, 'listening');
+const sessionOrigin = `http://127.0.0.1:${sessionStore.address().port}`;
 const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', String(port)], {
-  env: { ...process.env, NODE_ENV: 'production', DASHBOARD_PASSWORD: 'offline-login-smoke', DASHBOARD_PUBLIC_ORIGIN: publicOrigin, SUPABASE_URL: `http://127.0.0.1:${authority.address().port}`, SUPABASE_SERVICE_KEY: 'offline-only' },
+  env: { ...process.env, NODE_ENV: 'production', DASHBOARD_PASSWORD: 'offline-login-smoke', DASHBOARD_PUBLIC_ORIGIN: publicOrigin, SUPABASE_URL: sessionOrigin, NEXT_PUBLIC_SUPABASE_URL: sessionOrigin, SUPABASE_SERVICE_KEY: 'synthetic-login-smoke-only', NEXT_PUBLIC_SUPABASE_ANON_KEY: 'synthetic-login-smoke-only', ONLYFANS_API_BASE_URL: '', ONLYFANS_API_TOKEN: '', DASHBOARD_ALLOW_LEGACY_ADMIN_SESSIONS: '0' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let output = '';
@@ -88,12 +93,23 @@ try {
   assert.match(login.headers.get('set-cookie'), /allie_admin_session=/);
   assert.match(login.headers.get('set-cookie'), /twin_agency_access=;/);
   assert.match(login.headers.get('set-cookie'), /twin_agency_portal=;/);
-  console.log('Production login smoke passed: all five entry URLs, stale partner cookies, correct branded forms, admin authentication and protected-route checks');
+  const cookie = login.headers.get('set-cookie').match(/allie_admin_session=(owner_[a-f0-9]{64})/)[0];
+  assert.equal(sessions.size, 1, 'Login creates one durable opaque session');
+  assert.equal((await request('/api/onlyfans/accounts', {headers:{cookie}})).status, 503, 'Verified login reaches the unconfigured account service');
+  sessions.clear();
+  assert.equal((await request('/settings', {headers:{cookie}})).status, 307, 'A copied revoked cookie is rejected on the next request');
+  const wrong = await request('/admin-auth', {method:'POST', headers:{origin:publicOrigin}, body:new URLSearchParams({password:'wrong'})});
+  assert.equal(wrong.status, 303); assert.equal(sessions.size, 0, 'Wrong passwords cannot create a session');
+  sessionOutage = true;
+  const outage = await request('/admin-auth', {method:'POST', headers:{origin:publicOrigin}, body:new URLSearchParams({password:'offline-login-smoke'})});
+  assert.equal(outage.status, 500, 'Session-store outage remains a visible authentication failure');
+  assert.doesNotMatch(outage.headers.get('set-cookie') ?? '', /allie_admin_session=owner_/);
+  console.log('Production login smoke passed: revocable session fixture, copied-cookie rejection, wrong password and fail-closed outage; all five entry URLs, stale partner cookies, correct branded forms, admin authentication and protected-route checks');
 } catch (error) {
   console.error(error, output);
   process.exitCode = 1;
 } finally {
-  authority.close();
+  sessionStore.close();
   server.kill('SIGTERM');
   setTimeout(() => server.kill('SIGKILL'), 5000).unref();
 }

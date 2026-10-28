@@ -14,9 +14,9 @@ export function parseTeamCommand(fd: FormData, managementAvailable: boolean) {
     if (!["invite","update"].includes(operation)) return null;
     const creator_scope = single("creator_scope"), access = single("access");
     const raw = fd.getAll("creator_ids");
-    if (!["all","selected"].includes(creator_scope) || !["read","manage"].includes(access) || access === "manage" && !managementAvailable
+    if (!["all","selected"].includes(creator_scope) || !["read","chat","manage"].includes(access) || access === "manage" && !managementAvailable
       || raw.length>1000 || raw.some(id => typeof id !== "string" || !uuid.test(id)) || creator_scope === "all" && raw.length) return null;
-    const scope = {creator_scope,creator_ids:[...new Set(raw as string[])],can_manage:access === "manage"};
+    const scope = {creator_scope,creator_ids:[...new Set(raw as string[])],can_manage:access === "manage",can_chat:access === "chat"};
     if (operation === "update") return uuid.test(user_id) && uuid.test(revision) ? {operation,user_id,revision,...scope} : null;
     const email = single("email").trim().toLowerCase();
     return email.length<=254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? {operation,email,...scope} : null;

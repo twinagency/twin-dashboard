@@ -1,3 +1,4 @@
+import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
 // The live frontend read adapter.
 //
 // It speaks to the dashboard's read and scoped control handlers. Each handler
@@ -48,7 +49,7 @@ export type OnlyFansTransport = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
-    search?: string,
+    search?: InboxSearch,
   ): Promise<TransportReply<CursorPage<ConversationSummary>>>;
   readConversation(
     accountId: string,
@@ -186,10 +187,8 @@ export function createFetchOnlyFansTransport(
     },
 
     readConversations(accountId, cursor, aiOnly, search) {
-      const params = new URLSearchParams();
+      const params = inboxSearchParams(aiOnly, search);
       if (cursor) params.set("cursor", cursor);
-      if (aiOnly) params.set("filter", "ai");
-      if (search?.trim()) params.set("q", search.trim());
       const query = params.size ? `?${params}` : "";
       return request(`/accounts/${encodeURIComponent(accountId)}/conversations${query}`, (body) => {
         if (typeof body !== "object" || body === null) return null;

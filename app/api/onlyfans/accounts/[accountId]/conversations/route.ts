@@ -28,7 +28,9 @@ export async function GET(
   const search = url.searchParams.get("q") ?? undefined;
   if (search !== undefined && (search.length > 128 || /[\x00-\x1f]/.test(search))) return badRequest("That search is not valid.");
   const filter = url.searchParams.get("filter");
-  if (filter !== null && filter !== "ai") return badRequest("That conversation filter is not valid.");
-  const result = await readConversations(context, { accountId, cursor, aiOnly: filter === "ai", search });
+  if (filter !== null && !["ai", "unread", "attention"].includes(filter)) return badRequest("That conversation filter is not valid.");
+  const query = url.searchParams.get("query") ?? url.searchParams.get("q") ?? "";
+  if ([...url.searchParams.keys()].some(key => !["query", "q", "cursor", "filter"].includes(key)) || ["query", "q", "cursor", "filter"].some(key => url.searchParams.getAll(key).length > 1) || query.length > 200 || /[\u0000-\u001f]/.test(query)) return badRequest("Search fan name, username or ID using up to 200 characters.");
+  const result = await readConversations(context, { accountId, cursor, aiOnly: filter === "ai", search: { query, filter: (filter ?? "all") as "all" | "ai" | "unread" | "attention" } });
   return readResponse(result);
 }

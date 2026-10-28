@@ -120,34 +120,25 @@ export function createNativeReadBackend(options: {
     try {
       const r = await send(url.toString(), {
         method: "GET",
-        headers: {
-          Authorization: `Bearer ${options.token}`,
-          [ONLYFANS_SCHEMA_VERSION_HEADER]: ONLYFANS_PREVIEW_SCHEMA_VERSION,
-        },
+        timeoutMs: path === "readiness" ? 12_000 : 8_000,
+        headers: { Authorization: `Bearer ${options.token}`, [ONLYFANS_SCHEMA_VERSION_HEADER]: ONLYFANS_PREVIEW_SCHEMA_VERSION },
       });
-      if (r.ok) {
-        const j: unknown = await r.json();
-        if (
-          object(j) &&
-          j.schemaVersion === (path === "ledger" ? "of-ledger.v1" : ONLYFANS_PREVIEW_SCHEMA_VERSION) &&
-          (path === "ledger" || j.ok === true) &&
-          j.accountId === accountId
-        )
-          return { ok: true, data: j };
-      } else if ([400, 401, 403, 404, 409].includes(r.status))
-        return {
-          ok: false,
-          status: r.status,
-          outcome: "refused",
-          error: "This account evidence is not available to this session.",
-        };
-    } catch {}
-    return {
-      ok: false,
-      status: 503,
-      outcome: "unavailable",
-      error: "Current account evidence could not be verified.",
-    };
+      const value: unknown = await r.json().catch(() => null);
+      const reference = r.headers.get("X-OnlyFans-Evidence-Reference");
+      const suffix = reference && /^[a-f0-9]{32}$/.test(reference) ? ` Reference: ${reference}.` : "";
+      const unavailable = (error: string, status = 503): NativeResult => ({ ok: false, status, outcome: "unavailable", error: error + suffix });
+      if (r.status === 401) return unavailable("The dashboard's account-read credential was rejected. Ask the release owner to check the API credential.");
+      if ([400, 403, 404, 409].includes(r.status)) return { ok: false, status: r.status, outcome: "refused", error: `Account evidence was refused (HTTP ${r.status}). Refresh your assigned account and session.` + suffix };
+      if (!r.ok) return unavailable(`The account evidence service failed (HTTP ${r.status}). Ask the release owner to inspect the matching backend request.`);
+      if (!object(value)) return unavailable("Account evidence returned invalid JSON; no readiness result is available.", 502);
+      if (value.schemaVersion !== (path === "ledger" ? "of-ledger.v1" : ONLYFANS_PREVIEW_SCHEMA_VERSION)) return unavailable("Account evidence uses an unsupported response version. Check the deployed dashboard/API release pair.", 502);
+      if ((path !== "ledger" && value.ok !== true) || value.accountId !== accountId) return unavailable("Account evidence did not confirm the requested account. No readiness result is available.", 502);
+      return { ok: true, data: value };
+    } catch (error) {
+      return { ok: false, status: 503, outcome: "unavailable", error: error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name)
+        ? "The account evidence request timed out. Retry; persistent timeouts need API latency and lock investigation."
+        : "The account evidence service could not be reached. Check the connection and retry." };
+    }
   };
 }
 export function createNativeControlBackend(options: {

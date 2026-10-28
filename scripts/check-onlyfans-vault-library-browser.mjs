@@ -10,12 +10,12 @@ try{
  const page=await browser.newPage({viewport:{width:390,height:844}});
  const rows=Array.from({length:50},(_,i)=>({mediaId:String(i+1),kind:(i+1)%3===0?'video':'photo',durationSeconds:(i+1)%3===0?630:null,width:640,height:480,ready:false,reason:'readiness_unknown',description:`Synthetic landscape ${i+1}`}));
  let description='Original landscape',tags=['coast'],fingerprint=hash,loseReply=true,deny=false,readFailure=false;
- const writes=[];let lastQuery=null;
+ const writes=[];let lastQuery=null,failFirstPreview=true;
  await page.route('**/api/onlyfans-content/accounts/acc-a/vault**',async route=>{
   const req=route.request(),url=new URL(req.url()),suffix=url.pathname.split('/vault')[1];
   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
   if(!suffix){lastQuery=url.searchParams;let filtered=rows.filter(r=>(!lastQuery.get('kind')||r.kind===lastQuery.get('kind'))&&(!lastQuery.get('q')||r.description.includes(lastQuery.get('q')))&&(!lastQuery.get('folderId')||Number(r.mediaId)<=2));const matching=filtered.length;filtered=filtered.filter(r=>Number(r.mediaId)>Number(lastQuery.get('afterMediaId')||0));return json(envelope({vault:{items:filtered.slice(0,24),nextCursor:filtered.length>24?filtered[23].mediaId:null,connectionRevision:1,sync:null,summary:{total:50,photos:34,videos:16,other:0,matching,folders:1}}}));}
-  if(suffix==='/manage/folders')return json(envelope({folders:[{folderId:'7',name:'Outdoors',count:2}]}));
+  if(suffix==='/manage/folders')return json(envelope({folders:[{folderId:'7',name:'Outdoors',count:2,coverMediaId:'2',coverKind:'photo',automatic:true}]}));
   if(suffix.startsWith('/manage/assets/')){
    const mediaId=suffix.split('/').at(-1);
    if(deny)return json({ok:false},401);
@@ -24,6 +24,7 @@ try{
    if(loseReply){loseReply=false;return route.abort('connectionfailed');}
    return json(envelope({applied:true,commandKey:'c'.repeat(64),targetId:mediaId,fingerprint}));
   }
+  if(suffix==='/previews/1'&&failFirstPreview){failFirstPreview=false;return route.fulfill({status:404,body:''});}
   if(suffix.startsWith('/previews/'))return route.fulfill({status:200,contentType:'image/png',body:png});
   if(suffix==='/uploads')return json(envelope({uploads:{schemaVersion:'of-vault-media.v1',accountId,maxFiles:40,maxFileBytes:4000*1024**2,chunkBytes:8*1024**2,enabled:true,jobs:[]}}));
   throw Error('Unexpected fixture request: '+req.method()+' '+suffix);
@@ -31,6 +32,14 @@ try{
  await page.goto(origin+'/vault-fixture',{waitUntil:'networkidle'});
  await page.locator('[data-of-vault-item="24"]').waitFor();
  assert.equal(await page.locator('[data-of-vault-item]').count(),24);
+ assert(await page.locator('.of-library-sidebar').isVisible());
+ await page.locator('[data-of-folder-cover="7"]').waitFor();
+ assert.match(await page.locator('[data-of-folder-cover="7"]').innerText(),/Outdoors\s*2 files · Auto/);
+ await page.locator('[data-of-vault-item="1"]').scrollIntoViewIfNeeded();
+ await page.locator('[data-of-preview-pending="1"]').waitFor();
+ await page.locator('[data-of-preview-pending="1"]').getByRole('button',{name:'Retry preview'}).click();
+ await page.waitForFunction(()=>document.querySelector('[data-of-vault-image="1"] img')?.naturalWidth>0);
+
  await page.locator('.of-sync-tools > summary').click();
  const totals=page.locator('[data-of-vault-summary]');assert.match(await totals.innerText(),/All media\s*50/);assert.match(await totals.innerText(),/Photos\s*34/);assert.match(await totals.innerText(),/Videos\s*16/);
  assert.equal(await page.getByText('Needs review',{exact:true}).count(),0);
@@ -60,3 +69,4 @@ try{
  deny=true;await dialog.getByRole('textbox',{name:'Description',exact:true}).fill('Must clear');await dialog.locator('[data-of-vault-asset-save]').click();await dialog.getByText('Your session cannot edit this asset.',{exact:false}).waitFor();assert.equal(await dialog.locator('textarea').count(),0);
  console.log('PASS vault library browser: full-library totals, immediate media filters, folder/search filtering, next/previous, visible mobile editor, saved values, exact lost-reply retry, read errors, session clearing, 320/390/1440px layouts');
 }finally{await browser.close();}
+

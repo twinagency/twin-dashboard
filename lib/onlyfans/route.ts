@@ -16,7 +16,7 @@ import { authorizeRead, denialBody, type ReadAuth, type ReadDenial, type ReadRes
 /** Private, never cached: conversation data is per-operator and per-account. */
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Data-Mode": "live" } as const;
 
-export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: string | null; canManage: boolean };
+export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: string | null; canManage: boolean; canChat: boolean };
 
 export function denialResponse(denial: ReadDenial): NextResponse {
   return NextResponse.json(denialBody(denial), { status: denial.status, headers: PRIVATE_HEADERS });
@@ -31,7 +31,7 @@ export function denialResponse(denial: ReadDenial): NextResponse {
  *     const ctx = await requireOnlyFansRead();
  *     if (ctx instanceof NextResponse) return ctx;
  */
-export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean } = {}): Promise<ReadContext | NextResponse> {
+export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage" } = {}): Promise<ReadContext | NextResponse> {
   let agency: (AgencyIdentity & { kind?: string }) | null = null;
   let viewAs: unknown = null;
   try {
@@ -62,14 +62,15 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   if (denial) return denialResponse(denial);
 
   const canManage = grant ? grant.canManage : true;
-  if (options.write && !canManage) return denialResponse({ ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." });
+  const canChat = canManage || grant?.canChat === true;
+  if (options.write && !(options.capability === "chat" ? canChat : canManage)) return denialResponse({ ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." });
   const purpose = configuredBackendPurpose("API");
   const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose) : fetch;
   // An unavailable read credential must never yield an unscoped write transport.
   if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
-  return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, canManage };
+  return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, canManage, canChat };
 }
 
 export function readResponse<T>(result: ReadResult<T>): NextResponse {

@@ -16,9 +16,9 @@ const digest = (value: string) => createHash("sha256").update(value).digest("hex
 export async function POST(request: NextRequest, context: {
   params: Promise<{ accountId: string; conversationId: string }>;
 }) {
-  const ctx = await requireOnlyFansRead({ agency: true, write: true });
+  const ctx = await requireOnlyFansRead({ agency: true, write: true, capability: "chat" });
   if (ctx instanceof NextResponse) return ctx;
-  if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
+  if (!ctx.canChat || !ctx.actor) return refuse(403, "Your team access is read-only.");
   // Behind the Apache proxy, nextUrl and Host are the internal upstream (http://127.0.0.1:3001),
   // so the browser Origin is checked against the dashboard's canonical origin (lib/form-origin).
   if (!trustedFormOrigin(request) ||
@@ -50,6 +50,7 @@ export async function POST(request: NextRequest, context: {
   if (!backend) return refuse(503, "Conversation controls are not configured.");
   const action = body.action;
   if (!isControlAction(action)) return refuse(400, "That conversation control is unavailable.");
+  if (!ctx.canManage && !["manual_message", "request_takeover", "release_takeover"].includes(action)) return refuse(403, "This action requires management permission.");
   const expectedRevision = body.expectedRevision as number;
   // This shared-password dashboard has sessions, not individually named staff.
   // Audit the verified session without storing its reusable credential.

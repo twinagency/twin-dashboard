@@ -1,3 +1,4 @@
+import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
 // The one frontend data-source interface for the OnlyFans dashboard surface.
 //
 // Two implementations exist and they never mix: the deterministic fixture
@@ -36,7 +37,7 @@ export interface OnlyFansDataSource {
     accountId: string,
     cursor?: string | null,
     aiOnly?: boolean,
-    search?: string,
+    search?: InboxSearch,
   ): Promise<RequestState<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
