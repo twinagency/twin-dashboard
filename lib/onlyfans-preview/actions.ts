@@ -48,7 +48,7 @@ const ALL_ACTIONS: AvailableAction[] = [
 ];
 
 /** An unresolved send blocks every competing write for that conversation. */
-export const UNRESOLVED_OUTCOMES: DeliveryOutcome[] = ["dispatching", "accepted_pending", "unknown"];
+export const UNRESOLVED_OUTCOMES: DeliveryOutcome[] = ["dispatching", "accepted_pending", "unknown", "partial"];
 
 export function isDeliveryUnresolved(outcome: DeliveryOutcome): boolean {
   return UNRESOLVED_OUTCOMES.includes(outcome);

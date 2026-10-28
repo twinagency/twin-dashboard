@@ -405,7 +405,7 @@ function Composer({
               onChange={(event) => setText(event.target.value)}
               disabled={!canSend}
               rows={1}
-              placeholder={canSend ? "Write a reply as the creator…" : pending ? "Submitting…"
+              placeholder={canSend ? "Write a reply as the creator…" : pending ? pendingAction === "send_manual_message" ? "Sending…" : "Updating reply control…"
                 : sendBlockedReason === "Take over this conversation before sending a manual reply."
                   ? "Take over to reply" : "Reply unavailable, see reason below"}
               className="w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:cursor-not-allowed"
@@ -779,6 +779,7 @@ export default function InboxView({
               <div className="of-chat-header flex items-center gap-2.5 border-b border-line px-3.5 py-2.5">
                 <OnlyFansAvatar
                   name={fanName(detail.summary.fan)}
+                  avatarUrl={detail.summary.fan.avatarUrl}
                   className="h-9 w-9 text-[11px]"
                 />
                 <div className="min-w-0 flex-1">
@@ -828,6 +829,7 @@ export default function InboxView({
               <div className="of-profile-identity flex items-center gap-3">
                 <OnlyFansAvatar
                   name={fanName(detail.summary.fan)}
+                  avatarUrl={detail.summary.fan.avatarUrl}
                   className="h-11 w-11 text-xs"
                 />
                 <div className="min-w-0">
