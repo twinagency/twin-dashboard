@@ -25,10 +25,12 @@ export async function GET(
   const cursor = rawCursor && /^[A-Za-z0-9_-]{1,512}$/.test(rawCursor) ? rawCursor : null;
   if (rawCursor !== null && cursor === null) return badRequest("That page reference is not valid.");
 
+  const search = url.searchParams.get("q") ?? undefined;
+  if (search !== undefined && (search.length > 128 || /[\x00-\x1f]/.test(search))) return badRequest("That search is not valid.");
   const filter = url.searchParams.get("filter");
   if (filter !== null && !["ai", "unread", "attention"].includes(filter)) return badRequest("That conversation filter is not valid.");
-  const query = url.searchParams.get("query") ?? "";
-  if ([...url.searchParams.keys()].some(key => !["query", "cursor", "filter"].includes(key)) || ["query", "cursor", "filter"].some(key => url.searchParams.getAll(key).length > 1) || query.length > 200 || /[\u0000-\u001f]/.test(query)) return badRequest("Search fan name, username or ID using up to 200 characters.");
+  const query = url.searchParams.get("query") ?? url.searchParams.get("q") ?? "";
+  if ([...url.searchParams.keys()].some(key => !["query", "q", "cursor", "filter"].includes(key)) || ["query", "q", "cursor", "filter"].some(key => url.searchParams.getAll(key).length > 1) || query.length > 200 || /[\u0000-\u001f]/.test(query)) return badRequest("Search fan name, username or ID using up to 200 characters.");
   const result = await readConversations(context, { accountId, cursor, aiOnly: filter === "ai", search: { query, filter: (filter ?? "all") as "all" | "ai" | "unread" | "attention" } });
   return readResponse(result);
 }

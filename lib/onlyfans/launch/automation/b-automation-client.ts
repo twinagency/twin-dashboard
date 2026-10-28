@@ -21,7 +21,7 @@ export const readFollowUps = async (accountId: string, signal?: AbortSignal): Pr
   shaped(await bFetch(`/api/onlyfans-launch/automation/accounts/${enc(accountId)}/follow-ups`, { signal, readRecovery: true }), v => parseFollowUps(v, accountId));
 
 /** The ack proves a recorded event, not current state; callers must re-read the conversation. */
-export async function sendControl(accountId: string, conversationId: string, action: Exclude<ControlAction, "manual_message">, expectedRevision: number, signal?: AbortSignal): Promise<BReply<{ recordedRevision: number }>> {
+export async function sendControl(accountId: string, conversationId: string, action: Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">, expectedRevision: number, signal?: AbortSignal): Promise<BReply<{ recordedRevision: number }>> {
   const reply = await bFetch(`/api/onlyfans-controls/accounts/${enc(accountId)}/conversations/${enc(conversationId)}`, { method: "POST", body: { action, expectedRevision }, signal });
   if (reply.kind !== "ok") return reply as BReply<{ recordedRevision: number }>;
   const ack = parseControlAck(reply.data, { accountId, conversationId, action, expectedRevision });

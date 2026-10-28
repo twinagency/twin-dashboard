@@ -41,7 +41,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
   return (
     <Card ref={card} tabIndex={-1} id={connectionEditable ? undefined : `connection-${account.accountId}`} className="flex h-full flex-col p-4 scroll-mt-6" data-of-account-id={account.accountId}>
       <div className="of-account-identity">
-        <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
+        <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} large />
         <div className="min-w-0">
           <div className="of-account-name">{account.binding.creatorName}</div>
           <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans</span>
@@ -54,6 +54,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         <div><dt>Last sync</dt><dd><FreshnessLine freshness={account.syncFreshness} /></dd></div>
       </dl>
 
+      {account.syncHealth ? <dl className="mt-3 space-y-2 text-xs">{Object.entries(account.syncHealth).map(([area, status]) => <div key={area}><dt className="font-semibold capitalize">{area}</dt><dd>{status.lastSuccessAt || status.observedAt ? new Date((status.lastSuccessAt ?? status.observedAt)!).toLocaleString("en-AU", { timeZone: "Australia/Brisbane" }) + " AEST" : "No successful observation recorded"}{status.pending !== undefined ? ` · ${status.pending} pending` : ""}{status.pendingConversations !== undefined ? ` · ${status.pendingConversations} conversations pending` : ""}{status.quarantined ? ` · ${status.quarantined} quarantined` : ""}{status.coverage ? ` · ${status.coverage}` : ""}{status.reason ? ` · ${status.reason}` : ""}</dd></div>)}</dl> : null}
       {account.healthReason ? (
         <p className="mt-3 text-xs leading-5 text-[#8a5f06]" data-of-health-reason>
           {account.healthReason}
@@ -157,7 +158,7 @@ export default function AccountsView({
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
   const connected = accounts.filter((account) => account.health === "connected").length;
-  const needsAttention = accounts.length - connected;
+  const needsAttention = accounts.filter(account => account.health !== "connected" || account.needsAttention || account.syncFreshness.stale).length;
 
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">

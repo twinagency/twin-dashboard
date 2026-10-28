@@ -76,7 +76,7 @@ export type OnlyFansBackend = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
-    search?: InboxSearch,
+    search?: InboxSearch | string,
   ): Promise<BackendResult<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,

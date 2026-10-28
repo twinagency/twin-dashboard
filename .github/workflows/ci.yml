@@ -92,6 +92,9 @@ jobs:
       - name: OnlyFans takeover and blocked-control feedback
         run: |
           node --import tsx scripts/check-onlyfans-controls.ts
+          node --import tsx scripts/check-onlyfans-crm-video.ts
+          node --import tsx scripts/check-onlyfans-ai-visibility.tsx
+          node --import tsx scripts/check-inbox-refresh.ts
           node scripts/check-onlyfans-takeover-browser.mjs
 
       - name: Keep OnlyFans visual review evidence
@@ -177,6 +180,30 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Package the CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        run: |
+          test -f .next/standalone/server.js
+          test -z "$(find .next/standalone -type f -name '.env*' -print -quit)"
+          mkdir -p crm-release/standalone/.next crm-release/standalone/public
+          cp -a .next/standalone/. crm-release/standalone/
+          cp -a .next/static crm-release/standalone/.next/
+          cp -a public/. crm-release/standalone/public/
+          printf '%s\n' "$GITHUB_SHA" > crm-release/SOURCE_COMMIT
+          tar -C crm-release -czf onlyfans-crm-release.tgz .
+          sha256sum onlyfans-crm-release.tgz > onlyfans-crm-release.sha256
+
+      - name: Keep the exact CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-crm-release-${{ github.sha }}
+          path: |
+            onlyfans-crm-release.tgz
+            onlyfans-crm-release.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       # These checks use isolated fixtures, never production database credentials.
       - name: Behavioural checks

@@ -70,7 +70,10 @@ async function main() {
   assert.equal((html.match(/data-of-ai-reply/g) || []).length, 1, "Only verified AI messages receive an AI reply label");
   assert.equal((html.match(/data-of-handover-event/g) || []).length, 2, "Saved handovers appear inline");
   assert.match(html, />AI took over</);
-  assert.match(html, />AI chatting<\/button>/);
+  assert.match(html, />AI enabled<\/button>/);
+  assert.match(html, /Runtime status unavailable/);
+  assert.match(html, /Imported from OnlyFans/);
+  assert.match(html, /AEST/);
   const filteredHtml = renderToStaticMarkup(<InboxView {...props} aiOnly />);
   assert(!filteredHtml.includes('data-of-conversation-id="paused-fan"'));
   const refreshed = renderToStaticMarkup(<InboxView {...props} />);

@@ -156,13 +156,13 @@ export function applyAccounts(
  * Begin an accounts read. Returns the generation the result must come back
  * under, so an accounts response for a previous scope is refused.
  */
-export function beginAccounts(state: PreviewSelectionState): {
+export function beginAccounts(state: PreviewSelectionState, options: { background?: boolean } = {}): {
   state: PreviewSelectionState;
   generation: number;
 } {
   return {
     generation: state.scopeGeneration,
-    state: { ...state, accounts: { status: "loading" } },
+    state: options.background && ["ready", "stale"].includes(state.accounts.status) ? state : { ...state, accounts: { status: "loading" } },
   };
 }
 

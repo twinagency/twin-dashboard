@@ -36,7 +36,6 @@ try{
  });
  await page.goto(origin+'/vault-fixture',{waitUntil:'networkidle'});
  await page.locator('[data-of-vault-item="24"]').waitFor();
- await page.locator('.of-folder-tools > summary').click();
  await page.getByRole('button',{name:'New folder / add to folder',exact:true}).click();
  assert(await page.locator('[data-of-vault-folder-create]').isVisible(),'Create folder remains available in the compact folder tools');
  await page.getByRole('button',{name:'Create offer',exact:true}).click();

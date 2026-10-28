@@ -30,6 +30,7 @@ import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-searc
 
 import { clearSubmittedDraft, draftKey, readDraft, type InboxDraft } from "@/lib/onlyfans/inbox-drafts";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { threadNeedsRefresh, mergeListControl } from "@/lib/onlyfans/thread-refresh";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   availableActions,
@@ -229,7 +230,9 @@ export default function OnlyFansWorkspace({
   const [controls, setControls] = useState<PreviewControls>(DEFAULT_CONTROLS);
   const [commandResult, setCommandResult] = useState<CommandResult | null>(null);
   const [commandPending, setCommandPending] = useState(false);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
   const commandBusy = useRef(false);
+  const commandByThread = useRef(new Map<string, CommandResult>());
   const olderBusy = useRef(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
 
@@ -246,6 +249,11 @@ export default function OnlyFansWorkspace({
   const selectedSummary = selectedDetail && (selectedDetail.status === "ready" || selectedDetail.status === "stale") ? selectedDetail.data.summary : null;
   const handoverCurrent = handover && !handoverLoading && selectedSummary && handover.accountId === state.selectedAccountId &&
     handover.conversationId === selectedSummary.conversationId && handover.revision === selectedSummary.revision ? handover : null;
+  useEffect(() => {
+    const id = selectedSummary ? `${selectedSummary.accountId}:${selectedSummary.conversationId}` : "";
+    setCommandResult(commandByThread.current.get(id) ?? null);
+  }, [state.selectedAccountId, selectedSummary?.conversationId]);
+
   const requested = useRef<{ conversations: Set<string>; details: Set<string> }>({
     conversations: new Set(),
     details: new Set(),
@@ -311,6 +319,7 @@ export default function OnlyFansWorkspace({
   // the counters restarted.
   useEffect(() => {
     requested.current = { conversations: new Set(), details: new Set() };
+    commandByThread.current.clear();
     setCommandResult(null);
     commit(beginScope(ref.current));
   }, [viewerKey, requestedScope.creatorId, commit]);
@@ -322,7 +331,7 @@ export default function OnlyFansWorkspace({
   useEffect(() => {
     requested.current = { conversations: new Set(), details: new Set() };
     let cancelled = false;
-    const begun = beginAccounts(ref.current);
+    const begun = beginAccounts(ref.current, { background: sourceMode === "server" });
     commit(begun.state);
     void source
       .listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId })
@@ -333,6 +342,21 @@ export default function OnlyFansWorkspace({
       cancelled = true;
     };
   }, [source, commit, ref, requestedScope.creatorId, requestedScope.accountId]);
+
+  useEffect(() => {
+    if (sourceMode !== "server") return;
+    let active = true, busy = false;
+    const generation = ref.current.scopeGeneration;
+    const timer = setInterval(async () => {
+      if (busy || document.visibilityState !== "visible" || commandBusy.current) return;
+      busy = true;
+      try {
+        const result = await source.listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId });
+        if (active && (result.status === "ready" || result.status === "stale" || result.status === "empty")) commit(applyAccounts(ref.current, generation, result));
+      } finally { busy = false; }
+    }, 15000);
+    return () => { active = false; clearInterval(timer); };
+  }, [sourceMode, source, requestedScope.creatorId, requestedScope.accountId, commit, ref]);
 
   // Keep the selection inside the accounts the server actually returned.
   //
@@ -426,8 +450,20 @@ export default function OnlyFansWorkspace({
       commit(pending.state);
       try {
         const result = await source.listConversations(accountId, null, aiOnly, inboxSearch);
-        if (active) commit(applyConversationRefresh(ref.current, accountId,
-          pending.generation, pending.seq, result).state);
+        if (active) {
+          commit(applyConversationRefresh(ref.current, accountId, pending.generation, pending.seq, result).state);
+          const open = currentConversationState(ref.current);
+          if (!olderBusy.current && ref.current.selectedAccountId === accountId &&
+              (result.status === "ready" || result.status === "stale") && open && (open.status === "ready" || open.status === "stale")) {
+            const changed = result.data.items.find(row => threadNeedsRefresh(row, open.data.summary));
+            if (changed) {
+              const thread = requestConversation(ref.current, accountId, changed.conversationId, { background: true });
+              commit(thread.state);
+              const detail = await source.getConversation(accountId, changed.conversationId);
+              if (active) commit(applyConversation(ref.current, accountId, changed.conversationId, thread.generation, thread.seq, detail).state);
+            }
+          }
+        }
       } finally { busy = false; schedule(); }
     };
     const visible = () => {
@@ -593,6 +629,7 @@ export default function OnlyFansWorkspace({
     }
     commandBusy.current = true;
     setCommandPending(true);
+    setPendingAction(request.command);
     setCommandResult(null);
     const generation = ref.current.scopeGeneration;
     try {
@@ -608,7 +645,9 @@ export default function OnlyFansWorkspace({
       if (generation !== ref.current.scopeGeneration) return;
       const selected = () => ref.current.selectedAccountId === request.accountId &&
         ref.current.byAccount[request.accountId]?.selectedConversationId === request.conversationId;
+      commandByThread.current.set(`${request.accountId}:${request.conversationId}`, result);
       if (selected()) setCommandResult(result);
+      setPendingAction(null);
       if (!result.simulated) {
         const accounts = await source.listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId });
         commit(applyAccounts(ref.current, generation, accounts));
@@ -619,10 +658,10 @@ export default function OnlyFansWorkspace({
           // Refresh from the canonical store; the acknowledgement is historical.
           requested.current.conversations.add(request.accountId);
           requested.current.details.add(`${request.accountId}:${request.conversationId}`);
-          const list = requestConversations(ref.current, request.accountId);
+          const list = requestConversations(ref.current, request.accountId, { background: true });
           commit(list.state);
           const listRead = await source.listConversations(request.accountId, null, aiOnlyRef.current, searchRef.current);
-          commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
+          commit(applyConversationRefresh(ref.current, request.accountId, list.generation, list.seq, listRead).state);
           if (generation === ref.current.scopeGeneration && selected()) {
             requested.current.details.add(`${request.accountId}:${request.conversationId}`);
             const detail = requestConversation(ref.current, request.accountId, request.conversationId, { background: true });
@@ -636,7 +675,7 @@ export default function OnlyFansWorkspace({
     } catch {
       commit(applyAccounts(ref.current, generation, { status: "unavailable",
         message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
-    } finally { commandBusy.current = false; setCommandPending(false); }
+    } finally { commandBusy.current = false; setCommandPending(false); setPendingAction(null); }
   }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal]);
 
   const submitAction = useCallback(
@@ -753,9 +792,8 @@ export default function OnlyFansWorkspace({
       conversations={mapState<CursorPage<ConversationSummary>, CursorPage<ConversationSummary>>(
         state.selectedAccountId
           ? (state.byAccount[state.selectedAccountId]?.conversations ?? { status: "loading" })
-          : { status: "empty" },
-        page => ({ ...page, items: page.items.map(summary => selectedSummary?.accountId === summary.accountId &&
-          selectedSummary.conversationId === summary.conversationId && selectedSummary.revision >= summary.revision ? selectedSummary : summary) }),
+          : (state.accounts.status === "empty" ? { status: "empty" } : { status: "loading" }),
+        page => ({ ...page, items: page.items.map(summary => mergeListControl(summary, selectedSummary)) }),
       )}
       selectedConversationId={
         state.selectedAccountId
@@ -786,6 +824,7 @@ export default function OnlyFansWorkspace({
       onCommand={handleCommand}
       commandResult={commandResult}
       commandPending={commandPending}
+      pendingAction={pendingAction}
       onRetryCommand={() => {
         if (commandResult && !commandResult.simulated && commandResult.outcome === "unconfirmed") {
           void executeCommand(commandResult.request);

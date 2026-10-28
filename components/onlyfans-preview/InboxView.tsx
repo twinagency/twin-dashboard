@@ -19,12 +19,13 @@ import CreatorPortrait from "./CreatorPortrait";
 import MessageAttachments from "./MessageAttachments";
 import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
-import FanAvatar from "@/components/FanAvatar";
+import OnlyFansAvatar from "./OnlyFansAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
-import { conversationTimeline, isAiChatting } from "@/lib/onlyfans/ai-visibility";
+import { conversationTimeline, isAiChatting, effectiveAiStatus } from "@/lib/onlyfans/ai-visibility";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { ActionSet } from "@/lib/onlyfans-preview/actions";
-import { formatAge, formatPreviewTime } from "@/lib/onlyfans-preview/fixtures";
+import { formatAge } from "@/lib/onlyfans-preview/fixtures";
+import { displayTime as formatPreviewTime, displayDay, displayDateTime } from "@/lib/onlyfans/time";
 import type {
   AvailableAction,
   CommandPayload,
@@ -84,7 +85,7 @@ function AccountChips({
         data-of-account-chip={account.accountId} aria-pressed={account.accountId === activeAccountId}
         onClick={() => onSelectAccount(account.accountId)} title={`${account.binding.creatorName} · @${account.binding.handle}`}
         className="of-account" aria-label={account.binding.creatorName + " @" + account.binding.handle}>
-        <span className="creator-name"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} /></span>
+        <span className="creator-name"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} /></span>
         <span className="of-account-copy"><strong className="creator-name">{account.binding.creatorName}</strong><small>@{account.binding.handle}</small></span>
         <span className="of-health" data-health={account.health} aria-label={account.health} title={account.healthReason ?? account.health} />
       </button>)}
@@ -92,12 +93,14 @@ function AccountChips({
   );
 }
 
-function AiChattingBadge() {
-  return <span className="of-ai-badge" data-of-ai-chatting title="AI replies are enabled for this conversation">AI chatting</span>;
+function AiChattingBadge({ conversation, account }: { conversation: ConversationSummary; account: OfAccount | null }) {
+  const status = effectiveAiStatus(conversation, account);
+  return <span className="of-ai-badge" data-of-ai-chatting title={status}>{status}</span>;
 }
 
 function ConversationList({
   conversations,
+  account,
   selectedConversationId,
   onSelectConversation,
   nextCursor,
@@ -109,6 +112,7 @@ function ConversationList({
   onInboxSearchChange,
 }: {
   conversations: RequestState<CursorPage<ConversationSummary>>;
+  account: OfAccount | null;
   selectedConversationId: string | null;
   onSelectConversation: (conversationId: string) => void;
   nextCursor: string | null;
@@ -121,8 +125,9 @@ function ConversationList({
 }) {
   const [query, setQuery] = useState(inboxSearch.query);
   const filter = aiOnly ? "ai" : inboxSearch.filter;
-  const visibleConversations = (conversations.status === "ready" || conversations.status === "stale") && filter === "ai"
-    ? { ...conversations, data: { ...conversations.data, items: conversations.data.items.filter(isAiChatting) } } : conversations;
+  const localMatch = (row: ConversationSummary) => filter === "ai" ? isAiChatting(row) : filter === "paused" ? ["paused", "no_contact"].includes(row.automationMode) : filter === "review" ? row.attentionReasons?.includes("human_review") : filter === "delivery" ? row.attentionReasons?.includes("delivery_problem") : true;
+  const visibleConversations = conversations.status === "ready" || conversations.status === "stale"
+    ? { ...conversations, data: { ...conversations.data, items: conversations.data.items.filter(localMatch) } } : conversations;
   const searchChange = useRef(onInboxSearchChange);
   searchChange.current = onInboxSearchChange;
   useEffect(() => { const timer = setTimeout(() => searchChange.current({ query, filter }), 250); return () => clearTimeout(timer); }, [query, filter]);
@@ -131,8 +136,9 @@ function ConversationList({
     <div className="of-list-content">
     <div className="of-list-heading"><h2>Conversations</h2></div>
     <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search fan name, username or ID</span><input type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder="Search fan name, username or ID" /></label>
-    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["attention", "Attention"], ["ai", "AI chatting"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
+    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Needs reply"], ["attention", "Attention"], ["paused", "Intentionally paused"], ["review", "Human review"], ["delivery", "Delivery problem"], ["ai", "AI enabled"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
     <p className="of-filter-note">Searches saved fan names, usernames and IDs across this account. Message contents are not searched.</p>
+    {["paused", "review", "delivery"].includes(filter) && nextCursor ? <p className="of-filter-note">This status filter covers loaded search results. Load more to inspect further matches.</p> : null}
     <RequestStateBlock
       showStaleWarning={false}
       state={visibleConversations}
@@ -162,10 +168,9 @@ function ConversationList({
                         : "hover:bg-[#f8fafc]"
                     }`}
                   >
-                    <FanAvatar
-                      cloneId=""
-                      telegramId={null}
+                    <OnlyFansAvatar
                       name={conversation.fan.displayName}
+                      avatarUrl={conversation.fan.avatarUrl}
                       className="h-9 w-9 text-[11px]"
                     />
                     <span className="min-w-0 flex-1">
@@ -188,7 +193,7 @@ function ConversationList({
                         ) : null}
                         {["failed", "partial", "unknown", "refused"].includes(conversation.delivery) ? <DeliveryPill outcome={conversation.delivery} /> : null}
                         {conversation.unreadCount > 0 ? <span className="of-unread" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount}</span> : null}
-                        {isAiChatting(conversation) ? <AiChattingBadge /> : null}
+                        {isAiChatting(conversation) ? <AiChattingBadge conversation={conversation} account={account} /> : null}
                       </span>
                     </span>
                   </button>
@@ -264,7 +269,7 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
         </div>
       ) : (
         timeline.map((entry, index) => {
-          if (entry.kind === "control") return <div key={`control:${entry.event.revision}`} className="of-control-event" data-of-handover-event={entry.event.revision}><span>{entry.label}</span><time dateTime={entry.at}>{new Date(entry.at).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</time></div>;
+          if (entry.kind === "control") return <div key={`control:${entry.event.revision}`} className="of-control-event" data-of-handover-event={entry.event.revision}><span>{entry.label}</span><time dateTime={entry.at}>{displayDateTime(entry.at)}</time></div>;
           const message = entry.message;
           const inbound = message.direction === "inbound";
           const previousEntry = timeline[index - 1], nextEntry = timeline[index + 1];
@@ -274,7 +279,7 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
           const endsRun = !next || next.direction !== message.direction;
           return (
             <div key={message.messageId}>
-              {!previous || new Date(previous.occurredAt).toDateString() !== new Date(message.occurredAt).toDateString() ? <div className="of-message-day">{new Date(message.occurredAt).toLocaleDateString(undefined, {day:"numeric",month:"short",year:"numeric"})}</div> : null}
+              {!previous || displayDay(previous.occurredAt) !== displayDay(message.occurredAt) ? <div className="of-message-day">{displayDay(message.occurredAt)}</div> : null}
 
               <div className={"flex " + (inbound ? "justify-start" : "justify-end") + (startsRun ? " mt-2" : " mt-0.5")}>
                 <div className="flex max-w-[78%] flex-col items-stretch gap-1">
@@ -289,11 +294,11 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
                   >
                     <MessageAttachments accountId={detail.accountId} attachments={message.attachments} conversationId={message.conversationId} messageId={message.messageId} />
                     <span className="whitespace-pre-wrap">{onlyFansMessageText(message.body)}</span>
-                    <span className="tg-meta">{formatPreviewTime(message.occurredAt)}</span>
+                    <time className="tg-meta" dateTime={message.occurredAt} title={message.occurredAt}>{formatPreviewTime(message.occurredAt)}</time>
                   </div>
                   {!inbound ? (
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
-                      {message.origin === "ai" ? <span className="of-ai-reply" data-of-ai-reply>AI reply</span> : null}
+                      {message.origin === "ai" ? <span className="of-ai-reply" data-of-ai-reply>AI message</span> : message.origin === "human" ? <span>Human message</span> : <span>Imported from OnlyFans</span>}
                       {message.delivery === "sent" ? <span className="of-sent-receipt" title={`Provider accepted this message from ${ORIGIN_LABEL[message.origin]}. Read and purchase status are not confirmed.${message.evidenceRef ? " Receipt recorded." : ""}`}><Check size={13} aria-hidden="true" /><span className="sr-only">Sent to provider</span></span> : <DeliveryPill outcome={message.delivery} />}
                       {message.delivery !== "sent" && message.evidenceRef ? <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span> : null}
                     </div>
@@ -321,6 +326,7 @@ function Composer({
   disabledReason,
   simulated,
   pending,
+  pendingAction,
   result,
 }: {
   draftId: string;
@@ -332,6 +338,7 @@ function Composer({
   disabledReason: string | null;
   simulated: boolean;
   pending: boolean;
+  pendingAction?: string | null;
   result: CommandResult | null;
 }) {
   const draft = useSyncExternalStore(subscribeDraft, () => readDraft(draftId), emptyDraft);
@@ -378,7 +385,7 @@ function Composer({
         <p className="text-xs text-muted">Replying as {account.binding.creatorName} · @{account.binding.handle}. Draft kept in this tab for up to 8 hours, until reload or sign-out.</p>
         {takeoverAvailable ? <button type="button" data-of-composer-takeover onClick={onTakeover}
           disabled={takeoverDisabled} className="of-control-button of-primary">
-          <UserRound size={16} aria-hidden="true" />{pending ? "Updating reply control…" : "Take over to reply"}
+          <UserRound size={16} aria-hidden="true" />{pending && pendingAction === "request_takeover" ? "Requesting takeover…" : "Take over to reply"}
         </button> : null}
         {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
           <label className="block text-[11px] font-medium text-muted">Paid content
@@ -401,9 +408,9 @@ function Composer({
               onChange={(event) => setText(event.target.value)}
               disabled={!canSend}
               rows={1}
-              placeholder={canSend ? "Write a reply as the creator…" : pending ? "Submitting…"
+              placeholder={canSend ? "Write a reply as the creator…" : pending ? pendingAction === "send_manual_message" ? "Sending…" : "Updating reply control…"
                 : sendBlockedReason === "Take over this conversation before sending a manual reply."
-                  ? "Take over to reply" : "Reply unavailable — see reason below"}
+                  ? "Take over to reply" : "Reply unavailable, see reason below"}
               className="w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:cursor-not-allowed"
             />
           </label>
@@ -414,9 +421,10 @@ function Composer({
             aria-label="Send as creator"
             className="grid size-7 shrink-0 place-items-center rounded-lg bg-accent text-white transition disabled:cursor-not-allowed disabled:bg-elev disabled:text-muted"
           >
-            <Send className="size-3.5" />
+            {pending && pendingAction === "send_manual_message" ? <span className="text-[10px]">…</span> : <Send className="size-3.5" />}
           </button>
         </div>
+        {result && !result.simulated && result.request.command === "send_manual_message" ? <p role={result.accepted ? "status" : "alert"} className="text-xs" data-of-composer-result>{result.note}</p> : null}
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
           {simulated ? <SimulatedTag /> : null}
           <span>
@@ -434,7 +442,7 @@ function Composer({
 
 const RESOLUTION_OPTIONS: { value: DeliveryResolutionDecision; label: string }[] = [
   { value: "delivered", label: "The evidence shows it was delivered" },
-  { value: "not_delivered", label: "The evidence shows it was not delivered" },
+
 ];
 
 function ActionColumn({
@@ -445,20 +453,23 @@ function ActionColumn({
   onCommand,
   onResolve,
   pending,
+  pendingAction,
   onRetry,
 }: {
   actionSet: ActionSet;
   viewer: PreviewViewer;
   result: CommandResult | null;
   pending: boolean;
+  pendingAction?: string | null;
   onRetry: () => void;
   incident: ConversationDetail["deliveryIncident"];
   onCommand: (action: AvailableAction, payload: CommandPayload) => void;
-  onResolve: (attemptId: string, decision: DeliveryResolutionDecision) => void;
+  onResolve: (attemptId: string, decision: DeliveryResolutionDecision, providerMessageId: string) => void;
 }) {
   // What the operator read in the provider's evidence. The resolution command
   // carries it, so a decision cannot be submitted without one being made.
   const [decision, setDecision] = useState<DeliveryResolutionDecision | null>(null);
+  const [providerMessageId, setProviderMessageId] = useState("");
 
   return (
     <div className="flex flex-col gap-5">
@@ -466,7 +477,7 @@ function ActionColumn({
         <div data-of-incident className="rounded-xl border border-[#f0c3cb] bg-[#fff5f6] p-3">
           <div className="flex items-center gap-2 text-sm font-semibold text-[#9b2f62]">
             <AlertTriangle className="size-4" />
-            Delivery needs resolving
+            {incident.outcome === "dispatching" ? "Sending" : incident.outcome === "accepted_pending" ? "CRM receipt update pending" : "Delivery needs resolving"}
           </div>
           <p className="mt-1 text-xs leading-5 text-muted">{incident.detail}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted">
@@ -478,7 +489,8 @@ function ActionColumn({
               What the evidence shows
             </div>
             <div className="flex flex-col gap-1.5">
-              {RESOLUTION_OPTIONS.map((option) => (
+              {actionSet.available.some(entry => entry.action === "resolve_delivery_evidence") ? <label>Provider message ID<input aria-label="Provider message ID" inputMode="numeric" value={providerMessageId} onChange={event => setProviderMessageId(event.target.value)} /><small>The server verifies this exact message against OnlyFans. Missing history cannot confirm failure.</small></label> : <p>Keep this attempt held. Ask an account operator to reconcile the exact provider receipt in Operations.</p>}
+              {(actionSet.available.some(entry => entry.action === "resolve_delivery_evidence") ? RESOLUTION_OPTIONS : []).map((option) => (
                 <button
                   key={option.value}
                   type="button"
@@ -533,14 +545,14 @@ function ActionColumn({
       <div className="of-reply-actions" data-of-actions>
         {actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action)).map(entry => {
           const resolution = entry.action === "resolve_delivery_evidence";
-          const needsDecision = resolution && decision === null;
+          const needsDecision = resolution && (decision === null || !/^[1-9][0-9]{0,15}$/.test(providerMessageId));
           const primary = resolution || ["request_takeover", "release_takeover", "resume_automation"].includes(entry.action);
           const label = entry.action === "pause_automation" ? "Pause AI" : entry.action === "resume_automation" ? "Resume AI" : entry.action === "release_takeover" ? "Hand back to AI" : entry.label;
           const Icon = entry.action === "request_takeover" ? UserRound : entry.action === "pause_automation" ? Pause : Sparkles;
           return <div key={entry.action}><button type="button" data-of-action={entry.action} disabled={needsDecision || pending}
             title={needsDecision ? "Choose what the evidence shows first." : undefined}
-            onClick={() => resolution ? incident && decision && onResolve(incident.attemptId, decision) : onCommand(entry.action, NO_PAYLOAD)}
-            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending ? "Saving…" : label}</button>
+            onClick={() => resolution ? incident && decision && onResolve(incident.attemptId, decision, providerMessageId) : onCommand(entry.action, NO_PAYLOAD)}
+            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending && pendingAction === entry.action ? entry.action === "request_takeover" ? "Requesting takeover…" : entry.action === "release_takeover" ? "Handing back…" : "Saving…" : label}</button>
             {needsDecision ? <p className="of-filter-note">Choose what the evidence shows before resolving.</p> : null}</div>;
         })}
         {actionSet.available.every(entry => ["send_manual_message", "mark_no_contact"].includes(entry.action)) ? <p className="of-filter-note">No reply changes are available right now.</p> : null}
@@ -573,7 +585,7 @@ function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId:
 function FanMetrics({detail}: {detail:ConversationDetail}) {
   const financials = parseFanFinancials(detail.financials);
   return <div>
-    <div className="of-fan-metrics"><div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
+    <div className="of-fan-metrics">{!financials ? <div><strong>Unknown</strong><span>Recorded cleared spend</span></div> : null}<div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
     <h3 className="of-section-heading">Recorded spend</h3>
     {!financials ? <p className="of-empty-context">Financial evidence unavailable. Refresh after the account read service recovers.</p> : <>
       {financials.totals.length ? <ul className="text-xs space-y-2">{financials.totals.map(row => <li key={`${row.currency}:${row.status}`}>
@@ -654,6 +666,9 @@ export default function InboxView({
   viewer,
   onCommand,
   commandResult,
+  pendingAction,
+  drafts,
+  onSearchChange,
   commandPending = false,
   onRetryCommand = () => {},
   nextCursor,
@@ -691,6 +706,9 @@ export default function InboxView({
   onCommand: (action: AvailableAction, payload: CommandPayload) => void;
   commandResult: CommandResult | null;
   commandPending?: boolean;
+  pendingAction?: string | null;
+  drafts?: Map<string, { text: string; item: string }>;
+  onSearchChange?: (query: string) => void;
   onRetryCommand?: () => void;
   nextCursor: string | null;
   loadingMore: boolean;
@@ -762,6 +780,7 @@ export default function InboxView({
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ConversationList
               conversations={conversations}
+              account={activeAccount}
               selectedConversationId={selectedConversationId}
               onSelectConversation={id => { onSelectConversation(id); setMobilePanel("chat"); }}
               nextCursor={nextCursor}
@@ -783,10 +802,9 @@ export default function InboxView({
           ) : (
             <>
               <div className="of-chat-header flex items-center gap-2.5 border-b border-line px-3.5 py-2.5">
-                <FanAvatar
-                  cloneId=""
-                  telegramId={null}
+                <OnlyFansAvatar
                   name={fanName(detail.summary.fan)}
+                  avatarUrl={detail.summary.fan.avatarUrl}
                   className="h-9 w-9 text-[11px]"
                 />
                 <div className="min-w-0 flex-1">
@@ -797,7 +815,7 @@ export default function InboxView({
                     <span className="creator-name">{activeAccount.binding.creatorName}</span> · @{activeAccount.binding.handle}
                   </div>
                 </div>
-                {isAiChatting(detail.summary) ? <AiChattingBadge /> : null}
+                {isAiChatting(detail.summary) ? <AiChattingBadge conversation={detail.summary} account={activeAccount} /> : null}
               </div>
 
               <Thread detail={detail} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
@@ -816,6 +834,7 @@ export default function InboxView({
                     ? "Resolve the previous request outcome or retry that same request before composing another." : null)}
                   simulated={showPreviewChrome}
                   pending={commandPending}
+                  pendingAction={pendingAction}
                   result={commandResult}
                 />
               ) : null}
@@ -832,10 +851,9 @@ export default function InboxView({
             <div className="of-fan-sidebar flex flex-col gap-5">
               <h2 className="of-section-heading">Fan profile</h2>
               <div className="of-profile-identity flex items-center gap-3">
-                <FanAvatar
-                  cloneId=""
-                  telegramId={null}
+                <OnlyFansAvatar
                   name={fanName(detail.summary.fan)}
+                  avatarUrl={detail.summary.fan.avatarUrl}
                   className="h-11 w-11 text-xs"
                 />
                 <div className="min-w-0">
@@ -843,7 +861,7 @@ export default function InboxView({
                     {fanName(detail.summary.fan)}
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
-                    <span>Ref {detail.summary.fan.shortRef}</span>
+                    <span>{detail.summary.fan.username ? `@${detail.summary.fan.username} · ` : ""}Ref {detail.summary.fan.shortRef}</span>
                   </div>
                 </div>
               </div>
@@ -851,18 +869,21 @@ export default function InboxView({
               <FanMetrics detail={detail} />
               {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}
               <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
+              {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn
                 actionSet={actionSet}
                 viewer={viewer}
                 result={commandResult}
                 pending={commandPending}
+                  pendingAction={pendingAction}
                 onRetry={onRetryCommand}
                 incident={detail.deliveryIncident}
                 onCommand={onCommand}
-                onResolve={(attemptId, decision) =>
+                onResolve={(attemptId, decision, providerMessageId) =>
                   onCommand("resolve_delivery_evidence", {
                     kind: "delivery_resolution",
+                    providerMessageId,
                     attemptId,
                     decision,
                   })

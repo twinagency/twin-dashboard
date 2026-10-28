@@ -144,8 +144,10 @@ export function createFetchOnlyFansTransport(
         request: command, note, recordedRevision, intentId });
       const manualBody = command.command === "send_manual_message" && command.payload.kind === "manual_message" ? command.payload.body : null;
       const manual = manualBody !== null;
+      const resolution = command.command === "resolve_delivery_evidence" && command.payload.kind === "delivery_resolution";
       const action = manual ? "manual_message" : command.command;
-      if ((!manual && (!isControlAction(action) || command.payload.kind !== "none")) ||
+      if (resolution && (command.payload.kind !== "delivery_resolution" || command.payload.decision !== "delivered" || !/^[1-9][0-9]{0,15}$/.test(command.payload.providerMessageId ?? ""))) return result("refused", "An exact provider message ID is required for reconciliation.");
+      if ((!manual && !resolution && (!isControlAction(action) || command.payload.kind !== "none")) ||
           (manualBody !== null && (!manualBody.trim() || new TextEncoder().encode(manualBody).length > 4000))) {
         return result("refused", "That action is not configured for this account.");
       }
@@ -154,6 +156,7 @@ export function createFetchOnlyFansTransport(
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, expectedRevision: command.expectedRevision,
+            ...(resolution && command.payload.kind === "delivery_resolution" ? { attemptId: command.payload.attemptId, decision: command.payload.decision, providerMessageId: Number(command.payload.providerMessageId), requestKey: command.idempotencyKey } : {}),
             ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
               ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}) } : {}) }),
         });
