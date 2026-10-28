@@ -10,7 +10,7 @@
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import Link from "next/link";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { formatAge } from "@/lib/onlyfans-preview/fixtures";
@@ -33,9 +33,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean }) {
+function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome, openConnection }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean; openConnection: boolean }) {
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openConnection) { card.current?.scrollIntoView({ block: "start" }); card.current?.focus({ preventScroll: true }); }
+  }, [openConnection]);
   return (
-    <Card className="flex h-full flex-col p-4" data-of-account-id={account.accountId}>
+    <Card ref={card} tabIndex={-1} id={`connection-${account.accountId}`} className="flex h-full flex-col p-4 scroll-mt-6" data-of-account-id={account.accountId}>
       <div className="of-account-identity">
         <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
         <div className="min-w-0">
@@ -56,7 +60,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         </p>
       ) : null}
 
-      <details className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
+      <details open={openConnection && !connectionEditable || undefined} className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
         <summary>Account details</summary>      <dl className="mt-4 space-y-1.5 text-xs">
         <div className="flex items-center justify-between gap-3">
           <dt className="text-muted">Manual send</dt>
@@ -112,7 +116,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
       {agencyConnectionEditable ? <div className="mt-3 flex flex-wrap items-start gap-2"><AdminOnlyFansSignIn creators={[{id:account.binding.creatorId,name:account.binding.creatorName}]} accountId={account.accountId}/></div> : null}
-      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} /> : null}
+      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} initiallyOpen={openConnection} /> : null}
     </Card>
   );
 }
@@ -121,6 +125,7 @@ export default function AccountsView({
   controls,
   accountsState,
   activeAccountId,
+  openConnectionAccountId = null,
   onSelectAccount,
   readOnly,
   creatorName,
@@ -133,6 +138,7 @@ export default function AccountsView({
   controls?: ReactNode;
   accountsState: RequestState<OfAccount[]>;
   activeAccountId: string | null;
+  openConnectionAccountId?: string | null;
   onSelectAccount: (accountId: string) => void;
   readOnly: boolean;
   /** From the account binding the server returned; null when nothing came back. */
@@ -196,6 +202,7 @@ export default function AccountsView({
                 {list.map((account) => (
                   <div key={account.accountId} data-of-selected={activeAccountId === account.accountId || undefined} role="group" tabIndex={0} aria-label={`Select ${account.binding.creatorName} account`} onKeyDown={event => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onSelectAccount(account.accountId); } }} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
+                      openConnection={openConnectionAccountId === account.accountId}
                       agencyConnectionEditable={agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)}
                       connectionEditable={!agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>
@@ -208,4 +215,5 @@ export default function AccountsView({
     </div>
   );
 }
+
 

@@ -17,9 +17,9 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
-export default function ConnectionEditor({ accountId,creatorId,creatorName }: { accountId: string;creatorId?:string;creatorName?:string }) {
+export default function ConnectionEditor({ accountId,creatorId,creatorName,initiallyOpen = false }: { accountId: string;creatorId?:string;creatorName?:string;initiallyOpen?:boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [data, setData] = useState<Connection | null>(null), [notice, setNotice] = useState("");
   const [owner, setOwner] = useState(""), [xHash, setXHash] = useState(""), [proxy, setProxy] = useState("");
   const [modelEnabled, setModelEnabled] = useState(false), [modelId, setModelId] = useState(""), [apiKey, setApiKey] = useState("");
@@ -53,6 +53,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
       return true;
     } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
+  useEffect(() => {
+    if (initiallyOpen) { setOpen(true); void read(); }
+  }, [initiallyOpen, read]);
   useEffect(() => {
     if (!open || denied) return;
     const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitting.current) void read(false); }, 15000);
@@ -137,6 +140,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
           <dt className="text-muted">Used allowance</dt><dd>{data.usedUnits} / {data.limitUnits}</dd>
         </dl>
         <p className="mt-2 text-xs text-muted" data-of-connection-detail>{CONNECTION_DETAILS[state]}</p>
+        {data.lastError ? <details className="mt-2 text-xs" data-of-connection-error><summary>Recorded connection error</summary><code className="mt-1 block break-all">{data.lastError}</code></details> : null}
         {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
         <ConnectionSyncStatus connection={data} state={state} />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -228,3 +232,4 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
     </div> : null}
   </Card>;
 }
+
