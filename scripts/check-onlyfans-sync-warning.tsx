@@ -7,7 +7,9 @@ import { accounts } from "../lib/onlyfans-preview/fixtures";
 import { inboxSyncNotice } from "../lib/onlyfans/inbox-sync";
 import { connectionAiStatus } from "../lib/onlyfans-connections/presentation";
 import { CONNECTION_SCHEMA, type Connection } from "../lib/onlyfans-connections/contract";
-const { JSDOM } = createRequire(import.meta.url)("jsdom");
+const requireNative = createRequire(import.meta.url);
+const { JSDOM } = requireNative("jsdom");
+requireNative.extensions[".css"] = module => { module.exports = {}; };
 
 async function main() {
   const fresh = { asOf: "2026-10-28T11:50:00Z", maxAgeSeconds: 1800, stale: false };
