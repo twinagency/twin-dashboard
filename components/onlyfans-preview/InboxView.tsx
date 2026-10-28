@@ -120,7 +120,9 @@ function ConversationList({
   onInboxSearchChange: (search: InboxSearch) => void;
 }) {
   const [query, setQuery] = useState(inboxSearch.query);
-  const filter = inboxSearch.filter;
+  const filter = aiOnly ? "ai" : inboxSearch.filter;
+  const visibleConversations = (conversations.status === "ready" || conversations.status === "stale") && filter === "ai"
+    ? { ...conversations, data: { ...conversations.data, items: conversations.data.items.filter(isAiChatting) } } : conversations;
   const searchChange = useRef(onInboxSearchChange);
   searchChange.current = onInboxSearchChange;
   useEffect(() => { const timer = setTimeout(() => searchChange.current({ query, filter }), 250); return () => clearTimeout(timer); }, [query, filter]);
@@ -133,7 +135,7 @@ function ConversationList({
     <p className="of-filter-note">Searches saved fan names, usernames and IDs across this account. Message contents are not searched.</p>
     <RequestStateBlock
       showStaleWarning={false}
-      state={conversations}
+      state={visibleConversations}
       label="conversations"
       render={(page) =>
         page.items.length === 0 && !nextCursor ? (
