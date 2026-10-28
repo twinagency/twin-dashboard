@@ -413,3 +413,5 @@
 
 .platform :global(.of-folder-heading) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
 .platform :global(.of-folder-heading > button) { min-height: 36px; padding: 6px 10px; }
+
+.embedded.platform.platform.platform { display: block; height: auto; overflow: visible; border: 1px solid #dce8f2; border-radius: 14px; }
