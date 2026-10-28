@@ -53,7 +53,7 @@ async function main() {
     new NextRequest(origin + path, { method, headers: { ...headers, ...extra } });
   try {
     const readonly = await agencyIdentity("verified-token");
-    assert.deepEqual(readonly, { id: MOXY_MANAGEMENT_AGENCY_ID, name: "Moxy", userId: "verified-user", canManage: false, canChat: false, cloneIds: [assigned] });
+    assert.deepEqual(readonly, { id: MOXY_MANAGEMENT_AGENCY_ID, name: "Moxy", userId: "verified-user", canManage: false, cloneIds: [assigned] });
     assert.equal(agencyCanManage(readonly), false, "spoofed Auth metadata does not grant management");
     assert.equal((await middleware(request("/users"))).status, 403, "cookies/headers cannot promote read-only Moxy");
     // Moxy read-only must apply before agency/public route shortcuts.

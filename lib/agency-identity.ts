@@ -13,7 +13,7 @@ export async function agencyIdentity(token: string | undefined): Promise<AgencyI
   // This permission is server-owned membership data. Never copy it from Auth
   // metadata, a browser cookie, branding, or a submitted form field.
   const cloneIds = identity ? staffCreatorIds(identity.cloneIds, member.data) : null;
-  return identity && cloneIds ? { ...identity, cloneIds, ...(member.data.creator_scope === "selected" ? { creatorScope: "selected" as const } : {}), userId: data.user.id, canManage: member.data.can_manage === true, canChat: member.data.can_chat === true } : null;
+  return identity && cloneIds ? { ...identity, cloneIds, ...(member.data.creator_scope === "selected" ? { creatorScope: "selected" as const } : {}), userId: data.user.id, canManage: member.data.can_manage === true, ...(member.data.can_chat === true ? { canChat: true } : {}) } : null;
 }
 
 // Builds the SAME identity shape a real login produces, but keyed directly by
