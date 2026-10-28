@@ -4,13 +4,14 @@ import { inputCls } from "@/components/clone/fields";
 
 import Link from "next/link";
 import { createPortal } from "react-dom";
-import { Upload, Plus, Search, Grid2X2, List, RefreshCw, Image as ImageIcon, Video, MoreHorizontal } from "lucide-react";
+import { Upload, Plus, Search, Grid2X2, List, RefreshCw, Image as ImageIcon, Video, Folder, MoreHorizontal } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { parseContentPrice } from "@/lib/onlyfans/content";
 import { parseVault, parseVaultCreateAck, parseVaultSyncAck, validVaultProduct,
   type VaultRead, type VaultItem, type VaultCreateRequest, type VaultSyncRequest } from "@/lib/onlyfans/vault";
+import type { FolderSummary } from "@/lib/onlyfans/vault-editing";
 import VaultOrganization from "./VaultOrganization";
 import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
@@ -49,6 +50,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   const [search, setSearch] = useState(""), [mediaKind, setMediaKind] = useState("all");
   const appliedFilters = useRef({ query: "", kind: "all", folderId: "" });
   const readGeneration = useRef(0);
+  const [folders,setFolders]=useState<FolderSummary[]>([]),[refreshKey,setRefreshKey]=useState(0);
   const [folderId,setFolderId]=useState(""),[assetId,setAssetId]=useState<string|null>(null),[organizationBusy,setOrganizationBusy]=useState(false);
   const base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}`;
   const clearSelection = useCallback(() => { setSelected(new Map()); setPreviews(new Set()); }, []);
@@ -69,7 +71,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       const next = response.ok ? parseVault(await response.json(), accountId) : null;
       if (!active.current || generation !== readGeneration.current) return false;
       if (!next) { if (!background) setData(null); setNotice("The recorded vault could not be refreshed. Try again."); return false; }
-      appliedFilters.current = filters; setData(next); setCursor(after);
+      appliedFilters.current = filters; setData(next);setRefreshKey(value=>value+1); setCursor(after);
       setSelected(previous=>new Map([...previous].map(([id,row])=>[id,next.items.find(item=>item.mediaId===id)??row])));
       return true;
     } catch { if (active.current && generation === readGeneration.current) { if (!background) setData(null); setNotice("The recorded vault could not be refreshed. Try again."); } return false; }
@@ -85,12 +87,12 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   },[read,clearSelection]);
   const organizationChanged = useCallback(()=>{void read(cursor);router.refresh();},[read,router,cursor]);
   useEffect(() => {
-    if (busy || denied || organizationBusy || assetId || picker || retry || !["pending", "running"].includes(data?.sync?.status ?? "")) return;
+    if (busy || denied || organizationBusy || assetId || picker || retry || !data) return;
     let reading = false;
     const timer = setInterval(() => {
       if (reading || document.visibilityState !== "visible" || submitting.current) return;
       reading = true; void read(cursor, appliedFilters.current, true).finally(() => { reading = false; });
-    }, 8000);
+    }, ["pending", "running"].includes(data?.sync?.status ?? "") ? 8000 : 20000);
     return () => clearInterval(timer);
   }, [busy, denied, organizationBusy, assetId, picker, retry, data?.sync?.status, cursor, read]);
   function changeType(kind: string) {
@@ -178,6 +180,9 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
     {!data && !denied ? <button type="button" className={buttonClass} data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}>Refresh vault</button> : null}
     {data && !denied ? <>
       <div ref={libraryTop} className="scroll-mt-24" />
+      <div className="of-library-layout">
+      <aside className="of-library-sidebar"><VaultOrganization compact readOnly={readOnly} refreshKey={refreshKey} onFolders={setFolders} accountId={accountId} folderCount={data.summary?.folders} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/></aside>
+      <div className="of-library-main">
       <form className="of-vault-toolbar" onSubmit={event => {
         event.preventDefault(); if (busy || retry) return;
         setBusy(true); setPageTrail([]); clearSelection(); void read(null, { query: search.trim(), kind: mediaKind, folderId }).then(ok => {
@@ -209,7 +214,12 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         </details>
         {data.connectionRevision == null ? <Link className="of-text-link" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
       </div>
-      {!readOnly && !picker ? <div className="of-folder-browser"><VaultOrganization compact accountId={accountId} folderCount={data.summary?.folders} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/></div> : null}
+
+      <section className="of-collection-section" aria-label="Folder collections"><div className="of-collection-heading"><h3>{folderId ? folders.find(folder=>folder.folderId===folderId)?.name ?? "Folder" : "Your collections"}</h3><span>{folders.length} folders</span></div>
+        <div className="of-collection-grid">{folders.slice(0,6).map(folder=><button type="button" key={folder.folderId} data-of-folder-cover={folder.folderId} aria-pressed={folderId===folder.folderId} disabled={busy||!!retry} onClick={()=>changeFolder(folder.folderId)}>
+          <span className="of-collection-cover">{folder.coverMediaId ? <VaultFolderCover key={`${accountId}:${folder.coverMediaId}`} accountId={accountId} mediaId={folder.coverMediaId} refreshKey={refreshKey}/> : <Folder size={28} aria-hidden="true"/>}</span><span className="of-collection-name">{folder.name}<small>{folder.count.toLocaleString()} files{folder.automatic ? " · Auto" : ""}</small></span>
+        </button>)}</div>
+      </section>
       {!readOnly ? <details ref={offerForm} open={offerOpen} onToggle={event => setOfferOpen(event.currentTarget.open)} className="of-offer-composer rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>
@@ -233,8 +243,8 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         <div className="of-media-grid" data-of-vault-grid data-view={view}>
           {data.items.map(row => <article key={row.mediaId} className="of-media-card" data-of-vault-item={row.mediaId} data-selected={selected.has(row.mediaId) || undefined}>
             <div className="of-media-cover">
-              <VaultAssetPreview key={row.mediaId} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly}/>
-              {!["photo", "video"].includes(row.kind) ? <div className="of-media-placeholder"><ImageIcon size={32} /><span>{row.kind}</span></div> : null}
+              <VaultAssetPreview key={row.mediaId} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly} refreshKey={refreshKey}/>
+              {!["photo", "video", "gif"].includes(row.kind) ? <div className="of-media-placeholder"><ImageIcon size={32} /><span>{row.kind}</span></div> : null}
               <span className="of-media-kind">{row.kind === "video" ? <Video size={14} /> : <ImageIcon size={14} />}{row.kind}</span>
               <label className="of-media-select"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /></label>
               {row.durationSeconds !== null ? <span className="of-media-duration">{vaultDuration(row.durationSeconds)}</span> : null}
@@ -252,6 +262,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         </div></div>
       </fieldset>
       {selected.size > 0 && !readySelection ? <p className="of-notice" data-of-vault-readiness-hold>Selected assets need verified availability before creating a catalogue item. You can still organize them in folders.</p> : null}
+      </div></div>
       <ContentSyncSave key={accountId} accountId={accountId} readOnly={readOnly} />
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
@@ -261,3 +272,11 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   </Card>;
 }
 
+
+
+function VaultFolderCover({accountId,mediaId,refreshKey}:{accountId:string;mediaId:string;refreshKey:number}) {
+  const [failed,setFailed]=useState(false);
+  const [attempt,setAttempt]=useState(0);
+  useEffect(()=>{if(failed){setFailed(false);setAttempt(value=>value+1);}},[refreshKey]);
+  return failed ? <Folder size={28} aria-hidden="true"/> : <img key={attempt} src={`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/vault/previews/${mediaId}`} alt="" loading="lazy" onError={()=>setFailed(true)}/>;
+}
