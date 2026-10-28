@@ -1,4 +1,5 @@
 "use client";
+import { displayDateTime } from "@/lib/onlyfans/time";
 import { RotateCw } from "lucide-react";
 import type { Handover } from "@/lib/onlyfans/handover";
 const ACTIONS: Record<string, string> = { pause_automation: "Paused AI replies", resume_automation: "Resumed AI replies", request_takeover: "Requested takeover", complete_takeover: "Completed the handover", release_takeover: "Handed back to AI", mark_no_contact: "Stopped further contact", change_mode: "Updated reply mode" };
@@ -10,7 +11,7 @@ export default function HandoverPanel({ value, loading, onRefresh }: { value: Ha
     <p className="mt-2 text-sm" role="status">{loading ? "Checking reply ownership…" : !value ? "Ownership is unavailable. Refresh before replying." : value.mode === "no_contact" ? "Further contact is stopped" : value.takeoverState === "requested" ? "Takeover requested" : value.takeoverState !== "none" ? owner : value.mode === "automated" ? "AI replies enabled" : "AI replies are paused"}</p>
     {value?.takeoverState === "requested" ? <p className="mt-2 text-xs text-muted">Waiting for the current delivery to settle. Manual replies stay paused until handover completes.</p> : null}
     {value ? <details className="mt-3"><summary className="cursor-pointer text-xs font-semibold">Activity history</summary>
-      {value.events.length ? <ol className="mt-3 space-y-3">{value.events.map(event => <li key={event.revision} className="border-l-2 border-line pl-3 text-xs"><p className="font-medium">{ACTIONS[event.action] ?? "Updated reply controls"}</p><p className="mt-1 text-muted">{WHO[event.who] ?? "System"} · <time dateTime={event.at}>{new Date(event.at).toLocaleString()}</time></p></li>)}</ol> : <p className="mt-3 text-xs text-muted">No handover activity recorded yet.</p>}
+      {value.events.length ? <ol className="mt-3 space-y-3">{value.events.map(event => <li key={event.revision} className="border-l-2 border-line pl-3 text-xs"><p className="font-medium">{ACTIONS[event.action] ?? "Updated reply controls"}</p><p className="mt-1 text-muted">{WHO[event.who] ?? "System"} · <time dateTime={event.at}>{displayDateTime(event.at)}</time></p></li>)}</ol> : <p className="mt-3 text-xs text-muted">No handover activity recorded yet.</p>}
       {value.hasMore ? <p className="mt-3 text-xs text-muted">Showing the latest 30 changes.</p> : null}</details> : null}
   </section>;
 }

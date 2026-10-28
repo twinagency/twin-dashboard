@@ -75,6 +75,7 @@ export type OnlyFansBackend = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
+    search?: string,
   ): Promise<BackendResult<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
@@ -264,7 +265,7 @@ export function createHttpOnlyFansBackend(options: {
       }, creatorId !== null);
     },
 
-    listConversations(accountId, cursor, aiOnly) {
+    listConversations(accountId, cursor, aiOnly, search) {
       if (!ID_PATTERN.test(accountId)) {
         return Promise.resolve({
           ok: false,
@@ -276,6 +277,7 @@ export function createHttpOnlyFansBackend(options: {
       const params = new URLSearchParams();
       if (cursor) params.set("cursor", cursor);
       if (aiOnly) params.set("filter", "ai");
+      if (search?.trim()) params.set("q", search.trim());
       const query = params.size ? `?${params}` : "";
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations${query}`, (body) => {
         if (!isRecord(body) || !isRecord(body.page)) return null;

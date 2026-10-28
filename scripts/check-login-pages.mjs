@@ -1,14 +1,28 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { request as httpRequest } from 'node:http';
+import { request as httpRequest, createServer } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Exercise the production build without production credentials or database writes.
 const port = 3117;
 const local = `http://127.0.0.1:${port}`;
 const publicOrigin = 'https://dashboard.tgaiclone.xyz';
+// The production session authority is mandatory. Keep this routing smoke
+// entirely offline using a narrowly scoped synthetic RPC, never a real key.
+const sessions = new Set();
+const authority = createServer(async (req, res) => {
+  let raw = ''; for await (const chunk of req) raw += chunk;
+  let body; try { body = JSON.parse(raw); } catch { res.writeHead(400).end(); return; }
+  if (req.method !== 'POST' || req.headers.apikey !== 'offline-only' || !/^[a-f0-9]{64}$/.test(body.p_session_hash)) { res.writeHead(403).end(); return; }
+  let value = false;
+  if (req.url === '/rest/v1/rpc/dashboard_admin_session_create') { sessions.add(body.p_session_hash); value = true; }
+  else if (req.url === '/rest/v1/rpc/dashboard_owner_session_verify') value = sessions.has(body.p_session_hash);
+  else { res.writeHead(404).end(); return; }
+  res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(value));
+});
+await new Promise(resolve => authority.listen(0, '127.0.0.1', resolve));
 const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', String(port)], {
-  env: { ...process.env, NODE_ENV: 'production', DASHBOARD_PASSWORD: 'offline-login-smoke', DASHBOARD_PUBLIC_ORIGIN: publicOrigin },
+  env: { ...process.env, NODE_ENV: 'production', DASHBOARD_PASSWORD: 'offline-login-smoke', DASHBOARD_PUBLIC_ORIGIN: publicOrigin, SUPABASE_URL: `http://127.0.0.1:${authority.address().port}`, SUPABASE_SERVICE_KEY: 'offline-only' },
   stdio: ['ignore', 'pipe', 'pipe'],
 });
 let output = '';
@@ -79,6 +93,7 @@ try {
   console.error(error, output);
   process.exitCode = 1;
 } finally {
+  authority.close();
   server.kill('SIGTERM');
   setTimeout(() => server.kill('SIGKILL'), 5000).unref();
 }
