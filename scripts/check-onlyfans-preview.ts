@@ -389,7 +389,7 @@ async function main() {
 
     check("unknown delivery counts as unresolved", isDeliveryUnresolved("unknown"));
     check("dispatching delivery counts as unresolved", isDeliveryUnresolved("dispatching"));
-    check("partial delivery is settled, not unresolved", isDeliveryUnresolved("partial") === false);
+    check("partial delivery retains its unresolved send hold", isDeliveryUnresolved("partial"));
     check("failed delivery is settled, not unresolved", isDeliveryUnresolved("failed") === false);
 
     const paused = { ...summary(AVA, "of-conv-ava-1002"), delivery: "unknown" as const, automationMode: "paused" as const };
