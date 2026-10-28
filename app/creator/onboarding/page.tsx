@@ -1,6 +1,4 @@
 import CreatorContentIntake from "@/components/CreatorContentIntake";
-import CreatorOnboardingChoice from "@/components/CreatorOnboardingChoice";
-import CreatorOnlyFansOnboarding from "@/components/CreatorOnlyFansOnboarding";
 import { contentFolders } from "@/lib/creator-content-intake";
 import Link from "next/link";
 import { cookies } from "next/headers";
@@ -263,13 +261,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section, review, complete: completedView } = await searchParams;
   if (!optional && step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
-  // Explicit manual links and saved-form responses retain their existing steps.
-  if (optional && ((!step && !section && !status && !review && !completedView) || step === "onlyfans")) {
-    const onlyfans = step === "onlyfans";
-    return <CreatorSetupLayout brand="flirt" logoSrc="/brand/flirt-logo.webp" activeSection={onlyfans ? "onlyfans" : "choice"} applicationStatus={creator.applicationState?.label}>
-      {onlyfans ? <CreatorOnlyFansOnboarding readOnly={creator.readOnly} /> : <CreatorOnboardingChoice />}
-    </CreatorSetupLayout>;
-  }
   const activeStep = isOnboardingStep(step) ? step : null;
   const compactQuestionnaire = activeStep === "questionnaire";
   const questionnairePage = creatorQuestionnairePage(section, true);
