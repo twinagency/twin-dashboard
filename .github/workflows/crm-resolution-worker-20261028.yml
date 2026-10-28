@@ -1,3 +1,4 @@
+# Pinned worker source f234c641a0afd68b3314ad428284fcc24c96f1c2
 name: CRM worker evidence release 20261028
 on:
   push:
