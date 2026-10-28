@@ -1,3 +1,4 @@
+import "./check-onlyfans-creator-vault.mjs";
 /** Real UI components against isolated synthetic reads. No production URL or write is allowed. */
 import assert from 'node:assert/strict';
 import {spawn} from 'node:child_process';
@@ -49,7 +50,8 @@ try{
    await page.setViewportSize({width:1440,height:1000});
    await page.locator('[data-of-vault-item]').first().waitFor();
    const thumb=await page.locator('.of-media-cover').first().boundingBox();
-   assert(thumb && thumb.y<500 && thumb.height>180,'The media grid must appear in the first desktop viewport');
+   assert(thumb && thumb.y>=0 && thumb.height>180,'The media grid must retain portrait previews below the visible categories');
+   assert(await page.locator('[data-of-vault-organization]').isVisible(),'Category browsing stays visible above the media grid');
    assert(thumb && thumb.y>=0 && thumb.y+thumb.height<=page.viewportSize().height && thumb.height>180,`The first portrait must be fully visible in the desktop viewport: ${JSON.stringify(thumb)}`);
    const logo=page.locator('.dashboard-sidebar [data-channel-option="onlyfans"] img');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
    await page.getByRole('button',{name:'Create offer',exact:true}).click();
