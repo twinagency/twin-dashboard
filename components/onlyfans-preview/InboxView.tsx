@@ -267,6 +267,7 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
 
               <div className={"flex " + (inbound ? "justify-start" : "justify-end") + (startsRun ? " mt-2" : " mt-0.5")}>
                 <div className="flex max-w-[78%] flex-col items-stretch gap-1">
+                  {!inbound ? <span className="text-[11px] font-semibold text-muted" data-of-message-origin={message.origin} data-of-ai-reply={message.origin === "ai" || undefined}>{message.origin === "ai" ? "AI message" : message.origin === "human" ? "Human message" : "Sender unknown"}</span> : null}
                   <div
                     data-of-message-id={message.messageId}
                     data-of-message-delivery={message.delivery}
@@ -282,7 +283,6 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
                   </div>
                   {!inbound ? (
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
-                      {message.origin === "ai" ? <span className="of-ai-reply" data-of-ai-reply>AI reply</span> : null}
                       {message.delivery === "sent" ? <span className="of-sent-receipt" title={`Provider accepted this message from ${ORIGIN_LABEL[message.origin]}. Read and purchase status are not confirmed.${message.evidenceRef ? " Receipt recorded." : ""}`}><Check size={13} aria-hidden="true" /><span className="sr-only">Sent to provider</span></span> : <DeliveryPill outcome={message.delivery} />}
                       {message.delivery !== "sent" && message.evidenceRef ? <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span> : null}
                     </div>
