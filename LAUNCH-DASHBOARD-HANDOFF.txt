@@ -1,0 +1,41 @@
+HANDOFF: Twin OnlyFans LAUNCH DASHBOARD ("Chat 5" job), 23 Oct 2026
+You are a separate Claude session. Another Claude session (the "head dev") owns the
+offer import / content sync work, shared files, migrations and integration.
+
+READ FIRST
+- ~/Downloads/Claude_OnlyFans_Price_Import_Implementation_Plan_2026-10-23.txt (section 6 = dashboard rules)
+- ~/twin/JESSE-CONSOLIDATED-ASSIGNMENT-2026-10-23.txt (summary of Jesse's assignment) — section 3 is YOUR job
+- ~/twin/CLAUDE.md, this repo's CLAUDE.md/README
+
+WHERE
+- Worktree: ~/twin/twin-dashboard-wt-launch  branch codex/onlyfans-launch-dashboard
+  (jesse98/twin-dashboard; base = head dev's pinned 927b2d75105f6180c37f2759ed119f89521b979d)
+- Backend (read-only for you): ~/twin/twin-onlyfans-backend branch codex/onlyfans-offer-import
+
+YOU OWN (only edit these): components/onlyfans-launch/, lib/onlyfans/launch/, new routes under
+app/api/onlyfans-launch/ and new check scripts scripts/check-onlyfans-launch*.{ts,mjs}.
+Shared files (NativeWorkspace.tsx, navigation/layouts, package.json, ci.yml, middleware) belong to the
+head dev: do NOT edit them; write the exact change you need into LAUNCH-SHARED-CHANGES.txt in your worktree.
+
+BUILD (inspect the existing dashboard first, reuse working pages/components, fill real gaps):
+A Account readiness: real launch blockers + status + corrective actions (connection, history recovery,
+  purchase sync, AI config, catalogue readiness, outgoing permissions).
+B Purchases/ownership: failed imports, unmatched purchases, reversals, evidence; authorised investigation,
+  supported retries, audited resolutions. Never invent purchase evidence or ownership.
+C Personality/AI settings: review/edit imported personality drafts, approve config, model/budget/behaviour.
+  Credentials stay server-side.
+D Fan memory: saved facts/summaries, correct supported fields, history/memory coverage.
+E Automation/follow-ups: account + conversation modes, takeover, pause/resume, no-contact, emergency stop,
+  scheduled follow-ups + supported cancellation.
+Use existing backend contracts (backend service/onlyfans_commands/*, service/onlyfans_read/*). Backend
+contracts from Chats 1-4 (ledger, history/memory, personality, engagement) are still being built by
+ChatGPT; use clearly-labelled fixtures where a contract is pending and NEVER report a fixture-only screen
+as connected or complete. Keep a list of which screens are real vs fixture.
+Permission checks, loading/empty/error, account switching, stale responses, keyboard, 390px mobile.
+Run tsc + your contract checks; browser checks + screenshots where possible.
+
+RULES
+- No push, no deploy, no production access, no live sends, no .env, no secrets.
+- Commit locally on your branch. When done, write LAUNCH-DASHBOARD-REPORT.txt in the worktree:
+  commits, files, real-vs-fixture screen list, tests + exact counts, screenshots paths, shared-file requests.
+- Owner is Ronan: replies to him short bullets, call him "sir".
