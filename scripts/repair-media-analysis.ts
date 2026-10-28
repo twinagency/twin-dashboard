@@ -100,7 +100,7 @@ async function main() {
   if (mode === "apply") {
     const pv = opt("preview")!;
     const previewFile = pv.includes("/") || pv.endsWith(".jsonl") ? path.resolve(pv) : path.join(stateRoot, pv, "preview.jsonl");
-    const summary = await runRepair(ctx, { mode: "apply", cloneSlug: clone, table, scope: "all", limit: opt("limit") ? Number(opt("limit")) : undefined, preview: previewFile, holdList: opt("hold-list") ? path.resolve(opt("hold-list")!) : undefined });
+    const summary = await runRepair(ctx, { mode: "apply", cloneSlug: clone, table, scope: "all", limit: opt("limit") ? Number(opt("limit")) : undefined, preview: previewFile, holdList: opt("hold-list") ? path.resolve(opt("hold-list")!) : undefined, noHolds: flag("no-holds") });
     console.log(formatSummary(summary));
     console.log(`state dir: ${stateDir}`);
     if (summary.conflictReasons.length) console.log(`conflicts (${summary.conflictReasons.length}), listed in ${path.join(stateDir, "report.txt")}: run a fresh preview for those rows`);
