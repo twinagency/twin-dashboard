@@ -1,0 +1,37 @@
+name: Twin dashboard runtime package
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: OnlyFans dashboard checks
+        run: |
+          node --import tsx scripts/check-onlyfans-preview.ts
+          node --import tsx scripts/check-onlyfans-launch.ts
+          node --import tsx scripts/check-onlyfans-connections.ts
+          node --import tsx scripts/check-onlyfans-activation.ts
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Package runtime (no deploy)
+        run: |
+          mkdir -p runtime/.next
+          cp -a .next/standalone/. runtime/
+          cp -a .next/static runtime/.next/static
+          cp -a public runtime/public
+          tar -czf runtime.tar.gz -C runtime .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twin-dashboard-runtime
+          path: runtime.tar.gz
+          retention-days: 7
