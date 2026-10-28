@@ -33,8 +33,10 @@ export async function checkOnlyFansOverview(page, origin) {
     await overview.getByRole("heading", { name: "Overview", exact: true }).waitFor();
     assert.deepEqual(await overview.locator("[data-of-overview-metric]").evaluateAll(elements => elements.map(element => element.getAttribute("data-of-overview-metric"))), [
       "Recorded net earnings", "Recorded gross earnings", "Pending net", "Pending gross",
-      "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts", "Need attention",
+      "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts",
+      "Connection issues", "History freshness issues", "Payment imports incomplete", "Sending readiness",
     ]);
+    assert.equal(await overview.locator('[data-of-overview-metric="Sending readiness"] strong').innerText(), "Not verified here");
     assert.match(await overview.locator(".of-scope-line").innerText(), /Workspace totals · All authorised OnlyFans accounts/);
     assert.equal(await overview.locator('.of-creator-strip-items a[aria-current="true"]').getAttribute("href"), "/onlyfans/overview?period=all&account=acc-a");
     assert.equal(await overview.getByRole("combobox", { name: "Reporting period", exact: true }).inputValue(), "all");
