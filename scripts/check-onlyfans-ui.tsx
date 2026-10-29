@@ -65,8 +65,8 @@ async function main() {
   />);
   assert.match(complete, /<strong>3<\/strong><span>Owned media items<\/span>/, "A complete scan shows the authoritative count");
   assert.doesNotMatch(complete, /Ownership not fully verified/);
-  // Dossier order: identity, reply control, facts, notes, spend and ownership, then collapsed history.
-  const order = ["Fan profile", "data-of-relationship", "Reply control", "Key facts and preferences", ">Notes<", "Spend and ownership", "Edit fan notes and facts", "History and sync details"].map(label => inboxMarkup.indexOf(label));
+  // Dossier order: identity, reply control, categorised fan memory (#323), spend and ownership, then collapsed history.
+  const order = ["Fan profile", "data-of-relationship", "Reply control", ">Fan memory<", "Spend and ownership", "Edit fan notes and facts", "History and sync details"].map(label => inboxMarkup.indexOf(label));
   assert(order.every(index => index >= 0), "Every dossier section renders: " + order.join(","));
   assert.deepEqual([...order].sort((a, b) => a - b), order, "Dossier sections follow the agreed order");
   const historyTag = inboxMarkup.match(/<details class="of-history-details"[^>]*>/)?.[0] ?? "";
