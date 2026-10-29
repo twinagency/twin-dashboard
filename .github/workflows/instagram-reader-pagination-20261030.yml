@@ -1,8 +1,8 @@
 name: Instagram reader pagination repair
 on:
   push:
-    branches: [codex/instagram-reader-pagination-20261030]
-    paths: [.github/workflows/instagram-reader-pagination-20261030.yml]
+    branches: [main]
+    paths: [deployment/instagram-reader-pagination-20261030.md]
 permissions:
   contents: read
 concurrency:
@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   reader-check:
-    if: github.repository == 'twinagency/twin-dashboard' && github.ref == 'refs/heads/codex/instagram-reader-pagination-20261030'
+    if: github.repository == 'twinagency/twin-dashboard' && github.ref == 'refs/heads/main'
     environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 5
