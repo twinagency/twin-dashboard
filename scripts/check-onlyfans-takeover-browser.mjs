@@ -62,12 +62,14 @@ try {
  const takeover=page.locator('[data-of-action="request_takeover"]'),composer=page.locator("[data-of-composer]");
  await takeover.waitFor({timeout:15000});
  assert.equal(await composer.isEnabled(),true);
+ await composer.fill("Synthetic draft before takeover");
  assert.equal(await page.locator("[data-of-send]").isDisabled(),true);
  await page.locator("[data-of-composer-takeover]").click();
  await page.locator('[data-of-action="release_takeover"]').waitFor({timeout:15000});
  await page.waitForFunction(()=>document.querySelector("[data-of-composer]")?.disabled===false);
  assert.equal(await composer.isEnabled(),true);
  assert.equal(await page.locator("[data-of-attach-vault]").isEnabled(),true);
+ assert.equal(await page.locator("[data-of-send]").isEnabled(),true);
  assert.equal(await page.locator("[data-of-composer-takeover]").count(),0);
  assert.equal(await page.evaluate(()=>window.__takeoverPosts.length),1);
  assert.equal(await page.evaluate(()=>window.__takeoverPosts[0].action),"request_takeover");

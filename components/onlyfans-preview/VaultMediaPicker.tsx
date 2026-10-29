@@ -14,7 +14,7 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
   onToggle: (row: VaultItem) => void; onClose: () => void; onChanged: () => void; onDenied: () => void;
 }) {
   const [mode, setMode] = useState(initialMode), [data, setData] = useState<VaultRead | null>(null);
-  const [busy, setBusy] = useState(true), [notice, setNotice] = useState("Loading mediaâ€¦");
+  const [busy, setBusy] = useState(true), [notice, setNotice] = useState("Loading media…");
   const [query, setQuery] = useState(""), [kind, setKind] = useState("all"), [folderId, setFolderId] = useState("");
   const [cursor, setCursor] = useState<string | null>(null), [trail, setTrail] = useState<(string | null)[]>([]);
   const [organizationBusy, setOrganizationBusy] = useState(false), [uploadBusy, setUploadBusy] = useState(false);
@@ -78,7 +78,7 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
         <VaultUploader accountId={accountId} connectionRevision={connectionRevision} onChanged={changed} onBusy={setUploadBusy} />
       </div> : null}
       </div>
-      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-panel py-3"><p role="status" className="text-sm">{selected.size} selected{selected.size >= 20 ? " Â· Maximum reached" : ""}</p><button type="button" className={`${button} bg-accent text-white`} disabled={locked} onClick={onClose}>Done selecting media</button></div>
+      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-panel py-3"><p role="status" className="text-sm">{selected.size} selected{selected.size >= 20 ? " · Maximum reached" : ""}</p><button type="button" className={`${button} bg-accent text-white`} disabled={locked} onClick={onClose}>Done selecting media</button></div>
     </DialogContent>
   </Dialog>;
 }
