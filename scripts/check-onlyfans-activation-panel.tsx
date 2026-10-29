@@ -13,7 +13,10 @@ const base = (): ActivationStatus => ({
     runtime: stage("blocked", "sender_held_catalogue", "The sender is held: No enabled fixed-price paid item with vault media is approved yet.", "content"),
     replies: stage("blocked", "allowance_exhausted", "The send allowance is used up (500 of 500). Raise the total allowance to continue.", "limits") },
   allowance: { limitUnits: 500, usedUnits: 500, remainingUnits: 0, throttleSeconds: 20, mediaEnabled: true, state: "exhausted" },
-  budget: { dailyCostCapCents: 500, spentTodayUnits: 49993, capUnits: 50000, state: "ok", flag: null, resetsAt: null },
+  budget: { dailyCostCapCents: 500, spentTodayUnits: 49993, capUnits: 50000, state: "exhausted", flag: "Today's model budget is spent.", resetsAt: null,
+    spendByPurpose: [{ purpose: "gen_info", label: "Fan memory learner", units: 43000, share: 0.88 }, { purpose: "ai_chatter", label: "Chat replies", units: 300, share: 0.01 }] },
+  provider: { creditErrors24h: 2850, lastCreditErrorAt: "2026-10-29T16:04:00Z", creditErrorsRecent: true, rejectedKey24h: 0, rateLimited24h: 0 },
+  recentFailures: [{ reason: "model-budget-exhausted", count: 3, lastAt: null }],
   scope: { deploymentAllowed: true, allFansAllowed: true, selectionValid: true, selection: null, pilotFanOverride: ["318022380"] },
   conversations: { total: 58, enabledNow: 2, paused: 45, notYetEnabled: 40, pausedByStaff: 5, noContact: 3, humanControlled: 4, takeoverRequested: 1, needsPerson: 1, unresolvedDelivery: 1 },
   escalations: { needsPerson: 1, takeoverRequested: 1, humanControlled: 4, unresolvedDelivery: 1, recent: [{ fanId: "5001", at: null }] },
@@ -31,6 +34,7 @@ async function main() {
   assert.equal(parseActivationStatus(base(), "of-2"), null, "other account");
   assert.equal(parseActivationStatus({ ...base(), fingerprint: "xyz" }, "of-1"), null);
   assert.equal(parseActivationStatus({ ...base(), futureConversations: { enabled: true, startsAt: null, default: true } }, "of-1"), null, "default must be off");
+  assert.equal(parseActivationStatus({ ...base(), provider: { creditErrors24h: "x" } }, "of-1"), null, "malformed optional blocks are refused");
   const missing = base() as any; delete missing.stages.runtime;
   assert.equal(parseActivationStatus(missing, "of-1"), null);
 
@@ -38,7 +42,7 @@ async function main() {
   const html = renderToStaticMarkup(<ActivationPanel accountId="of-1" creatorName="Creator" initial={{ status: base(), canManage: true }} />);
   for (const needle of ["Connected to OnlyFans", "AI model usable", "Sender running", "Conversations can receive replies",
     "has no model API key saved", "fixed-price paid item", "allowance is used up", "500 of 500 used", "499.9 of 500 cents",
-    "Asked for a person", "Human takeover", "No-contact", "temporary single-fan history override"]) assert.ok(html.includes(needle), "missing: " + needle);
+    "Fan memory learner 88%", "Chat replies 1%", "2850 refused for lack of credit", "model-budget-exhausted x3", "Paused, not yet enabled", "Asked for a person", "Human takeover", "No-contact", "temporary single-fan history override"]) assert.ok(html.includes(needle), "missing: " + needle);
   assert.ok(/data-of-stage="model" data-of-stage-state="blocked"/.test(html) && /data-of-stage="connection" data-of-stage-state="ok"/.test(html));
   assert.ok(/data-of-future-conversations(?![^>]*checked)/.test(html), "future conversations default off");
   assert.ok(html.includes("Would enable 40 of 58 chats") && html.includes("4 human takeover (kept)") && html.includes("3 no-contact (kept)"), "preview shows what is kept");

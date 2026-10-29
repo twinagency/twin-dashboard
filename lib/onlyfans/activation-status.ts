@@ -10,7 +10,10 @@ export type ActivationStatus = {
   accountId: string; observedAt: string; activated: boolean; ready: boolean; fingerprint: string;
   stages: Record<StageName, Stage>;
   allowance: { limitUnits: number; usedUnits: number; remainingUnits: number; throttleSeconds: number | null; mediaEnabled: boolean; state: "none" | "ok" | "exhausted" };
-  budget: { dailyCostCapCents: number | null; spentTodayUnits: number; capUnits: number | null; state: string; flag: string | null; resetsAt: string | null };
+  budget: { dailyCostCapCents: number | null; spentTodayUnits: number; capUnits: number | null; state: string; flag: string | null; resetsAt: string | null;
+    spendByPurpose?: { purpose: string; label: string; units: number; share: number }[] };
+  provider?: { creditErrors24h: number; lastCreditErrorAt: string | null; creditErrorsRecent: boolean; rejectedKey24h: number; rateLimited24h: number };
+  recentFailures?: { reason: string; count: number; lastAt: string | null }[];
   scope: { deploymentAllowed: boolean; allFansAllowed: boolean; selectionValid: boolean; selection: { mode: string; fans: number[] } | null; pilotFanOverride: string[] };
   conversations: { total: number; enabledNow: number; paused: number; notYetEnabled: number; pausedByStaff: number; noContact: number; humanControlled: number; takeoverRequested: number; needsPerson: number; unresolvedDelivery: number };
   escalations: { needsPerson: number; takeoverRequested: number; humanControlled: number; unresolvedDelivery: number; recent: { fanId: string; at: string | null }[] };
@@ -37,6 +40,9 @@ export function parseActivationStatus(value: unknown, accountId: string): Activa
   if (!object(stages) || !STAGE_NAMES.every(name => stage(stages[name]))) return null;
   if (!countsOk(allowance, ["limitUnits", "usedUnits", "remainingUnits"]) || !["none", "ok", "exhausted"].includes(allowance.state)) return null;
   if (!object(budget) || !count(budget.spentTodayUnits) || !text(budget.state, 40) || !nullText(budget.flag)) return null;
+  if (budget.spendByPurpose !== undefined && !(Array.isArray(budget.spendByPurpose) && budget.spendByPurpose.every((r: unknown) => object(r) && text(r.label, 80) && count(r.units) && typeof r.share === "number"))) return null;
+  if (value.provider !== undefined && !(object(value.provider) && count(value.provider.creditErrors24h) && typeof value.provider.creditErrorsRecent === "boolean")) return null;
+  if (value.recentFailures !== undefined && !(Array.isArray(value.recentFailures) && value.recentFailures.every((r: unknown) => object(r) && text(r.reason, 120) && count(r.count)))) return null;
   if (!object(scope) || typeof scope.selectionValid !== "boolean" || !Array.isArray(scope.pilotFanOverride)) return null;
   if (!countsOk(conversations, ["total", "enabledNow", "paused", "notYetEnabled", "pausedByStaff", "noContact", "humanControlled", "takeoverRequested", "needsPerson", "unresolvedDelivery"])) return null;
   if (!countsOk(escalations, ["needsPerson", "takeoverRequested", "humanControlled", "unresolvedDelivery"]) || !Array.isArray(escalations.recent)) return null;
@@ -56,7 +62,7 @@ export const BLOCKER_TEXT: Record<string, string> = {
   model_credential_missing: "This account has no model API key saved.", model_credential_invalid: "The saved model key could not be read.",
   model_credential_model_mismatch: "The saved key is for a different model than the one selected.", model_credential_expired: "The model key expired with the connection.",
   model_not_selected: "No reply model is selected in settings.", budget_unset: "No daily model budget is set.",
-  delivery_disabled: "Outgoing messages are switched off.", scope_invalid: "The saved fan scope needs review.",
+  provider_no_credit: "The model provider refused requests for lack of credit.", delivery_disabled: "Outgoing messages are switched off.", scope_invalid: "The saved fan scope needs review.",
 };
 export const blockerText = (code: string) => BLOCKER_TEXT[code] ?? code.replace(/_/g, " ");
 

@@ -97,7 +97,14 @@ export default function ActivationPanel({ accountId, creatorName, onChanged, ini
       <dd>{status.allowance.usedUnits} of {status.allowance.limitUnits} used{status.allowance.state === "exhausted" ? " (used up)" : ""}</dd>
       <dt className="text-muted">Model budget today</dt>
       <dd>{status.budget.dailyCostCapCents === null ? "not set" : `${(status.budget.spentTodayUnits / 100).toFixed(1)} of ${status.budget.dailyCostCapCents} cents`}{status.budget.state === "exhausted" ? " (spent)" : ""}</dd>
+      {status.budget.spendByPurpose?.length ? <><dt className="text-muted" title="What today's model budget was spent on. Chat replies share it with background work such as the fan memory learner.">Budget spent on</dt>
+        <dd data-of-budget-purposes>{status.budget.spendByPurpose.map(r => `${r.label} ${Math.round(r.share * 100)}%`).join(", ")}</dd></> : null}
+      {status.provider && (status.provider.creditErrors24h > 0 || status.provider.rejectedKey24h > 0) ? <><dt className="text-muted">Model provider</dt>
+        <dd data-of-provider-errors>{status.provider.creditErrors24h ? `${status.provider.creditErrors24h} refused for lack of credit` : ""}{status.provider.creditErrors24h && status.provider.rejectedKey24h ? ", " : ""}{status.provider.rejectedKey24h ? `${status.provider.rejectedKey24h} key rejections` : ""} (24h)</dd></> : null}
+      {status.recentFailures?.length ? <><dt className="text-muted">Reply failures (24h)</dt>
+        <dd data-of-reply-failures>{status.recentFailures.map(f => `${f.reason} x${f.count}`).join(", ")}</dd></> : null}
       <dt className="text-muted">Chats enabled</dt><dd>{c.enabledNow} of {c.total}</dd>
+      <dt className="text-muted">Paused, not yet enabled</dt><dd>{c.notYetEnabled}</dd>
       <dt className="text-muted">Human takeover</dt><dd>{c.humanControlled}{c.takeoverRequested ? ` (${c.takeoverRequested} requested)` : ""}</dd>
       <dt className="text-muted">No-contact</dt><dd>{c.noContact}</dd>
       <dt className="text-muted" title="Chats the AI paused because the fan asked for a person. A team member should answer them.">Asked for a person</dt>
