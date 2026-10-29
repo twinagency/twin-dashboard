@@ -32,3 +32,37 @@ assert.equal(readDraft(a).mediaPrice,"15.00");n++;
 assert.equal(clearSubmittedDraft(a,readDraft(a)),true);n++;
 assert.equal(readDraft(a).selectedMedia.length,0);n++;
 console.log(JSON.stringify({checks:n,passed:true}));
+
+
+// Exercise the live browser adapter too: the composer accepted media-only drafts
+// while this layer incorrectly refused them before making a network request.
+const { createFetchOnlyFansTransport } = await import('../lib/onlyfans-preview/server-data-source.ts');
+const sent=[];
+const transport=createFetchOnlyFansTransport(async(url,init)=>{
+ const request=JSON.parse(init.body);sent.push({url,request});
+ return new Response(JSON.stringify({schemaVersion:'of-controls.v1',ok:true,applied:true,
+  accountId:'acc-a',conversationId:'conv-a',action:'manual_message',recordedRevision:7,
+  commandKey:'a'.repeat(64),intentId:'12345678-1234-1234-1234-123456789abc',outcome:'queued'}),{status:200});
+});
+const command={command:'send_manual_message',accountId:'acc-a',conversationId:'conv-a',expectedRevision:7,
+ idempotencyKey:'12345678-1234-1234-1234-123456789abc',payload:{kind:'manual_message',body:''}};
+for(const media of [{mediaIds:['11'],previewIds:[],priceCents:0},good]){
+ for(const caption of ['', '  ', 'My own caption']){
+  const result=await transport.submitControl({...command,payload:{...command.payload,body:caption,media}});
+  assert.equal(result.accepted,true);assert.equal(sent.at(-1).request.body,caption);
+  assert.deepEqual(sent.at(-1).request.media,media);
+  assert.deepEqual(Object.keys(sent.at(-1).request).sort(),['action','body','expectedRevision','media','requestKey']);
+ }
+}
+const sentBefore=sent.length;
+for(const payload of [command.payload,{...command.payload,body:'  '},
+ {...command.payload,media:{...good,mediaIds:[]}},
+ {...command.payload,media:{...good,priceCents:299}},
+ {...command.payload,media:{...good,description:'Internal AI description must never be sent'}},
+ {...command.payload,body:'x'.repeat(4001),media:good},
+ {...command.payload,media:good,catalogItemId:1}]){
+ assert.equal((await transport.submitControl({...command,payload})).accepted,false);
+}
+assert.equal(sent.length,sentBefore,'Invalid or empty messages never reach the server');
+assert.equal((await transport.submitControl({...command,payload:{kind:'manual_message',body:'Plain reply'}})).accepted,true);
+console.log('PASS live adapter: free/paid media-only sends, exact optional captions, invalid media and empty-message rejection');
