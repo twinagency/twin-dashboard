@@ -79,6 +79,10 @@ export function HealthPill({ health }: { health: ConnectionHealth }) {
   return <StatusPill pill={HEALTH_LABEL[health]} />;
 }
 
+export function OwnershipPill({ ownership }: { ownership: { label: string; tone: Tone } }) {
+  return <span data-of-ownership={ownership.label}><QuietLabel tone={ownership.tone}>{ownership.label}</QuietLabel></span>;
+}
+
 export function ModePill({ mode }: { mode: AutomationMode }) {
   return <StatusPill pill={MODE_LABEL[mode]} />;
 }

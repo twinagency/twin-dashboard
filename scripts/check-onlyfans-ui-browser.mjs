@@ -28,11 +28,12 @@ try {
   const page = await browser.newPage({reducedMotion:"reduce"}), errors = [];
   page.on("pageerror", error => errors.push(String(error)));
   const pages = ["overview", "accounts", "inbox", "campaigns", "content", "sales", "settings", "operations"];
+  const HEADING = { overview: "Today", accounts: "Creators", inbox: "OnlyFans inbox", sales: "Earnings" };
   for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440]) {
     await page.setViewportSize({ width, height: width === 320 ? 568 : width === 375 ? 667 : width < 768 ? 844 : 1000 });
     for (const section of pages) {
       await page.goto(`${origin}/onlyfans/${section}/`, { waitUntil: "load" });
-      await page.getByRole("heading", { name: section === "inbox" ? "OnlyFans inbox" : section[0].toUpperCase() + section.slice(1), exact: true }).first().waitFor();
+      await page.getByRole("heading", { name: HEADING[section] ?? section[0].toUpperCase() + section.slice(1), exact: true }).first().waitFor();
       if (section === "accounts") await page.locator("[data-of-account-id]").first().waitFor();
       if (section === "inbox") await page.locator("[data-of-conversation-id]").first().waitFor();
       if (section === "settings") await page.locator("[data-of-edit-persona]").waitFor();
@@ -55,6 +56,14 @@ try {
         if (width < 768) check(mobile.fields.every(size => size >= 16), `${section} fields trigger phone zoom at ${width}px`);
       }
       if (section === "inbox" && width >= 1024) {
+        // Below 1280px the fan panel starts closed so the conversation is not squeezed into narrow columns; it opens on demand.
+        if (width < 1280) {
+          check(!(await page.locator(".users-panel-profile").isVisible()), `Fan panel starts closed at ${width}px`);
+          const wide = await page.locator(".users-panel-chat").boundingBox();
+          check(!!wide && wide.width >= 480, `Conversation keeps its width at ${width}px`);
+          await page.locator("[data-of-profile-toggle]").click();
+          await page.locator(".users-panel-profile").waitFor();
+        }
         const chat = await page.locator(".users-panel-chat").boundingBox();
         const fan = await page.locator(".users-panel-profile").boundingBox();
         const composer = await page.locator("[data-of-composer]").boundingBox();
@@ -62,6 +71,14 @@ try {
         check(!!composer && composer.y + composer.height <= 1000, `Reply box stays inside the viewport at ${width}px`);
         check(await page.locator("[data-of-action=request_takeover]").isVisible(), `Manual takeover remains visible at ${width}px`);
         check(await page.locator("[data-of-action=pause_automation]").isVisible(), `Pause AI remains visible at ${width}px`);
+        // Hiding the fan details keeps the selected conversation and gives the chat the width back.
+        const before = await page.locator(".users-panel-chat").boundingBox();
+        await page.locator("[data-of-profile-toggle]").click();
+        check(!(await page.locator(".users-panel-profile").isVisible()), `Fan panel collapses at ${width}px`);
+        const after = await page.locator(".users-panel-chat").boundingBox();
+        check(!!before && !!after && after.width > before.width, `Chat widens when the fan panel is hidden at ${width}px`);
+        check(await page.locator("[data-of-composer]").isVisible(), `Conversation stays selected after collapsing at ${width}px`);
+        await page.locator("[data-of-profile-toggle]").click();
       }
       await page.screenshot({ path: path.join(shots, `${width}-${section}.png`), fullPage: true });
     }

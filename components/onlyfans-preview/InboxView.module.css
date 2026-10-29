@@ -141,6 +141,9 @@
 .workspace :global(.of-panel-switch button) { min-height:40px; }
 @media(min-width:1024px) { .workspace :global(.of-layout) { grid-template-columns:minmax(210px,.94fr) minmax(290px,1.6fr) minmax(220px,.95fr); grid-template-rows:minmax(0,1fr); height:0; min-height:0; } }
 @media(min-width:1500px) { .workspace :global(.of-layout) { grid-template-columns:310px minmax(350px,1fr) 300px; } }
+/* Fan panel closed: the conversation gets its width instead of an empty column. */
+@media(min-width:1024px) { .workspace :global(.of-layout[data-profile="closed"]) { grid-template-columns:minmax(240px,.8fr) minmax(320px,2fr); } }
+@media(min-width:1500px) { .workspace :global(.of-layout[data-profile="closed"]) { grid-template-columns:340px minmax(420px,1fr); } }
 @media(max-width:1279px) { .workspace :global(.of-inbox-heading) { align-items:flex-start; flex-wrap:wrap; gap:8px; } .workspace :global(.users-panel-profile) { padding:16px 13px; } }
 @media(max-width:1023px) {
  .workspace { padding:8px; overflow-x:hidden; overflow-y:auto; overscroll-behavior-x:none; }
@@ -214,3 +217,23 @@
 .workspace :global(.of-memory-learning summary) { display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer; min-height:32px; list-style:none; }
 .workspace :global(.of-memory-learning summary::-webkit-details-marker) { display:none; }
 .workspace :global(.of-memory-learning p) { margin-top:7px; line-height:1.6; overflow-wrap:anywhere; }
+/* Secondary filters sit behind a disclosure so the primary row stays three short views. */
+.workspace :global(.of-more-filters) { padding:0 10px; }
+.workspace :global(.of-more-filters summary) { cursor:pointer; padding:2px 0 6px; color:var(--inbox-muted); font-size:11px; font-weight:600; }
+.workspace :global(.of-more-filters .of-filters) { padding:0 0 8px; }
+.workspace :global(.of-more-filters .of-filters button) { flex:0 1 auto; }
+/* Composer stays at the bottom of the chat panel, clear of the home bar. */
+.workspace :global(.of-composer) { position:sticky; bottom:0; z-index:1; padding-bottom:max(10px,env(safe-area-inset-bottom)); }
+.workspace :global(.of-sheet-bar), .workspace :global(.of-sheet-backdrop) { display:none; }
+@media(max-width:1023px) {
+ .workspace :global(.of-sheet-backdrop) { display:block; position:fixed; inset:0; z-index:40; background:rgba(20,38,61,.38); }
+ /* The panel tabs stay above the sheet, so Chat and Conversations are one tap away while it is open. */
+ .workspace :global(.of-panel-switch) { position:relative; z-index:43; }
+ .workspace :global(.users-panel-profile[data-sheet=open]) { position:fixed; left:0; right:0; bottom:0; z-index:42; height:auto; max-height:82dvh; border-radius:17px 17px 0 0; box-shadow:0 -10px 30px rgba(20,38,61,.28); padding-bottom:max(16px,env(safe-area-inset-bottom)); overscroll-behavior:contain; }
+ .workspace :global(.of-sheet-bar) { display:flex; align-items:center; justify-content:space-between; position:sticky; top:-16px; z-index:1; margin:-16px -13px 10px; padding:12px 13px; background:#fff; border-bottom:1px solid #edf2f6; font-size:13px; }
+ .workspace :global(.of-sheet-bar button) { min-height:36px; padding:0 12px; border-radius:9px; background:#e5f5fe; color:#217fb1; font-size:12px; font-weight:600; }
+}
+
+/* Badges give way to the fan's name: long status text is cut with an ellipsis, never the name. */
+.workspace :global(.of-chat-badges) { display:flex; min-width:0; max-width:46%; flex-shrink:1; align-items:center; gap:6px; overflow:hidden; }
+.workspace :global(.of-chat-badges > *) { min-width:0; overflow:hidden; text-overflow:ellipsis; }

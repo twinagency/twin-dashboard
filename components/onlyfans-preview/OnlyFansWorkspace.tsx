@@ -1,5 +1,6 @@
 "use client";
 import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
+import { recallFilters, recallSelected, rememberFilters, rememberSelected } from "@/lib/onlyfans/inbox-view-memory";
 
 // The OnlyFans workspace: which account is selected, which conversation is
 // open, the last modelled command, and the data source behind all of it.
@@ -237,11 +238,15 @@ export default function OnlyFansWorkspace({
   const [loadingOlder, setLoadingOlder] = useState(false);
 
   const { state, ref, commit } = useSelectionStore();
-  const [inboxSearch, setInboxSearch] = useState<InboxSearch>(EMPTY_INBOX_SEARCH);
+  // Filters and the chosen thread are recalled from this document's memory, so
+  // opening Content or Earnings and coming back leaves the inbox as it was.
+  const recalled = useState(() => draftPrincipal === "fixture" || draftPrincipal === "unavailable" ? null : recallFilters(draftPrincipal, requestedScope.creatorId))[0];
+  const [inboxSearch, setInboxSearch] = useState<InboxSearch>(recalled?.search ?? EMPTY_INBOX_SEARCH);
   const searchRef = useRef(inboxSearch);
   searchRef.current = inboxSearch;
-  const [aiOnly, setAiOnly] = useState(false);
-  const aiOnlyRef = useRef(false);
+  const [aiOnly, setAiOnly] = useState(recalled?.aiOnly ?? false);
+  const aiOnlyRef = useRef(recalled?.aiOnly ?? false);
+  const remembers = draftPrincipal !== "fixture" && draftPrincipal !== "unavailable";
   const [handover, setHandover] = useState<Handover | null>(null);
   const [handoverLoading, setHandoverLoading] = useState(false);
   const [handoverRefresh, setHandoverRefresh] = useState(0);
@@ -506,9 +511,10 @@ export default function OnlyFansWorkspace({
     if (!entry || entry.selectedConversationId) return;
     const list = entry.conversations;
     if (list.status !== "ready" && list.status !== "stale") return;
-    const first = list.data.items[0];
+    const remembered = remembers ? recallSelected(draftPrincipal, accountId) : null;
+    const first = list.data.items.find(item => item.conversationId === remembered) ?? list.data.items[0];
     if (first) commit(selectConversation(ref.current, accountId, first.conversationId));
-  }, [state, commit, ref]);
+  }, [state, commit, ref, remembers, draftPrincipal]);
 
   const accountsState = state.accounts;
 
@@ -577,9 +583,10 @@ export default function OnlyFansWorkspace({
       const accountId = ref.current.selectedAccountId;
       if (!accountId) return;
       setCommandResult(null);
+      if (remembers) rememberSelected(draftPrincipal, accountId, conversationId);
       commit(selectConversation(ref.current, accountId, conversationId));
     },
-    [commit, ref],
+    [commit, ref, remembers, draftPrincipal],
   );
 
   const handleLoadOlder = useCallback(async () => {
@@ -812,12 +819,14 @@ export default function OnlyFansWorkspace({
         requested.current.conversations.clear();
         searchRef.current = next;
         setInboxSearch(next);
+        if (remembers) rememberFilters(draftPrincipal, requestedScope.creatorId, { search: next, aiOnly: aiOnlyRef.current });
       }}
       onAiFilterChange={enabled => {
         if (aiOnlyRef.current === enabled) return;
         aiOnlyRef.current = enabled;
         requested.current.conversations.clear();
         setAiOnly(enabled);
+        if (remembers) rememberFilters(draftPrincipal, requestedScope.creatorId, { search: searchRef.current, aiOnly: enabled });
       }}
       handoverHistory={sourceMode === "server" ? handover : null}
       handover={sourceMode === "server" ? <HandoverPanel value={handoverCurrent} loading={handoverLoading} onRefresh={refreshHandover} /> : undefined}

@@ -25,6 +25,27 @@ export function effectiveAiStatus(conversation: ConversationSummary, account: Of
   return "AI enabled for this fan. Ready for new input";
 }
 
+export type ReplyOwnership = { label: string; tone: "green" | "blue" | "gold" | "pink" | "slate" };
+
+/**
+ * Plain reply-ownership label from saved control state only. The row data cannot say
+ * which person holds a takeover, so only the selected conversation's handover (already
+ * redacted to you/team/operator at the BFF) can name "you" or "another operator";
+ * otherwise a person is described without guessing who.
+ */
+export function replyOwnership(conversation: ConversationSummary, account: OfAccount | null, handover?: Handover | null): ReplyOwnership {
+  if (conversation.automationMode === "no_contact") return { label: "No further contact", tone: "slate" };
+  if (conversation.takeoverState === "requested") return { label: "Takeover pending", tone: "gold" };
+  if (conversation.takeoverState === "effective" || conversation.automationMode === "human_controlled") {
+    const owner = handover && handover.accountId === conversation.accountId && handover.conversationId === conversation.conversationId &&
+      handover.takeoverState === conversation.takeoverState ? handover.owner : null;
+    return owner === "you" ? { label: "You are handling", tone: "blue" } :
+      owner === "team" || owner === "operator" ? { label: "Another operator is handling", tone: "blue" } : { label: "A person is handling", tone: "blue" };
+  }
+  if (conversation.automationMode === "paused" || account?.runtime?.enabled === false) return { label: "AI paused", tone: "gold" };
+  return conversation.requiresAttention ? { label: "Action required", tone: "pink" } : { label: "AI handling", tone: "green" };
+}
+
 type ControlEvent = Handover["events"][number];
 export type ConversationTimelineEntry =
   | { kind: "message"; at: string; message: ConversationDetail["messages"][number] }

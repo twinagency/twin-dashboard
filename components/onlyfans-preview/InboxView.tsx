@@ -15,6 +15,7 @@ import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
 import { parseFanFinancials } from "@/lib/onlyfans/fan-financials";
 import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
 import { draftKey, readDraft, writeDraft, subscribeDraft, emptyDraft } from "@/lib/onlyfans/inbox-drafts";
+import { recallScroll, rememberScroll } from "@/lib/onlyfans/inbox-view-memory";
 import BMemoryPanel from "@/components/onlyfans-launch/memory/BMemoryPanel";
 import FanMemoryCategories from "./FanMemoryCategories";
 import { inboxSyncNotice } from "@/lib/onlyfans/inbox-sync";
@@ -24,7 +25,7 @@ import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import OnlyFansAvatar from "./OnlyFansAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
-import { conversationTimeline, isAiChatting, effectiveAiStatus } from "@/lib/onlyfans/ai-visibility";
+import { conversationTimeline, isAiChatting, effectiveAiStatus, replyOwnership } from "@/lib/onlyfans/ai-visibility";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { ActionSet } from "@/lib/onlyfans-preview/actions";
 import { formatAge } from "@/lib/onlyfans-preview/fixtures";
@@ -39,6 +40,7 @@ import type {
   DeliveryResolutionDecision,
   MessageOrigin,
   OfAccount,
+  OwnedMediaItem,
   PreviewViewer,
   RequestState,
   CommandResult,
@@ -46,6 +48,7 @@ import type {
 import { NO_PAYLOAD } from "@/lib/onlyfans-preview/types";
 import {
   DeliveryPill,
+  OwnershipPill,
   SimulatedTag,
   formatMoney,
 } from "./labels";
@@ -53,6 +56,9 @@ import { FreshnessLine } from "./PreviewChrome";
 import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
+import { fanContentHistory } from "@/lib/onlyfans/chat-content-history";
+import ChatContentPicker, { isSendableOffer, offerMediaSummary } from "./ChatContentPicker";
+import { Info } from "@/components/clone/fields";
 
 const PRIORITY_LABEL: Record<ConversationSummary["priority"], { label: string; tone: "pink" | "gold" | "slate" }> = {
   priority: { label: "Priority", tone: "pink" },
@@ -101,6 +107,15 @@ function AiChattingBadge({ conversation, account }: { conversation: Conversation
   return <span className="of-ai-badge" data-of-ai-chatting title={status}>{status}</span>;
 }
 
+/** Ownership pill and AI status badge, one rule for the row and the chat header. */
+function OwnershipBadges({ conversation, account, handover }: { conversation: ConversationSummary; account: OfAccount | null; handover?: Handover | null }) {
+  const ownership = replyOwnership(conversation, account, handover);
+  return <>
+    {ownership.label !== "AI handling" ? <OwnershipPill ownership={ownership} /> : null}
+    {isAiChatting(conversation) && ownership.label !== "AI paused" ? <AiChattingBadge conversation={conversation} account={account} /> : null}
+  </>;
+}
+
 function ConversationList({
   conversations,
   account,
@@ -128,7 +143,7 @@ function ConversationList({
 }) {
   const [query, setQuery] = useState(inboxSearch.query);
   const filter = aiOnly ? "ai" : inboxSearch.filter;
-  const localMatch = (row: ConversationSummary) => filter === "ai" ? isAiChatting(row) : filter === "paused" ? ["paused", "no_contact"].includes(row.automationMode) : filter === "review" ? row.attentionReasons?.includes("human_review") : filter === "delivery" ? row.attentionReasons?.includes("delivery_problem") : true;
+  const localMatch = (row: ConversationSummary) => filter === "ai" ? isAiChatting(row) : filter === "paused" ? ["paused", "no_contact"].includes(row.automationMode) : filter === "review" ? row.attentionReasons?.includes("human_review") || row.automationMode === "human_controlled" || row.takeoverState !== "none" : filter === "delivery" ? row.attentionReasons?.includes("delivery_problem") : true;
   const visibleConversations = conversations.status === "ready" || conversations.status === "stale"
     ? { ...conversations, data: { ...conversations.data, items: conversations.data.items.filter(localMatch) } } : conversations;
   const searchChange = useRef(onInboxSearchChange);
@@ -139,7 +154,9 @@ function ConversationList({
     <div className="of-list-content">
     <div className="of-list-heading"><h2>Conversations</h2></div>
     <label className="of-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search fan name, username or ID</span><input type="search" maxLength={200} value={query} onChange={event => setQuery(event.target.value)} placeholder="Search fan name, username or ID" /></label>
-    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Needs reply"], ["attention", "Attention"], ["paused", "Intentionally paused"], ["review", "Human review"], ["delivery", "Delivery problem"], ["ai", "AI enabled"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
+    <div className="of-filters" aria-label="Filter conversations">{([ ["all", "All"], ["unread", "Unread"], ["review", "Human handling"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div>
+    <details className="of-more-filters" open={["attention", "paused", "delivery", "ai"].includes(filter)}><summary>More filters</summary>
+      <div className="of-filters" aria-label="More conversation filters">{([ ["attention", "Attention"], ["paused", "Intentionally paused"], ["delivery", "Delivery problem"], ["ai", "AI enabled"] ] as const).map(([key, label]) => <button type="button" key={key} aria-pressed={filter === key} onClick={() => chooseFilter(key)}>{label}</button>)}</div></details>
     <p className="of-filter-note">Searches saved fan names, usernames and IDs across this account. Message contents are not searched.</p>
     {["paused", "review", "delivery"].includes(filter) && nextCursor ? <p className="of-filter-note">This status filter covers loaded search results. Load more to inspect further matches.</p> : null}
     <RequestStateBlock
@@ -196,7 +213,7 @@ function ConversationList({
                         ) : null}
                         {["failed", "partial", "unknown", "refused"].includes(conversation.delivery) ? <DeliveryPill outcome={conversation.delivery} /> : null}
                         {conversation.unreadCount > 0 ? <span className="of-unread" aria-label={`${conversation.unreadCount} unread messages`}>{conversation.unreadCount}</span> : null}
-                        {isAiChatting(conversation) ? <AiChattingBadge conversation={conversation} account={account} /> : null}
+                        <OwnershipBadges conversation={conversation} account={account} />
                       </span>
                     </span>
                   </button>
@@ -229,7 +246,8 @@ function ConversationList({
  * `tg-bubble-in/out`, run tails, the day rule) so the two channels read as one
  * product, with the OnlyFans receipt attached under each outbound bubble.
  */
-function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail: ConversationDetail; handoverHistory?: Handover | null; loadingOlder: boolean; onLoadOlder: () => void }) {
+function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder }: { detail: ConversationDetail; principal: string; handoverHistory?: Handover | null; loadingOlder: boolean; onLoadOlder: () => void }) {
+  const remembers = principal !== "fixture" && principal !== "unavailable";
   const timeline = conversationTimeline(detail, handoverHistory);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -239,24 +257,35 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
   const olderAnchor = useRef<{ height: number; top: number } | null>(null);
   const bottom = useRef(true);
   const previousThread = useRef("");
+  const previousLength = useRef(0);
+  // Messages that arrived while the reader was scrolled up. They are never
+  // dragged into view; the pill below says how many are waiting.
+  const [unseen, setUnseen] = useState(0);
   useLayoutEffect(() => {
     const node = scrollRef.current;
     if (!node) return;
     if (previousThread.current !== detail.conversationId) {
       previousThread.current = detail.conversationId; olderAnchor.current = null; bottom.current = true;
-      node.scrollTop = node.scrollHeight;
+      // Coming back to a thread you had scrolled up in reopens it where you were.
+      const saved = remembers ? recallScroll(principal, detail.accountId, detail.conversationId) : null;
+      if (saved === null) node.scrollTop = node.scrollHeight; else { node.scrollTop = saved; bottom.current = false; }
+      setUnseen(0);
     } else if (olderAnchor.current && !loadingOlder) {
       node.scrollTop = olderAnchor.current.top + node.scrollHeight - olderAnchor.current.height;
       olderAnchor.current = null;
     } else if (!olderAnchor.current && bottom.current) node.scrollTop = node.scrollHeight;
+    else if (!olderAnchor.current && timeline.length > previousLength.current) setUnseen(count => count + timeline.length - previousLength.current);
+    previousLength.current = timeline.length;
   }, [detail.conversationId, timeline.length, loadingOlder]);
 
   return (
+    <div className="relative flex min-h-0 flex-1 flex-col">
     <div
       ref={scrollRef}
       className="tg-thread min-h-[16rem] flex-1 overflow-y-auto px-3 py-3"
       data-of-thread
-      onScroll={event => { const node = event.currentTarget; bottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; }}
+      onScroll={event => { const node = event.currentTarget; bottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80; if (bottom.current) setUnseen(count => count ? 0 : count);
+        if (remembers) rememberScroll(principal, detail.accountId, detail.conversationId, bottom.current ? null : node.scrollTop); }}
     >
       {/* A short thread sits at the bottom of the panel, the way a chat does,
           instead of leaving the wallpaper dangling under three bubbles. */}
@@ -316,6 +345,10 @@ function Thread({ detail, handoverHistory, loadingOlder, onLoadOlder }: { detail
 
       </div>
     </div>
+    {unseen > 0 ? <button type="button" data-of-new-messages className="absolute bottom-3 left-1/2 z-10 -translate-x-1/2 rounded-full bg-accent px-4 py-2 text-xs font-semibold text-white shadow-lg"
+      onClick={() => { const node = scrollRef.current; if (node) node.scrollTo({ top: node.scrollHeight }); bottom.current = true; setUnseen(0); }}>
+      {unseen === 1 ? "1 new message" : `${unseen} new messages`} ↓</button> : null}
+    </div>
   );
 }
 
@@ -331,6 +364,7 @@ function Composer({
   pending,
   pendingAction,
   result,
+  detail,
 }: {
   draftId: string;
   actionSet: ActionSet;
@@ -343,10 +377,32 @@ function Composer({
   pending: boolean;
   pendingAction?: string | null;
   result: CommandResult | null;
+  /** The open conversation, for fan-specific content history. Without it the picker stays closed and the select remains. */
+  detail?: ConversationDetail;
 }) {
+  const [pickerOpen, setPickerOpen] = useState(false), attachButton = useRef<HTMLButtonElement>(null);
   const draft = useSyncExternalStore(subscribeDraft, () => readDraft(draftId), emptyDraft);
   const text = draft.body, catalogItemId = draft.catalogItemId;
   const setText = (body: string) => writeDraft(draftId, { body });
+  // An offer and vault attachments are alternatives: choosing an offer drops attachments, and attaching media clears the offer (ManualMediaAttachments).
+  const setCatalogItemId = (catalogItemId: string) => writeDraft(draftId, { catalogItemId, ...(catalogItemId ? { selectedMedia: [], mediaPaid: false, previewIds: [] } : {}) });
+  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]);
+  const [catalogueCursor, setCatalogueCursor] = useState<string | null>(null), [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState("");
+  const catalogueActive = useRef(true), catalogueRequest = useRef(false);
+  const loadCatalogue = useCallback(async (cursor: string | null = null) => {
+    if (simulated || account.capabilities.sendManualMessage !== "available" || catalogueRequest.current) return;
+    catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
+    try {
+      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(account.accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error("Saved paid content is unavailable. Text replies remain available.");
+      const value = await response.json(), parsed = parseWorkspace(value.workspace, account.accountId, "content");
+      if (!parsed || parsed.section !== "content") throw new Error("Saved paid content could not be read.");
+      if (catalogueActive.current) { setCatalogue(previous => cursor ? [...new Map([...previous, ...parsed.items].map(item => [item.itemId, item])).values()] : parsed.items); setCatalogueCursor(parsed.nextCursor); }
+    } catch (error) { if (catalogueActive.current) setCatalogueError(error instanceof Error ? error.message : "Saved paid content could not be read."); }
+    finally { catalogueRequest.current = false; if (catalogueActive.current) setCatalogueBusy(false); }
+  }, [account.accountId, account.capabilities.sendManualMessage, simulated]);
+  useEffect(() => { catalogueActive.current = true; void loadCatalogue(); return () => { catalogueActive.current = false; }; }, [loadCatalogue]);
+  const selectedOffer = catalogItemId ? catalogue.find(item => item.itemId === catalogItemId) : undefined;
   const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason && !pending;
   const takeoverAvailable = canSubmitCommand(viewer, actionSet, "request_takeover");
   const takeoverDisabled = pending || (!result?.simulated && result?.outcome === "unconfirmed");
@@ -380,6 +436,31 @@ function Composer({
           <UserRound size={16} aria-hidden="true" />{pending && pendingAction === "request_takeover" ? "Requesting takeover…" : "Take over to reply"}
         </button> : null}
         {!simulated && account.capabilities.sendManualMessage === "available" ? <ManualMediaAttachments key={draftId} accountId={account.accountId} draftId={draftId} draft={draft} disabled={!canEdit} /> : null}
+        {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
+          {detail ? <button type="button" ref={attachButton} data-of-attach-content aria-haspopup="dialog" disabled={!canSend} onClick={() => setPickerOpen(true)}
+            className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-accent disabled:opacity-50"><ImagePlus size={14} aria-hidden="true" />Attach content</button> : null}
+          <label className="block text-[11px] font-medium text-muted">Paid content
+            <select data-of-manual-offer value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)} disabled={!canSend}
+              className="mt-1 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink disabled:bg-elev disabled:text-muted">
+              <option value="">Text reply only</option>
+              {catalogue.filter(isSendableOffer).map(item => <option key={item.itemId} value={item.itemId}>{item.label} · {formatRecordedMoney(item.priceCents!, item.currency)}</option>)}
+            </select>
+          </label>
+          {catalogueError ? <p className="text-[11px] text-muted" role="status">{catalogueError}</p> : null}
+          {catalogueCursor || catalogueError ? <button type="button" className="text-[11px] font-semibold text-accent disabled:text-muted" disabled={!canSend || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more saved content" : "Retry saved content"}</button> : null}
+        </div></details> : null}
+        {catalogItemId ? <div className="rounded-lg border border-line bg-elev px-3 py-2 text-xs" data-of-composition-summary>
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 break-words font-semibold">{selectedOffer ? selectedOffer.label : `Saved item #${catalogItemId}`}
+              <Info className="ml-1" text="This reply will include the saved item at its catalogue price and previews. The price and the free and paid split come from the Content page and cannot be changed here." /></p>
+            <button type="button" data-of-composition-clear disabled={pending} onClick={() => setCatalogItemId("")} className="shrink-0 font-semibold text-accent disabled:opacity-50">Clear</button>
+          </div>
+          <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5">
+            <dt className="text-muted">Attachments</dt><dd>{selectedOffer ? offerMediaSummary(selectedOffer) : "Not loaded yet"}</dd>
+            <dt className="text-muted">Caption</dt><dd className="line-clamp-2 min-w-0 whitespace-pre-wrap break-words">{text.trim() || "No caption yet"}</dd>
+            <dt className="text-muted">Approved price</dt><dd className="font-semibold">{selectedOffer?.priceCents != null ? formatRecordedMoney(selectedOffer.priceCents, selectedOffer.currency) : "Not loaded yet"}</dd>
+          </dl>
+        </div> : null}
         <div className="of-input flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
           <label className="min-w-0 flex-1">
             <span className="sr-only">Manual message</span>
@@ -417,6 +498,11 @@ function Composer({
           </span>
         </div>
       </form>
+      {/* Outside the form: portalled dialogs still bubble submit events through the React tree. */}
+      {pickerOpen && detail ? <ChatContentPicker key={account.accountId} accountId={account.accountId} offers={catalogue} offersBusy={catalogueBusy} offersError={catalogueError}
+          hasMoreOffers={!!catalogueCursor} onLoadMoreOffers={() => void loadCatalogue(catalogueCursor)} selectedItemId={catalogItemId} history={fanContentHistory(detail)}
+          contentHref={`/onlyfans/content?creator=${encodeURIComponent(account.binding.creatorId)}&account=${encodeURIComponent(account.accountId)}`}
+          finalFocus={attachButton} onSelectOffer={setCatalogItemId} onClose={() => setPickerOpen(false)} /> : null}
     </div>
   );
 }
@@ -565,7 +651,9 @@ function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId:
 
 function FanMetrics({detail}: {detail:ConversationDetail}) {
   const financials = parseFanFinancials(detail.financials);
+  const latest = detail.ownedMedia.reduce<OwnedMediaItem | null>((best, item) => !best || Date.parse(item.purchasedAt) > Date.parse(best.purchasedAt) ? item : best, null);
   return <div>
+    <p className="of-empty-context" data-of-latest-purchase>{latest ? <>Last media purchase: {formatAge(latest.purchasedAt)}</> : "No media purchase recorded in the history loaded for this fan."}</p>
     <div className="of-fan-metrics">{!financials ? <div><strong>Unknown</strong><span>Recorded cleared spend</span></div> : null}<div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
     <h3 className="of-section-heading">Recorded spend</h3>
     {!financials ? <p className="of-empty-context">Financial evidence unavailable. Refresh after the account read service recovers.</p> : <>
@@ -695,6 +783,29 @@ export default function InboxView({
   onInboxSearchChange?: (search: InboxSearch) => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
+  // The fan panel is a third column only where there is room for it (1280px+).
+  // Narrower desktops start with it closed and can open it; closing it never
+  // touches the selected conversation, which lives outside this component.
+  const [profileOpen, setProfileOpen] = useState(true);
+  useEffect(() => { if (window.matchMedia("(max-width: 1279px)").matches) setProfileOpen(false); }, []);
+  // Below lg the fan info tab opens as a sheet over the chat. The chat, its draft and
+  // its scroll stay mounted underneath, so closing the sheet loses nothing.
+  const [narrow, setNarrow] = useState(false);
+  const sheetClose = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    const query = window.matchMedia("(max-width: 1023px)");
+    const sync = () => setNarrow(query.matches);
+    sync(); query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
+  const sheetOpen = narrow && mobilePanel === "controls";
+  useEffect(() => {
+    if (!sheetOpen) return;
+    sheetClose.current?.focus();
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setMobilePanel("chat"); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sheetOpen]);
   const {setIdentity}=useInboxIdentity();
   const creatorId=activeAccount?.binding.creatorId, creatorName=activeAccount?.binding.creatorName, creatorHandle=activeAccount?.binding.handle;
   useEffect(()=>{ setIdentity(creatorId && creatorName && creatorHandle ? {creatorId,creatorName,handle:creatorHandle} : null); return ()=>setIdentity(null); },[creatorId,creatorName,creatorHandle,setIdentity]);
@@ -745,13 +856,13 @@ export default function InboxView({
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
       {accountControls}
 
-      <nav aria-label="Inbox panels" className="of-panel-switch mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
+      <nav aria-label="Inbox panels" className="of-panel-switch relative z-[41] mb-3 grid grid-cols-3 gap-1 rounded-xl border border-line bg-panel p-1 lg:hidden">
         {([ ["conversations", "Conversations"], ["chat", "Chat"], ["controls", "Fan info"] ] as const).map(([key, label]) =>
           <button key={key} type="button" data-of-mobile-panel={key} aria-pressed={mobilePanel === key}
             onClick={() => setMobilePanel(key)} disabled={key !== "conversations" && !selectedConversationId}
             className={`rounded-lg px-1 py-2 text-xs font-semibold disabled:opacity-40 ${mobilePanel === key ? "bg-accent/10 text-accent-deep" : "text-muted"}`}>{label}</button>)}
       </nav>
-      <div className="of-layout" data-of-inbox-layout>
+      <div className="of-layout" data-of-inbox-layout data-profile={profileOpen ? "open" : "closed"}>
         <Card size="sm" className={`users-panel users-panel-list h-[min(34rem,65dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "conversations" ? "flex" : "hidden lg:flex"}`}>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <ConversationList
@@ -770,7 +881,7 @@ export default function InboxView({
           </div>
         </Card>
 
-        <Card size="sm" className={`users-panel users-panel-chat h-[min(42rem,75dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel === "chat" ? "flex" : "hidden lg:flex"}`}>
+        <Card size="sm" className={`users-panel users-panel-chat h-[min(42rem,75dvh)] flex-col overflow-hidden p-0 lg:h-full ${mobilePanel !== "conversations" ? "flex" : "hidden lg:flex"}`}>
           {!activeAccount || !detail ? (
             <div className="flex flex-1 items-center justify-center gap-2 p-6 text-sm text-muted">
               {detailState ? <RequestStateBlock state={detailState} label="conversation" render={() => null} /> : <><MessageCircle className="size-4" />Select a conversation to read it.</>}
@@ -783,7 +894,7 @@ export default function InboxView({
                   avatarUrl={detail.summary.fan.avatarUrl}
                   className="h-9 w-9 text-[11px]"
                 />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-[7rem] flex-1">
                   <div className="truncate text-sm font-semibold text-ink">
                     {fanName(detail.summary.fan)}
                   </div>
@@ -791,10 +902,13 @@ export default function InboxView({
                     <span className="creator-name">{activeAccount.binding.creatorName}</span> · @{activeAccount.binding.handle}
                   </div>
                 </div>
-                {isAiChatting(detail.summary) ? <AiChattingBadge conversation={detail.summary} account={activeAccount} /> : null}
+                <span className="of-chat-badges"><OwnershipBadges conversation={detail.summary} account={activeAccount} handover={handoverHistory} /></span>
+                <button type="button" data-of-profile-toggle aria-expanded={profileOpen} onClick={() => setProfileOpen(open => !open)}
+                  className="hidden min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold text-muted hover:text-ink lg:inline-flex">
+                  <UserRound className="size-3.5" aria-hidden="true" />{profileOpen ? "Hide fan details" : "Fan details"}</button>
               </div>
 
-              <Thread detail={detail} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
+              <Thread detail={detail} principal={draftPrincipal} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
               {actionSet ? (
                 <Composer
@@ -803,6 +917,7 @@ export default function InboxView({
                   actionSet={actionSet}
                   viewer={viewer}
                   account={activeAccount}
+                  detail={detail}
                   onTakeover={() => onCommand("request_takeover", NO_PAYLOAD)}
                   onSubmit={(body, catalogItemId, media) => onCommand("send_manual_message", { kind: "manual_message", body,
                     ...(catalogItemId === undefined ? {} : { catalogItemId }), ...(media ? { media } : {}) })}
@@ -818,7 +933,10 @@ export default function InboxView({
           )}
         </Card>
 
-        <Card size="sm" className={`users-panel users-panel-profile overflow-y-auto p-4 lg:h-full ${mobilePanel === "controls" ? "block" : "hidden lg:block"}`}>
+        {sheetOpen ? <button type="button" className="of-sheet-backdrop" tabIndex={-1} aria-label="Close fan info" onClick={() => setMobilePanel("chat")} /> : null}
+        <Card size="sm" data-sheet={mobilePanel === "controls" ? "open" : "closed"} role={sheetOpen ? "dialog" : undefined} aria-modal={sheetOpen ? true : undefined} aria-label={sheetOpen ? "Fan info" : undefined}
+          className={`users-panel users-panel-profile overflow-y-auto p-4 lg:h-full ${mobilePanel === "controls" ? "block" : "hidden"} ${profileOpen ? "lg:block" : "lg:hidden"}`}>
+          <div className="of-sheet-bar lg:hidden"><strong>Fan info</strong><button type="button" ref={sheetClose} data-of-sheet-close onClick={() => setMobilePanel("chat")}>Close</button></div>
           {!activeAccount || !detail || !actionSet ? (
             <div className="flex h-full items-center justify-center text-center text-xs text-muted">
               Pick a conversation to see the fan and the controls.
