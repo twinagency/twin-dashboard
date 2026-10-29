@@ -27,6 +27,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const result = { exports: {} as Record<string, any> };
   new Function("require", "module", "exports", js)((name: string) => {
     if (name === "@/components/NavigationLink") name = "next/link";
+    if (name === "@/components/PlatformIcon") return compile("components/PlatformIcon.tsx", {});
     if (Object.hasOwn(imports, name)) return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };
     if (["react", "react/jsx-runtime", "lucide-react"].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected Dashboard dependency: ${name}`);
