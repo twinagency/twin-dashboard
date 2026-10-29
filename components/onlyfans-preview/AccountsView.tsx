@@ -22,6 +22,7 @@ import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
 import ConnectionEditor, { RegisterConnection } from "./ConnectionEditor";
 import CreatorPortrait from "./CreatorPortrait";
+import CreatorHub from "./CreatorHub";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -162,7 +163,7 @@ export default function AccountsView({
 
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">
-      <CreatorPlatformHeading title="Accounts" description={creatorName
+      <CreatorPlatformHeading title="Creators" description={creatorName
         ? `Manage ${creatorName}’s OnlyFans accounts and choose how you want to reply.`
         : "Your creator accounts, connections and reply settings, together."} />
       {showPreviewChrome ? <span data-of-source-note>{sourceLabel}</span> : null}
@@ -185,6 +186,7 @@ export default function AccountsView({
         label="accounts"
         render={(list) => (
           <>
+            <CreatorHub accounts={list} />
             <div className="of-account-counts">
               <Stat label="Accounts" value={String(list.length)} />
               <Stat label="Connected" value={String(connected)} />

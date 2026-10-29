@@ -502,3 +502,16 @@
   .mediaPicker :global(input:not([type="checkbox"]):not([type="radio"])),
   .mediaPicker :global(select), .mediaPicker :global(textarea) { font-size: 16px; }
 }
+.platform :global(.of-hub-identity) { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-bottom: 12px; }
+.platform :global(.of-hub-identity .of-portrait-large) { width: 96px; height: 106px; }
+.platform :global(.of-hub-cards) { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.platform :global(.of-hub-cards [data-of-hub-card="connection"]) { grid-column: 1 / -1; }
+.platform :global(.of-hub-cards .of-text-link) { display: flex; }
+.platform :global(.of-hub-lines) { display: grid; gap: 8px; margin-top: 10px; font-size: 13px; }
+.platform :global(.of-hub-line) { display: grid; grid-template-columns: 160px minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.platform :global(.of-hub-line dt) { color: #61758e; }
+.platform :global(.of-hub-lines + .of-hub-lines) { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--studio-line); }
+@media (max-width: 700px) {
+  .platform :global(.of-hub-cards) { grid-template-columns: minmax(0, 1fr); }
+  .platform :global(.of-hub-line) { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+}

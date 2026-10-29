@@ -21,6 +21,7 @@ export async function checkConfiguration(page, context, origin) {
   await save.click(); await notice.filter({ hasText: "Save recorded." }).waitFor();
   await savedValue("Updated Synthetic Harbor");
   await page.getByRole("tab", { name: "Reply settings", exact: true }).click();
+  await editor.locator("[data-of-model-advanced]").evaluate(element => { element.open = true; });
   await editor.locator("[data-of-edit-model]").selectOption("grok-4-1-fast-non-reasoning");
   await save.click(); await notice.filter({ hasText: "Save recorded." }).waitFor();
   await page.getByRole("tab", { name: "Personality", exact: true }).click();

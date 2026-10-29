@@ -167,7 +167,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </div>)}</div>
           <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it for OnlyFans. Save only facts approved by the creator. Save or discard other edits before choosing Use Twin value.</p>
         </div>
-        </StudioTabPanel><StudioTabPanel value="replies"><div className="grid min-w-0 gap-3 sm:grid-cols-2">
+        </StudioTabPanel><StudioTabPanel value="replies"><p className="text-sm" data-of-model-summary>Reply model: {data.resolvedReplyModel ? "Saved on this creator" : "Not set up"}{!data.modelsValid ? ", needs review" : ""}</p>
+        <details className="rounded-lg border border-line p-3" open={!data.modelsValid} data-of-model-advanced><summary className="cursor-pointer text-sm font-semibold">Advanced</summary><div className="mt-3 space-y-3"><div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Default model<select data-of-edit-model className={inputClass} disabled={!data.modelsValid} value={defaultModel} onChange={event => setDefaultModel(event.target.value)}>
             {!data.defaultModel ? <option value="" disabled>No saved model</option> : !data.modelOptions.includes(data.defaultModel) ? <option value={data.defaultModel} disabled>Current choice needs review</option> : null}
             {data.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
@@ -178,7 +179,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
             {data.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
           </select></label>
         </div>
-        <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p>
+        <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p></div></details>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Daily model budget (USD cents)<input data-of-edit-budget type="number" min={0} max={1_000_000} step={1} className={inputClass} value={dailyBudget} onChange={event => setDailyBudget(event.target.value)} /></label>
           <label className="min-w-0 text-sm">Reasoning effort<select data-of-edit-reasoning className={inputClass} value={effort} onChange={event => setEffort(event.target.value)}>

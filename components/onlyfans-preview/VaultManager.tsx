@@ -49,7 +49,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   const libraryTop = useRef<HTMLDivElement>(null);
   const [retry, setRetry] = useState<Pending | null>(null), [created, setCreated] = useState<string | null>(null);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
-  const [search, setSearch] = useState(""), [mediaKind, setMediaKind] = useState("all");
+  const [search, setSearch] = useState(""), [mediaKind, setMediaKind] = useState("all"), [needsReview, setNeedsReview] = useState(false), [allFolders, setAllFolders] = useState(false);
   const appliedFilters = useRef({ query: "", kind: "all", folderId: "" });
   const readGeneration = useRef(0);
   const foregroundRead = useRef(false);
@@ -111,7 +111,8 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   }, [busy, denied, organizationBusy, assetId, picker, retry, data?.sync?.status, cursor, read]);
   function changeType(kind: string) {
     if (busy || retry) return;
-    setMediaKind(kind); setPageTrail([]); clearSelection();
+    if (kind === "review") { setNeedsReview(true); return; }
+    setNeedsReview(false); setMediaKind(kind); setPageTrail([]); clearSelection();
     void read(null, { query: search.trim(), kind, folderId });
   }
   async function goPage(after: string | null, trail: (string | null)[]) {
@@ -159,6 +160,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
     else next.set(row.mediaId, row);
     setSelected(next);
   }
+  const shownItems = data?.items.filter(row => !needsReview || !row.ready) ?? [];
   const cents = parseContentPrice(price);
   const product = { label: label.trim(), description: description.trim(), priceCents: cents ?? -1, enabled,
     mediaIds: [...selected.keys()], previewMediaIds: [...selected.keys()].filter(id => previews.has(id)) };
@@ -202,7 +204,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         setPageTrail([]); clearSelection(); void read(null, { query: search.trim(), kind: mediaKind, folderId });
       }}>
         <div className="of-media-filters" role="tablist" aria-label="Media type">
-          {[{ key: "all", label: "All media" }, { key: "photo", label: "Photos" }, { key: "video", label: "Videos" }].map(tab => <button key={tab.key} type="button" role="tab" aria-selected={mediaKind === tab.key} disabled={busy || !!retry} onClick={() => changeType(tab.key)}>{tab.label}</button>)}
+          {[{ key: "all", label: "All media" }, { key: "photo", label: "Photos" }, { key: "video", label: "Videos" }, { key: "review", label: "Needs review" }].map(tab => <button key={tab.key} type="button" role="tab" aria-selected={tab.key === "review" ? needsReview : !needsReview && mediaKind === tab.key} title={tab.key === "review" ? "Files on this page that are not ready for offers, with the reason." : undefined} disabled={busy || !!retry} onClick={() => changeType(tab.key)}>{tab.label}</button>)}
         </div>
         <div className="of-media-search"><Search size={17} aria-hidden="true" /><input type="search" aria-label="Search your media" placeholder="Search descriptions and tags" maxLength={120} value={search} onChange={event => setSearch(event.target.value)} disabled={busy || !!retry}/><button type="submit" data-of-vault-search aria-label="Search vault" disabled={busy || !!retry}><Search size={17} aria-hidden="true" /></button></div>
         <div className="of-view-toggle" role="group" aria-label="Media layout"><button type="button" aria-label="Grid view" aria-pressed={view === "grid"} onClick={() => setView("grid")}><Grid2X2 size={19} /></button><button type="button" aria-label="List view" aria-pressed={view === "list"} onClick={() => setView("list")}><List size={19} /></button></div>
@@ -228,9 +230,10 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       </div>
 
       {folderId ? <div className="of-collection-heading"><h3>{folders.find(folder=>folder.folderId===folderId)?.name ?? "Folder"}</h3></div> : <section className="of-collection-section" aria-label="Folder collections"><div className="of-collection-heading"><h3>Your collections</h3><span>{folders.length} folders</span></div>
-        <div className="of-collection-grid">{folders.slice(0,6).map(folder=><button type="button" key={folder.folderId} data-of-folder-cover={folder.folderId} aria-pressed={folderId===folder.folderId} disabled={busy||!!retry} onClick={()=>changeFolder(folder.folderId)}>
+        <div className="of-collection-grid">{(allFolders?folders:folders.slice(0,6)).map(folder=><button type="button" key={folder.folderId} data-of-folder-cover={folder.folderId} aria-pressed={folderId===folder.folderId} disabled={busy||!!retry} onClick={()=>changeFolder(folder.folderId)}>
           <span className="of-collection-cover">{folder.coverMediaId ? <VaultFolderCover key={`${accountId}:${folder.coverMediaId}`} accountId={accountId} mediaId={folder.coverMediaId} refreshKey={refreshKey}/> : <Folder size={28} aria-hidden="true"/>}</span><span className="of-collection-name">{folder.name}<small>{folder.count.toLocaleString()} files{folder.automatic ? " · Auto" : ""}</small></span>
         </button>)}</div>
+        {folders.length>6?<button type="button" className="of-text-link mt-2" aria-expanded={allFolders} onClick={()=>setAllFolders(value=>!value)}>{allFolders?"Show fewer folders":`Show all folders (${folders.length})`}</button>:null}
       </section>}
       {!readOnly ? <details ref={offerForm} open={offerOpen} onToggle={event => setOfferOpen(event.currentTarget.open)} className="of-offer-composer rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
@@ -253,21 +256,21 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       <fieldset disabled={busy || !!retry || organizationBusy} className="of-vault-files">
         <legend className="sr-only">{resultLabel} · Page {pageTrail.length + 1}</legend>
         <div className="of-media-grid" data-of-vault-grid data-view={view} aria-busy={busy}>
-          {(viewReady ? data.items : []).map(row => <article key={row.mediaId} className="of-media-card" data-of-vault-item={row.mediaId} data-selected={selected.has(row.mediaId) || undefined}>
+          {(viewReady ? shownItems : []).map(row => <article key={row.mediaId} className="of-media-card" data-of-vault-item={row.mediaId} data-selected={selected.has(row.mediaId) || undefined}>
             <div className="of-media-cover">
-              <VaultAssetPreview key={row.mediaId} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly} refreshKey={refreshKey}/>
+              <VaultAssetPreview key={row.mediaId} accountId={accountId} mediaId={row.mediaId} kind={row.kind} readOnly={readOnly} refreshKey={refreshKey} processing={!row.ready && row.reason === "not_ready"}/>
               {!["photo", "video", "gif"].includes(row.kind) ? <div className="of-media-placeholder"><ImageIcon size={32} /><span>{row.kind}</span></div> : null}
               <span className="of-media-kind">{row.kind === "video" ? <Video size={14} /> : <ImageIcon size={14} />}{row.kind}</span>
               <label className="of-media-select"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /></label>
               {row.durationSeconds !== null ? <span className="of-media-duration">{vaultDuration(row.durationSeconds)}</span> : null}
             </div>
-            <div className="of-media-caption"><p className="of-media-title">{row.description || `${row.kind === "video" ? "Video" : row.kind === "photo" ? "Photo" : "Asset"} #${row.mediaId}`}</p><span className="of-media-availability" data-ready={row.ready}>{vaultAvailability(row).label}</span>
+            <div className="of-media-caption"><p className="of-media-title">{row.description || `${row.kind === "video" ? "Video" : row.kind === "photo" ? "Photo" : "Asset"} #${row.mediaId}`}</p><span className="of-media-availability" data-ready={row.ready}>{vaultAvailability(row).label}</span>{needsReview ? <span className="mt-1 block text-xs text-muted" data-of-review-reason>{vaultAvailability(row).explanation}</span> : null}
               <div className="of-media-details"><button type="button" disabled={readOnly} data-of-vault-edit={row.mediaId} onClick={() => setAssetId(row.mediaId)}>Edit details</button><details><summary aria-label={`Availability details for asset ${row.mediaId}`}><MoreHorizontal size={18} /></summary><div><p>{vaultAvailability(row).explanation}</p><p>Asset #{row.mediaId}{row.width && row.height ? ` · ${row.width} × ${row.height}` : ""}</p></div></details></div>
             </div>
           </article>)}
         </div>
-        {viewReady && !data.items.length ? <p className="of-empty-copy">No files match this view. Try another media type, search or folder.</p> : null}
-        <div className="of-vault-pagination" aria-busy={busy}><span>{viewReady ? <>Showing {data.items.length} files · Page {pageTrail.length + 1}{data.summary ? ` of ${Math.max(1, Math.ceil(data.summary.matching / 24))}` : ""}</> : resultLabel}</span><div>
+        {viewReady && !shownItems.length ? <p className="of-empty-copy">{needsReview && data.items.length ? "Every file on this page is ready. Check other pages for files that need review." : "No files match this view. Try another media type, search or folder."}</p> : null}
+        <div className="of-vault-pagination" aria-busy={busy}><span>{viewReady ? <>Showing {shownItems.length} files · Page {pageTrail.length + 1}{data.summary ? ` of ${Math.max(1, Math.ceil(data.summary.matching / 24))}` : ""}</> : resultLabel}</span><div>
           <button type="button" className={buttonClass} disabled={!viewReady || !pageTrail.length} onClick={() => void goPage(pageTrail.at(-1) ?? null, pageTrail.slice(0, -1))}>Previous</button>
           <button type="button" data-of-vault-next className={buttonClass} disabled={!viewReady || !data.nextCursor} onClick={() => data.nextCursor && void goPage(data.nextCursor, [...pageTrail, cursor])}>Next page →</button>
           {busy && <span role="status" className="text-sm text-muted">Loading page…</span>}
