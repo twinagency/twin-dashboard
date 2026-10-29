@@ -1,15 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { inputCls } from "@/components/clone/fields";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { parseVault, vaultAvailability, vaultDuration, type VaultItem, type VaultRead } from "@/lib/onlyfans/vault";
 import VaultAssetPreview from "./VaultAssetPreview";
 import VaultOrganization from "./VaultOrganization";
 import VaultUploader from "./VaultUploader";
-import styles from "./OnlyFansStudio.module.css";
+import styles from "./VaultMediaPicker.module.css";
 
-const button = "min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
+const button = styles.button;
 export default function VaultMediaPicker({ accountId, connectionRevision, selected, initialMode, onToggle, onClose, onChanged, onDenied, purpose = "item", allowUpload = true }: {
   accountId: string; connectionRevision: number | null; selected: Map<string, VaultItem>; initialMode: "vault" | "upload"; purpose?: "item" | "message"; allowUpload?: boolean;
   onToggle: (row: VaultItem) => void; onClose: () => void; onChanged: () => void; onDenied: () => void;
@@ -48,38 +47,52 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
   async function go(after: string | null, nextTrail: (string | null)[]) { if (await read(after)) setTrail(nextTrail); }
   const locked = organizationBusy || uploadBusy;
   return <Dialog open onOpenChange={open => { if (!open && !locked) onClose(); }}>
-    <DialogContent className={`${styles.mediaPicker} flex max-h-[90dvh] flex-col overflow-hidden bg-panel text-ink sm:max-w-3xl`} showCloseButton={!locked} data-of-media-picker>
-      <DialogHeader><DialogTitle>{purpose === "message" ? "Attach vault media" : "Add media to your item"}</DialogTitle><DialogDescription>{purpose === "message" ? "Choose files for this message. Set its price in your reply." : "Choose existing files or upload new ones. Your item description and price stay in the draft."}</DialogDescription></DialogHeader>
-      {allowUpload ? <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Add media source">
-        {[["vault", "Choose from vault"], ...(allowUpload ? [["upload", "Upload new files"]] : [])].map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={mode === value} disabled={locked} className={`${button} ${mode === value ? "bg-accent text-white" : ""}`} onClick={() => { setMode(value as "vault" | "upload"); if (value === "vault") { setTrail([]); void read(null); } }}>{label}</button>)}
+    <DialogContent className={styles.dialog} showCloseButton={!locked} data-of-media-picker>
+      <DialogHeader className={styles.header}>
+        <DialogTitle>{purpose === "message" ? "Attach media" : "Add media to your item"}</DialogTitle>
+        <DialogDescription>{purpose === "message" ? "Choose photos and videos from any folder. Add your caption and price in the reply." : "Choose existing files or upload new ones. Your item description and price stay in the draft."}</DialogDescription>
+      </DialogHeader>
+      {allowUpload ? <div className={styles.tabs} role="tablist" aria-label="Add media source">
+        {[["vault", "Choose from vault"], ["upload", "Upload new files"]].map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={mode === value} disabled={locked} className={button} onClick={() => { setMode(value as "vault" | "upload"); if (value === "vault") { setTrail([]); void read(null); } }}>{label}</button>)}
       </div> : null}
-      <div className="min-h-0 overflow-y-auto" data-of-picker-body>
-      <div hidden={mode !== "vault"}>
-        <form className="mt-3 space-y-3" onSubmit={event => { event.preventDefault(); if (!busy && !locked) filter({ query: query.trim(), kind, folderId }); }}>
-          <label className="block text-sm">Search media<input type="search" className={`${inputCls} mt-1 w-full`} maxLength={120} value={query} onChange={event => setQuery(event.target.value)} /></label>
-          <div className="flex flex-wrap gap-2"><label className="min-w-0 flex-1 text-sm">Media type<select className={`${inputCls} mt-1 w-full`} value={kind} disabled={busy || locked} onChange={event => { setKind(event.target.value); filter({ query: query.trim(), kind: event.target.value, folderId }); }}><option value="all">Photos and videos</option><option value="photo">Photos</option><option value="video">Videos</option></select></label><button type="submit" className={`${button} self-end`} disabled={busy || locked}>Search media</button></div>
-        </form>
-        <VaultOrganization compact readOnly={purpose === "message"} accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={changed} onBusy={setOrganizationBusy} />
-        {notice ? <p role="status" className="mt-3 text-sm">{notice}</p> : null}
-        <p className="mt-3 text-xs text-muted">{purpose === "message" ? "Select up to 20 photos or videos to attach." : "Choose up to 20 files. Files without confirmed full access cannot be added to a paid item. Folders help you find files; the item contains the files you select."}</p>
-        <button type="button" className={`${button} mt-2`} disabled={busy || locked} onClick={() => void read(cursor)}>Refresh media</button>
-        <div className="mt-3 grid min-w-0 gap-3 min-[380px]:grid-cols-2 sm:grid-cols-3" data-of-picker-grid>
-          {data?.items.map(row => { const checked = selected.has(row.mediaId), available = row.ready && ["photo", "video"].includes(row.kind); return <article key={row.mediaId} className={"min-w-0 rounded-xl border p-3 " + (checked ? "border-accent bg-accent/5 ring-1 ring-accent" : "border-line")} data-of-picker-item={row.mediaId}>
-            <VaultAssetPreview accountId={accountId} mediaId={row.mediaId} kind={row.kind} tile />
-            <label className="flex min-h-11 items-start gap-2 text-sm"><input type="checkbox" className="mt-1" aria-label={`Add asset ${row.mediaId}`} checked={checked} disabled={busy || locked || !checked && (!available || selected.size >= 20)} onChange={() => onToggle(row)} /><span className="min-w-0 break-words">{row.description || `${row.kind} #${row.mediaId}`}</span></label>
-            <p className="text-xs text-muted">{row.kind} {vaultDuration(row.durationSeconds)}</p><p className="mt-1 text-xs">{purpose === "message" && row.ready ? "Ready to attach" : vaultAvailability(row).label}</p>
-            {!available ? <p className="mt-1 text-xs text-muted">{vaultAvailability(row).explanation}</p> : null}
-          </article>; })}
+      <div className={styles.body} data-of-picker-body>
+        <div hidden={mode !== "vault"} className={styles.layout}>
+          <aside className={styles.folders}>
+            <VaultOrganization compact readOnly={purpose === "message"} accountId={accountId} selectedIds={[...selected.keys()]} folderId={folderId} onFolderChange={changeFolder} onChanged={changed} onBusy={setOrganizationBusy} />
+          </aside>
+          <div className={styles.content}>
+            <form className={styles.filters} onSubmit={event => { event.preventDefault(); if (!busy && !locked) filter({ query: query.trim(), kind, folderId }); }}>
+              <label className={styles.search}>Search media<input type="search" placeholder="Search your media…" maxLength={120} value={query} onChange={event => setQuery(event.target.value)} /></label>
+              <label>Media type<select value={kind} disabled={busy || locked} onChange={event => { setKind(event.target.value); filter({ query: query.trim(), kind: event.target.value, folderId }); }}><option value="all">Photos and videos</option><option value="photo">Photos</option><option value="video">Videos</option></select></label>
+              <button type="submit" className={button} aria-label="Search media" disabled={busy || locked}>Search</button>
+            </form>
+            <div className={styles.toolbar}><span>{selected.size} of 20 selected · Choose across folders</span><button type="button" className={styles.textButton} aria-label="Refresh media" disabled={busy || locked} onClick={() => void read(cursor)}>Refresh</button></div>
+            {purpose === "message" ? <p className={styles.captionNote}>Descriptions are internal and are never sent as captions. Only your reply text is sent.</p> : null}
+            {notice ? <p role="status" className={styles.notice}>{notice}</p> : null}
+            <div className={styles.grid} data-of-picker-grid aria-busy={busy}>
+              {data?.items.map(row => {
+                const checked = selected.has(row.mediaId), available = row.ready && ["photo", "video"].includes(row.kind);
+                return <article key={row.mediaId} className={styles.card} data-selected={checked} data-of-picker-item={row.mediaId}>
+                  <div className={styles.preview}>
+                    <VaultAssetPreview accountId={accountId} mediaId={row.mediaId} kind={row.kind} tile />
+                    <span className={styles.kind}>{row.kind === "video" ? "Video" : "Photo"}{row.durationSeconds ? ` · ${vaultDuration(row.durationSeconds)}` : ""}</span>
+                  </div>
+                  <label className={styles.selectAsset}><input type="checkbox" aria-label={`Add asset ${row.mediaId}`} checked={checked} disabled={busy || locked || !checked && (!available || selected.size >= 20)} onChange={() => onToggle(row)} /><span>{checked ? "Selected" : "Select " + (row.kind === "video" ? "video" : "photo")}</span><small>#{row.mediaId}</small></label>
+                  {row.description ? <details className={styles.description}><summary>Internal description</summary><p>{row.description}</p></details> : null}
+                  {!available ? <p className={styles.unavailable}><strong>{vaultAvailability(row).label}</strong><br />{vaultAvailability(row).explanation}</p> : null}
+                </article>;
+              })}
+            </div>
+            {data && !data.items.length ? <p className={styles.notice}>No media matches this view. Try another search, type or folder.</p> : null}
+            <div className={styles.pagination}><button type="button" className={button} disabled={busy || locked || !trail.length} onClick={() => void go(trail.at(-1) ?? null, trail.slice(0, -1))}>Previous media</button><span>Page {trail.length + 1}</span><button type="button" className={button} disabled={busy || locked || !data?.nextCursor} onClick={() => data?.nextCursor && void go(data.nextCursor, [...trail, cursor])}>Next media</button></div>
+          </div>
         </div>
-        {data && !data.items.length ? <p className="mt-3 text-sm">No media matches this view. Try another search, type or folder.</p> : null}
-        <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" className={button} disabled={busy || locked || !trail.length} onClick={() => void go(trail.at(-1) ?? null, trail.slice(0, -1))}>Previous media</button><span className="text-sm">Page {trail.length + 1}</span><button type="button" className={button} disabled={busy || locked || !data?.nextCursor} onClick={() => data?.nextCursor && void go(data.nextCursor, [...trail, cursor])}>Next media</button></div>
+        {allowUpload ? <div hidden={mode !== "upload"} className={styles.upload}>
+          <p>Upload to the connected OnlyFans vault, then choose the processed files to add them to your item. Uploading does not publish a feed post.</p>
+          <VaultUploader accountId={accountId} connectionRevision={connectionRevision} onChanged={changed} onBusy={setUploadBusy} />
+        </div> : null}
       </div>
-      {allowUpload ? <div hidden={mode !== "upload"}>
-        <p className="mt-3 text-sm">Upload to the connected OnlyFans vault. Once processing and vault sync finish, choose the files in Choose from vault to attach them to this item. Uploading does not publish a feed post.</p>
-        <VaultUploader accountId={accountId} connectionRevision={connectionRevision} onChanged={changed} onBusy={setUploadBusy} />
-      </div> : null}
-      </div>
-      <div className="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-t border-line bg-panel py-3"><p role="status" className="text-sm">{selected.size} selected{selected.size >= 20 ? " · Maximum reached" : ""}</p><button type="button" className={`${button} bg-accent text-white`} disabled={locked} onClick={onClose}>Done selecting media</button></div>
+      <div className={styles.footer}><p role="status"><strong>{selected.size}</strong> {selected.size === 1 ? "file" : "files"} selected{selected.size >= 20 ? " · Maximum reached" : ""}</p><button type="button" className={styles.done} disabled={locked} onClick={onClose}>{purpose === "message" ? (selected.size ? `Use ${selected.size} selected` : "Done") : "Done selecting media"}</button></div>
     </DialogContent>
   </Dialog>;
 }

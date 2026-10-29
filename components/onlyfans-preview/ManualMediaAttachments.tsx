@@ -32,7 +32,7 @@ export default function ManualMediaAttachments({ accountId, draftId, draft, disa
           <VaultAssetPreview tile accountId={accountId} mediaId={row.mediaId} kind={row.kind} />
           <button type="button" disabled={disabled} aria-label={"Remove asset " + row.mediaId} onClick={() => toggle(row)}
             className="absolute right-1 top-1 grid size-7 place-items-center rounded-full bg-black/70 text-white"><X size={15} /></button>
-          <p className="mt-1 truncate text-xs" title={row.description || undefined}>{row.description || row.kind + " " + row.mediaId}</p>
+          <p className="mt-1 truncate text-xs">{row.kind === "video" ? "Video" : "Photo"} #{row.mediaId}</p>
           {draft.mediaPaid ? <label className="mt-1 flex min-h-8 items-center gap-1 text-xs"><input type="checkbox" disabled={disabled}
             checked={draft.previewIds.includes(row.mediaId)} onChange={() => update({ previewIds: draft.previewIds.includes(row.mediaId) ? draft.previewIds.filter(id => id !== row.mediaId) : [...draft.previewIds, row.mediaId] })} />Free preview</label> : null}
         </div>)}
@@ -50,6 +50,7 @@ export default function ManualMediaAttachments({ accountId, draftId, draft, disa
           onChange={e => update({ mediaPrice: e.target.value })} className="w-24 rounded-lg border border-line bg-panel px-3 py-2 text-ink" /></label>
           : <span className="text-sm text-muted">Free attachment{selected.size === 1 ? "" : "s"}</span>}
       </div>
+      <p className="mt-2 text-xs text-muted">Only the caption you type below is sent. Leave it blank to send just the media.</p>
       {draft.mediaPaid ? <p className="mt-2 text-xs" data-of-manual-total>{manualPriceCents(draft.mediaPrice) ? "USD " + (manualPriceCents(draft.mediaPrice)! / 100).toFixed(2) + " total" : "Enter a price from USD 3.00 to 200.00."}</p> : null}
     </div> : null}
     {notice ? <p role="alert" className="text-sm">{notice}</p> : null}
@@ -57,3 +58,4 @@ export default function ManualMediaAttachments({ accountId, draftId, draft, disa
       onToggle={toggle} onClose={() => setOpen(false)} onChanged={() => {}} onDenied={() => { setOpen(false); setNotice("Your session cannot read this creator's media. Refresh or sign in again."); }} /> : null}
   </section>;
 }
+

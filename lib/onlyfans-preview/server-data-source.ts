@@ -1,4 +1,5 @@
 import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
+import { validManualMedia } from "../onlyfans/manual-media";
 // The live frontend read adapter.
 //
 // It speaks to the dashboard's read and scoped control handlers. Each handler
@@ -147,8 +148,12 @@ export function createFetchOnlyFansTransport(
       const resolution = command.command === "resolve_delivery_evidence" && command.payload.kind === "delivery_resolution";
       const action = manual ? "manual_message" : command.command;
       if (resolution && (command.payload.kind !== "delivery_resolution" || command.payload.decision !== "delivered" || !/^[1-9][0-9]{0,15}$/.test(command.payload.providerMessageId ?? ""))) return result("refused", "An exact provider message ID is required for reconciliation.");
-      if ((!manual && !resolution && (!isControlAction(action) || command.payload.kind !== "none")) ||
-          (manualBody !== null && (!manualBody.trim() || new TextEncoder().encode(manualBody).length > 4000))) {
+      const attachments = command.payload.kind === "manual_message" ? command.payload.media : undefined;
+      if (manual && ((!manualBody!.trim() && !attachments) || new TextEncoder().encode(manualBody!).length > 4000 ||
+          (attachments !== undefined && (!validManualMedia(attachments) || (command.payload.kind === "manual_message" && command.payload.catalogItemId !== undefined))))) {
+        return result("refused", "Choose media or write a message. Check the attachment price and previews before sending.");
+      }
+      if (!manual && !resolution && (!isControlAction(action) || command.payload.kind !== "none")) {
         return result("refused", "That action is not configured for this account.");
       }
       try {
@@ -301,3 +306,4 @@ export function createServerOnlyFansDataSource(options: {
     },
   };
 }
+
