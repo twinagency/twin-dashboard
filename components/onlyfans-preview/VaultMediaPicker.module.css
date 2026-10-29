@@ -2,6 +2,7 @@
 .dialog.dialog {
   --color-panel: #fff; --color-ink: #20364a; --color-muted: #6b7f91; --color-line: #e1eaf1;
   --color-accent: #087bbb; --color-elev: #f4f8fb;
+  position: fixed; inset: 0; margin: auto; translate: none; transition-property: opacity, transform;
   display: flex; flex-direction: column; gap: 0; width: min(1080px, calc(100vw - 40px));
   max-width: none; height: min(820px, 90dvh); max-height: 90dvh; padding: 0; overflow: hidden;
   border: 1px solid #dfe8ef; border-radius: 20px; background: #fff; color: #20364a;
