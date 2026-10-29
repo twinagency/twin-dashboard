@@ -7,7 +7,7 @@ export type ControlSubmission = {
   expectedRevision: number; commandKey: string; actor: string;
   body?: string;
   attemptId?: string; providerMessageId?: number; decision?: "delivered";
-  catalogItemId?: number | null;
+  catalogItemId?: number | null; media?: import("./manual-media").ManualMedia;
 };
 
 export function createControlBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
@@ -22,7 +22,7 @@ export function createControlBackend(options: { baseUrl: string; token: string; 
           commandKey: command.commandKey, actor: command.actor,
           ...(command.action === "resolve_delivery_evidence" ? { attemptId: command.attemptId, providerMessageId: command.providerMessageId, decision: command.decision } : {}),
           ...(command.action === "manual_message" ? { body: command.body,
-            ...(command.catalogItemId !== undefined ? { catalogItemId: command.catalogItemId } : {}) } : {}) }),
+            ...(command.catalogItemId !== undefined ? { catalogItemId: command.catalogItemId } : {}), ...(command.media ? { media: command.media } : {}) } : {}) }),
       });
       if ([400, 401, 403, 404, 409, 413, 503].includes(result.status)) {
         const code = controlRefusalCode(await result.json().catch(() => null));

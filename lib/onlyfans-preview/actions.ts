@@ -1,3 +1,4 @@
+import { validManualMedia, canonicalManualMedia } from "../onlyfans/manual-media";
 // Which controls the dashboard may offer, and why.
 //
 // Three independent dimensions decide this, and none of them implies another:
@@ -199,7 +200,7 @@ export function canSubmitCommand(
 export function canonicalPayload(payload: CommandPayload): string {
   switch (payload.kind) {
     case "manual_message":
-      return payload.catalogItemId == null ? `message:${payload.body}` : `message:item-${payload.catalogItemId}:${payload.body}`;
+      return payload.media ? `message:media-${canonicalManualMedia(payload.media)}:${payload.body}` : payload.catalogItemId == null ? `message:${payload.body}` : `message:item-${payload.catalogItemId}:${payload.body}`;
     case "delivery_resolution":
       return `resolution:${payload.attemptId}:${payload.decision}:${payload.providerMessageId ?? ""}`;
     case "none":
@@ -233,12 +234,13 @@ export function commandPayloadProblem(
     if (payload.kind !== "manual_message") {
       return "A manual message needs a message payload.";
     }
-    if (payload.body.trim().length === 0) {
+    if (payload.body.trim().length === 0 && !payload.media) {
       return "A manual message needs some text before it can be modelled.";
     }
     if (new TextEncoder().encode(payload.body).length > MAX_MANUAL_MESSAGE_LENGTH) {
       return `That message is longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`;
     }
+    if (payload.media !== undefined && (!validManualMedia(payload.media) || payload.catalogItemId != null)) return "Choose valid vault files and a message price.";
     if (payload.catalogItemId != null && (!Number.isInteger(payload.catalogItemId) || payload.catalogItemId <= 0 || payload.catalogItemId >= 2 ** 31)) {
       return "Select a saved content item from this account.";
     }

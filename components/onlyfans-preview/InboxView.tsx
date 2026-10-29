@@ -9,6 +9,8 @@
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
+import ManualMediaAttachments from "./ManualMediaAttachments";
+import { manualPriceCents, validManualMedia, type ManualMedia } from "@/lib/onlyfans/manual-media";
 import { onlyFansMessageText } from "@/lib/onlyfans/message-display";
 import { parseFanFinancials } from "@/lib/onlyfans/fan-financials";
 import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
@@ -333,7 +335,7 @@ function Composer({
   actionSet: ActionSet;
   viewer: PreviewViewer;
   account: OfAccount;
-  onSubmit: (body: string, catalogItemId?: number) => void;
+  onSubmit: (body: string, catalogItemId?: number, media?: ManualMedia) => void;
   onTakeover: () => void;
   disabledReason: string | null;
   simulated: boolean;
@@ -344,23 +346,6 @@ function Composer({
   const draft = useSyncExternalStore(subscribeDraft, () => readDraft(draftId), emptyDraft);
   const text = draft.body, catalogItemId = draft.catalogItemId;
   const setText = (body: string) => writeDraft(draftId, { body });
-  const setCatalogItemId = (catalogItemId: string) => writeDraft(draftId, { catalogItemId });
-  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]);
-  const [catalogueCursor, setCatalogueCursor] = useState<string | null>(null), [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState("");
-  const catalogueActive = useRef(true), catalogueRequest = useRef(false);
-  const loadCatalogue = useCallback(async (cursor: string | null = null) => {
-    if (simulated || account.capabilities.sendManualMessage !== "available" || catalogueRequest.current) return;
-    catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
-    try {
-      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(account.accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) });
-      if (!response.ok) throw new Error("Saved paid content is unavailable. Text replies remain available.");
-      const value = await response.json(), parsed = parseWorkspace(value.workspace, account.accountId, "content");
-      if (!parsed || parsed.section !== "content") throw new Error("Saved paid content could not be read.");
-      if (catalogueActive.current) { setCatalogue(previous => cursor ? [...new Map([...previous, ...parsed.items].map(item => [item.itemId, item])).values()] : parsed.items); setCatalogueCursor(parsed.nextCursor); }
-    } catch (error) { if (catalogueActive.current) setCatalogueError(error instanceof Error ? error.message : "Saved paid content could not be read."); }
-    finally { catalogueRequest.current = false; if (catalogueActive.current) setCatalogueBusy(false); }
-  }, [account.accountId, account.capabilities.sendManualMessage, simulated]);
-  useEffect(() => { catalogueActive.current = true; void loadCatalogue(); return () => { catalogueActive.current = false; }; }, [loadCatalogue]);
   const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason && !pending;
   const takeoverAvailable = canSubmitCommand(viewer, actionSet, "request_takeover");
   const takeoverDisabled = pending || (!result?.simulated && result?.outcome === "unconfirmed");
@@ -371,12 +356,18 @@ function Composer({
       : new TextEncoder().encode(text).length > MAX_MANUAL_MESSAGE_LENGTH
         ? `Longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`
         : null;
-  const submittable = canSend && bodyProblem === null && !!text.trim();
+  const canEdit = !pending && (viewer.canManage || viewer.canChat === true);
+  const media: ManualMedia | undefined = draft.selectedMedia.length ? {
+    mediaIds: draft.selectedMedia.map(row => row.mediaId), previewIds: draft.mediaPaid ? draft.previewIds : [],
+    priceCents: draft.mediaPaid ? manualPriceCents(draft.mediaPrice) ?? -1 : 0,
+  } : undefined;
+  const mediaProblem = media && !validManualMedia(media) ? "Set a price from USD 3.00 to 200.00 and leave at least one attachment locked, or choose Free." : null;
+  const submittable = canSend && bodyProblem === null && !mediaProblem && (!!text.trim() || !!media);
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!submittable) return;
-    onSubmit(text, catalogItemId ? Number(catalogItemId) : undefined);
+    onSubmit(text, media ? undefined : catalogItemId ? Number(catalogItemId) : undefined, media);
   }
 
   return (
@@ -387,18 +378,7 @@ function Composer({
           disabled={takeoverDisabled} className="of-control-button of-primary">
           <UserRound size={16} aria-hidden="true" />{pending && pendingAction === "request_takeover" ? "Requesting takeover…" : "Take over to reply"}
         </button> : null}
-        {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
-          <label className="block text-[11px] font-medium text-muted">Paid content
-            <select data-of-manual-offer value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)} disabled={!canSend}
-              className="mt-1 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink disabled:bg-elev disabled:text-muted">
-              <option value="">Text reply only</option>
-              {catalogue.filter(item => item.readiness === "terms_checked" && item.priceCents !== null && item.priceCents >= 300 && item.priceCents <= 20000 && /^[1-9][0-9]*$/.test(item.itemId) && Number(item.itemId) < 2 ** 31).map(item => <option key={item.itemId} value={item.itemId}>{item.label} · {formatRecordedMoney(item.priceCents!, item.currency)}</option>)}
-            </select>
-          </label>
-          {catalogueError ? <p className="text-[11px] text-muted" role="status">{catalogueError}</p> : null}
-          {catalogueCursor || catalogueError ? <button type="button" className="text-[11px] font-semibold text-accent disabled:text-muted" disabled={!canSend || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more saved content" : "Retry saved content"}</button> : null}
-          {catalogItemId ? <p className="text-[11px] text-muted">This reply will include the saved item at its catalogue price and previews.</p> : null}
-        </div></details> : null}
+        {!simulated && account.capabilities.sendManualMessage === "available" ? <ManualMediaAttachments key={draftId} accountId={account.accountId} draftId={draftId} draft={draft} disabled={!canEdit} /> : null}
         <div className="of-input flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
           <label className="min-w-0 flex-1">
             <span className="sr-only">Manual message</span>
@@ -406,9 +386,9 @@ function Composer({
               data-of-composer
               value={text}
               onChange={(event) => setText(event.target.value)}
-              disabled={!canSend}
+              disabled={!canEdit}
               rows={1}
-              placeholder={canSend ? "Write a reply as the creator…" : pending ? pendingAction === "send_manual_message" ? "Sending…" : "Updating reply control…"
+              placeholder={canEdit ? (media ? "Add a caption (optional)…" : "Write a reply as the creator…") : pending ? pendingAction === "send_manual_message" ? "Sending…" : "Updating reply control…"
                 : sendBlockedReason === "Take over this conversation before sending a manual reply."
                   ? "Take over to reply" : "Reply unavailable, see reason below"}
               className="w-full resize-none bg-transparent text-sm text-ink outline-none placeholder:text-muted disabled:cursor-not-allowed"
@@ -429,7 +409,7 @@ function Composer({
           {simulated ? <SimulatedTag /> : null}
           <span>
             {disabledReason ??
-              bodyProblem ??
+              bodyProblem ?? mediaProblem ??
               (simulated ? `Nothing is sent. @${account.binding.handle} is a fixture, and this preview has no delivery authority.`
                 : actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason ??
                   null)}
@@ -828,8 +808,8 @@ export default function InboxView({
                   viewer={viewer}
                   account={activeAccount}
                   onTakeover={() => onCommand("request_takeover", NO_PAYLOAD)}
-                  onSubmit={(body, catalogItemId) => onCommand("send_manual_message", { kind: "manual_message", body,
-                    ...(catalogItemId === undefined ? {} : { catalogItemId }) })}
+                  onSubmit={(body, catalogItemId, media) => onCommand("send_manual_message", { kind: "manual_message", body,
+                    ...(catalogItemId === undefined ? {} : { catalogItemId }), ...(media ? { media } : {}) })}
                   disabledReason={connectionReason ?? (!commandResult?.simulated && commandResult?.outcome === "unconfirmed"
                     ? "Resolve the previous request outcome or retry that same request before composing another." : null)}
                   simulated={showPreviewChrome}
