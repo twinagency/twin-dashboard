@@ -44,6 +44,8 @@ import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import ViewAsBanner from "@/components/ViewAsBanner";
 import { logout } from "@/app/login/actions";
 import { channelAccess, resolveChannelScope } from "@/lib/channel-scope";
+import type { DashboardChannel } from "@/lib/channel-nav";
+import { isOnlyFansOnly, ONLYFANS_ONLY_HOME } from "@/lib/app-mode";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
@@ -104,13 +106,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || await isAuthed();
   if (!authed) return <html lang="en" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
+  // TWIN_APP_MODE=onlyfans: one channel, no Telegram header totals, no Twin changelog popup.
+  const ofOnly = isOnlyFansOnly();
   const [twinVersion, clones, activeCloneId, viewAsInfo, { usdPerStar }, cloneRates] = await Promise.all([
-    agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
+    agency || ofOnly ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
     getViewerTerms(), getCloneRates().catch(() => ({} as Record<string, number>)),
   ]);
-  const [allTimeStars, overrideTotals, channelScope] = await Promise.all([
-    getHeaderAllTimeStars(activeCloneId),
-    activeCloneId ? Promise.resolve([]) : Promise.all(Object.keys(cloneRates).map(async id => [id, await getHeaderAllTimeStars(id)] as const)),
+  const [allTimeStars, overrideTotals, resolvedScope] = await Promise.all([
+    ofOnly ? Promise.resolve(0) : getHeaderAllTimeStars(activeCloneId),
+    activeCloneId || ofOnly ? Promise.resolve([]) : Promise.all(Object.keys(cloneRates).map(async id => [id, await getHeaderAllTimeStars(id)] as const)),
     resolveChannelScope(channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo, onlyFansAgency: !!agency?.userId && agency.name !== "Twin Technologies" })),
   ]);
   // Header rate: a picked girl's own rate, else the exact all-time blend of the
@@ -124,24 +128,26 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);
+  // TWIN_APP_MODE=onlyfans offers the one channel, so the channel switch is not drawn.
+  const channelScope = ofOnly ? { ...resolvedScope, allowed: ["onlyfans"] as DashboardChannel[] } : resolvedScope;
   // Path-dependent navigation stays in client components, not frozen here.
   return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : isTopOnlyfansAgency(agency?.name) ? "top-onlyfans-agency" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : !agency || agency.name === "Twin" ? "twin-light" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
-      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar} cloneRates={cloneRates} fleetUsdPerStar={headerUsdPerStar}><BlurProvider>
+      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage} onlyFansOnly={ofOnly}><CurrencyProvider usdPerStar={usdPerStar} cloneRates={cloneRates} fleetUsdPerStar={headerUsdPerStar}><BlurProvider>
         <WorkspaceShell activeCloneId={activeCloneId} creators={clones}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} channels={channelScope.allowed} />
           <div className="workspace-content flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-              <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse={!isMoxy(agency?.name)} agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
+              <Link href={ofOnly ? ONLYFANS_ONLY_HOME : agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse={!isMoxy(agency?.name)} agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} allTimeUsdPerStar={headerUsdPerStar} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{isMoxy(agency?.name) && !canManage && <p role="status" className="mx-4 mt-3 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-muted">View-only access · You can browse every available page. Changes and account connections are disabled.</p>}{children}</MainShell>
             <WorkspaceMobileNav activeCloneId={activeCloneId} channels={channelScope.allowed} />
           </div>
         </WorkspaceShell>
-        {!agency && <TwinUpdatePopup activeCloneId={activeCloneId} version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
+        {!agency && !ofOnly && <TwinUpdatePopup activeCloneId={activeCloneId} version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
       </BlurProvider></CurrencyProvider></DashboardAccessProvider>
     </body>
   </html>;

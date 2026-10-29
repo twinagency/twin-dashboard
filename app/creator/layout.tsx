@@ -8,6 +8,7 @@ import { isCreatorDashboardPath, isCreatorPlatformPage } from "@/lib/creator-das
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { getViewerTerms } from "@/lib/platform-cut";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
+import { isOnlyFansOnly } from "@/lib/app-mode";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import ViewAsBanner from "@/components/ViewAsBanner";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       onboardingFinished={creator.applicationSubmitted !== false}
       connectionPage={pathname === "/creator/platforms"}
       homePage={pathname === "/creator"}
+      onlyFansOnly={isOnlyFansOnly()}
       allTimeStars={allTimeStars}
       usdPerStar={usdPerStar}
     >

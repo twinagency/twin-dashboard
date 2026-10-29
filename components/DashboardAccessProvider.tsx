@@ -9,6 +9,8 @@ type DashboardAccessContext = {
   isCreator: boolean;
   canManage: boolean;
   agencyName?: string;
+  /** True only when the server runs with TWIN_APP_MODE=onlyfans (lib/app-mode.ts). */
+  onlyFansOnly: boolean;
 };
 
 const Access = createContext<DashboardAccessContext>({
@@ -17,6 +19,7 @@ const Access = createContext<DashboardAccessContext>({
   isAgency: false,
   isCreator: false,
   canManage: true,
+  onlyFansOnly: false,
 });
 export const useDashboardAccess = () => useContext(Access);
 
@@ -27,11 +30,14 @@ export default function DashboardAccessProvider({
   agencyName,
   canManage = false,
   audience,
+  onlyFansOnly = false,
   children,
 }: {
   agencyName?: string;
   canManage?: boolean;
   audience?: DashboardAudience;
+  /** Passed down from a server layout, because a runtime server env var does not exist in the browser. */
+  onlyFansOnly?: boolean;
   children: ReactNode;
 }) {
   // Existing callers need no migration: a verified agency name still means an
@@ -98,6 +104,7 @@ export default function DashboardAccessProvider({
     isCreator,
     canManage: resolvedCanManage,
     agencyName,
+    onlyFansOnly,
   }}>{children}</Access.Provider>;
 }
 export function AdminOnly({children}:{children:ReactNode}) {

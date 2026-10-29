@@ -127,6 +127,12 @@ const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
   color: "neutral",
 }));
 
+// TWIN_APP_MODE=onlyfans: a creator sees only the pages the OnlyFans-only app serves.
+const CREATOR_ONLYFANS_LINKS: NavLink[] = [
+  { kind: "route", label: "Platforms", href: "/creator/platforms", icon: "Clones", color: "neutral" },
+  { kind: "route", label: "Inbox", href: "/creator/onlyfans/inbox", icon: "Messages", color: "neutral" },
+];
+
 const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
@@ -405,7 +411,7 @@ const TETHER_SIDEBAR_THEME = `
 `;
 
 export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false, channelSwitch }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean; channelSwitch?: ReactNode }) {
-  const {readOnly,isAgency,isCreator,canManage,agencyName,audience}=useDashboardAccess();
+  const {readOnly,isAgency,isCreator,canManage,agencyName,audience,onlyFansOnly}=useDashboardAccess();
   const isAdmin = audience === "admin";
   const moxyNavigation = isAgency && (isMoxy(agencyName) || agencyName === TOP_ONLYFANS_AGENCY.name);
   const twinAgencyNavigation = isAgency && agencyName === TOP_ONLYFANS_AGENCY.name;
@@ -419,7 +425,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const primaryLinks = moxyNavigation || twinAgencyNavigation
     ? MOXY_LINKS
     : isCreator
-    ? CREATOR_LINKS
+    ? (onlyFansOnly ? CREATOR_ONLYFANS_LINKS : CREATOR_LINKS)
     : isPreview
     ? [...NAV_LINKS, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
     : isAdmin
@@ -430,7 +436,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // A profile opened from Dashboard may differ from the global scope cookie.
   // Keep its configuration links on the creator actually displayed.
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
-  const rawChannel = channelDefinition(workspaceChannel(pathname, searchParams.get("workspace"), isAdmin));
+  const rawChannel = channelDefinition(onlyFansOnly && !isCreator ? "onlyfans" : workspaceChannel(pathname, searchParams.get("workspace"), isAdmin));
   const channel = isAgency && !isMoxy(agencyName) && rawChannel.channel === "onlyfans" ? { ...rawChannel, nav: rawChannel.nav.filter(item => item.key !== "of-operations") } : rawChannel;
   // Telegram uses the same operator navigation as Overview and Earnings.
   // OnlyFans retains its account-specific tools and verified route guards.
@@ -550,13 +556,13 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 
   return <>
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
-    <div className={studioNavigation ? "studio-brand-row" : "flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"}><Link href={isCreator ? "/creator" : isAdmin ? "/overview" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse={!(isMoxy(agencyName) && channel.channel === "onlyfans")} studio={studioNavigation} agencyName={agencyName === "Twin" || twinAgencyNavigation ? undefined : agencyName} /></Link>{headerAction}</div>
+    <div className={studioNavigation ? "studio-brand-row" : "flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"}><Link href={onlyFansOnly ? (isCreator ? "/creator/platforms" : "/onlyfans/overview") : isCreator ? "/creator" : isAdmin ? "/overview" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse={!(isMoxy(agencyName) && channel.channel === "onlyfans")} studio={studioNavigation} agencyName={agencyName === "Twin" || twinAgencyNavigation ? undefined : agencyName} /></Link>{headerAction}</div>
     {channelSwitch ? <div className="workspace-channel-selector shrink-0 px-4 pt-3">{channelSwitch}</div> : null}
-    {isAgency && !isPreview ? <div className="px-4 pt-3"><Link href="/agency/setup" onClick={onNavigate} className="workspace-nav-row flex rounded-lg px-3 py-2 text-sm font-semibold">Agency setup & team</Link></div> : null}
+    {isAgency && !isPreview ? <div className="px-4 pt-3"><Link href={onlyFansOnly ? "/agency/team" : "/agency/setup"} onClick={onNavigate} className="workspace-nav-row flex rounded-lg px-3 py-2 text-sm font-semibold">{onlyFansOnly ? "Team access" : "Agency setup & team"}</Link></div> : null}
     {twinAgencyNavigation ? <div className="shrink-0 px-4 pt-4"><Link href="/agency/creator-invites" onClick={onNavigate} aria-current={isGlobalActive("/agency/creator-invites") ? "page" : undefined} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white"><Icon d={PATHS.Plus} className="h-5 w-5" />Invite creator</Link></div> : null}
     {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className={"px-7 py-4 text-sm " + (isMoxy(agencyName) && channel.channel === "onlyfans" ? "text-slate-600" : "text-white/75")}>{agencyName} · {readOnly ? "Read only" : (isMoxy(agencyName) || twinAgencyNavigation) && canManage ? "Owner" : "Creator management"}</div> : isAdmin && !fullNavigation ? null : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
     <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className={(studioNavigation ? "studio-sidebar-nav " : "") + "flex flex-1 flex-col overflow-y-auto px-4 py-2"}>{isAdmin && !channelScoped ? <h2 className="workspace-nav-heading">Your workspace</h2> : null}{channelScoped ? <ChannelNav channel={channel} onNavigate={onNavigate} /> : isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation || twinAgencyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{!channelScoped && isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator && !studioRoute ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
-    {studioNavigation && channelScoped && <Link href={isAgency ? "/onlyfans/settings" : "/settings"} onClick={onNavigate} className="studio-account"><Icon d={PATHS.Settings} className="h-5 w-5" /><span>{isAgency ? "Account settings" : "Workspace settings"}</span><Icon d='<path d="m9 5 7 7-7 7"/>' className="h-4 w-4" /></Link>}
+    {studioNavigation && channelScoped && <Link href={isAgency || onlyFansOnly ? "/onlyfans/settings" : "/settings"} onClick={onNavigate} className="studio-account"><Icon d={PATHS.Settings} className="h-5 w-5" /><span>{isAgency ? "Account settings" : "Workspace settings"}</span><Icon d='<path d="m9 5 7 7-7 7"/>' className="h-4 w-4" /></Link>}
   </>;
 }
 
