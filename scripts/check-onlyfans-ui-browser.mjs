@@ -139,7 +139,7 @@ try {
       await page.locator("[data-of-conversation-id]").first().waitFor();
       if(width>=1024){
         check(await page.locator(".dashboard-sidebar").isVisible(),brand+": visible shared navigation");
-        check(await page.locator(".dashboard-sidebar [data-channel-option] img").evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),brand+": real channel logos load");
+        check(await page.locator(".dashboard-sidebar [data-channel-option] svg[data-platform-icon]").evaluateAll(icons=>icons.length>0&&icons.every(icon=>{const box=icon.getBoundingClientRect();return box.width>0&&box.height>0;})),brand+": inline channel marks render");
         if(brand==="Moxy")check(await page.locator('.dashboard-sidebar img[alt^="Moxy"]').evaluate(img=>img.complete&&img.naturalWidth>0),"Moxy logo loads");
         check(await page.locator("[data-of-action=request_takeover]").isVisible(),brand+": manual takeover remains visible");
         const controlColors=await page.locator("[data-of-action=request_takeover]").evaluate(e=>({background:getComputedStyle(e).backgroundColor,foreground:getComputedStyle(e).color,opacity:getComputedStyle(e).opacity}));

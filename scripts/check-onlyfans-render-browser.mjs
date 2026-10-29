@@ -35,7 +35,7 @@ try{
   // The real workspace polls for updates. Readiness is rendered content,
   // not a quiet network, and the dev fixture may compile a route on first use.
   await page.goto(`http://127.0.0.1:4198/onlyfans/${route}`,{waitUntil:'domcontentloaded',timeout:60000});
-  await page.getByRole('heading',{name:{overview:'Today',accounts:'Creators',inbox:'OnlyFans inbox',sales:'Earnings'}[route]??route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
+  await page.getByRole('main').getByRole('heading',{name:{overview:'Today',accounts:'Creators',inbox:'OnlyFans inbox',sales:'Earnings'}[route]??route[0].toUpperCase()+route.slice(1),exact:true}).waitFor();
   await page.evaluate(()=>document.fonts.ready);
   if(route==='campaigns')await waitForCampaigns(page);
   if(route==='content'){await page.locator('[data-of-vault-grid]').waitFor();await page.locator('[data-of-vault-item]').first().waitFor();}
@@ -53,7 +53,7 @@ try{
    assert(thumb && thumb.y>=0 && thumb.height>180,'The media grid must retain portrait previews below the visible categories');
    assert(await page.locator('[data-of-vault-organization]').isVisible(),'Category browsing stays visible above the media grid');
    assert(thumb && thumb.y>=0 && thumb.y+thumb.height<=page.viewportSize().height && thumb.height>180,`The first portrait must be fully visible in the desktop viewport: ${JSON.stringify(thumb)}`);
-   const logo=page.locator('.dashboard-sidebar [data-channel-option="onlyfans"] img');assert(await logo.evaluate(img=>img.complete&&img.naturalWidth>0),'The actual OnlyFans logo must load');
+   const logo=page.locator('.dashboard-sidebar [data-channel-option="onlyfans"] svg[data-platform-icon="onlyfans"]');assert(await logo.evaluate(icon=>{const box=icon.getBoundingClientRect();return box.width>0&&box.height>0&&!!icon.querySelector('path');}),'The inline OnlyFans mark must render in the channel switch');
    await page.getByRole('button',{name:'Create offer',exact:true}).click();
    await page.locator('[data-of-vault-product-label]').fill('Unsaved visual test');
    await page.getByRole('tab',{name:'Offers',exact:true}).click();

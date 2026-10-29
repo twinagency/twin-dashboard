@@ -10,7 +10,7 @@ try{
  const page=await browser.newPage({viewport:{width:390,height:844}});
  const rows=Array.from({length:50},(_,i)=>({mediaId:String(i+1),kind:(i+1)%3===0?'video':'photo',durationSeconds:(i+1)%3===0?630:null,width:640,height:480,ready:false,reason:'readiness_unknown',description:`Synthetic landscape ${i+1}`}));
  let description='Original landscape',tags=['coast'],fingerprint=hash,loseReply=true,deny=false,readFailure=false;
- const writes=[];let lastQuery=null,failFirstPreview=true;
+ const writes=[];let lastQuery=null,failPreview=6;
  await page.route('**/api/onlyfans-content/accounts/acc-a/vault**',async route=>{
   const req=route.request(),url=new URL(req.url()),suffix=url.pathname.split('/vault')[1];
   const json=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)});
@@ -24,7 +24,8 @@ try{
    if(loseReply){loseReply=false;return route.abort('connectionfailed');}
    return json(envelope({applied:true,commandKey:'c'.repeat(64),targetId:mediaId,fingerprint}));
   }
-  if(suffix==='/previews/1'&&failFirstPreview){failFirstPreview=false;return route.fulfill({status:404,body:''});}
+  // The preview component retries a transient failure twice (image load plus one probe each time) before it shows Retry, so six requests fail.
+  if(suffix==='/previews/1'&&failPreview>0){failPreview-=1;return route.fulfill({status:503,body:''});}
   if(suffix.startsWith('/previews/'))return route.fulfill({status:200,contentType:'image/png',body:png});
   if(suffix==='/uploads')return json(envelope({uploads:{schemaVersion:'of-vault-media.v1',accountId,maxFiles:40,maxFileBytes:4000*1024**2,chunkBytes:8*1024**2,enabled:true,jobs:[]}}));
   throw Error('Unexpected fixture request: '+req.method()+' '+suffix);
