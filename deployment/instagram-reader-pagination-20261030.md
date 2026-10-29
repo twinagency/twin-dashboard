@@ -6,3 +6,5 @@ Phase 2: run the full synthetic reader tests, then apply the isolated two-file p
 
 Reader source: 825fcbfefcba150c71b5273c26e42ae1e761c6de.
 Preflight succeeded through the production cloud connection on 30 October 2026 (Brisbane).
+
+Attempt 2: explicitly load the existing root environment file. Attempt 1 stopped before container replacement; the original connection remained verified. All 34 synthetic reader tests passed.
