@@ -14,7 +14,7 @@ async function waitForCampaigns(page){
   if(!manager)return false;
   const text=manager.innerText;
   const historySettled=manager.querySelector('[data-of-campaign]')||text.includes('Campaign history is unavailable.')||text.includes('No campaigns are recorded for this account.');
-  const loading=[...manager.querySelectorAll('p,button')].some(node=>/^Loading(?: campaigns| saved conversations| campaign detail)?…$/.test(node.textContent.trim()));
+  const loading=[...manager.querySelectorAll('p,button')].some(node=>/^Loading(?: campaigns| synchronized conversations| campaign detail)?…$/.test(node.textContent.trim()));
   return !!historySettled&&!loading;
  });
 }

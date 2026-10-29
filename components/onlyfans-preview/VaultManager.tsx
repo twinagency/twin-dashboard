@@ -18,6 +18,8 @@ import ContentEditor from "./ContentEditor";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
 import VaultMediaPicker from "./VaultMediaPicker";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { syncStatusLine, vaultSelectionSummary, MULTI_CATEGORY_NOTE } from "@/lib/onlyfans/section8";
 import ContentSyncSave from "./ContentSyncSave";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
@@ -54,7 +56,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
   const readGeneration = useRef(0);
   const foregroundRead = useRef(false);
   const [folders,setFolders]=useState<FolderSummary[]>([]),[refreshKey,setRefreshKey]=useState(0);
-  const [folderId,setFolderId]=useState(""),[assetId,setAssetId]=useState<string|null>(null),[organizationBusy,setOrganizationBusy]=useState(false);
+  const [folderId,setFolderId]=useState(""),[assetId,setAssetId]=useState<string|null>(null),[detail,setDetail]=useState<VaultItem|null>(null),[organizationBusy,setOrganizationBusy]=useState(false);
   const base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}`;
   const clearSelection = useCallback(() => { setSelected(new Map()); setPreviews(new Set()); }, []);
   const read = useCallback(async (after: string | null, filters = appliedFilters.current, background = false) => {
@@ -212,7 +214,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       <div className="of-library-controls">
         <span data-of-vault-result-count>{resultLabel}{selected.size ? ` · ${selected.size} selected` : ""}</span>
         <button type="button" data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}><RefreshCw size={15} aria-hidden="true" />Refresh vault</button>
-        <details className="of-sync-tools" open={data.sync?.status === "failed"}><summary>{data.sync?.status === "complete" ? "Vault synced" : data.sync ? `Sync: ${SYNC_STATUS[data.sync.status]}${["pending", "running"].includes(data.sync.status) ? ` · ${data.sync.itemsSeen.toLocaleString()} files checked` : ""}` : "Sync details"}</summary>
+        <details className="of-sync-tools" open={data.sync?.status === "failed"}><summary>{data.sync ? syncStatusLine(data.sync) : "Sync details"}</summary>
       <div className="of-vault-sync-copy text-xs" data-of-vault-sync-status>
         {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? "Vault sync complete" : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
           <p className="mt-1 text-muted">{data.sync.itemsSeen.toLocaleString()} files checked in this sync. {["pending", "running"].includes(data.sync.status) ? "Totals may increase. This page updates automatically." : `Last updated ${new Date(data.sync.updatedAt).toLocaleString()}.`}</p>
@@ -253,6 +255,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
           <button type="submit" data-of-vault-create className={`${buttonClass} min-h-11`} aria-describedby={productIssues.length ? "vault-product-issues" : undefined} disabled={!productValid}>{enabled ? "Create catalogue item" : "Save item with offers disabled"}</button>
         </fieldset>
       </form></details> : null}
+      <p className="of-selection-summary" data-of-vault-selection-summary title={MULTI_CATEGORY_NOTE}>{vaultSelectionSummary({ folderName: folderId ? folders.find(folder => folder.folderId === folderId)?.name ?? "Selected folder" : null, folderCount: folderId ? folders.find(folder => folder.folderId === folderId)?.count ?? null : null, matching: data.summary?.matching ?? null, kind: mediaKind, query: appliedFilters.current.query, needsReview })}</p>
       <fieldset disabled={busy || !!retry || organizationBusy} className="of-vault-files">
         <legend className="sr-only">{resultLabel} · Page {pageTrail.length + 1}</legend>
         <div className="of-media-grid" data-of-vault-grid data-view={view} aria-busy={busy}>
@@ -264,7 +267,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
               <label className="of-media-select"><input disabled={readOnly} data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /></label>
               {row.durationSeconds !== null ? <span className="of-media-duration">{vaultDuration(row.durationSeconds)}</span> : null}
             </div>
-            <div className="of-media-caption"><p className="of-media-title">{row.description || `${row.kind === "video" ? "Video" : row.kind === "photo" ? "Photo" : "Asset"} #${row.mediaId}`}</p><span className="of-media-availability" data-ready={row.ready}>{vaultAvailability(row).label}</span>{needsReview ? <span className="mt-1 block text-xs text-muted" data-of-review-reason>{vaultAvailability(row).explanation}</span> : null}
+            <div className="of-media-caption"><button type="button" className="of-media-title-button" data-of-vault-detail={row.mediaId} aria-label={`View details for asset ${row.mediaId}`} onClick={() => setDetail(row)}><p className="of-media-title">{row.description || `${row.kind === "video" ? "Video" : row.kind === "photo" ? "Photo" : "Asset"} #${row.mediaId}`}</p></button><span className="of-media-availability" data-ready={row.ready}>{vaultAvailability(row).label}</span>{needsReview ? <span className="mt-1 block text-xs text-muted" data-of-review-reason>{vaultAvailability(row).explanation}</span> : null}
               <div className="of-media-details"><button type="button" disabled={readOnly} data-of-vault-edit={row.mediaId} onClick={() => setAssetId(row.mediaId)}>Edit details</button><details><summary aria-label={`Availability details for asset ${row.mediaId}`}><MoreHorizontal size={18} /></summary><div><p>{vaultAvailability(row).explanation}</p><p>Asset #{row.mediaId}{row.width && row.height ? ` · ${row.width} × ${row.height}` : ""}</p></div></details></div>
             </div>
           </article>)}
@@ -281,6 +284,15 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       <ContentSyncSave key={accountId} accountId={accountId} readOnly={readOnly} />
       {created ? <div className="mt-4 rounded-lg border border-line p-3 text-sm" data-of-vault-created={created}>Catalogue item #{created} was recorded.<ContentEditor key={created} accountId={accountId} itemId={created} /></div> : null}
     </> : null}
+    <Dialog open={!!detail} onOpenChange={open => { if (!open) setDetail(null); }}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+      <DialogHeader><DialogTitle>{detail?.kind === "video" ? "Video" : "Photo"} · #{detail?.mediaId}</DialogTitle></DialogHeader>
+      {detail ? <div className="space-y-2 text-sm" data-of-vault-detail-panel>
+        <p className="whitespace-pre-wrap break-words">{detail.description || "No description yet."}</p>
+        <p className="text-xs text-muted">{vaultAvailability(detail).label}. {vaultAvailability(detail).explanation}</p>
+        <p className="text-xs text-muted">{detail.width && detail.height ? `${detail.width} × ${detail.height}` : "Size not reported"}{detail.durationSeconds !== null ? ` · ${vaultDuration(detail.durationSeconds)}` : ""}</p>
+        <p className="text-xs text-muted">{MULTI_CATEGORY_NOTE}</p>
+      </div> : null}
+    </DialogContent></Dialog>
     {assetId && !readOnly && !denied ? <VaultMetadataEditor key={`${accountId}:${assetId}`} accountId={accountId} mediaId={assetId} onClose={() => setAssetId(null)} onChanged={organizationChanged}/> : null}
     {picker && !readOnly && !denied ? <VaultMediaPicker key={accountId} accountId={accountId} connectionRevision={data?.connectionRevision ?? null} selected={selected} initialMode={picker} onToggle={toggle} onClose={() => setPicker(null)} onChanged={organizationChanged} onDenied={denyPicker}/> : null}
     {retry && !denied ? <div className="mt-4 flex flex-wrap gap-2"><button type="button" data-of-vault-retry className={buttonClass} disabled={busy} onClick={() => void execute(retry)}>Retry same request</button><button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { setRetry(null); clearSelection(); setNotice("Review the recorded catalogue and sync status before starting another request. The previous command may already have committed."); }}>Use refreshed vault</button></div> : null}

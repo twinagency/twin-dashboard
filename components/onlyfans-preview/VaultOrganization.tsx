@@ -2,6 +2,7 @@
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
 import { Folder } from "lucide-react";
+import { MULTI_CATEGORY_NOTE } from "@/lib/onlyfans/section8";
 import { inputCls } from "@/components/clone/fields";
 import { parseVaultResource,parseVaultEditAck,validVaultEdit,type FolderSummary,type FolderMetadata,type VaultEditRequest,type FolderPatch } from "@/lib/onlyfans/vault-editing";
 const button="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-accent disabled:opacity-50";
@@ -68,7 +69,7 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
     <div className="of-folder-heading"><h3 className="text-sm font-semibold">Folders &amp; categories{folders ? <span className="of-folder-count">{folders.length}</span> : null}</h3>
       {compact && !denied && !readOnly ? <button type="button" className={button} aria-label={toolsOpen ? "Hide folder tools" : "New folder / add to folder"} disabled={busy||!!retry} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(value=>!value)}>{toolsOpen ? "Hide tools" : "+ New folder"}</button> : null}
     </div>
-    <p className="mt-1 text-xs text-muted">Categories fill automatically as media is described. Unsorted holds media awaiting descriptions.</p>
+    <p className="mt-1 text-xs text-muted">Categories fill automatically as media is described. Unsorted holds media awaiting descriptions.{" "}{MULTI_CATEGORY_NOTE}</p>
     {notice?<p className="mt-2 text-xs" role="status" data-of-vault-edit-notice>{notice}</p>:null}
     {folders?.length === 0 ? <p className="mt-2 text-xs text-muted">No categories yet. Media needs descriptions or tags before it can be sorted automatically. You can also create your own folder.</p> : null}
     {!denied && folders !== null ? <nav className="of-folder-nav" aria-label="Media folders">
