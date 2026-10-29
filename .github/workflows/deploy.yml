@@ -145,6 +145,7 @@ jobs:
   build-and-deploy:
     needs: [creator-uploads, test]
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
         with: { ref: "${{ github.event.inputs.ref || github.sha }}" }
