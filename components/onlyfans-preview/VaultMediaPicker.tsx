@@ -22,6 +22,8 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
   const callbacks = useRef({ onDenied, onChanged }); callbacks.current = { onDenied, onChanged };
   const read = useCallback(async (after: string | null, nextFilters = filters.current) => {
     const stamp = ++generation.current; setBusy(true);
+    // Retry the requested view, and remove the previous folder's media immediately.
+    filters.current = nextFilters; setCursor(after); setData(null); setNotice("Loading media…");
     try {
       const params = new URLSearchParams();
       if (after) params.set("afterMediaId", after);
@@ -36,7 +38,7 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
       const next = response.ok ? parseVault(await response.json(), accountId) : null;
       if (!active.current || stamp !== generation.current) return false;
       if (!next) throw Error("Unavailable");
-      filters.current = nextFilters; setData(next); setCursor(after); setNotice(""); return true;
+      setData(next); setNotice(""); return true;
     } catch { if (active.current && stamp === generation.current) { setData(null); setNotice("Media could not be loaded. Retry to choose files."); } return false; }
     finally { if (active.current && stamp === generation.current) setBusy(false); }
   }, [accountId]);
@@ -96,3 +98,4 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
     </DialogContent>
   </Dialog>;
 }
+
