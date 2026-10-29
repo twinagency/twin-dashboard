@@ -9,9 +9,11 @@ import { operatorViewer } from "../lib/onlyfans-preview/fixture-data-source";
 import { agencyOnlyFansRequest } from "../lib/onlyfans/agency-scope";
 import { ONLYFANS_CHANNEL } from "../lib/channel-nav";
 import type { SalesRead } from "../lib/onlyfans/workspace";
+import { checkFanMemoryCategories } from "./check-onlyfans-fan-memory";
 
 import { onlyFansMessageText } from "../lib/onlyfans/message-display";
 async function main() {
+  await checkFanMemoryCategories();
   assert.equal(onlyFansMessageText("<p>Hello &amp; welcome</p><p>Line two<br>Last line &#128075;</p>"), "Hello & welcome\nLine two\nLast line \u{1f44b}");
   assert.equal(onlyFansMessageText("I <3 you & 2 < 3"), "I <3 you & 2 < 3");
   assert.equal(onlyFansMessageText("<p>hello<script>alert(1)</script><strong> friend</strong></p>"), "hello friend");
@@ -87,3 +89,4 @@ async function main() {
   console.log("PASS OnlyFans UI: bounded, isolated Overview reads; unknown account refusal; partial/unavailable data; rolling periods; preserved payment meanings; read-only page and Operations restrictions.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

@@ -16,6 +16,7 @@ import { parseFanFinancials } from "@/lib/onlyfans/fan-financials";
 import { EMPTY_INBOX_SEARCH, type InboxSearch } from "@/lib/onlyfans/inbox-search";
 import { draftKey, readDraft, writeDraft, subscribeDraft, emptyDraft } from "@/lib/onlyfans/inbox-drafts";
 import BMemoryPanel from "@/components/onlyfans-launch/memory/BMemoryPanel";
+import FanMemoryCategories from "./FanMemoryCategories";
 import { inboxSyncNotice } from "@/lib/onlyfans/inbox-sync";
 import CreatorPortrait from "./CreatorPortrait";
 import MessageAttachments from "./MessageAttachments";
@@ -579,13 +580,8 @@ function FanMetrics({detail}: {detail:ConversationDetail}) {
 }
 
 function FanContext({detail}:{detail:ConversationDetail}) {
-  const notes=detail.facts.filter(fact=>/^(notes?|conversation notes?)$/i.test(fact.label.trim()));
-  const facts=detail.facts.filter(fact=>!notes.includes(fact) && !/^creator profile coverage$/i.test(fact.label.trim()) && !(/^display name$/i.test(fact.label) && fact.value===fanName(detail.summary.fan)));
   return <div className="of-fan-context">
-    <section><h3 className="of-section-heading">Saved facts</h3>
-      {facts.length ? <ul className="of-fact-list">{facts.map(item=><li key={item.label+item.value} title={"Source: "+item.source}><span>{item.label}</span><p>{item.value}</p></li>)}</ul> : <p className="of-empty-context">Nothing saved yet.</p>}
-    </section>
-    <section><h3 className="of-section-heading">Notes</h3><div className="of-note">{notes.length ? notes.map(item=><p key={item.label+item.value}>{item.value}</p>) : <p className="of-empty-context">No notes available.</p>}</div></section>
+    <FanMemoryCategories key={`${detail.accountId}:${detail.conversationId}`} facts={detail.facts} displayName={fanName(detail.summary.fan)} />
     <section><h3 className="of-section-heading">Purchased media</h3>
       {detail.ownedMedia.length ? <ul className="of-purchases">{detail.ownedMedia.map(item=><li key={item.mediaId}>
         <span className="of-purchase-icon" aria-hidden="true"><ImagePlus size={21}/></span>
@@ -886,4 +882,5 @@ export default function InboxView({
     </div>
   );
 }
+
 
