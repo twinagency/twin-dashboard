@@ -156,9 +156,10 @@
  .workspace :global(.of-account-switcher) { flex-wrap:wrap; gap:4px 8px; }
  .workspace :global(.of-accounts) { flex-basis:100%; overscroll-behavior-x:contain; }
  .workspace :global(.of-manage-accounts) { margin-left:auto; min-height:44px; }
- .workspace :global(.of-panel-switch) { position:sticky; top:0; z-index:10; flex-shrink:0; margin-bottom:0; }
+ .workspace :global(.of-panel-switch) { position:sticky; top:0; z-index:10; flex-shrink:0; margin-bottom:0; grid-template-columns:max-content repeat(2,minmax(0,1fr)); }
  .workspace :global(.of-panel-switch button), .workspace :global(.of-filters button), .workspace :global([data-of-attach-vault]) { min-height:44px; }
- .workspace :global(.of-filters button) { white-space:normal; }
+ .workspace :global(.of-panel-switch button) { min-width:0; padding-inline:10px; white-space:nowrap; }
+ .workspace :global(.of-filters button) { flex:0 1 auto; padding:8px 10px; white-space:normal; overflow-wrap:normal; }
  .workspace :global(.of-input button) { width:44px; height:44px; }
  .workspace :global(.tg-thread) { overflow-x:hidden; }
  .workspace :global([aria-label="Selected attachments"]) { max-width:100%; overscroll-behavior-x:contain; }
