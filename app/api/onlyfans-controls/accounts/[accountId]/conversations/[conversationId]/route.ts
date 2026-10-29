@@ -1,3 +1,4 @@
+import { validManualMedia, type ManualMedia } from "@/lib/onlyfans/manual-media";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
@@ -37,12 +38,13 @@ export async function POST(request: NextRequest, context: {
         (body.expectedRevision as number) < 0 || (body.expectedRevision as number) >= 2 ** 31 - 1) throw new Error();
     const manual = body.action === "manual_message";
     const resolution = body.action === "resolve_delivery_evidence";
-    const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : [])].sort().join(",");
+    const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : []), ...(Object.hasOwn(body, "media") ? ["media"] : [])].sort().join(",");
     if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : resolution ? "action,attemptId,decision,expectedRevision,providerMessageId,requestKey" : "action,expectedRevision")) throw new Error();
     if (resolution && (body.decision !== "delivered" || typeof body.attemptId !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(body.attemptId) ||
         !Number.isSafeInteger(body.providerMessageId) || (body.providerMessageId as number) <= 0 || typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) throw new Error();
-    if (manual && (typeof body.body !== "string" || !body.body.trim() || new TextEncoder().encode(body.body).length > 4000 ||
+    if (manual && (typeof body.body !== "string" || (!body.body.trim() && !Object.hasOwn(body, "media")) || new TextEncoder().encode(body.body).length > 4000 ||
         typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey))) throw new Error();
+    if (manual && Object.hasOwn(body, "media") && (!validManualMedia(body.media) || Object.hasOwn(body, "catalogItemId"))) throw new Error();
     if (manual && Object.hasOwn(body, "catalogItemId") && body.catalogItemId !== null &&
         (!Number.isInteger(body.catalogItemId) || (body.catalogItemId as number) <= 0 || (body.catalogItemId as number) >= 2 ** 31)) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That conversation control request is invalid."); }
@@ -57,11 +59,11 @@ export async function POST(request: NextRequest, context: {
   const actor = ctx.actor;
   const commandKey = digest(JSON.stringify([actor, accountId, conversationId, action, expectedRevision,
     ...(action === "resolve_delivery_evidence" ? [body.attemptId, body.providerMessageId, body.decision, body.requestKey] : []),
-    ...(action === "manual_message" ? [body.body, body.requestKey, ...(Object.hasOwn(body, "catalogItemId") ? [body.catalogItemId] : [])] : [])]));
+    ...(action === "manual_message" ? [body.body, body.requestKey, ...(Object.hasOwn(body, "catalogItemId") ? [body.catalogItemId] : []), ...(Object.hasOwn(body, "media") ? [body.media] : [])] : [])]));
   const result = await backend({ accountId, conversationId, action, expectedRevision, actor, commandKey,
     ...(action === "resolve_delivery_evidence" ? { attemptId: body.attemptId as string, providerMessageId: body.providerMessageId as number, decision: "delivered" as const } : {}),
     ...(action === "manual_message" ? { body: body.body as string,
-      ...(Object.hasOwn(body, "catalogItemId") ? { catalogItemId: body.catalogItemId as number | null } : {}) } : {}) });
+      ...(Object.hasOwn(body, "catalogItemId") ? { catalogItemId: body.catalogItemId as number | null } : {}), ...(Object.hasOwn(body, "media") ? { media: body.media as ManualMedia } : {}) } : {}) });
   return result.ok ? answer(result.ack) : answer({ schemaVersion: CONTROL_SCHEMA,
     ok: false, outcome: result.outcome, error: result.error, ...(result.code ? { code: result.code } : {}) }, result.status);
 }

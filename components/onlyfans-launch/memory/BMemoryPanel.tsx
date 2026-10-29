@@ -134,7 +134,7 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
       {!selectedFanId && coverage.state === "loading" ? <BLoading label="Loading history and fans…" /> : null}
       {coverage.state === "error" ? <BError message={coverage.message} onRetry={() => void loadCoverage(accountId)} /> : null}
       {coverage.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read memory for this account.</p> : null}
-      {coverage.state === "ok" ? <>
+      {!selectedFanId && coverage.state === "ok" ? <>
         <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="coverage"><h3 className="font-semibold">Account recovery</h3><RecoveryView progress={coverage.data.progress} /></div>
         <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="fans"><h3 className="font-semibold">Fans</h3>
           {coverage.data.fans.length === 0 ? <p className="mt-2 text-sm" data-b-state="empty">No canonical fan rows are available yet.</p> :
@@ -152,7 +152,7 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
         {fan.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read this fan.</p> : null}
         {fan.state === "ok" ? <div className="grid min-w-0 gap-4">
           <h3 className="break-words font-semibold">{selectedName?.displayName || selectedName?.username || `Fan ${fanId}`}</h3>
-          <MemoryProgressView progress={fan.data.progress} /><RecoveryView progress={fan.data.recovery} />
+          {!selectedFanId ? <><MemoryProgressView progress={fan.data.progress} /><RecoveryView progress={fan.data.recovery} /></> : null}
           {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button> : null}
           <FanFacts memory={fan.data.memory} manage={manage} busy={busy} edit={edit} setEdit={setEdit} onSave={save} />
           <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Source excerpts</h4>
