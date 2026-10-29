@@ -16,7 +16,7 @@
   --color-accent-tint: var(--studio-tint); --foreground: var(--studio-ink); --background: var(--studio-bg);
   --card: #fff; --card-foreground: var(--studio-ink); --border: var(--studio-line); --input: var(--studio-line);
   --primary: var(--studio-accent); --primary-foreground: #fff; --ring: var(--studio-accent);
-  display: flex; height: 100dvh; min-height: 0; overflow: hidden;
+  display: flex; height: 100dvh; min-height: 0; min-width: 0; max-width: 100%; overflow: hidden;
   font-family: var(--font-sans, Inter), Arial, sans-serif; color: var(--studio-ink); background: var(--studio-bg);
 }
 .platform :global(a) { text-decoration: none; }
@@ -58,7 +58,10 @@
 .platform :global(.of-currency-label) { margin-left: auto; border: 1px solid var(--studio-line); border-radius: 10px; padding: 11px 16px; font-size: 13px; }
 .platform.platform.platform :global(.dashboard-mobile-header) { background: #e8f5ff; color: var(--studio-ink); }
 .platform :global(.dashboard-mobile-header [class*="text-white"]) { color: var(--studio-ink); }
-.platform.platform.platform :global(.dashboard-main) { max-width: none; background: var(--studio-bg); scrollbar-gutter: stable; }
+.platform.platform.platform :global(.dashboard-main) { min-width: 0; max-width: 100%; overflow-x: hidden; overflow-wrap: anywhere; background: var(--studio-bg); scrollbar-gutter: stable; }
+.platform[data-onlyfans-ui] > :global(.workspace-content) { height: 100%; min-height: 0; }
+.platform :global(:is(.dashboard-page, .of-tab-workspace, .of-tab-panel, .of-tab-section, .of-panel, .of-table-scroll)) { min-width: 0; max-width: 100%; }
+.platform :global(:is(.of-tabs, .of-table-scroll, .of-folder-nav, .of-collection-grid, .of-creator-strip-items)) { overscroll-behavior-x: contain; }
 .platform.platform.platform :global(.studio-workspace-main:not(.studio-workspace-edge)) { padding: 30px 32px 36px; }
 .platform.platform.platform :global(.dashboard-page) { max-width: 1600px; margin: 0 auto; padding: 0; }
 .platform :global(.dashboard-main)::before, .platform :global(.dashboard-main)::after, .platform :global(.dashboard-page)::before { display: none; }
@@ -455,4 +458,47 @@
  .platform :global(.of-folder-nav strong) { margin-left:4px; }
  .platform :global(.of-collection-grid) { display:flex; overflow-x:auto; padding-bottom:4px; }
  .platform :global(.of-collection-grid > button) { flex:0 0 124px; }
+}
+
+/* Phone layouts share the available viewport with navigation. Wide tables and
+   media strips scroll inside their own containers, never the whole page. */
+@media (max-width: 1023px) {
+  .platform.platform.platform :global(.dashboard-main) { scrollbar-gutter: auto; overscroll-behavior-x: none; }
+  .platform.platform.platform :global(.studio-workspace-main:not(.studio-workspace-edge)) { padding: 20px 16px 24px; }
+  .platform.platform.platform.platform :global(.dashboard-topbar) { height: auto; min-height: 64px; padding: 8px 12px; }
+  .platform.platform.platform.platform :global(.workspace-account-controls) { min-width: 0; max-width: 100%; flex-wrap: wrap; gap: 6px; }
+  .platform :global(.workspace-account-controls > *) { min-width: 0; }
+  .platform :global(.dashboard-mobile-header) { min-width: 0; gap: 12px; }
+  .platform :global(.dashboard-mobile-header > :first-child) { min-width: 0; }
+  .platform :global(.dashboard-mobile-header > :last-child) { flex-shrink: 0; }
+  .platform :global(.of-mobile-nav) { position: static; flex-shrink: 0; width: 100%; }
+  .platform :global(.of-period-form) { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  .platform :global(.of-period-form > *) { min-width: 0; max-width: 100%; }
+  .platform :global(.of-settings-layout) { grid-template-columns: minmax(0, 1fr); }
+  .platform :global(.of-identity-card) { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+  .platform :global(.of-identity-card .of-portrait-large) { width: 68px; height: 76px; margin: 0; font-size: 24px; }
+  .platform :global(.of-content-actions), .platform :global(.of-vault-local-actions), .platform :global(.of-vault-pagination > div) { flex-wrap: wrap; }
+  .platform :global(.twin-campaign-compose), .platform :global(.twin-campaign-preview) { min-width: 0; padding: 16px; }
+  .platform :global(.of-sale-row) { flex-wrap: wrap; }
+}
+
+@media (max-width: 767px) {
+  .platform.platform.platform.platform :global(input:not([type="checkbox"]):not([type="radio"])),
+  .platform.platform.platform.platform :global(select),
+  .platform.platform.platform.platform :global(textarea) { font-size: 16px; }
+  .platform :global(.of-native-accounts a) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .platform :global(.of-media-filters) { flex-wrap: wrap; }
+  .platform :global(.of-media-search) { flex-basis: 100%; }
+  .platform :global(.of-content-library .of-tab-panel > section) { padding: 14px; }
+  .platform :global(.of-account-status > div) { align-items: flex-start; flex-wrap: wrap; }
+  .platform :global(.of-account-status dd) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+}
+
+/* The picker is portalled outside the workspace, so it owns its mobile sizing. */
+.mediaPicker { min-width: 0; max-height: calc(100dvh - 2rem); }
+.mediaPicker :global([data-of-picker-body]) { min-width: 0; overflow-x: hidden; overscroll-behavior: contain; overflow-wrap: anywhere; }
+.mediaPicker :global([data-of-picker-body] > *) { min-width: 0; }
+@media (max-width: 767px) {
+  .mediaPicker :global(input:not([type="checkbox"]):not([type="radio"])),
+  .mediaPicker :global(select), .mediaPicker :global(textarea) { font-size: 16px; }
 }

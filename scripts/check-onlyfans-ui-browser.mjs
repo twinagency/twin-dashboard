@@ -28,16 +28,32 @@ try {
   const page = await browser.newPage({reducedMotion:"reduce"}), errors = [];
   page.on("pageerror", error => errors.push(String(error)));
   const pages = ["overview", "accounts", "inbox", "campaigns", "content", "sales", "settings", "operations"];
-  for (const width of [390, 430, 768, 1024, 1280, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
+  for (const width of [320, 375, 390, 430, 768, 1024, 1280, 1440]) {
+    await page.setViewportSize({ width, height: width === 320 ? 568 : width === 375 ? 667 : width < 768 ? 844 : 1000 });
     for (const section of pages) {
       await page.goto(`${origin}/onlyfans/${section}/`, { waitUntil: "load" });
       await page.getByRole("heading", { name: section === "inbox" ? "OnlyFans inbox" : section[0].toUpperCase() + section.slice(1), exact: true }).first().waitFor();
       if (section === "accounts") await page.locator("[data-of-account-id]").first().waitFor();
       if (section === "inbox") await page.locator("[data-of-conversation-id]").first().waitFor();
       if (section === "settings") await page.locator("[data-of-edit-persona]").waitFor();
-      const sizing = await page.evaluate(() => ({ page: document.documentElement.scrollWidth, viewport: innerWidth, main: document.querySelector("main")?.scrollWidth }));
+      const sizing = await page.evaluate(() => {
+        const main = document.querySelector("main");
+        return { page: document.documentElement.scrollWidth, viewport: innerWidth, main: main?.scrollWidth, available: main?.clientWidth };
+      });
       check(sizing.page <= sizing.viewport + 1, `${section} overflows at ${width}px: ${JSON.stringify(sizing)}`);
+      check(sizing.main <= sizing.available + 1, `${section} scroll container drifts sideways at ${width}px: ${JSON.stringify(sizing)}`);
+      if (width < 1024) {
+        const mobile = await page.evaluate(() => {
+          const main = document.querySelector("main").getBoundingClientRect();
+          const nav = document.querySelector(".of-mobile-nav").getBoundingClientRect();
+          const fields = [...document.querySelectorAll('main input:not([type="checkbox"]):not([type="radio"]), main select, main textarea')]
+            .filter(element => element.getClientRects().length)
+            .map(element => Number.parseFloat(getComputedStyle(element).fontSize));
+          return { mainBottom: main.bottom, navTop: nav.top, navBottom: nav.bottom, height: innerHeight, fields };
+        });
+        check(mobile.mainBottom <= mobile.navTop + 1 && mobile.navBottom <= mobile.height + 1, `${section} mobile navigation covers content at ${width}px`);
+        if (width < 768) check(mobile.fields.every(size => size >= 16), `${section} fields trigger phone zoom at ${width}px`);
+      }
       if (section === "inbox" && width >= 1024) {
         const chat = await page.locator(".users-panel-chat").boundingBox();
         const fan = await page.locator(".users-panel-profile").boundingBox();

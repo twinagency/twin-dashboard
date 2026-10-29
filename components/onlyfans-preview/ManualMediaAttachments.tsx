@@ -20,7 +20,7 @@ export default function ManualMediaAttachments({ accountId, draftId, draft, disa
     else if (row.ready && next.size < 20) next.set(row.mediaId, row);
     update({ selectedMedia: [...next.values()], previewIds: draft.previewIds.filter(id => next.has(id)) });
   }
-  return <section aria-label="Attach media" className="space-y-3">
+  return <section aria-label="Attach media" className="min-w-0 space-y-3">
     <button type="button" data-of-attach-vault disabled={disabled} onClick={() => { setNotice(""); setOpen(true); }}
       className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-line bg-panel px-3 py-2 text-sm font-semibold text-accent hover:bg-elev disabled:opacity-50">
       <ImagePlus size={18} aria-hidden="true" />{selected.size ? "Add more media" : "Add media"}
@@ -44,7 +44,7 @@ export default function ManualMediaAttachments({ accountId, draftId, draft, disa
           <button type="button" disabled={disabled} aria-pressed={draft.mediaPaid} onClick={() => update({ mediaPaid: true })}
             className={"rounded-md px-3 py-2 text-sm font-semibold " + (draft.mediaPaid ? "bg-panel text-ink shadow-sm" : "text-muted")}>Set price</button>
         </div>
-        {draft.mediaPaid ? <label className="flex items-center gap-2 text-sm">Total price (USD)<input data-of-manual-price aria-label="Total price (USD)"
+        {draft.mediaPaid ? <label className="flex min-w-0 flex-wrap items-center gap-2 text-sm">Total price (USD)<input data-of-manual-price aria-label="Total price (USD)"
           type="text" inputMode="decimal" maxLength={6} placeholder="3.00" disabled={disabled} value={draft.mediaPrice}
           title="USD 3.00 to 200.00 for all selected attachments"
           onChange={e => update({ mediaPrice: e.target.value })} className="w-24 rounded-lg border border-line bg-panel px-3 py-2 text-ink" /></label>

@@ -64,6 +64,18 @@ jobs:
           sudo timeout --kill-after=10s 300s "$(command -v node)" node_modules/playwright/cli.js install-deps chromium webkit
           timeout --kill-after=10s 240s npx playwright install chromium webkit
 
+      - name: OnlyFans phone scrolling and viewport checks
+        run: npm run test:onlyfans-ui-browser
+
+      - name: Keep OnlyFans responsive review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-mobile-review
+          path: test-results/onlyfans-ui/
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Immediate navigation feedback and page prefetch
         run: |
           node scripts/check-navigation-feedback.cjs
@@ -174,7 +186,6 @@ jobs:
           npm run test:onlyfans-launch-b
           npm run test:onlyfans-launch-access
           npm run test:onlyfans-browser-syntax
-          npm run test:onlyfans-ui-browser
 
       - name: Build
         run: npm run build
