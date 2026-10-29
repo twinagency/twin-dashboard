@@ -1,0 +1,42 @@
+import assert from "node:assert/strict";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { groupFanMemory } from "../lib/onlyfans-preview/fan-memory-groups";
+import type { FanContextFact } from "../lib/onlyfans-preview/types";
+
+export async function checkFanMemoryCategories() {
+  const fact = (label: string, value: string): FanContextFact => ({ label, value, source: "imported" });
+  const facts = [fact("Real name", "Ronan Yeats"), fact("Conversation summary", "Name: Ronan Yeats (current, 2026-10-23). Interests: I play tennis (current, 2026-10-17). Interests: soccer (current, 2026-10-17). Request: Send a video (current, 2026-10-24). Request: Another video (current, 2026-10-23). Event: I’m going to be a pilot (uncertain, 2026-10-24). Age: Stated age 19 on 2026-10-17; current age uncertain (19–20) (current, 2026-10-17)."), fact("Notes", "Enjoys long chats. Keep this full sentence."), fact("Profile learning", "Processing this fan’s history"), fact("Creator profile coverage", "140/4660 fans processed")];
+  const original = JSON.stringify(facts);
+  const { groups, learning } = groupFanMemory(facts);
+  const items = (id: string) => groups.find(group => group.id === id)!.items;
+  assert.equal(items("identity").length, 2, "A name repeated in the summary is one saved fact, not two");
+  assert.equal(items("identity")[0].learnedAt, "2026-10-23", "A repeated summary adds its source date");
+  assert.equal(items("interests").length, 2);
+  assert.equal(items("requests").length, 2, "Requests remain separate from lasting preferences");
+  assert.equal(items("work")[0].value, "I’m going to be a pilot", "Future goals must not become current jobs");
+  assert.equal(items("work")[0].qualifier, "uncertain", "Display grouping preserves uncertainty metadata");
+  assert.match(items("identity")[1].value, /current age uncertain \(19–20\)/, "Do not invent a birthday or advance age");
+  assert.equal(items("notes")[0].value, "Enjoys long chats. Keep this full sentence.");
+  assert.equal(items("location").length, 0);
+  assert.equal(learning.length, 1);
+  assert.equal(JSON.stringify(facts), original, "The projection cannot mutate AI memory or the source response");
+  const unknown = groupFanMemory([fact("Conversation summary", "Unstructured wording. New category: preserve me."), fact("Custom field", "Anything not categorised stays available")]);
+  assert.equal(unknown.groups.find(g => g.id === "notes")!.items.length, 2);
+  const event = groupFanMemory([fact("Conversation summary", "Event: I’m going to be away next week (current, 2026-10-24).")]);
+  assert.equal(event.groups.find(g => g.id === "work")!.items.length, 0, "A future activity is not automatically a career goal");
+  assert.equal(event.groups.find(g => g.id === "dates")!.items.length, 1);
+  const repeated = groupFanMemory([fact("Conversation summary", "Request: Send a video (current, 2026-10-23). Request: Send a video (current, 2026-10-24).")]);
+  assert.equal(repeated.groups.find(g => g.id === "requests")!.items.length, 2, "The same request on different dates keeps both occurrences");
+  (globalThis as unknown as { React: typeof React }).React = React;
+  const { default: FanMemoryCategories } = await import("../components/onlyfans-preview/FanMemoryCategories");
+  const markup = renderToStaticMarkup(<FanMemoryCategories facts={facts} />);
+  assert.equal((markup.match(/class="of-memory-category"/g) || []).length, 9);
+  assert.match(markup, /No info/);
+  assert.doesNotMatch(markup, /Review|140\/4660|Creator profile coverage/);
+  assert.match(markup, /Memory updates/);
+  assert.match(markup, /I’m going to be a pilot/);
+  assert.match(markup, /2026-10-24/);
+  assert.doesNotMatch(renderToStaticMarkup(<FanMemoryCategories facts={[]} />), /Ronan|tennis|pilot/, "Switching fans must never leak another fan’s facts");
+  console.log("PASS fan memory: labelled grouping, source dates, original wording, unknown-text retention, empty categories and isolated per-fan rendering.");
+}
