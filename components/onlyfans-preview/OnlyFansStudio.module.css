@@ -465,7 +465,7 @@
 @media (max-width: 1023px) {
   .platform.platform.platform :global(.dashboard-main) { scrollbar-gutter: auto; overscroll-behavior-x: none; }
   .platform.platform.platform :global(.studio-workspace-main:not(.studio-workspace-edge)) { padding: 20px 16px 24px; }
-  .platform.platform.platform.platform :global(.dashboard-topbar) { height: auto; min-height: 60px; padding: 8px 12px; }
+  .platform.platform.platform.platform :global(.dashboard-topbar) { height: auto; min-height: 64px; padding: 8px 12px; }
   .platform.platform.platform.platform :global(.workspace-account-controls) { min-width: 0; max-width: 100%; flex-wrap: wrap; gap: 6px; }
   .platform :global(.workspace-account-controls > *) { min-width: 0; }
   .platform :global(.dashboard-mobile-header) { min-width: 0; gap: 12px; }
