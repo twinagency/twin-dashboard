@@ -7,6 +7,7 @@ import { parseVault, vaultAvailability, vaultDuration, type VaultItem, type Vaul
 import VaultAssetPreview from "./VaultAssetPreview";
 import VaultOrganization from "./VaultOrganization";
 import VaultUploader from "./VaultUploader";
+import styles from "./OnlyFansStudio.module.css";
 
 const button = "min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 export default function VaultMediaPicker({ accountId, connectionRevision, selected, initialMode, onToggle, onClose, onChanged, onDenied, purpose = "item", allowUpload = true }: {
@@ -47,7 +48,7 @@ export default function VaultMediaPicker({ accountId, connectionRevision, select
   async function go(after: string | null, nextTrail: (string | null)[]) { if (await read(after)) setTrail(nextTrail); }
   const locked = organizationBusy || uploadBusy;
   return <Dialog open onOpenChange={open => { if (!open && !locked) onClose(); }}>
-    <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden bg-panel text-ink sm:max-w-3xl" showCloseButton={!locked} data-of-media-picker>
+    <DialogContent className={`${styles.mediaPicker} flex max-h-[90dvh] flex-col overflow-hidden bg-panel text-ink sm:max-w-3xl`} showCloseButton={!locked} data-of-media-picker>
       <DialogHeader><DialogTitle>{purpose === "message" ? "Attach vault media" : "Add media to your item"}</DialogTitle><DialogDescription>{purpose === "message" ? "Choose files for this message. Set its price in your reply." : "Choose existing files or upload new ones. Your item description and price stay in the draft."}</DialogDescription></DialogHeader>
       {allowUpload ? <div className="grid grid-cols-2 gap-2" role="tablist" aria-label="Add media source">
         {[["vault", "Choose from vault"], ...(allowUpload ? [["upload", "Upload new files"]] : [])].map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={mode === value} disabled={locked} className={`${button} ${mode === value ? "bg-accent text-white" : ""}`} onClick={() => { setMode(value as "vault" | "upload"); if (value === "vault") { setTrail([]); void read(null); } }}>{label}</button>)}
