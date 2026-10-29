@@ -78,8 +78,13 @@ try {
   const handle=label.match(/@(.+)$/)[1];
   check(await account.getAttribute("aria-pressed")==="true", "Account selection follows the requested creator");
   check(await page.locator(".of-account-copy small").filter({hasText:"@"+handle}).isVisible(), "Selected account handle stays visible");
-  await page.getByRole("heading",{name:"Notes",exact:true}).waitFor();
-  check(await page.getByRole("heading",{name:"Purchased media",exact:true}).isVisible(), "Fan panel keeps notes and purchase sections");
+  await page.getByRole("heading",{name:"Fan memory",exact:true}).waitFor();
+  check(await page.locator(".of-memory-category").count() === 9, "Fan memory retains all populated and empty categories");
+  const notes = page.locator(".of-memory-category[data-category=notes]");
+  await notes.locator("summary").click();
+  check(await notes.getAttribute("open") !== null, "Notes remain available through the expandable category");
+  check(await page.locator(".of-memory-count").filter({hasText:"No info"}).count() > 0, "Empty memory categories are clearly labelled");
+  check(await page.getByRole("heading",{name:"Purchased media",exact:true}).isVisible(), "Fan panel keeps expandable notes and purchased media");
   check(await page.locator(".dashboard-sidebar").getByRole("link",{name:"Content",exact:true}).isVisible(), "Full workspace navigation remains visible");
   await page.setViewportSize({width:390,height:1000});
   await page.locator("[data-of-mobile-panel=controls]").click();
