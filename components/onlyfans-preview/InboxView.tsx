@@ -580,7 +580,7 @@ function FanMetrics({detail}: {detail:ConversationDetail}) {
 
 function FanContext({detail}:{detail:ConversationDetail}) {
   const notes=detail.facts.filter(fact=>/^(notes?|conversation notes?)$/i.test(fact.label.trim()));
-  const facts=detail.facts.filter(fact=>!notes.includes(fact) && !(/^display name$/i.test(fact.label) && fact.value===fanName(detail.summary.fan)));
+  const facts=detail.facts.filter(fact=>!notes.includes(fact) && !/^creator profile coverage$/i.test(fact.label.trim()) && !(/^display name$/i.test(fact.label) && fact.value===fanName(detail.summary.fan)));
   return <div className="of-fan-context">
     <section><h3 className="of-section-heading">Saved facts</h3>
       {facts.length ? <ul className="of-fact-list">{facts.map(item=><li key={item.label+item.value} title={"Source: "+item.source}><span>{item.label}</span><p>{item.value}</p></li>)}</ul> : <p className="of-empty-context">Nothing saved yet.</p>}
