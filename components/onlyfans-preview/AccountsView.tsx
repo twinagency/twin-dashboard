@@ -8,6 +8,7 @@
 // its creator grid. Nothing here invents a second visual language.
 
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
+import PlatformIcon from "@/components/PlatformIcon";
 import Link from "next/link";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -45,7 +46,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} large />
         <div className="min-w-0">
           <div className="of-account-name">{account.binding.creatorName}</div>
-          <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans</span>
+          <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><PlatformIcon platform="onlyfans" size={22} />OnlyFans</span>
         </div>
       </div>
 

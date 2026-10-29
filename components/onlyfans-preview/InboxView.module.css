@@ -140,7 +140,8 @@
 .workspace :global(.of-purchases li > span:last-child) { font-size:11px; font-weight:600; white-space:nowrap; }
 .workspace :global(.of-panel-switch button) { min-height:40px; }
 @media(min-width:1024px) { .workspace :global(.of-layout) { grid-template-columns:minmax(210px,.94fr) minmax(290px,1.6fr) minmax(220px,.95fr); grid-template-rows:minmax(0,1fr); height:0; min-height:0; } }
-@media(min-width:1500px) { .workspace :global(.of-layout) { grid-template-columns:310px minmax(350px,1fr) 300px; } }
+@media(min-width:1280px) { .workspace :global(.of-layout) { grid-template-columns:minmax(210px,.85fr) minmax(330px,1.9fr) clamp(320px,26vw,380px); } }
+@media(min-width:1500px) { .workspace :global(.of-layout) { grid-template-columns:290px minmax(400px,1fr) clamp(320px,26vw,380px); } }
 /* Fan panel closed: the conversation gets its width instead of an empty column. */
 @media(min-width:1024px) { .workspace :global(.of-layout[data-profile="closed"]) { grid-template-columns:minmax(240px,.8fr) minmax(320px,2fr); } }
 @media(min-width:1500px) { .workspace :global(.of-layout[data-profile="closed"]) { grid-template-columns:340px minmax(420px,1fr); } }
@@ -237,3 +238,24 @@
 /* Badges give way to the fan's name: long status text is cut with an ellipsis, never the name. */
 .workspace :global(.of-chat-badges) { display:flex; min-width:0; max-width:46%; flex-shrink:1; align-items:center; gap:6px; overflow:hidden; }
 .workspace :global(.of-chat-badges > *) { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+
+/* Fan dossier: the panel scrolls on its own, values wrap inside bounded tracks and nothing is shrunk or hidden. */
+.workspace :global(.of-layout > *), .workspace :global(.of-fan-sidebar), .workspace :global(.of-fan-sidebar > *), .workspace :global(.of-fan-context > *) { min-width:0; }
+.workspace :global(.users-panel-profile) { overflow-y:auto; overscroll-behavior:contain; }
+.workspace :global(.of-fan-sidebar) { overflow-wrap:anywhere; }
+.workspace :global(.of-relationship) { margin:-8px 0 0; font-size:12px; line-height:1.6; color:var(--inbox-muted); }
+.workspace :global(.of-relationship > span) { display:block; }
+.workspace :global(.of-fan-metrics) { grid-template-columns:repeat(auto-fit,minmax(min(130px,100%),1fr)); }
+.workspace :global(.of-fan-metrics strong) { overflow-wrap:anywhere; }
+.workspace :global(.of-ownership) { display:flex; flex-direction:column; gap:4px; margin:0; }
+.workspace :global(.of-ownership strong) { font-size:14px; }
+.workspace :global(.of-ownership[data-of-ownership=unverified] p) { margin:0; padding:8px 10px; border-radius:10px; background:#fff8e9; color:#7a560d; font-size:12px; line-height:1.5; }
+.workspace :global(.of-spend-row) { overflow-wrap:anywhere; }
+.workspace :global(.of-spend-row > span) { display:block; }
+.workspace :global(.of-history-details) { border-top:1px solid #edf2f6; padding-top:12px; }
+.workspace :global(.of-history-details summary) { cursor:pointer; }
+.workspace :global(.of-history-body) { display:flex; flex-direction:column; gap:12px; margin-top:10px; min-width:0; }
+.workspace :global([data-b-fact][data-b-source=operator]) { border-left:4px solid #7a5cc7; }
+.workspace :global([data-b-fact][data-b-source=canonical]) { border-left:4px solid #2b7de9; }
+.workspace :global([data-b-fact][data-b-source=history]) { border-left:4px solid #21ab79; }
+.workspace :global([data-b-memory-state=partial]), .workspace :global([data-b-memory-state=not_processed]) { background:#fff8e9; border-color:#f4e5c3; }

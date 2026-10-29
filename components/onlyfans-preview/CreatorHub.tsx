@@ -8,6 +8,7 @@
 // "Unavailable" rather than showing a zero.
 
 import Link from "next/link";
+import PlatformIcon from "@/components/PlatformIcon";
 import { createContext, useContext, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
@@ -44,7 +45,7 @@ function StatusLine({ label, area, hint, action }: { label: string; area: HubAre
 
 export default function CreatorHub({ accounts }: { accounts: OfAccount[] }) {
   const data = useContext(HubData);
-  const scope = parseWorkspaceScope(useSearchParams());
+  const scope = parseWorkspaceScope(useSearchParams() ?? new URLSearchParams());
   const requested = scope.accountId ? accounts.find(account => account.accountId === scope.accountId) : undefined;
   const creatorId = requested?.binding.creatorId ?? scope.creatorId;
   const owned = creatorId ? accounts.filter(account => account.binding.creatorId === creatorId) : [];
@@ -73,7 +74,7 @@ export default function CreatorHub({ accounts }: { accounts: OfAccount[] }) {
             <h2 className="of-account-name">{first.binding.creatorName}</h2>
             <div className="mt-0.5 truncate text-sm text-muted">@{first.binding.handle}</div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {owned.map(account => <span key={account.accountId} className="of-account-brand mt-0"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans{owned.length > 1 ? ` @${account.binding.handle}` : ""}</span>)}
+              {owned.map(account => <span key={account.accountId} className="of-account-brand mt-0"><PlatformIcon platform="onlyfans" size={22} />OnlyFans{owned.length > 1 ? ` @${account.binding.handle}` : ""}</span>)}
             </div>
           </div>
           <form className="of-period-form ml-auto" action="/onlyfans/accounts" method="get">

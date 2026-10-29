@@ -646,36 +646,60 @@ function ActionColumn({
 
 function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId: string; canCorrect: boolean }) {
   const [opened, setOpened] = useState(false);
-  return <details onToggle={event => { if (event.currentTarget.open) setOpened(true); }}><summary className="of-section-heading">Edit fan notes and facts</summary>{opened ? <BMemoryPanel canManage={canCorrect} selectedAccountId={accountId} selectedFanId={fanId} /> : null}</details>;
+  return <details onToggle={event => { if (event.currentTarget.open) setOpened(true); }}><summary className="of-section-heading">Edit fan notes and facts</summary>{opened ? <BMemoryPanel part="facts" canManage={canCorrect} selectedAccountId={accountId} selectedFanId={fanId} /> : null}</details>;
+}
+
+/** Archive, recovery, discovery and stored-message counters stay one click away, never ahead of fan information. */
+function FanHistory({ detail, accountId, canCorrect, showMemory }: { detail: ConversationDetail; accountId: string; canCorrect: boolean; showMemory: boolean }) {
+  const [opened, setOpened] = useState(false);
+  return <details className="of-history-details" data-of-history-details onToggle={event => { if (event.currentTarget.open) setOpened(true); }}>
+    <summary className="of-section-heading">History and sync details</summary>
+    <div className="of-history-body"><div><FreshnessLine freshness={detail.freshness} /></div>
+      {showMemory && opened ? <BMemoryPanel part="diagnostics" canManage={canCorrect} selectedAccountId={accountId} selectedFanId={detail.summary.fan.fanId} /> : null}</div>
+  </details>;
+}
+
+const Hint = ({ text }: { text: string }) => <span className="ml-1 cursor-help text-muted/80" title={text} aria-label={text}>ⓘ</span>;
+const latestPurchase = (items: OwnedMediaItem[]) => items.reduce<OwnedMediaItem | null>((best, item) => !best || Date.parse(item.purchasedAt) > Date.parse(best.purchasedAt) ? item : best, null);
+
+/** One line built only from the loaded conversation and purchase history. */
+function FanRelationship({ detail }: { detail: ConversationDetail }) {
+  const latest = latestPurchase(detail.ownedMedia);
+  return <p className="of-relationship" data-of-relationship>
+    <span>Last activity {formatAge(detail.summary.lastActivityAt)}</span>
+    <span data-of-latest-purchase>{latest ? <>Last media purchase: {formatAge(latest.purchasedAt)}</> : "No media purchase recorded in the history loaded for this fan."}</span>
+  </p>;
 }
 
 function FanMetrics({detail}: {detail:ConversationDetail}) {
   const financials = parseFanFinancials(detail.financials);
-  const latest = detail.ownedMedia.reduce<OwnedMediaItem | null>((best, item) => !best || Date.parse(item.purchasedAt) > Date.parse(best.purchasedAt) ? item : best, null);
-  return <div>
-    <p className="of-empty-context" data-of-latest-purchase>{latest ? <>Last media purchase: {formatAge(latest.purchasedAt)}</> : "No media purchase recorded in the history loaded for this fan."}</p>
-    <div className="of-fan-metrics">{!financials ? <div><strong>Unknown</strong><span>Recorded cleared spend</span></div> : null}<div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
-    <h3 className="of-section-heading">Recorded spend</h3>
+  const verified = !!financials && financials.coverageComplete;
+  return <div className="of-spend" data-of-spend>
+    <h3 className="of-section-heading">Spend and ownership</h3>
+    {!financials ? <div className="of-fan-metrics"><div><strong>Unknown</strong><span>Recorded cleared spend</span></div></div> : null}
     {!financials ? <p className="of-empty-context">Financial evidence unavailable. Refresh after the account read service recovers.</p> : <>
-      {financials.totals.length ? <ul className="text-xs space-y-2">{financials.totals.map(row => <li key={`${row.currency}:${row.status}`}>
+      {financials.totals.length ? <ul className="text-xs space-y-2">{financials.totals.map(row => <li key={`${row.currency}:${row.status}`} className="of-spend-row">
         <strong>{formatRecordedMoney(row.grossCents, row.currency)}</strong> gross · {row.status.replaceAll("_", " ")} · {row.transactions} transactions.
-        <span className="block">Net: {row.netCents === null ? "Unavailable" : formatRecordedMoney(row.netCents, row.currency)}. Last transaction: {new Date(row.lastTransactionAt).toLocaleString()}.</span>
+        <span>Net: {row.netCents === null ? "Unavailable" : formatRecordedMoney(row.netCents, row.currency)}.</span>
+        <span>Last transaction: {new Date(row.lastTransactionAt).toLocaleString()}.</span>
       </li>)}</ul> : <p className="of-empty-context">No canonical transactions recorded for this fan.</p>}
-      <p className="text-xs text-muted">Coverage through {financials.coverageAt ? new Date(financials.coverageAt).toLocaleString() : "an unknown cutoff"}. {financials.coverageComplete ? "Completed supported scan; later activity may be missing." : "Partial or unverified history; recorded totals are not lifetime spend."}</p>
+      <p className="text-xs text-muted of-spend-row"><span>Coverage through {financials.coverageAt ? new Date(financials.coverageAt).toLocaleString() : "an unknown cutoff"}.</span><span>{financials.coverageComplete ? "Completed supported scan; later activity may be missing." : "Partial or unverified history; recorded totals are not lifetime spend."}</span></p>
       {financials.commerceHeld ? <p role="note" className="text-xs">Commerce is held for this fan. Ownership and payment reconciliation must be verified before paid content is sent.</p> : null}
     </>}
+    {verified ? <div className="of-fan-metrics" data-of-ownership="verified"><div><strong>{detail.ownedMedia.length}</strong><span>Owned media items</span></div></div>
+      : <div className="of-ownership" data-of-ownership="unverified"><strong>Known owned items: {detail.ownedMedia.length}</strong>
+        <p role="note">Ownership not fully verified, payment history incomplete<Hint text="This count only covers items found in the history loaded for this fan. Payment history is not fully reconciled, so other purchases may exist. This text does not grant ownership and does not unlock selling." /></p></div>}
+    <h3 className="of-section-heading">Purchased media</h3>
+    {detail.ownedMedia.length ? <ul className="of-purchases">{detail.ownedMedia.map(item=><li key={item.mediaId}>
+      <span className="of-purchase-icon" aria-hidden="true"><ImagePlus size={21}/></span>
+      <div><strong>{item.label}</strong><small>{formatAge(item.purchasedAt)}</small></div>
+    </li>)}</ul> : <p className="of-empty-context">No purchased media in this view.</p>}
   </div>;
 }
 
 function FanContext({detail}:{detail:ConversationDetail}) {
   return <div className="of-fan-context">
     <FanMemoryCategories key={`${detail.accountId}:${detail.conversationId}`} facts={detail.facts} displayName={fanName(detail.summary.fan)} />
-    <section><h3 className="of-section-heading">Purchased media</h3>
-      {detail.ownedMedia.length ? <ul className="of-purchases">{detail.ownedMedia.map(item=><li key={item.mediaId}>
-        <span className="of-purchase-icon" aria-hidden="true"><ImagePlus size={21}/></span>
-        <div><strong>{item.label}</strong><small>{formatAge(item.purchasedAt)}</small></div>
-      </li>)}</ul> : <p className="of-empty-context">No purchased media in this view.</p>}
-    </section>
   </div>;
 }
 
@@ -787,12 +811,13 @@ export default function InboxView({
   // Narrower desktops start with it closed and can open it; closing it never
   // touches the selected conversation, which lives outside this component.
   const [profileOpen, setProfileOpen] = useState(true);
-  useEffect(() => { if (window.matchMedia("(max-width: 1279px)").matches) setProfileOpen(false); }, []);
+  useEffect(() => { if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1279px)").matches) setProfileOpen(false); }, []);
   // Below lg the fan info tab opens as a sheet over the chat. The chat, its draft and
   // its scroll stay mounted underneath, so closing the sheet loses nothing.
   const [narrow, setNarrow] = useState(false);
   const sheetClose = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
+    if (typeof window.matchMedia !== "function") return;
     const query = window.matchMedia("(max-width: 1023px)");
     const sync = () => setNarrow(query.matches);
     sync(); query.addEventListener("change", sync);
@@ -942,9 +967,9 @@ export default function InboxView({
               Pick a conversation to see the fan and the controls.
             </div>
           ) : (
-            <div className="of-fan-sidebar flex flex-col gap-5">
+            <div className="of-fan-sidebar flex min-w-0 flex-col gap-5">
               <h2 className="of-section-heading">Fan profile</h2>
-              <div className="of-profile-identity flex items-center gap-3">
+              <div className="of-profile-identity flex min-w-0 items-center gap-3">
                 <OnlyFansAvatar
                   name={fanName(detail.summary.fan)}
                   avatarUrl={detail.summary.fan.avatarUrl}
@@ -960,8 +985,7 @@ export default function InboxView({
                 </div>
               </div>
 
-              <FanMetrics detail={detail} />
-              {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}
+              <FanRelationship detail={detail} />
               <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
               {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
@@ -986,11 +1010,10 @@ export default function InboxView({
               </section>
 
               <FanContext detail={detail} />
+              <FanMetrics detail={detail} />
+              {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}
               <details open={!!detail.deliveryIncident}><summary className="text-sm font-semibold">Delivery history</summary><DeliveryLedger messages={detail.messages} /></details>
-
-              <div className="border-t border-line pt-3">
-                <details className="of-freshness"><summary>Sync details</summary><FreshnessLine freshness={detail.freshness} /></details>
-              </div>
+              <FanHistory key={`h:${activeAccount.accountId}:${detail.summary.fan.fanId}`} detail={detail} accountId={activeAccount.accountId} canCorrect={viewer.canManage || viewer.canChat === true} showMemory={!showPreviewChrome} />
             </div>
           )}
         </Card>

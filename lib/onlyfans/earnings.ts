@@ -7,13 +7,22 @@ export type EarningsStatistics = {byKind:({kind:string}&EarningsAmount)[];byAcco
 export type NativeEarnings={schemaVersion:"of-earnings.v1";window:EarningsWindow;asOf:string;accountCount:number;coveredAccountCount:number;
  status:"current"|"unavailable";reasons:(keyof typeof EARNINGS_REASONS)[];currency:"USD";
  clearedGrossCents:number|null;clearedNetCents:number|null;clearedCount:number|null;pendingCount:number|null;refundedCount:number|null;
- recentLedgerAt:string|null;fullLedgerAt:string|null;recorded?:RecordedEarnings|null;history?:EarningsHistory;statistics?:EarningsStatistics|null};
+ recentLedgerAt:string|null;fullLedgerAt:string|null;recorded?:RecordedEarnings|null;history?:EarningsHistory;statistics?:EarningsStatistics|null;
+ /** Present only when the backend echoes the account filter it applied. Absent or null means the figures are agency-wide, whatever was asked. */
+ scope?:EarningsScope|null};
+export type EarningsScope={accountIds:string[]};
+const SCOPE_ID=/^[A-Za-z0-9._:-]{1,64}$/;
+/** The optional account filter, validated and de-duplicated. Null when it is empty or any id is not a safe id. */
+export function normalizeEarningsScope(ids:readonly string[]|null|undefined):string[]|null{
+ if(!Array.isArray(ids)||ids.length===0||ids.length>50||ids.some(id=>typeof id!=="string"||!SCOPE_ID.test(id)))return null;
+ return [...new Set(ids)].sort();
+}
 const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
 const exact=(v:Record<string,unknown>,keys:string[])=>Object.keys(v).sort().join(",") === [...keys].sort().join(",");
 export const earningsStamp=(v:unknown):v is string=>typeof v==="string"&&/Z$/.test(v)&&Number.isFinite(Date.parse(v));
 export const validEarningsWindow=(v:unknown):v is EarningsWindow=>object(v)&&exact(v,["start","end"])&&earningsStamp(v.start)&&earningsStamp(v.end)&&Date.parse(v.end)>Date.parse(v.start)&&Date.parse(v.start)>=0&&Date.parse(v.end)-Date.parse(v.start)<=60000*86400000;
-export function parseNativeEarnings(v:unknown,window:EarningsWindow):NativeEarnings|null{
- if(!object(v)||!exact(v,["schemaVersion","window","asOf","accountCount","coveredAccountCount","status","reasons","currency","clearedGrossCents","clearedNetCents","clearedCount","pendingCount","refundedCount","recentLedgerAt","fullLedgerAt",...(Object.hasOwn(v,"recorded")?["recorded"]:[]),...(Object.hasOwn(v,"history")?["history"]:[]),...(Object.hasOwn(v,"statistics")?["statistics"]:[])])||v.schemaVersion!=="of-earnings.v1"||!validEarningsWindow(v.window)||v.window.start!==window.start||v.window.end!==window.end||!earningsStamp(v.asOf)||v.currency!=="USD"||!["current","unavailable"].includes(v.status as string))return null;
+export function parseNativeEarnings(v:unknown,window:EarningsWindow,requestedScope?:readonly string[]|null):NativeEarnings|null{
+ if(!object(v)||!exact(v,["schemaVersion","window","asOf","accountCount","coveredAccountCount","status","reasons","currency","clearedGrossCents","clearedNetCents","clearedCount","pendingCount","refundedCount","recentLedgerAt","fullLedgerAt",...(Object.hasOwn(v,"recorded")?["recorded"]:[]),...(Object.hasOwn(v,"history")?["history"]:[]),...(Object.hasOwn(v,"statistics")?["statistics"]:[]),...(Object.hasOwn(v,"scope")?["scope"]:[])])||v.schemaVersion!=="of-earnings.v1"||!validEarningsWindow(v.window)||v.window.start!==window.start||v.window.end!==window.end||!earningsStamp(v.asOf)||v.currency!=="USD"||!["current","unavailable"].includes(v.status as string))return null;
  const integer=(x:unknown,min=0,max=Number.MAX_SAFE_INTEGER)=>Number.isSafeInteger(x)&&(x as number)>=min&&(x as number)<=max;
  if(!integer(v.accountCount,0,1000)||!integer(v.coveredAccountCount,0,v.accountCount as number)||!Array.isArray(v.reasons)||new Set(v.reasons).size!==v.reasons.length||v.reasons.some(r=>typeof r!=="string"||!Object.hasOwn(EARNINGS_REASONS,r)))return null;
  const amounts=[v.clearedGrossCents,v.clearedNetCents],counts=[v.clearedCount,v.pendingCount,v.refundedCount];
@@ -45,6 +54,15 @@ export function parseNativeEarnings(v:unknown,window:EarningsWindow):NativeEarni
    }
    if(gross!==v.recorded.grossCents||payments!==v.recorded.paymentCount||net!==v.recorded.netCents)return null;
   }
+ }
+ if(v.scope!==undefined&&v.scope!==null){
+  // An echoed scope must be exactly the one that was asked for. Anything else is not a figure for this caller's selection.
+  const sc=v.scope;
+  if(!object(sc)||!exact(sc,["accountIds"])||!Array.isArray(sc.accountIds)||sc.accountIds.length>1000||sc.accountIds.some(id=>typeof id!=="string"||!SCOPE_ID.test(id))||new Set(sc.accountIds).size!==sc.accountIds.length)return null;
+  const wanted=normalizeEarningsScope(requestedScope);
+  if(!wanted||wanted.length!==sc.accountIds.length||wanted.some(id=>!(sc.accountIds as string[]).includes(id)))return null;
+  const stats=v.statistics as EarningsStatistics|null|undefined;
+  if(stats&&stats.byAccount.some(row=>!(sc.accountIds as string[]).includes(row.accountId)))return null;
  }
  return v as NativeEarnings;
 }

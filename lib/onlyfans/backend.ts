@@ -30,7 +30,7 @@ import type {
   OfAccount,
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
-import { parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
+import { normalizeEarningsScope, parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
 import { parseMessageAttachments } from "./message-attachments";
 import { parseOperations, type OperationsSnapshot } from "./operations";
 import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
@@ -83,7 +83,8 @@ export type OnlyFansBackend = {
     conversationId: string,
     cursor?: string | null,
   ): Promise<BackendResult<ConversationDetail>>;
-  getEarnings?(window:EarningsWindow):Promise<BackendResult<NativeEarnings>>;
+  /** `scope.accountIds` is an optional filter of authorized account ids. A backend that ignores it answers agency-wide and does not echo `scope`; callers must check `data.scope`. */
+  getEarnings?(window:EarningsWindow,scope?:{accountIds?:readonly string[]}):Promise<BackendResult<NativeEarnings>>;
   getOperations?(accountId: string): Promise<BackendResult<OperationsSnapshot>>;
   getWorkspace?(accountId: string, section: NativeSection, cursor?: string | null): Promise<BackendResult<WorkspaceRead>>;
 };
@@ -235,9 +236,19 @@ export function createHttpOnlyFansBackend(options: {
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/workspace/${section}${query}`, body => isRecord(body) ? parseWorkspace(body.workspace, accountId, section) : null);
     },
 
-    getEarnings(window) {
+    getEarnings(window, scope) {
       if(!validEarningsWindow(window))return Promise.resolve({ok:false,status:400,code:"invalid_earnings_window",error:"That reporting window is not supported."});
-      return read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}&includePending=true&includeHistory=true`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null).then(result=>!result.ok&&result.status===400?read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null):result);
+      const requested = scope?.accountIds;
+      const ids = requested === undefined ? null : normalizeEarningsScope(requested);
+      if(requested !== undefined && !ids)return Promise.resolve({ok:false,status:400,code:"invalid_earnings_scope",error:"That account selection is not valid."});
+      const base=`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`;
+      const filter=ids?`&accountIds=${encodeURIComponent(ids.join(","))}`:"";
+      const shape=(echo:readonly string[]|null)=>(body:unknown)=>isRecord(body)?parseNativeEarnings(body.earnings,window,echo):null;
+      // Fallbacks never drop the scope silently: a backend that rejects the filter is asked again without it, and the
+      // caller then sees an unscoped answer (no echo) and must not label it with a creator.
+      return read(`${base}&includePending=true&includeHistory=true${filter}`,shape(ids))
+        .then(result=>!result.ok&&result.status===400&&ids?read(`${base}&includePending=true&includeHistory=true`,shape(null)):result)
+        .then(result=>!result.ok&&result.status===400?read(base,shape(null)):result);
     },
     getOperations(accountId) {
       if (!ID_PATTERN.test(accountId)) {

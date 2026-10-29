@@ -22,7 +22,7 @@ type Edit = { field: MemoryField; value: string; reason: string; error: string }
 type PendingCorrection = { accountId: string; fanId: string; correction: MemoryCorrection };
 
 /** Native account-scoped memory. Archive recovery and stored-message processing remain separate. */
-export default function BMemoryPanel({ canManage = false, canRecover = canManage, initialAccountId, selectedAccountId, selectedFanId }: { canManage?: boolean; canRecover?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string }) {
+export default function BMemoryPanel({ canManage = false, canRecover = canManage, initialAccountId, selectedAccountId, selectedFanId, part = "all" }: { canManage?: boolean; canRecover?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string; part?: "all" | "facts" | "diagnostics" }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading), [accountId, setAccountId] = useState("");
@@ -119,16 +119,17 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     if (selectedFan && fanRef.current === selectedFan) await loadFan(id, selectedFan);
   }
 
+  const showFacts = part !== "diagnostics", showDiag = part !== "facts";
   const selectedName = coverage.state === "ok" ? coverage.data.fans.find(f => f.fanId === fanId) : undefined;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-mem-h" data-b-memory>
-    <h2 id="b-mem-h" className="text-lg font-semibold">Fan memory</h2>
-    {!manage ? <p className="text-sm" role="note" data-b-readonly>Read-only access: you can inspect memory and progress.</p> : null}
+    {part === "all" ? <h2 id="b-mem-h" className="text-lg font-semibold">Fan memory</h2> : null}
+    {!manage && showFacts ? <p className="text-sm" role="note" data-b-readonly>Read-only access: you can inspect memory and progress.</p> : null}
     {accounts.state === "loading" ? <BLoading label="Loading accounts…" /> : null}
     {accounts.state === "error" ? <BError message={accounts.message} onRetry={() => void loadAccounts()} /> : null}
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
     {accounts.state === "ok" && accountId ? <>
-      {!selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} /> : <p className="text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p>}
+      {!selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} /> : part === "all" ? <p className="min-w-0 break-words text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p> : null}
       <div className="flex flex-wrap gap-2"><button type="button" className={bButton} onClick={() => { if (!selectedFanId) void loadCoverage(accountId); if (fanId) void loadFan(accountId, fanId); }}>Refresh current state</button>
         {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill()}>Resume account recovery</button> : null}</div>
       {!selectedFanId && coverage.state === "loading" ? <BLoading label="Loading history and fans…" /> : null}
@@ -145,53 +146,86 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
           {coverage.data.nextCursor ? <button type="button" className={`${bButton} mt-3`} disabled={paging} onClick={() => void loadCoverage(accountId, coverage.data.nextCursor!)}>{paging ? "Loading…" : "Load more fans"}</button> : null}
         </div></> : null}
       <div aria-live="polite" className="min-h-5 text-sm" data-b-notice>{notice}</div>
-      {pending && pending.accountId === accountId && pending.fanId === fanId ? <button type="button" className={bButton} disabled={!manage || busy} onClick={() => void sendCorrection(pending)}>Retry identical correction</button> : null}
+      {showFacts && pending && pending.accountId === accountId && pending.fanId === fanId ? <button type="button" className={bButton} disabled={!manage || busy} onClick={() => void sendCorrection(pending)}>Retry identical correction</button> : null}
       {fanId ? <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="fan">
         {fan.state === "loading" ? <BLoading label="Loading current fan memory…" /> : null}
         {fan.state === "error" ? <BError message={fan.message} onRetry={() => void loadFan(accountId, fanId)} /> : null}
         {fan.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read this fan.</p> : null}
         {fan.state === "ok" ? <div className="grid min-w-0 gap-4">
-          <h3 className="break-words font-semibold">{selectedName?.displayName || selectedName?.username || `Fan ${fanId}`}</h3>
-          {!selectedFanId ? <><MemoryProgressView progress={fan.data.progress} /><RecoveryView progress={fan.data.recovery} /></> : null}
-          {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button> : null}
-          <FanFacts memory={fan.data.memory} manage={manage} busy={busy} edit={edit} setEdit={setEdit} onSave={save} />
-          <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Source excerpts</h4>
+          {part === "all" ? <h3 className="break-words font-semibold">{selectedName?.displayName || selectedName?.username || `Fan ${fanId}`}</h3> : null}
+          {showFacts ? <MemoryStateView state={memoryState(fan.data.progress, fan.data.recovery, fan.data.memory)} /> : null}
+          {showDiag ? <MemoryDiagnostics progress={fan.data.progress} recovery={fan.data.recovery} /> : null}
+          {showDiag && !selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button> : null}
+          {showFacts ? <FanFacts memory={fan.data.memory} manage={manage} busy={busy} edit={edit} setEdit={setEdit} onSave={save} /> : null}
+          {showFacts ? <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Source excerpts</h4>
             <form className="flex min-w-0 flex-wrap gap-2" onSubmit={e => { e.preventDefault(); void loadFan(accountId, fanId, false, query); }}>
               <label htmlFor="b-memory-query" className="sr-only">Search source excerpts</label><input id="b-memory-query" maxLength={2000} value={query} onChange={e => setQuery(e.target.value)} placeholder="Search stored messages" className="min-h-11 min-w-0 flex-1 rounded-lg border border-line bg-transparent px-2" />
               <button className={bButton} type="submit">Search excerpts</button></form>
             {fan.data.memory.interactions.length ? <ul className="grid gap-2">{fan.data.memory.interactions.map((x, index) => <li key={`${x.sourceMessageId}-${index}`} className="min-w-0 rounded-lg border border-line p-2 text-sm"><p className="break-words">{x.excerpt}</p><p className="text-xs text-muted">{x.direction === "in" ? "Fan" : "Account"} · {bTime(x.sourceAt)} · message {x.sourceMessageId}</p></li>)}</ul> : <p className="text-sm text-muted">No source excerpts match this view.</p>}
             <p className="text-xs text-muted">Recall uses conservative English patterns and lexical retrieval from stored messages. Saved profile notes and excerpts are not a generated biography or proof of complete provider history.</p>
-          </div>
+          </div> : null}
         </div> : null}
       </div> : null}
     </> : null}
   </section>;
 }
 
+const dlCls = "mt-2 grid min-w-0 grid-cols-1 gap-y-0.5 text-sm", dtCls = "mt-1.5 text-xs text-muted", ddCls = "min-w-0 break-words [overflow-wrap:anywhere]";
 function RecoveryView({ progress: p }: { progress: RecoveryProgress }) {
-  return <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm" data-b-archive={p.status}>
-    <dt className="text-muted">Recent intake</dt><dd>{p.recentRecoveryNeeded ? "Recovery gap reported" : "No recovery gap reported"}. Intake count is not supplied.</dd>
-    <dt className="text-muted">Archive recovery</dt><dd>{p.status === "complete" ? "Available provider history recovered" : "Incomplete"}</dd>
-    <dt className="text-muted">Discovery</dt><dd>{p.discoveryComplete ? "Current discovery complete" : "Still discovering conversations"}</dd>
-    <dt className="text-muted">Conversations</dt><dd>{p.conversationsComplete} complete / {p.conversationsDiscovered} discovered</dd>
-    <dt className="text-muted">Archive messages</dt><dd>{p.messagesObserved} observed, {p.messagesAdded} added. Provider total unknown.</dd>
-    <dt className="text-muted">Archive pages</dt><dd>{p.pagesCommitted}</dd>
-    <dt className="text-muted">Retrying / deferred</dt><dd>{p.conversationsRetrying} / {p.conversationsDeferredForLiveInput} deferred for current input</dd>
+  return <dl className={dlCls} data-b-archive={p.status}>
+    <dt className={dtCls}>Recent intake</dt><dd className={ddCls}>{p.recentRecoveryNeeded ? "Recovery gap reported" : "No recovery gap reported"}. Intake count is not supplied.</dd>
+    <dt className={dtCls}>Archive recovery</dt><dd className={ddCls}>{p.status === "complete" ? "Available provider history recovered" : "Incomplete"}</dd>
+    <dt className={dtCls}>Discovery</dt><dd className={ddCls}>{p.discoveryComplete ? "Current discovery complete" : "Still discovering conversations"}</dd>
+    <dt className={dtCls}>Conversations</dt><dd className={ddCls}>{p.conversationsComplete} complete / {p.conversationsDiscovered} discovered</dd>
+    <dt className={dtCls}>Archive messages</dt><dd className={ddCls}>{p.messagesObserved} observed, {p.messagesAdded} added. Provider total unknown.</dd>
+    <dt className={dtCls}>Archive pages</dt><dd className={ddCls}>{p.pagesCommitted}</dd>
+    <dt className={dtCls}>Retrying / deferred</dt><dd className={ddCls}>{p.conversationsRetrying} / {p.conversationsDeferredForLiveInput} deferred for current input</dd>
   </dl>;
 }
 function MemoryProgressView({ progress: p }: { progress: MemoryProgress }) {
-  return <div data-b-memory-progress><h4 className="text-sm font-semibold">Processing stored messages into memory</h4><dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
-    <dt className="text-muted">Stored messages</dt><dd>{p.storedMessages}</dd><dt className="text-muted">Processed / pending</dt><dd>{p.processedCurrentMessages} / {p.pendingMessages}</dd>
-    <dt className="text-muted">Stored-message processing</dt><dd>{p.storedMemoryComplete ? "Current stored messages processed" : "Work remains"}</dd>
-    <dt className="text-muted">Oldest / newest stored</dt><dd>{bTime(p.oldestStoredAt)} / {bTime(p.newestStoredAt)}</dd>
-    <dt className="text-muted">Memory last processed</dt><dd>{bTime(p.lastProcessedAt, "Not yet processed")}</dd>
-    <dt className="text-muted">Provider-history total</dt><dd>Unknown</dd></dl></div>;
+  return <div data-b-memory-progress className="min-w-0"><h4 className="text-sm font-semibold">Processing stored messages into memory</h4><dl className={dlCls}>
+    <dt className={dtCls}>Stored messages</dt><dd className={ddCls}>{p.storedMessages}</dd><dt className={dtCls}>Processed / pending</dt><dd className={ddCls}>{p.processedCurrentMessages} / {p.pendingMessages}</dd>
+    <dt className={dtCls}>Stored-message processing</dt><dd className={ddCls}>{p.storedMemoryComplete ? "Current stored messages processed" : "Work remains"}</dd>
+    <dt className={dtCls}>Oldest stored</dt><dd className={ddCls}>{bTime(p.oldestStoredAt)}</dd>
+    <dt className={dtCls}>Newest stored</dt><dd className={ddCls}>{bTime(p.newestStoredAt)}</dd>
+    <dt className={dtCls}>Memory last processed</dt><dd className={ddCls}>{bTime(p.lastProcessedAt, "Not yet processed")}</dd>
+    <dt className={dtCls}>Provider-history total</dt><dd className={ddCls}>Unknown</dd></dl></div>;
+}
+/** Every archive, recovery, discovery and stored-message counter. The inbox sidebar keeps these inside a collapsed disclosure. */
+export function MemoryDiagnostics({ progress, recovery }: { progress: MemoryProgress; recovery: RecoveryProgress }) {
+  return <div className="grid min-w-0 gap-3" data-b-diagnostics><MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
+}
+
+export type MemoryStateKey = "not_processed" | "partial" | "no_facts" | "current";
+export type MemoryState = { key: MemoryStateKey; label: string; detail: string };
+/**
+ * Memory state from the fields the service already returns. There is no job status, delay or failure flag in the
+ * contract, so "processing", "delayed" and "failed" cannot be told apart from "partial" and are reported as not reported.
+ */
+export function memoryState(progress: MemoryProgress, recovery: RecoveryProgress, memory: NativeMemory): MemoryState {
+  const hasFacts = Object.keys(memory.facts).length > 0 || Object.values(memory.summaries).some(v => !!v);
+  const retry = recovery.conversationsRetrying > 0 ? ` Archive retries reported: ${recovery.conversationsRetrying}.` : "";
+  if (progress.processedCurrentMessages === 0 && !progress.lastProcessedAt)
+    return { key: "not_processed", label: "Not processed", detail: progress.storedMessages ? `${progress.storedMessages} stored messages are waiting to be processed.${retry}` : `No stored messages to process yet.${retry}` };
+  if (progress.pendingMessages > 0 || !progress.storedMemoryComplete)
+    return { key: "partial", label: "Partially imported", detail: `${progress.pendingMessages} of ${progress.storedMessages} stored messages are still to be processed.${retry}` };
+  if (recovery.status !== "complete")
+    return { key: "partial", label: "Partially imported", detail: `Stored messages are processed, but provider history is not fully recovered, so memory may be incomplete.${retry}` };
+  if (!hasFacts) return { key: "no_facts", label: "Processed, no supported facts", detail: `All stored messages were processed and none contained a supported fact.${retry}` };
+  return { key: "current", label: "Current", detail: `Stored messages processed through ${bTime(progress.lastProcessedAt, "an unknown time")}.${retry}` };
+}
+export function MemoryStateView({ state }: { state: MemoryState }) {
+  return <div className="min-w-0 rounded-lg border border-line p-3 text-sm" data-b-memory-state={state.key}>
+    <p className="font-semibold">Memory state: {state.label}</p>
+    <p className="mt-1 break-words text-xs text-muted [overflow-wrap:anywhere]">{state.detail}</p>
+    <p className="mt-1 text-xs text-muted">Processing, delayed and failed: Not reported <span className="cursor-help" title="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only." aria-label="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only.">ⓘ</span></p>
+  </div>;
 }
 function FanFacts({ memory: m, manage, busy, edit, setEdit, onSave }: { memory: NativeMemory; manage: boolean; busy: boolean; edit: Edit | null; setEdit: (edit: Edit | null) => void; onSave: (operation: "set" | "clear") => Promise<void> }) {
   return <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Saved facts and profile</h4><ul className="grid min-w-0 gap-2">{MEMORY_FIELDS.map(field => {
     const fact = m.facts[field], override = m.overrides[field], value = fact?.value ?? m.summaries[field] ?? "", editing = edit?.field === field;
-    return <li key={field} data-b-fact={field} className="min-w-0 rounded-lg border border-line p-3 text-sm"><h5 className="font-semibold">{FIELD_LABELS[field]}</h5>
-      {override?.operation === "clear" ? <p className="text-muted">Cleared by an operator. The clear is retained across history imports.</p> : <p className="whitespace-pre-wrap break-words">{value || "No saved value"}</p>}
+    return <li key={field} data-b-fact={field} data-b-source={override?.operation === "clear" ? "operator" : fact?.source ?? "none"} className="min-w-0 rounded-lg border border-line p-3 text-sm"><h5 className="font-semibold">{FIELD_LABELS[field]}</h5>
+      {override?.operation === "clear" ? <p className="text-muted">Cleared by an operator. The clear is retained across history imports.</p> : <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{value || "Not provided"}</p>}
       {fact ? <p className="mt-1 text-xs text-muted">{fact.source === "operator" ? "Operator correction" : fact.source === "canonical" ? "Saved canonical profile" : "Chat-history evidence"}{fact.sourceAt ? ` · ${bTime(fact.sourceAt)}` : ""}{fact.sourceMessageId ? ` · message ${fact.sourceMessageId}` : ""}</p> : null}
       {fact?.quote ? <blockquote className="mt-2 break-words border-l-2 border-line pl-2 text-xs">{fact.quote}</blockquote> : null}
       {editing ? <div className="mt-2 grid gap-2">
