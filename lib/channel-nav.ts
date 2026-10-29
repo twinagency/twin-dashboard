@@ -39,6 +39,10 @@ export type ChannelNavItem = {
   availability: ChannelNavAvailability;
   /** Shown for planned entries, and as the link's tooltip otherwise. */
   note?: string;
+  /** `settings` entries render under the Settings heading, after the everyday pages. */
+  group?: "settings";
+  /** A combined, every-creator page: its link drops the selected creator and account. */
+  combined?: true;
 };
 
 export type ChannelDefinition = {
@@ -98,15 +102,18 @@ export const ONLYFANS_CHANNEL: ChannelDefinition = {
   href: "/onlyfans/overview",
   summary: "OnlyFans accounts and conversations, account by account.",
   nav: [
-    { key: "of-overview", label: "Overview", href: "/onlyfans/overview", icon: "Home", availability: "built" },
-    { key: "of-accounts", label: "Accounts", href: "/onlyfans/accounts", icon: "Users", availability: "built" },
+    // Everyday pages first, in the order an operator works through a day.
+    // Keys and routes are unchanged, so bookmarks and older links still land.
+    { key: "of-overview", label: "Today", href: "/onlyfans/overview", icon: "Home", availability: "built", combined: true, note: "Who needs attention, what was earned and what needs a person." },
     { key: "of-inbox", label: "Inbox", href: "/onlyfans/inbox", icon: "Messages", availability: "built" },
-    { key: "of-campaigns", label: "Campaigns", href: "/onlyfans/campaigns", icon: "Flows", availability: "built", note: "Saved message campaigns and recipient delivery." },
+    { key: "of-accounts", label: "Creators", href: "/onlyfans/accounts", icon: "Users", availability: "built", note: "Creators, their OnlyFans accounts and connections." },
     { key: "of-content", label: "Content", href: "/onlyfans/content", icon: "Media", availability: "built", note: "Your media library and prepared offers." },
-    { key: "of-sales", label: "Sales", href: "/onlyfans/sales", icon: "Revenue", availability: "built", note: "Recorded transactions and open offers." },
-    { key: "of-settings", label: "Settings", href: "/onlyfans/settings", icon: "Settings", availability: "built", note: "Saved creator configuration and runtime permissions." },
-    { key: "of-launch", label: "Launch control", href: "/onlyfans/launch", icon: "Settings", availability: "built", note: "Account readiness, purchase recovery, approved personality, fan memory and account automation controls." },
-    { key: "of-operations", label: "Operations", href: "/onlyfans/operations", icon: "Database", availability: "built" },
+    { key: "of-sales", label: "Earnings", href: "/onlyfans/sales", icon: "Revenue", availability: "built", note: "Recorded transactions and open offers." },
+    { key: "of-campaigns", label: "Campaigns", href: "/onlyfans/campaigns", icon: "Flows", availability: "built", note: "Saved message campaigns and recipient delivery." },
+    // Team, configuration and technical controls.
+    { key: "of-settings", label: "Settings", href: "/onlyfans/settings", icon: "Settings", availability: "built", group: "settings", note: "Saved creator configuration and runtime permissions." },
+    { key: "of-launch", label: "Launch control", href: "/onlyfans/launch", icon: "Settings", availability: "built", group: "settings", note: "Account readiness, purchase recovery, approved personality, fan memory and account automation controls." },
+    { key: "of-operations", label: "Operations", href: "/onlyfans/operations", icon: "Database", availability: "built", group: "settings" },
   ],
 };
 

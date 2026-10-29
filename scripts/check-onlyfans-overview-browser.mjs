@@ -30,7 +30,7 @@ export async function checkOnlyFansOverview(page, origin) {
     await page.goto(origin + "/onlyfans/overview?account=acc-a", { waitUntil: "domcontentloaded", timeout: 90000 });
     const overview = page.locator('[data-of-surface="onlyfans-overview"]');
     await overview.waitFor({ timeout: 60000 });
-    await overview.getByRole("heading", { name: "Overview", exact: true }).waitFor();
+    await overview.getByRole("heading", { name: "Today", exact: true }).waitFor();
     assert.deepEqual(await overview.locator("[data-of-overview-metric]").evaluateAll(elements => elements.map(element => element.getAttribute("data-of-overview-metric"))), [
       "Recorded net earnings", "Recorded gross earnings", "Pending net", "Pending gross",
       "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts",

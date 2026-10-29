@@ -7,7 +7,7 @@ import { configuredContentBackend } from "@/lib/onlyfans/content-backend";
 import NativeWorkspaceView from "./NativeWorkspaceView";
 
 export type NativeSearch = { account?: string | string[]; creator?: string | string[]; cursor?: string | string[] };
-const TITLES = { content: "Content", sales: "Sales", settings: "Settings" } as const;
+const TITLES = { content: "Content", sales: "Earnings", settings: "Settings" } as const;
 export default async function NativeWorkspace({ section, searchParams }: { section: NativeSection; searchParams: Promise<NativeSearch> }) {
   const title = TITLES[section];
   const description = section === "content" ? "Your content, organised and ready to share." : section === "sales" ? "See your purchases, payments and refunds." : "Your personality, preferences and AI reply settings.";

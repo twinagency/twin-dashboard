@@ -91,7 +91,9 @@ export default function TopBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const channel = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
-  const combined = audience === "admin" && channel === "all" && ["/dashboard", "/overview"].includes(pathname);
+  // OnlyFans Today reports every creator, so its header must not name the one
+  // selected on another page.
+  const combined = audience === "admin" && channel === "all" && ["/dashboard", "/overview"].includes(pathname) || channel === "onlyfans" && pathname === "/onlyfans/overview";
   const [rosterRead, setRosterRead] = useState<{channel: string; status: "ready" | "unavailable"; creators: typeof clones} | null>(null);
   useEffect(() => {
     if (audience !== "admin" || channel === "all" || lockCreatorScope) return;
