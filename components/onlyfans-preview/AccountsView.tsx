@@ -22,6 +22,7 @@ import { FreshnessLine } from "./PreviewChrome";
 import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
 import ConnectionEditor, { RegisterConnection } from "./ConnectionEditor";
+import ActivationPanel from "./ActivationPanel";
 import CreatorPortrait from "./CreatorPortrait";
 import CreatorHub from "./CreatorHub";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
@@ -118,6 +119,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         ) : null}
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
+      {!showPreviewChrome && !readOnly ? <ActivationPanel accountId={account.accountId} creatorName={account.binding.creatorName} /> : null}
       {agencyConnectionEditable ? <div className="mt-3 flex flex-wrap items-start gap-2"><AdminOnlyFansSignIn creators={[{id:account.binding.creatorId,name:account.binding.creatorName}]} accountId={account.accountId}/></div> : null}
       {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} initiallyOpen={openConnection} /> : null}
     </Card>

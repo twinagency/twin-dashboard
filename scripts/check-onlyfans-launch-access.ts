@@ -7,7 +7,7 @@ const pages = ["/onlyfans/launch", "/onlyfans/launch/memory", "/onlyfans/launch/
 const reads = ["/api/onlyfans/accounts", ...["access", "readiness", "purchases", "personality"].map(x => `/api/onlyfans-launch/abc/accounts/acc-a/${x}`),
   "/api/onlyfans-launch/abc/accounts/acc-a/purchases/evidence",
   "/api/onlyfans-launch/memory/accounts/acc-a/fans", "/api/onlyfans-launch/memory/accounts/acc-a/fans/7",
-  "/api/onlyfans-launch/automation/accounts/acc-a/follow-ups",
+  "/api/onlyfans-launch/automation/accounts/acc-a/follow-ups", "/api/onlyfans-launch/activation/accounts/acc-a",
   "/api/onlyfans-launch/automation/accounts/acc-a/settings", "/api/onlyfans-launch/automation/accounts/acc-a/emergency-stop",
   "/api/onlyfans-launch/automation/accounts/acc-a/follow-ups/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   "/api/onlyfans-launch/abc/accounts/acc-a/personality/history", "/api/onlyfans-launch/abc/accounts/acc-a/personality/revisions/7"];
@@ -17,6 +17,7 @@ for (const path of [...pages, ...reads]) {
   check(!allows(path, "POST", true, true), `server action ${path}`);
 }
 const writes = [
+  ...["activate", "enable-existing", "future-conversations", "operating-limits", "model-credential", "model-check"].map(x => ["POST", `/api/onlyfans-launch/activation/accounts/acc-a/${x}`]),
   ["POST", "/api/onlyfans-launch/abc/accounts/acc-a/command"],
   ["POST", "/api/onlyfans-launch/automation/accounts/acc-a/follow-ups"],
   ["POST", "/api/onlyfans-launch/automation/accounts/acc-a/emergency-stop"],
