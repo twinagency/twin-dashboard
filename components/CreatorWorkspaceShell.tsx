@@ -32,6 +32,7 @@ export default function CreatorWorkspaceShell({
   onboardingFinished = true,
   connectionPage = false,
   homePage = false,
+  onlyFansOnly = false,
   allTimeStars,
   usdPerStar,
   children,
@@ -47,6 +48,8 @@ export default function CreatorWorkspaceShell({
   onboardingFinished?: boolean;
   connectionPage?: boolean;
   homePage?: boolean;
+  /** TWIN_APP_MODE=onlyfans, passed from the server layout. */
+  onlyFansOnly?: boolean;
   allTimeStars: number;
   usdPerStar?: number;
   children: ReactNode;
@@ -61,14 +64,14 @@ export default function CreatorWorkspaceShell({
   const cloneBeingCreated = !connected && onboardingFinished && isMoxy(agencyName);
   const wordmarkAgency = agencyName === "Twin" ? undefined : agencyName;
   return (
-    <DashboardAccessProvider agencyName={agencyName} audience="creator">
+    <DashboardAccessProvider agencyName={agencyName} audience="creator" onlyFansOnly={onlyFansOnly}>
       <CurrencyProvider usdPerStar={usdPerStar}>
         <BlurProvider>
           <div className="flex h-screen" data-creator-workspace-shell="true">
             <Sidebar clones={clones} activeCloneId={activeCloneId} />
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
               <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-                <Link href="/creator" aria-label={agencyName || "Twin Technologies"}>
+                <Link href={onlyFansOnly ? "/creator/platforms" : "/creator"} aria-label={agencyName || "Twin Technologies"}>
                   <TwinWordmark inverse agencyName={wordmarkAgency} />
                 </Link>
                 <div className="flex items-center gap-1">

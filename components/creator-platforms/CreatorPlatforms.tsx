@@ -15,7 +15,8 @@ import ConnectionSyncStatus from "@/components/onlyfans-preview/ConnectionSyncSt
 import { activePlatformEnrollment, parseCreatorPlatforms, platformConnectionState, type CreatorPlatforms as Snapshot, type PlatformChannel } from "@/lib/creator-platforms/model";
 
 export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
-  const moxy = isMoxy(useDashboardAccess().agencyName);
+  const { agencyName, onlyFansOnly } = useDashboardAccess();
+  const moxy = isMoxy(agencyName);
   const [data,setData]=useState(initial),[busy,setBusy]=useState<PlatformChannel|null>(null);
   const [notice,setNotice]=useState(""),[connecting,setConnecting]=useState(false);
   const [statusFresh,setStatusFresh]=useState(true),[now,setNow]=useState(()=>Date.now()),[refreshing,setRefreshing]=useState(false);
@@ -145,7 +146,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
           </div>;
         })}
       </section>
-      <section className={styles.card} data-platform-telegram>
+      {!onlyFansOnly && <section className={styles.card} data-platform-telegram>
         <div className={styles.cardBrand}><PlatformIcon platform="telegram" size={48} /><h2>Telegram</h2>
           {data.telegram.configured&&<span className={styles.badge} data-state={data.telegram.status==="active"?"connected":"attention"}>{data.telegram.status==="active"?<><Check size={13}/>Connected</>:"Paused"}</span>}
         </div>
@@ -153,7 +154,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
         {data.telegram.configured||telegramSelected?<Link className={styles.secondaryButton} href={telegramHref}>{data.telegram.configured?"Open Telegram setup":"Continue Telegram setup"}<ArrowRight size={17}/></Link>:<button className={styles.secondaryButton} disabled={!!busy||data.readOnly} onClick={()=>void choose("telegram")}>{busy==="telegram"?<><LoaderCircle size={17} className={styles.spinner}/>Getting ready…</>:<>Set up Telegram<ArrowRight size={17}/></>}</button>}
         <p className={styles.helper}>{data.telegram.configured?"Your existing profile and content are already here.":telegramSelected?"Setup requested. Continue with your existing profile.":"We’ll use your existing profile and content."}</p>
         {telegramSelected&&<div className={styles.telegramLinks}><Link className={styles.textLink} href={telegramHref}>Your profile<ChevronRight size={15}/></Link><Link className={styles.textLink} href={data.telegram.configured?"/creator/ppvs":"/creator/onboarding?step=content"}>Your content<ChevronRight size={15}/></Link></div>}
-      </section>
+      </section>}
     </div>
     <footer className={styles.footer}><p><Sparkles size={19} aria-hidden="true"/>Your profile, content and agency stay together.</p><div><button className={styles.textLink} disabled={!!busy||refreshing} onClick={()=>void refresh()}><RefreshCw size={14} className={refreshing?styles.spinner:undefined}/>{refreshing?"Refreshing…":"Refresh status"}</button><Link className={styles.textLink} href="/creator">Back to my space<ArrowRight size={14}/></Link></div></footer>
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="connect-heading" onCancel={closeConnection} onClose={()=>{if(connecting)closeConnection();}}>

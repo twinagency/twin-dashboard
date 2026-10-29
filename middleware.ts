@@ -17,6 +17,7 @@ import { creatorDashboardIdentity, creatorDashboardIdentityById } from "@/lib/cr
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, isCreatorPlatformPage, creatorPlatformApiAllowed, isCreatorPlatformApiPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { activeViewAs, VIEW_AS_EXIT_PATH } from "@/lib/view-as";
+import { isOnlyFansOnly, onlyFansOnlyVerdict } from "@/lib/app-mode";
 
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
@@ -39,6 +40,13 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
+  // TWIN_APP_MODE=onlyfans (server env, read per request): default-deny every
+  // route that is not OnlyFans or sign-in. Unset, this block never runs.
+  if (isOnlyFansOnly()) {
+    const verdict = onlyFansOnlyVerdict(path, ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action"));
+    if (verdict.kind === "redirect") return privateResponse(NextResponse.redirect(new URL(verdict.to, dashboardOrigin(req))));
+    if (verdict.kind === "notfound") return privateResponse(path.startsWith("/api/") ? NextResponse.json({ error: "Not found" }, { status: 404 }) : new NextResponse("Not found", { status: 404 }));
+  }
   // Login/logout and independently authenticated endpoints must never renew an
   // unrelated agency session or overwrite a new identity's response cookies.
   const skip = path === "/agency/join" || path.startsWith("/agency/join/") || isTwinLoginPath(path) || isMarketingPath(path) || path === "/admin-auth"

@@ -86,12 +86,12 @@ export default function TopBar({
       setSignOutError("Could not sign out. Your session has not been confirmed revoked. Please try again.");
     } finally { setSignOutPending(false); }
   };
-  const {isAgency,isCreator,agencyName,audience}=useDashboardAccess();
+  const {isAgency,isCreator,agencyName,audience,onlyFansOnly}=useDashboardAccess();
   const {identity:inboxIdentity}=useInboxIdentity();
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const channel = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
+  const channel = onlyFansOnly && !isCreator ? "onlyfans" : workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
   // OnlyFans Today reports every creator, so its header must not name the one
   // selected on another page.
   const combined = audience === "admin" && channel === "all" && ["/dashboard", "/overview"].includes(pathname) || channel === "onlyfans" && pathname === "/onlyfans/overview";
@@ -170,7 +170,7 @@ export default function TopBar({
             is withheld rather than shown at zero: a Stars figure on an OF
             account would read as that account's earnings, and the two must
             never be silently aggregated. */}
-        {channel !== "onlyfans" && !combined ? (
+        {channel !== "onlyfans" && !combined && !onlyFansOnly ? (
           <>
             <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
               <span className="text-xs">💵</span>
@@ -181,7 +181,7 @@ export default function TopBar({
             <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
           </>
         ) : null}
-        {channel === "onlyfans" ? <span className="of-currency-label" title="OnlyFans amounts retain their recorded currency. Summary earnings are in USD.">USD</span> : <CurrencyToggle compact />}
+        {channel === "onlyfans" || onlyFansOnly ? <span className="of-currency-label" title="OnlyFans amounts retain their recorded currency. Summary earnings are in USD.">USD</span> : <CurrencyToggle compact />}
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
         {/* Agency and creator portals sign out through their own route so the
