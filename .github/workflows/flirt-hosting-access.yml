@@ -1,0 +1,25 @@
+name: Check Flirt hosting access
+on:
+  push:
+    branches: [codex/flirt-hosting-access-20261030]
+    paths: [.github/workflows/flirt-hosting-access.yml]
+permissions:
+  contents: read
+jobs:
+  hosting-access:
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 3
+    steps:
+      - name: Use existing deployment identity
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Check exact Flirt hosting resources
+        run: |
+          set -euo pipefail
+          aws sts get-caller-identity --query '{Account:Account,Arn:Arn}'
+          aws s3api head-object --bucket flirt-site-323149985112 --key index.html --query '{ETag:ETag,ContentLength:ContentLength}'
+          aws cloudfront get-distribution --id E1KC3NJPNZCWJ1 --query 'Distribution.{Id:Id,Status:Status,Aliases:DistributionConfig.Aliases.Items}'
