@@ -4,7 +4,8 @@ import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import { Card } from "@/components/ui/card";
 import { workspaceHref } from "@/lib/onlyfans-preview/scope";
 import type { OfAccount } from "@/lib/onlyfans-preview/types";
-import { CONFIG_ISSUES, formatRecordedMoney, type NativeSection, type WorkspaceRead } from "@/lib/onlyfans/workspace";
+import { CONFIG_ISSUES, formatRecordedMoney, type NativeSection, type SettingsRead, type WorkspaceRead } from "@/lib/onlyfans/workspace";
+import { Info } from "@/components/clone/fields";
 import ConfigurationEditor from "./ConfigurationEditor";
 import ContentEditor from "./ContentEditor";
 import ContentLibrary from "./ContentLibrary";
@@ -14,7 +15,8 @@ import CreatorPortrait from "./CreatorPortrait";
 import { StudioTabs, StudioTabPanel, StudioTabSection } from "./StudioTabs";
 
 const READY = { disabled: "Disabled", free_teaser: "Free teaser", needs_review: "Needs review", terms_checked: "Terms checked" } as const;
-const TITLES = { content: "Content", sales: "Sales", settings: "Settings" } as const;
+const TITLES = { content: "Content", sales: "Earnings", settings: "Settings" } as const;
+const saved = (value: boolean) => value ? "Saved on this creator" : "Not set up";
 const yesNo = (value: boolean | null) => value === null ? "Not explicitly saved" : value ? "Enabled" : "Disabled";
 
 export default function NativeWorkspaceView({ section, account, accounts, data, creatorId, cursor, contentConfigured, configurationConfigured, canManage, agency }: {
@@ -39,10 +41,10 @@ export default function NativeWorkspaceView({ section, account, accounts, data, 
       <p>Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
     </details> : null}
     {section === "content" ? <ContentLibrary accountId={account.accountId} readOnly={!canManage} configured={contentConfigured} offers={<>{contentConfigured ? <OfferImportPanel key={`import:${account.accountId}`} accountId={account.accountId} readOnly={!canManage} /> : null}<WorkspaceBody data={data} contentEditable={canManage && contentConfigured} /></>} /> : null}
-    {data.section === "sales" ? <SalesView data={data} creatorName={account.binding.creatorName} creatorId={account.binding.creatorId} /> : null}
+    {data.section === "sales" ? <SalesView data={data} creatorName={account.binding.creatorName} creatorId={account.binding.creatorId} providerAvatarUrl={account.creatorProfile?.avatarUrl} /> : null}
     {section === "settings" ? <StudioTabs label="Creator settings" tabs={[{ value: "personality", label: "Personality" }, { value: "replies", label: "Reply settings" }, { value: "account", label: "Account" }]}>
-      <div className="of-settings-layout"><aside className="of-identity-card"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large /><h2>{account.binding.creatorName}</h2><p>@{account.binding.handle}</p><span className="of-platform-tag">OnlyFans</span></aside><div className="of-settings-content">
-        <StudioTabSection value={["personality", "replies"]}>{canManage && configurationConfigured ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : <><StudioTabPanel value="personality"><WorkspaceBody data={data} settingsSection="personality" /></StudioTabPanel><StudioTabPanel value="replies"><WorkspaceBody data={data} settingsSection="replies" /></StudioTabPanel></>}</StudioTabSection>
+      <div className="of-settings-layout"><aside className="of-identity-card"><CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} large /><h2>{account.binding.creatorName}</h2><p>@{account.binding.handle}</p><span className="of-platform-tag">OnlyFans</span></aside><div className="of-settings-content">
+        <StudioTabSection value={["personality", "replies"]}>{data.section === "settings" ? <EffectiveAi cfg={data.configuration} /> : null}{canManage && configurationConfigured ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : <><StudioTabPanel value="personality"><WorkspaceBody data={data} settingsSection="personality" /></StudioTabPanel><StudioTabPanel value="replies"><WorkspaceBody data={data} settingsSection="replies" /></StudioTabPanel></>}</StudioTabSection>
         <StudioTabPanel value="account"><section className="of-panel"><h2>Account details</h2><div className="mt-4"><WorkspaceBody data={data} /></div></section></StudioTabPanel>
       </div></div>
     </StudioTabs> : null}
@@ -51,6 +53,13 @@ export default function NativeWorkspaceView({ section, account, accounts, data, 
     {cursor ? <Link className="ml-4 mt-5 inline-block text-sm text-accent" href={href}>Back to first page</Link> : null}
     <div className="mt-6 flex flex-wrap gap-4 text-sm font-semibold text-accent"><Link href={workspaceHref("/onlyfans/inbox", { creatorId, accountId: account.accountId })}>Open inbox →</Link><Link href={workspaceHref("/onlyfans/launch", { creatorId, accountId: account.accountId })}>Launch control →</Link>{!agency ? <Link href={workspaceHref("/onlyfans/operations", { creatorId, accountId: account.accountId })}>Processing status →</Link> : null}</div>
   </div>;
+}
+
+function EffectiveAi({ cfg }: { cfg: SettingsRead["configuration"] }) {
+  return <Card className="mb-4 min-w-0 p-4" data-of-effective-ai><h2 className="flex items-center gap-1 font-semibold">Effective AI configuration<Info text="What this creator's AI replies use today, based on settings saved on this creator. Agency defaults are not shown because none are recorded here." /></h2>
+    <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><dt className="text-muted">Personality</dt><dd>{saved(!!cfg?.personaExcerpt)}</dd><dt className="text-muted">Language</dt><dd>{cfg?.language ? `${cfg.language}, ${saved(true).toLowerCase()}` : saved(false)}</dd><dt className="text-muted">Model</dt><dd>{saved(!!(cfg?.savedReplyModelOverride ?? cfg?.savedDefaultModel))}</dd></dl>
+    {cfg?.issues.length ? <ul className="mt-4 list-disc space-y-1 pl-4 text-xs text-muted">{cfg.issues.map(issue => <li key={issue}>{CONFIG_ISSUES[issue]}</li>)}</ul> : null}
+  </Card>;
 }
 
 function WorkspaceBody({ data, contentEditable = false, settingsSection }: { data: WorkspaceRead; contentEditable?: boolean; settingsSection?: "personality" | "replies" }) {
@@ -72,8 +81,8 @@ function WorkspaceBody({ data, contentEditable = false, settingsSection }: { dat
       <dt className="text-muted">Account processing</dt><dd>{yesNo(data.runtimeEnabled)}</dd><dt className="text-muted">Delivery permission</dt><dd>{data.deliveryPolicy ? yesNo(data.deliveryPolicy.enabled) : "Not configured"}</dd><dt className="text-muted">Media permission</dt><dd>{data.deliveryPolicy ? yesNo(data.deliveryPolicy.mediaEnabled) : "Not configured"}</dd><dt className="text-muted">Used allowance</dt><dd>{data.deliveryPolicy ? `${data.deliveryPolicy.usedUnits} / ${data.deliveryPolicy.limitUnits}` : "Not configured"}</dd>
     </dl></Card> : null}
     {cfg ? <>
-      {settingsSection !== "personality" ? <Card className="min-w-0 p-4"><h2 className="font-semibold">Saved model and language</h2><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><dt className="text-muted">Default model</dt><dd className="break-all">{cfg.savedDefaultModel ?? "Not saved"}</dd><dt className="text-muted">Reply override</dt><dd className="break-all">{cfg.savedReplyModelOverride ?? "No saved override"}</dd><dt className="text-muted">Account language</dt><dd>{cfg.language ?? "No account override"}</dd><dt className="text-muted">Daily model cap per provider</dt><dd>{formatRecordedMoney(cfg.dailyModelCapCents, "USD")}</dd></dl><p className="mt-4 text-xs text-muted">Saved choices do not verify model credentials or a successful provider call.</p></Card> : null}
-      {settingsSection !== "replies" ? <Card className="min-w-0 p-4"><h2 className="font-semibold">Creator persona{cfg.personaTruncated ? " excerpt" : ""}</h2><p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted">{cfg.personaExcerpt || "Not saved."}</p><dl className="mt-4 space-y-3">{cfg.creatorFacts.map(fact => <div key={fact.label}><dt className="text-xs text-muted">{fact.label}</dt><dd className="mt-1 break-words text-sm">{fact.value}</dd></div>)}</dl></Card> : null}
+      {settingsSection !== "personality" ? <Card className="min-w-0 p-4"><h2 className="font-semibold">Saved model and language</h2><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><dt className="text-muted">Reply model</dt><dd>{saved(!!(cfg.savedReplyModelOverride ?? cfg.savedDefaultModel))}</dd><dt className="text-muted">Account language</dt><dd>{cfg.language ?? "No account override"}</dd><dt className="text-muted">Daily model cap per provider</dt><dd>{formatRecordedMoney(cfg.dailyModelCapCents, "USD")}</dd></dl><details className="mt-3 text-sm"><summary className="cursor-pointer font-semibold">Advanced</summary><dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3"><dt className="text-muted">Default model</dt><dd className="break-all">{cfg.savedDefaultModel ?? "Not saved"}</dd><dt className="text-muted">Reply override</dt><dd className="break-all">{cfg.savedReplyModelOverride ?? "No saved override"}</dd></dl></details><p className="mt-4 text-xs text-muted">Saved choices do not verify model credentials or a successful provider call.</p></Card> : null}
+      {settingsSection !== "replies" ? <Card className="min-w-0 p-4"><h2 className="font-semibold">Creator persona{cfg.personaTruncated ? " excerpt" : ""}</h2><p className="mt-3 whitespace-pre-wrap break-words text-sm text-muted">{cfg.personaExcerpt || "Not provided"}</p><dl className="mt-4 space-y-3">{cfg.creatorFacts.map(fact => <div key={fact.label}><dt className="text-xs text-muted">{fact.label}</dt><dd className="mt-1 break-words text-sm">{fact.value || "Not provided"}</dd></div>)}</dl></Card> : null}
       {settingsSection !== "personality" ? <Card className="min-w-0 p-4"><h2 className="font-semibold">Saved on-request sales permissions</h2><dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm"><dt className="text-muted">Media offers</dt><dd>{yesNo(cfg.salesPermissions.pack_send_enabled)}</dd><dt className="text-muted">Offers on request</dt><dd>{yesNo(cfg.salesPermissions.pack_on_ask_enabled)}</dd><dt className="text-muted">Qualification gate</dt><dd>{yesNo(cfg.salesPermissions.qualification_gate_enabled)}</dd></dl>{cfg.issues.length ? <ul className="mt-4 list-disc space-y-1 pl-4 text-xs text-muted">{cfg.issues.map(issue => <li key={issue}>{CONFIG_ISSUES[issue]}</li>)}</ul> : null}</Card> : null}
     </> : <Card className="p-4 text-sm text-muted">No creator configuration is saved.</Card>}
   </div>;

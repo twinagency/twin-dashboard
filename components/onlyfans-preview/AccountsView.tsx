@@ -8,6 +8,7 @@
 // its creator grid. Nothing here invents a second visual language.
 
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
+import PlatformIcon from "@/components/PlatformIcon";
 import Link from "next/link";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -22,6 +23,7 @@ import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
 import ConnectionEditor, { RegisterConnection } from "./ConnectionEditor";
 import CreatorPortrait from "./CreatorPortrait";
+import CreatorHub from "./CreatorHub";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -44,7 +46,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} large />
         <div className="min-w-0">
           <div className="of-account-name">{account.binding.creatorName}</div>
-          <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans</span>
+          <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><PlatformIcon platform="onlyfans" size={22} />OnlyFans</span>
         </div>
       </div>
 
@@ -162,7 +164,7 @@ export default function AccountsView({
 
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">
-      <CreatorPlatformHeading title="Accounts" description={creatorName
+      <CreatorPlatformHeading title="Creators" description={creatorName
         ? `Manage ${creatorName}’s OnlyFans accounts and choose how you want to reply.`
         : "Your creator accounts, connections and reply settings, together."} />
       {showPreviewChrome ? <span data-of-source-note>{sourceLabel}</span> : null}
@@ -185,6 +187,7 @@ export default function AccountsView({
         label="accounts"
         render={(list) => (
           <>
+            <CreatorHub accounts={list} />
             <div className="of-account-counts">
               <Stat label="Accounts" value={String(list.length)} />
               <Stat label="Connected" value={String(connected)} />

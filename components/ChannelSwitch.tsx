@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "@/components/NavigationLink";
+import PlatformIcon from "@/components/PlatformIcon";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -47,16 +48,7 @@ export default function ChannelSwitch({
           data-channel-option={channel.channel}
           className="workspace-channel-option"
         >
-          {channel.channel === "all" ? (
-            <svg className="workspace-channel-logo" aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="7" height="7" rx="2" />
-              <rect x="14" y="3" width="7" height="7" rx="2" />
-              <rect x="3" y="14" width="7" height="7" rx="2" />
-              <rect x="14" y="14" width="7" height="7" rx="2" />
-            </svg>
-          ) : (
-            <img className="workspace-channel-logo" src={"/brand/platforms/" + channel.channel + ".svg"} width="28" height="28" alt="" />
-          )}
+          <PlatformIcon platform={channel.channel === "telegram" || channel.channel === "onlyfans" ? channel.channel : "all"} size={22} className="workspace-channel-logo" />
           <span>{channel.label}</span>
           {moxyTelegram && channel.channel === "onlyfans" && <span className="workspace-channel-new" aria-label="New">New</span>}
         </Link>

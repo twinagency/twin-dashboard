@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRequire } from "node:module";
@@ -43,7 +44,51 @@ async function main() {
   />);
   assert.match(inboxMarkup, /Financial evidence unavailable\./,
     "Asset-level bundle prices cannot establish a fan's canonical spend");
-  assert.match(inboxMarkup, /<strong>3<\/strong><span>Owned media items<\/span>/);
+  assert.match(inboxMarkup, /Known owned items: 3/, "Owned items stay visible as a known count");
+  assert.match(inboxMarkup, /Ownership not fully verified, payment history incomplete/, "Missing financials must not read as authoritative ownership");
+  assert.doesNotMatch(inboxMarkup, /<strong>3<\/strong><span>Owned media items<\/span>/, "No authoritative owned count without complete coverage");
+  assert.doesNotMatch(inboxMarkup, /<strong>0<\/strong><span>Owned media items/);
+  const incomplete = renderToStaticMarkup(<InboxView
+    accountsState={{ status: "ready", data: [fixtureAccount] }} activeAccount={fixtureAccount} activeAccountId={fixtureAccount.accountId}
+    onSelectAccount={() => {}} conversations={{ status: "ready", data: { items: [bundledDetail.summary], nextCursor: null } }}
+    selectedConversationId={bundledDetail.conversationId} onSelectConversation={() => {}}
+    detailState={{ status: "ready", data: { ...bundledDetail, ownedMedia: [], financials: { version: "of-fan-financials.v1", totals: [], coverageComplete: false, coverageAt: null, commerceHeld: false } } }} viewer={operatorViewer()} onCommand={() => {}}
+    commandResult={null} nextCursor={null} loadingMore={false} onLoadMore={() => {}} showPreviewChrome={false}
+  />);
+  assert.match(incomplete, /Known owned items: 0/); assert.match(incomplete, /Ownership not fully verified/);
+  const complete = renderToStaticMarkup(<InboxView
+    accountsState={{ status: "ready", data: [fixtureAccount] }} activeAccount={fixtureAccount} activeAccountId={fixtureAccount.accountId}
+    onSelectAccount={() => {}} conversations={{ status: "ready", data: { items: [bundledDetail.summary], nextCursor: null } }}
+    selectedConversationId={bundledDetail.conversationId} onSelectConversation={() => {}}
+    detailState={{ status: "ready", data: { ...bundledDetail, financials: { version: "of-fan-financials.v1", totals: [], coverageComplete: true, coverageAt: "2026-10-28T00:00:00Z", commerceHeld: false } } }} viewer={operatorViewer()} onCommand={() => {}}
+    commandResult={null} nextCursor={null} loadingMore={false} onLoadMore={() => {}} showPreviewChrome={false}
+  />);
+  assert.match(complete, /<strong>3<\/strong><span>Owned media items<\/span>/, "A complete scan shows the authoritative count");
+  assert.doesNotMatch(complete, /Ownership not fully verified/);
+  // Dossier order: identity, reply control, categorised fan memory (#323), spend and ownership, then collapsed history.
+  const order = ["Fan profile", "data-of-relationship", "Reply control", ">Fan memory<", "Spend and ownership", "Edit fan notes and facts", "History and sync details"].map(label => inboxMarkup.indexOf(label));
+  assert(order.every(index => index >= 0), "Every dossier section renders: " + order.join(","));
+  assert.deepEqual([...order].sort((a, b) => a - b), order, "Dossier sections follow the agreed order");
+  const historyTag = inboxMarkup.match(/<details class="of-history-details"[^>]*>/)?.[0] ?? "";
+  assert(historyTag && !/\sopen(=|\s|>)/.test(historyTag), "History and sync details start collapsed");
+  assert.doesNotMatch(inboxMarkup, /Archive messages|Archive pages|Retrying \/ deferred|Stored messages/, "Diagnostics never sit in the open dossier");
+  assert.match(inboxMarkup, /of-fan-sidebar flex min-w-0 flex-col/, "Sidebar column can shrink below its content");
+  const css = readFileSync(new URL("../components/onlyfans-preview/InboxView.module.css", import.meta.url), "utf8");
+  assert.match(css, /of-fan-sidebar\) \{ overflow-wrap:anywhere/, "Long ids and values wrap instead of overflowing");
+  assert.match(css, /clamp\(320px,26vw,380px\)/, "Deliberate fan panel width");
+  assert.match(css, /of-fan-sidebar > \*\)[^{]*\{ min-width:0/, "Sidebar children have min-width:0");
+  const { MemoryDiagnostics, memoryState, MemoryStateView } = await import("../components/onlyfans-launch/memory/BMemoryPanel");
+  const progress = { schemaVersion: "of-history-memory-progress.v1", algorithm: "a", storedMessages: 20, processedCurrentMessages: 20, pendingMessages: 0, storedMemoryComplete: true, providerHistoryComplete: null, revision: 1, oldestStoredAt: null, newestStoredAt: null, lastProcessedAt: "2026-10-28T00:00:00Z" } as never;
+  const recovery = { schemaVersion: "of-history-recovery.v1", accountId: "a", fanId: "1", status: "incomplete", discoveryComplete: false, conversationsDiscovered: 3, conversationsComplete: 1, conversationsRetrying: 1, conversationsDeferredForLiveInput: 0, pagesCommitted: 4, messagesObserved: 0, messagesAdded: 0, totalMessages: null, percentComplete: null, recentRecoveryNeeded: true } as never;
+  const diagnostics = renderToStaticMarkup(<MemoryDiagnostics progress={progress} recovery={recovery} />);
+  for (const label of ["Archive messages", "Archive pages", "Retrying / deferred", "Stored messages"]) assert.match(diagnostics, new RegExp(label.replace("/", "\\/")));
+  const memory = { facts: {}, summaries: {}, overrides: {}, interactions: [] } as never;
+  assert.equal(memoryState({ ...(progress as object), processedCurrentMessages: 0, pendingMessages: 20, storedMemoryComplete: false, lastProcessedAt: null } as never, recovery, memory).key, "not_processed");
+  assert.equal(memoryState({ ...(progress as object), processedCurrentMessages: 10, pendingMessages: 10, storedMemoryComplete: false } as never, recovery, memory).key, "partial");
+  assert.equal(memoryState(progress, recovery, memory).key, "partial", "Incomplete provider history stays partial");
+  assert.equal(memoryState(progress, { ...(recovery as object), status: "complete" } as never, memory).key, "no_facts");
+  assert.equal(memoryState(progress, { ...(recovery as object), status: "complete" } as never, { ...(memory as object), facts: { home_city: { value: "Oslo", source: "history" } } } as never).key, "current");
+  assert.match(renderToStaticMarkup(<MemoryStateView state={memoryState(progress, recovery, memory)} />), /Not reported/);
   assert.doesNotMatch(inboxMarkup, /Recorded purchases|Recent purchases|USD 30\.00/,
     "Three owned assets from one bundle must never be presented as three financial transactions");
   assert.equal((inboxMarkup.match(/Bundle item [123]/g) || []).length, 3, "All owned media stay visible");

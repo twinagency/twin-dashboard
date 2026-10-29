@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
+import PlatformIcon from "@/components/PlatformIcon";
 import { isMoxy } from "@/lib/agency-brand";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronRight, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
@@ -117,7 +118,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     {notice&&<p role="status" className={styles.notice}>{notice}{notice==="Sign in to your creator account again."&&<> <Link href="/creator/login">Sign in again</Link></>}</p>}
     <div className={styles.cards}>
       <section className={styles.card} data-platform-onlyfans>
-        <div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={48} height={48} alt="" aria-hidden="true"/><h2>OnlyFans</h2>
+        <div className={styles.cardBrand}><PlatformIcon platform="onlyfans" size={48} /><h2>OnlyFans</h2>
           {statusFresh&&verified.length>0&&!needsReconnect&&!retrying&&<span className={styles.badge} data-state="connected"><Check size={13}/>Connected</span>}
           {statusFresh&&retrying&&<span className={styles.badge} data-state="attention">Retrying connection</span>}
           {statusFresh&&paused&&<span className={styles.badge} data-state="attention">Paused</span>}
@@ -145,7 +146,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
         })}
       </section>
       <section className={styles.card} data-platform-telegram>
-        <div className={styles.cardBrand}><img src="/brand/platforms/telegram.svg" width={48} height={48} alt="" aria-hidden="true"/><h2>Telegram</h2>
+        <div className={styles.cardBrand}><PlatformIcon platform="telegram" size={48} /><h2>Telegram</h2>
           {data.telegram.configured&&<span className={styles.badge} data-state={data.telegram.status==="active"?"connected":"attention"}>{data.telegram.status==="active"?<><Check size={13}/>Connected</>:"Paused"}</span>}
         </div>
         <div className={styles.cardCopy}><h3>Your Telegram space.</h3><p>{data.telegram.configured?data.telegram.handle?`Your Telegram profile: @${data.telegram.handle.replace(/^@/,"")}`:"Your Telegram profile is configured.":"Connect your existing bot or set up your first one."}</p></div>
@@ -156,7 +157,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     </div>
     <footer className={styles.footer}><p><Sparkles size={19} aria-hidden="true"/>Your profile, content and agency stay together.</p><div><button className={styles.textLink} disabled={!!busy||refreshing} onClick={()=>void refresh()}><RefreshCw size={14} className={refreshing?styles.spinner:undefined}/>{refreshing?"Refreshing…":"Refresh status"}</button><Link className={styles.textLink} href="/creator">Back to my space<ArrowRight size={14}/></Link></div></footer>
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="connect-heading" onCancel={closeConnection} onClose={()=>{if(connecting)closeConnection();}}>
-      {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
+      {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><PlatformIcon platform="onlyfans" size={40} /><h2 id="connect-heading">Connect OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
         <div className={styles.connectionContent}>{data.onlyfans.signIn==="hosted"?<HostedConnect key={`${data.profileId||"none"}:${connectingAccount||"new"}`} profileId={data.profileId||""} accountId={connectingAccount} disabled={data.readOnly||!data.profileId} onChanged={refresh}/>:<BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>}</div>
         <details className={styles.assisted}><summary>Agency-assisted connection</summary><SessionConnect disabled={data.readOnly||!data.profileId} onChanged={refresh}/></details>
       </div>}

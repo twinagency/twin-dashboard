@@ -9,6 +9,9 @@ import { Info, inputCls } from "@/components/clone/fields";
 import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, parseCampaignAck, parseCampaignDetail, parseCampaignList,
   validCampaignCreate, type Campaign, type CampaignAction, type CampaignChange, type CampaignCreate, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
 import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
+import OnlyFansAvatar from "./OnlyFansAvatar";
+import { inboxSearchParams } from "@/lib/onlyfans/inbox-search";
+import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
 
 type Write = { kind: "create"; body: CampaignCreate } | { kind: "change"; campaignId: string; body: CampaignChange };
@@ -33,7 +36,14 @@ const REASONS: Record<string, string> = {
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
 
-export default function CampaignManager({ accountId, readOnly = false }: { accountId: string; readOnly?: boolean }) {
+/** The sender is always explicit. Without exactly one chosen account nothing can be queued. */
+export default function CampaignManager({ accountId, sender = null, readOnly = false }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean }) {
+  if (!accountId) return <div className="space-y-5" data-of-campaign-manager><Card className="p-4"><h2 className="font-semibold">New campaign</h2><p role="status" data-of-campaign-sender className="mt-2 text-sm font-medium">{NO_SENDER_TEXT}</p></Card></div>;
+  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} />;
+}
+
+function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId: string; sender: Sender | null; readOnly: boolean }) {
+  const initialDraft = useRef(recallDraft(accountId)).current;
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
   const pathname = usePathname();
@@ -45,21 +55,24 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [listReady, setListReady] = useState(false);
   const [notice, setNotice] = useState(""), [retry, setRetry] = useState<Write | null>(null);
-  const [name, setName] = useState(""), [body, setBody] = useState(""), [scheduled, setScheduled] = useState("");
-  const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">("explicit");
-  const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set());
+  const [name, setName] = useState(initialDraft.name), [body, setBody] = useState(initialDraft.body), [scheduled, setScheduled] = useState(initialDraft.scheduled);
+  const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">(initialDraft.audienceKind);
+  const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set(initialDraft.fanIds));
+  const [fanQuery, setFanQuery] = useState(initialDraft.query), [appliedQuery, setAppliedQuery] = useState(initialDraft.query), [fansLoaded, setFansLoaded] = useState(false), fanSeq = useRef(0);
   const [fanCursor, setFanCursor] = useState<string | null>(null), [fansBusy, setFansBusy] = useState(false), [fanError, setFanError] = useState("");
   const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]), [catalogueCursor, setCatalogueCursor] = useState<string | null>(null);
-  const [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState(""), [catalogItemId, setCatalogItemId] = useState("");
+  const [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState(""), [catalogItemId, setCatalogItemId] = useState(initialDraft.catalogItemId);
+  useEffect(() => { rememberDraft(accountId, { name, body, scheduled, audienceKind, fanIds: [...fanIds], catalogItemId, query: fanQuery }); }, [accountId, name, body, scheduled, audienceKind, fanIds, catalogItemId, fanQuery]);
+  useEffect(() => { const timer = window.setTimeout(() => setAppliedQuery(fanQuery.trim()), 300); return () => window.clearTimeout(timer); }, [fanQuery]);
   const catalogueRequest = useRef(false);
   const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const sessionLost = useCallback(() => {
     if (!active.current) return;
     sessionDenied.current = true;
-    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null);
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
-  }, [router]);
+  }, [router, accountId]);
   const read = useCallback(async (id?: string | null) => {
     try {
       const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
@@ -72,17 +85,20 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
       return true;
     } catch (error) { if (active.current) setNotice(error instanceof Error ? error.message : "Campaigns could not be refreshed."); return false; }
   }, [endpoint, accountId, sessionLost]);
-  const loadFans = useCallback(async (cursor: string | null = null) => {
-    if (fanRequest.current) return; fanRequest.current = true; setFansBusy(true); setFanError("");
+  const loadFans = useCallback(async (cursor: string | null = null, query = "") => {
+    if (cursor && fanRequest.current) return;
+    const seq = ++fanSeq.current; fanRequest.current = true; setFansBusy(true); setFanError("");
+    if (!cursor) { setFansLoaded(false); setFans([]); setFanCursor(null); }
     try {
-      const response = await readWithRecovery(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
+      const params = inboxSearchParams(false, query); if (cursor) params.set("cursor", cursor);
+      const response = await readWithRecovery(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${params.size ? `?${params}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
       if ([401, 403].includes(response.status)) { sessionLost(); return; }
-      if (!response.ok) throw new Error(`Saved conversations could not be loaded (HTTP ${response.status}) after bounded recovery. Retry; if this persists, ask the release owner to inspect the account list request.`);
+      if (!response.ok) throw new Error(`Synchronized conversations could not be loaded (HTTP ${response.status}) after bounded recovery. Retry; if this persists, ask the release owner to inspect the account list request.`);
       const value = await response.json();
       if (!Array.isArray(value.page?.items) || value.page.items.some((item: ConversationSummary) => item.accountId !== accountId || typeof item.conversationId !== "string" || !item.fan || typeof item.fan.displayName !== "string")) throw new Error("The audience response was invalid.");
-      if (active.current && !sessionDenied.current) { setFans(previous => cursor ? [...new Map([...previous, ...value.page.items].map(item => [item.conversationId, item])).values()] : value.page.items); setFanCursor(typeof value.page.nextCursor === "string" ? value.page.nextCursor : null); }
-    } catch (error) { if (active.current) setFanError(error instanceof Error ? error.message : "Saved conversations could not be loaded."); }
-    finally { fanRequest.current = false; if (active.current) setFansBusy(false); }
+      if (active.current && !sessionDenied.current && seq === fanSeq.current) { setFans(previous => cursor ? mergePage(previous, value.page.items) : value.page.items); setFanCursor(typeof value.page.nextCursor === "string" ? value.page.nextCursor : null); setFansLoaded(true); }
+    } catch (error) { if (active.current && seq === fanSeq.current) setFanError(error instanceof Error ? error.message : "Synchronized conversations could not be loaded."); }
+    finally { if (seq === fanSeq.current) { fanRequest.current = false; if (active.current) setFansBusy(false); } }
   }, [accountId, sessionLost]);
   const loadCatalogue = useCallback(async (cursor: string | null = null) => {
     if (catalogueRequest.current) return; catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
@@ -96,7 +112,8 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
     } catch (error) { if (active.current) setCatalogueError(error instanceof Error ? error.message : "The content catalogue could not be loaded."); }
     finally { catalogueRequest.current = false; if (active.current) setCatalogueBusy(false); }
   }, [accountId, sessionLost]);
-  useEffect(() => { void read().finally(() => { if (active.current) setLoading(false); }); void loadFans(); void loadCatalogue(); }, [read, loadFans, loadCatalogue]);
+  useEffect(() => { void read().finally(() => { if (active.current) setLoading(false); }); void loadCatalogue(); }, [read, loadCatalogue]);
+  useEffect(() => { void loadFans(null, appliedQuery); }, [loadFans, appliedQuery]);
   useEffect(() => { selection.current = selected; setDetail(null); if (selected) void read(selected); }, [selected, read]);
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
   async function write(request: Write) {
@@ -109,7 +126,7 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
       else if (response.ok) {
         const ack = parseCampaignAck(await response.json(), { accountId, ...(request.kind === "change" ? { campaignId: request.campaignId, action: request.body.action, expectedRevision: request.body.expectedRevision } : {}) });
         if (ack && active.current) { uncertain = false; setSelected(ack.campaignId); selection.current = ack.campaignId;
-          if (request.kind === "create") { setName(""); setBody(""); setScheduled(""); setFanIds(new Set()); setCatalogItemId(""); }
+          if (request.kind === "create") { setName(""); setBody(""); setScheduled(""); setFanIds(new Set()); setCatalogItemId(""); setFanQuery(""); forgetDraft(accountId); }
           setNotice(request.kind === "create" ? "Campaign saved. Recipient delivery is tracked below." : "Campaign change saved. Current delivery is being refreshed."); }
       }
     } catch { /* Keep exact original write identity for an explicit retry. */ }
@@ -119,12 +136,12 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
     }
   }
   function submit(event: FormEvent) {
-    event.preventDefault(); if (busy || retry || denied || readOnly) return;
+    event.preventDefault(); if (busy || retry || denied || readOnly || !sender) return;
     let scheduledAt: string | null = null;
     try { scheduledAt = scheduled ? new Date(scheduled).toISOString() : null; } catch { setNotice("Choose a valid schedule."); return; }
     const request: CampaignCreate = { requestKey: crypto.randomUUID(), name, body, audience: audienceKind === "all_known" ? { kind: "all_known" } : { kind: "explicit", conversationIds: [...fanIds].sort() }, scheduledAt,
       ...(catalogItemId ? { catalogItemId: Number(catalogItemId) } : {}) };
-    if (!validCampaignCreate(request)) { setNotice("Enter a name, message and at least one saved conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
+    if (!validCampaignCreate(request)) { setNotice("Enter a name, message and at least one synchronized conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
     void write({ kind: "create", body: request });
   }
   const locked = busy || !!retry || denied || readOnly;
@@ -132,21 +149,29 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
   const actionAllowed = (action: CampaignAction) => !!campaign && (action === "pause" ? ["scheduled", "running"].includes(campaign.status) : action === "resume" ? campaign.status === "paused" : !["cancelled", "completed"].includes(campaign.status));
   return <div className="space-y-5" data-of-campaign-manager>
     <Card className={twinRefresh ? "twin-campaign-compose" : "p-4"}><h2 className="font-semibold">New campaign</h2>
+      <p data-of-campaign-sender className="mt-2 text-sm font-medium">{senderLine(sender)}</p>
       <p className="mt-1 text-xs leading-5 text-muted">Each recipient receives an individual message through the shared delivery queue. Pausing stops further recipients; an attempt already in progress may finish.</p>
       <form className="mt-4 space-y-4" onSubmit={submit}><fieldset disabled={locked} className="space-y-4">
         <label className="block text-sm font-medium">Campaign name<input className={`${inputClass} mt-1`} value={name} maxLength={128} onChange={event => setName(event.target.value)} required /></label>
         <label className="block text-sm font-medium">Message<textarea data-of-campaign-body className={`${inputClass} mt-1 min-h-28`} value={body} onChange={event => setBody(event.target.value)} required /><span className="mt-1 block text-xs font-normal text-muted">{new TextEncoder().encode(body).length.toLocaleString()} / 20,000 bytes</span></label>
         <div><label className="block text-sm font-medium">Attach saved paid content<select data-of-campaign-offer className={`${inputClass} mt-1`} value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)}><option value="">Text only</option>{catalogue.filter(item => item.readiness === "terms_checked" && item.priceCents !== null && item.priceCents >= 300 && item.priceCents <= 20000).map(item => <option key={item.itemId} value={item.itemId}>{item.label} · {formatRecordedMoney(item.priceCents!, item.currency)}</option>)}</select></label><p className="mt-1 text-xs leading-5 text-muted">The saved item’s price, media and free previews are frozen when the campaign is created and checked again before delivery. Change saved prices from Content.</p>{catalogueError ? <p className="mt-2 text-xs text-muted" role="status">{catalogueError} Text campaigns remain available.</p> : null}{catalogueCursor || catalogueError ? <button type="button" className={`${buttonClass} mt-2`} disabled={locked || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more content" : "Retry catalogue"}</button> : null}</div>
         <label className="block text-sm font-medium">Send time<input type="datetime-local" className={`${inputClass} mt-1 max-w-sm`} value={scheduled} onChange={event => setScheduled(event.target.value)} /><span className="mt-1 block text-xs font-normal text-muted">Leave empty to queue now. Scheduled times use your device timezone.</span></label>
-        <div><h3 className="text-sm font-medium">Audience</h3><div className="mt-2 flex flex-wrap gap-4 text-sm">
+        <div><h3 className="flex items-center gap-1 text-sm font-medium">Audience<Info text={POPULATION_HINT} /></h3><p className="mt-1 text-xs text-muted" data-of-campaign-population>{POPULATION_TEXT}</p><div className="mt-2 flex flex-wrap gap-4 text-sm">
           <label className="flex items-center gap-2"><input type="radio" name={`audience-${accountId}`} checked={audienceKind === "explicit"} onChange={() => setAudienceKind("explicit")} />Choose conversations</label>
-          <label className="flex items-center gap-2"><input type="radio" name={`audience-${accountId}`} checked={audienceKind === "all_known"} onChange={() => setAudienceKind("all_known")} />All saved conversations</label></div>
-          <p className="mt-2 text-xs leading-5 text-muted">The audience is a snapshot of locally synchronized conversations, up to 1,000 recipients. It may not include every OnlyFans subscriber. No-contact exclusions and delivery holds are checked again before sending.</p>
-          {audienceKind === "explicit" ? <div className="mt-3"><p className="mb-2 text-xs text-muted">{fanIds.size} selected</p><div className="max-h-56 overflow-y-auto rounded-lg border border-line">{fans.map(fan => <label key={fan.conversationId} className="flex items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0"><input type="checkbox" data-of-campaign-recipient={fan.conversationId} checked={fanIds.has(fan.conversationId)} disabled={locked || (fanIds.size >= 1000 && !fanIds.has(fan.conversationId))} onChange={event => setFanIds(previous => { const next = new Set(previous); event.target.checked ? next.add(fan.conversationId) : next.delete(fan.conversationId); return next; })} /><span className="min-w-0 flex-1 truncate">{fan.fan.displayName}</span><span className="text-xs text-muted">{fan.automationMode === "no_contact" ? "No contact" : fan.fan.shortRef}</span></label>)}{!fans.length ? <p className="p-3 text-xs text-muted">{fansBusy ? "Loading saved conversations…" : "No saved conversations loaded."}</p> : null}</div>{fanError ? <p role="alert" className="mt-2 text-xs text-muted">{fanError}</p> : null}{fanCursor || fanError ? <button type="button" className={`${buttonClass} mt-2`} disabled={fansBusy || locked} onClick={() => void loadFans(fanCursor)}>{fansBusy ? "Loading…" : fanCursor ? "Load more conversations" : "Retry audience"}</button> : null}</div> : null}
+          <label className="flex items-center gap-2"><input type="radio" name={`audience-${accountId}`} checked={audienceKind === "all_known"} onChange={() => setAudienceKind("all_known")} />{ALL_MODE_LABEL}<Info text={ALL_MODE_HINT} /></label></div>
+          {audienceKind === "explicit" ? <div className="mt-3" data-of-campaign-audience>
+            <input type="search" data-of-campaign-search aria-label="Search conversations" className={`${inputClass} mb-2`} placeholder="Search fan name, username or ID" maxLength={200} value={fanQuery} onChange={event => setFanQuery(event.target.value)} />
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted"><span data-of-campaign-selected>{fanIds.size.toLocaleString()} selected{fanIds.size >= AUDIENCE_LIMIT ? " (limit reached)" : ""}</span>
+              <button type="button" className={`${buttonClass} !px-2 !py-1 !text-xs`} disabled={locked || !fans.length} onClick={() => setFanIds(previous => selectPage(previous, fans))}>Select this page</button>
+              <button type="button" className={`${buttonClass} !px-2 !py-1 !text-xs`} disabled={locked || !fanIds.size} onClick={() => setFanIds(clearSelection())}>Clear</button></div>
+            <div className="overflow-y-auto rounded-lg border border-line" style={{ maxHeight: "min(28rem, 60vh)" }}>{fans.map(fan => <label key={fan.conversationId} className="flex items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0"><input type="checkbox" data-of-campaign-recipient={fan.conversationId} checked={fanIds.has(fan.conversationId)} disabled={locked || (fanIds.size >= AUDIENCE_LIMIT && !fanIds.has(fan.conversationId))} onChange={event => setFanIds(previous => { const next = new Set(previous); event.target.checked ? next.add(fan.conversationId) : next.delete(fan.conversationId); return next; })} /><OnlyFansAvatar name={fan.fan.displayName} avatarUrl={fan.fan.avatarUrl} id={fan.fan.fanId} className="h-8 w-8 text-[11px]" /><span className="min-w-0 flex-1"><span className="block truncate">{fan.fan.displayName}</span><span className="block truncate text-xs text-muted">{fan.fan.username ? `@${fan.fan.username}` : fan.fan.shortRef}</span></span><span className="shrink-0 text-right text-xs text-muted">{fan.automationMode === "no_contact" ? <span className="block">No contact</span> : null}{ageText(fan.lastActivityAt)}</span></label>)}
+              {!fans.length ? <p className="p-3 text-xs text-muted" role="status" data-of-campaign-audience-state={fansBusy ? "loading" : fanError ? "error" : fansLoaded ? "empty" : "idle"}>{fansBusy ? "Loading synchronized conversations…" : fanError ? "Conversations could not be loaded." : fansLoaded ? (appliedQuery ? "No synchronized conversation matches this search." : "No synchronized conversations yet for this account.") : "No conversations loaded."}</p> : null}</div>
+            <p className="mt-2 flex flex-wrap items-center gap-1 text-xs text-muted" data-of-campaign-loaded>Showing {fans.length.toLocaleString()} loaded conversations{fanCursor ? ". More are available, load more to see them." : fansLoaded && !fanError ? ". That is every match." : "."}{lastSyncAt(fans) ? ` Last synchronized ${ageText(lastSyncAt(fans))}.` : ""}<Info text="Selected conversations stay selected while you search or load more pages. Total subscribers and eligible recipients are not known here." /></p>
+            {fanError ? <p role="alert" className="mt-2 text-xs text-muted">{fanError}</p> : null}{fanCursor || fanError ? <button type="button" className={`${buttonClass} mt-2`} disabled={fansBusy || locked} onClick={() => void (fanCursor ? loadFans(fanCursor, appliedQuery) : loadFans(null, appliedQuery))}>{fansBusy ? "Loading…" : fanCursor ? "Load more conversations" : "Retry audience"}</button> : null}</div> : null}
         </div>
-        <button data-of-create-campaign type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={locked || !name.trim() || !body.trim() || (audienceKind === "explicit" && !fanIds.size)}>{busy ? "Saving…" : scheduled ? "Schedule campaign" : "Queue campaign"}</button>
+        <button data-of-create-campaign type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={!canQueue({ accountId: sender ? accountId : null, locked, name, body, audienceKind, selected: fanIds.size })}>{busy ? "Saving…" : scheduled ? "Schedule campaign" : "Queue campaign"}</button>
       </fieldset></form>
-      {twinRefresh && <aside className="twin-campaign-preview" aria-label="Campaign preview"><h3>Message preview</h3><p className="twin-help">OnlyFans · {name || "Untitled campaign"}</p><div className="twin-preview-bubble">{body || "Your message will appear here as you type."}</div><dl><div><dt>Saved content</dt><dd>{catalogue.find(item => item.itemId === catalogItemId)?.label || "Text only"}</dd></div><div><dt>Audience</dt><dd>{audienceKind === "explicit" ? `${fanIds.size} selected conversations` : "All saved conversations, up to 1,000"}</dd></div><div><dt>Send time</dt><dd>{scheduled ? "Scheduled for your selected time" : "Queues when you submit"}</dd></div></dl><p className="twin-help">This preview does not send a message. Review the audience and send time before submitting.</p></aside>}
+      {twinRefresh && <aside className="twin-campaign-preview" aria-label="Campaign preview"><h3>Message preview</h3><p className="twin-help">OnlyFans · {name || "Untitled campaign"}</p><div className="twin-preview-bubble">{body || "Your message will appear here as you type."}</div><dl><div><dt>Saved content</dt><dd>{catalogue.find(item => item.itemId === catalogItemId)?.label || "Text only"}</dd></div><div><dt>Audience</dt><dd>{audienceKind === "explicit" ? `${fanIds.size} selected conversations` : "All synchronized conversations, up to 1,000 (refused above that)"}</dd></div><div><dt>Send time</dt><dd>{scheduled ? "Scheduled for your selected time" : "Queues when you submit"}</dd></div></dl><p className="twin-help">This preview does not send a message. Review the audience and send time before submitting.</p></aside>}
     </Card>
     {notice ? <div role="status" className="rounded-xl border border-line bg-elev p-4 text-sm" data-of-campaign-notice>{notice}{retry ? <button type="button" className={`${buttonClass} ml-3 bg-white`} disabled={busy} onClick={() => void write(retry)}>Retry same request</button> : null}</div> : null}
     <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved campaigns</h2><button className={buttonClass} disabled={busy || denied || loading} onClick={() => { void read(); if (selected) void read(selected); }}>Refresh</button></div>

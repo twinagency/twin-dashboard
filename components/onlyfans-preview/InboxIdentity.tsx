@@ -1,6 +1,6 @@
 "use client";
 import {createContext, useContext, useMemo, useState, type ReactNode} from "react";
-type Identity = {creatorId:string; creatorName:string; handle:string} | null;
+type Identity = {creatorId:string; creatorName:string; handle:string; avatarUrl?:string|null} | null;
 const Context = createContext<{identity:Identity; setIdentity:(identity:Identity)=>void}>({identity:null,setIdentity:()=>{}});
 export function InboxIdentityProvider({children}:{children:ReactNode}) {
  const [identity,setIdentity]=useState<Identity>(null);

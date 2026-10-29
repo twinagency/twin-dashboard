@@ -24,7 +24,7 @@ import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard
 
 import Link from "@/components/NavigationLink";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
@@ -276,25 +276,27 @@ function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNav
   const rowClass = "workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
   return (
     <>
-      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Your workspace</h2>
+      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-inherit opacity-60" style={{ fontSize: 10, lineHeight: "16px" }}>Your workspace</h2>
       <div className="space-y-1" data-channel-nav={channel.channel}>
-        {channel.nav.map((item) => {
+        {channel.nav.map((item, index) => {
+          const heading = item.group === "settings" && channel.nav[index - 1]?.group !== "settings"
+            ? <h2 key={`${item.key}-heading`} className="mb-1 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-inherit opacity-60" style={{ fontSize: 10, lineHeight: "16px" }} data-channel-nav-group="settings">Settings</h2>
+            : null;
           const icon = PATHS[item.icon] ?? PATHS.Dials;
           if (item.availability === "planned") {
             return (
-              <div key={item.key} title={item.note} aria-disabled="true" className={rowClass + " cursor-default text-white/45"}>
+              <Fragment key={item.key}>{heading}<div title={item.note} aria-disabled="true" className={rowClass + " cursor-default text-white/45"}>
                 <Icon d={icon} className="h-[18px] w-[18px] text-white/35" />
                 <span className="flex-1">{item.label}</span>
                 <span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Planned</span>
-              </div>
+              </div></Fragment>
             );
           }
           const itemPath = item.href.split("?")[0];
           const active = pathname === itemPath || pathname.startsWith(itemPath + "/");
           return (
-            <Link
-              key={item.key}
-              href={channel.channel === "onlyfans" ? workspaceHref(item.href, parseWorkspaceScope(params)) : item.href}
+            <Fragment key={item.key}>{heading}<Link
+              href={channel.channel === "onlyfans" && !item.combined ? workspaceHref(item.href, parseWorkspaceScope(params)) : item.href}
               onClick={onNavigate}
               title={item.note}
               data-channel-link={item.key}
@@ -303,7 +305,7 @@ function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNav
             >
               <Icon d={icon} className={"h-[18px] w-[18px] " + (active ? "text-white" : "text-[#9cbad3]")} />
               <span className="flex-1">{item.label}</span>
-            </Link>
+            </Link></Fragment>
           );
         })}
       </div>

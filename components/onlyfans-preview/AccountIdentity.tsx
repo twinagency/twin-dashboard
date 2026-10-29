@@ -6,6 +6,7 @@ import { useInboxIdentity } from "./InboxIdentity";
 export default function AccountIdentity({ account }: { account: OfAccount }) {
   const { setIdentity } = useInboxIdentity();
   const { creatorId, creatorName, handle } = account.binding;
-  useEffect(() => { setIdentity({ creatorId, creatorName, handle }); return () => setIdentity(null); }, [creatorId, creatorName, handle, setIdentity]);
+  const avatarUrl = account.creatorProfile?.avatarUrl ?? null;
+  useEffect(() => { setIdentity({ creatorId, creatorName, handle, avatarUrl }); return () => setIdentity(null); }, [creatorId, creatorName, handle, avatarUrl, setIdentity]);
   return null;
 }

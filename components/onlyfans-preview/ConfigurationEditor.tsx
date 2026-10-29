@@ -5,6 +5,7 @@ import { inputCls } from "@/components/clone/fields";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import FactFieldView from "./FactFieldView";
 import { StudioTabPanel } from "./StudioTabs";
 import { fanSelectionFromText } from "@/lib/onlyfans/activation";
 import { FACT_KEYS, parseConfiguration, parseConfigurationAck, validConfigurationRequest,
@@ -26,6 +27,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
   const [scopeMode, setScopeMode] = useState<"selected" | "all">("selected"), [scopeFans, setScopeFans] = useState("");
   const [dailyBudget, setDailyBudget] = useState("0"), [effort, setEffort] = useState("");
+  const [editingFacts, setEditingFacts] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(true);
   const [denied, setDenied] = useState(false);
   const [notice, setNotice] = useState("Loading editable configuration…");
@@ -147,16 +149,15 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
               : "Twin facts are unavailable or out of date. AI replies wait for synchronization."}
           </p>
           {!data.factsValid ? <p className="mt-1 text-xs text-muted">Saved facts need review before they can be edited.</p> : null}
-          <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">{data.factFields.map(field => <div key={field.key} className="min-w-0 text-sm">
-            <label>{field.label}
+          <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">{data.factFields.map(field => <div key={field.key} className="min-w-0">
+            <FactFieldView label={field.label} factKey={field.key} savedValue={data.creatorFacts[field.key] ?? ""} value={facts[field.key] ?? ""}
+              overridden={data.sharedFacts.overrideKeys.includes(field.key)} sharedState={data.sharedFacts.state} editing={editingFacts.has(field.key)}
+              readOnly={data.readOnlyFacts.includes(field.key)} onEdit={() => setEditingFacts(previous => new Set(previous).add(field.key))}>
               {data.readOnlyFacts.includes(field.key)
                 ? <textarea data-of-edit-fact={field.key} className={`${inputClass} min-h-24`} readOnly value={facts[field.key] ?? ""} />
                 : <input data-of-edit-fact={field.key} className={inputClass} maxLength={240} value={facts[field.key] ?? ""}
                     disabled={!data.factsValid} onChange={event => setFacts(previous => ({ ...previous, [field.key]: event.target.value }))} />}
-            </label>
-            {data.sharedFacts.state !== "unconfigured" ? <span className="mt-1 block text-xs text-muted">
-              {data.sharedFacts.overrideKeys.includes(field.key) ? "OnlyFans override" : "Inherited from Twin when supplied"}
-            </span> : null}
+            </FactFieldView>
             {data.readOnlyFacts.includes(field.key) ? <span className="block text-xs text-muted">Long saved facts are shown in full and cannot be edited here.</span> : null}
             {data.sharedFacts.state === "current" && data.sharedFacts.overrideKeys.includes(field.key) ? <button
               type="button" data-of-inherit-fact={field.key} disabled={!!command || !data.factsValid}
@@ -165,9 +166,10 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
               Use Twin value
             </button> : null}
           </div>)}</div>
-          <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it for OnlyFans. Save only facts approved by the creator. Save or discard other edits before choosing Use Twin value.</p>
+          <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it for OnlyFans. Save only facts approved by the creator. Facts shown as Not provided are not sent to the AI. Save or discard other edits before choosing Use Twin value.</p>
         </div>
-        </StudioTabPanel><StudioTabPanel value="replies"><div className="grid min-w-0 gap-3 sm:grid-cols-2">
+        </StudioTabPanel><StudioTabPanel value="replies"><p className="text-sm" data-of-model-summary>Reply model: {data.resolvedReplyModel ? "Saved on this creator" : "Not set up"}{!data.modelsValid ? ", needs review" : ""}</p>
+        <details className="rounded-lg border border-line p-3" open={!data.modelsValid} data-of-model-advanced><summary className="cursor-pointer text-sm font-semibold">Advanced</summary><div className="mt-3 space-y-3"><div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Default model<select data-of-edit-model className={inputClass} disabled={!data.modelsValid} value={defaultModel} onChange={event => setDefaultModel(event.target.value)}>
             {!data.defaultModel ? <option value="" disabled>No saved model</option> : !data.modelOptions.includes(data.defaultModel) ? <option value={data.defaultModel} disabled>Current choice needs review</option> : null}
             {data.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
@@ -178,7 +180,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
             {data.modelOptions.map(model => <option key={model} value={model}>{model}</option>)}
           </select></label>
         </div>
-        <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p>
+        <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p></div></details>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Daily model budget (USD cents)<input data-of-edit-budget type="number" min={0} max={1_000_000} step={1} className={inputClass} value={dailyBudget} onChange={event => setDailyBudget(event.target.value)} /></label>
           <label className="min-w-0 text-sm">Reasoning effort<select data-of-edit-reasoning className={inputClass} value={effort} onChange={event => setEffort(event.target.value)}>
