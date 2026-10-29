@@ -11,6 +11,7 @@ concurrency:
 jobs:
   reader-check:
     if: github.repository == 'twinagency/twin-dashboard' && github.ref == 'refs/heads/codex/instagram-reader-pagination-20261030'
+    environment: production
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
