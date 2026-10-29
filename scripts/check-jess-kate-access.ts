@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { POST as login, GET as loginEntry } from "../app/jess-and-kate-ai/auth/route";
@@ -19,6 +20,7 @@ async function main(){
   const oldFetch=globalThis.fetch;
   let active=true,agencyActive=true,wrongUser=false,wrongAgency=false,emptyScope=false,tokenRequests=0,passwordUpdates=0;
   globalThis.fetch=async(input,init)=>{
+    const rpc = syntheticAdminSessionRpc(input, init); if (rpc) return rpc;
     const url=new URL(String(input));let body:unknown;
     if(url.pathname==="/auth/v1/token"){
       tokenRequests++;const credentials=JSON.parse(String(init?.body));assert.equal(credentials.email,portal.loginEmail);
@@ -34,7 +36,7 @@ async function main(){
         assert.equal(url.searchParams.get("email"),`eq.${portal.loginEmail}`);
         body=active?{user_id:user,email:portal.loginEmail}:null;
       }else {
-        assert.equal(url.searchParams.get("select"),"agency_id,can_manage,creator_scope,creator_ids,creator_access_revision");
+        assert.equal(url.searchParams.get("select"),"agency_id,can_manage,can_chat,creator_scope,creator_ids,creator_access_revision");
         assert.equal(url.searchParams.get("user_id"),`eq.${user}`);
         body=active?{ creator_scope: "all", creator_ids: [], creator_access_revision: "dddddddd-dddd-4ddd-8ddd-dddddddddddd", agency_id:wrongAgency?"different-agency":portal.id,can_manage:false}:null;
       }
@@ -91,3 +93,4 @@ async function main(){
   console.log("Jess and Kate AI: fixed-account login, one-creator scope, editing, cross-tenant denial, independent branding, revocation, admin password management and logout passed");
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
+

@@ -74,6 +74,17 @@ export default function TopBar({
    */
   signOutAction?: (formData: FormData) => void | Promise<void>;
 }) {
+  const [signOutError, setSignOutError] = useState("");
+  const [signOutPending, setSignOutPending] = useState(false);
+  const revokeAndSignOut = async (data: FormData) => {
+    setSignOutError(""); setSignOutPending(true);
+    try {
+      if (!signOutAction) throw new Error("Sign out action unavailable");
+      await signOutAction(data);
+    } catch {
+      setSignOutError("Could not sign out. Your session has not been confirmed revoked. Please try again.");
+    } finally { setSignOutPending(false); }
+  };
   const {isAgency,isCreator,agencyName,audience}=useDashboardAccess();
   const {identity:inboxIdentity}=useInboxIdentity();
   const { currency, rate, usdPerStar } = useCurrency();
@@ -177,10 +188,13 @@ export default function TopBar({
           <SignOutButton mode="simulated" />
         ) : (
           <form
-            action={isCreator ? "/creator-auth/logout" : isAgency ? "/agency/logout" : signOutAction}
+            action={isCreator ? "/creator-auth/logout" : isAgency ? "/agency/logout" : revokeAndSignOut}
             method={isCreator || isAgency ? "post" : undefined}
           >
-            <SignOutButton showLabel={isAgency || isCreator} />
+            <fieldset disabled={!isAgency && !isCreator && signOutPending} className="m-0 border-0 p-0">
+              <SignOutButton showLabel={isAgency || isCreator} />
+            </fieldset>
+            {!isAgency && !isCreator && signOutError && <p role="alert" className="max-w-64 text-xs text-crit">{signOutError}</p>}
           </form>
         )}
       </div>

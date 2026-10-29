@@ -1,4 +1,6 @@
 "use client";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { parseWorkspaceScope, workspaceHref } from "@/lib/onlyfans-preview/scope";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type BAccount } from "@/lib/onlyfans/launch/automation/b-automation";
 import { readAccounts } from "@/lib/onlyfans/launch/automation/b-automation-client";
@@ -20,7 +22,9 @@ type Edit = { field: MemoryField; value: string; reason: string; error: string }
 type PendingCorrection = { accountId: string; fanId: string; correction: MemoryCorrection };
 
 /** Native account-scoped memory. Archive recovery and stored-message processing remain separate. */
-export default function BMemoryPanel({ canManage = false }: { canManage?: boolean }) {
+export default function BMemoryPanel({ canManage = false, canRecover = canManage, initialAccountId, selectedAccountId, selectedFanId }: { canManage?: boolean; canRecover?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string }) {
+  const router = useRouter(), pathname = usePathname(), params = useSearchParams();
+  const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading), [accountId, setAccountId] = useState("");
   const [coverage, setCoverage] = useState<Load<MemoryCoveragePage>>(loading), [fan, setFan] = useState<Load<FanMemoryView>>(loading);
   const [fanId, setFanId] = useState(""), [query, setQuery] = useState(""), [edit, setEdit] = useState<Edit | null>(null);
@@ -36,8 +40,12 @@ export default function BMemoryPanel({ canManage = false }: { canManage?: boolea
     accountsCtl.current?.abort(); const c = new AbortController(); accountsCtl.current = c; setAccounts(loading);
     const l = toLoad(await readAccounts(c.signal)); if (!l || c.signal.aborted) return;
     setAccounts(l);
-    if (l.state === "ok") setAccountId(old => old && l.data.some(a => a.accountId === old) ? old : l.data[0]?.accountId ?? "");
-  }, []);
+    if (l.state === "ok") {
+      const wanted = selectedAccountId ?? initialAccountId;
+      if (wanted && !l.data.some(a => a.accountId === wanted)) { setAccounts({ state: "denied" }); setAccountId(""); return; }
+      setAccountId(old => wanted ?? (old && l.data.some(a => a.accountId === old) ? old : l.data[0]?.accountId ?? ""));
+    }
+  }, [selectedAccountId, initialAccountId]);
   useEffect(() => { void loadAccounts(); return () => { accountsCtl.current?.abort(); }; }, [loadAccounts]);
 
   const loadCoverage = useCallback(async (id: string, cursor?: string) => {
@@ -63,9 +71,12 @@ export default function BMemoryPanel({ canManage = false }: { canManage?: boolea
   useEffect(() => {
     listCtl.current?.abort(); fanCtl.current?.abort(); commandCtl.current?.abort(); listEpoch.current++; fanEpoch.current++;
     setCoverage(loading); setFan(loading); setFanId(""); fanRef.current = ""; setEdit(null); setNotice(""); setQuery(""); setPending(null); setBusy(false); setPaging(false); setPermissionDenied(false);
-    if (accountId) void loadCoverage(accountId);
+    if (accountId) {
+      if (selectedFanId) void loadFan(accountId, selectedFanId, true);
+      else void loadCoverage(accountId);
+    }
     return () => { listCtl.current?.abort(); fanCtl.current?.abort(); commandCtl.current?.abort(); };
-  }, [accountId, loadCoverage]);
+  }, [accountId, loadCoverage, loadFan, selectedFanId]);
 
   async function sendCorrection(command: PendingCorrection) {
     if (!manage || busy || command.accountId !== accountRef.current || command.fanId !== fanRef.current) return;
@@ -96,7 +107,7 @@ export default function BMemoryPanel({ canManage = false }: { canManage?: boolea
     await sendCorrection(command);
   }
   async function backfill(selectedFan?: string) {
-    if (!manage || busy) return;
+    if (!manage || !canRecover || busy) return;
     const id = accountId; commandCtl.current?.abort(); const c = new AbortController(); commandCtl.current = c; setBusy(true); setNotice("");
     const r = await resumeHistory(id, selectedFan, c.signal);
     if (c.signal.aborted || accountRef.current !== id) return;
@@ -117,10 +128,10 @@ export default function BMemoryPanel({ canManage = false }: { canManage?: boolea
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
     {accounts.state === "ok" && accountId ? <>
-      <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={setAccountId} />
-      <div className="flex flex-wrap gap-2"><button type="button" className={bButton} onClick={() => { void loadCoverage(accountId); if (fanId) void loadFan(accountId, fanId); }}>Refresh current state</button>
-        <button type="button" className={bButton} disabled={!manage || busy} onClick={() => void backfill()}>Resume account recovery</button></div>
-      {coverage.state === "loading" ? <BLoading label="Loading history and fans…" /> : null}
+      {!selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} /> : <p className="text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p>}
+      <div className="flex flex-wrap gap-2"><button type="button" className={bButton} onClick={() => { if (!selectedFanId) void loadCoverage(accountId); if (fanId) void loadFan(accountId, fanId); }}>Refresh current state</button>
+        {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill()}>Resume account recovery</button> : null}</div>
+      {!selectedFanId && coverage.state === "loading" ? <BLoading label="Loading history and fans…" /> : null}
       {coverage.state === "error" ? <BError message={coverage.message} onRetry={() => void loadCoverage(accountId)} /> : null}
       {coverage.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read memory for this account.</p> : null}
       {coverage.state === "ok" ? <>
@@ -142,7 +153,7 @@ export default function BMemoryPanel({ canManage = false }: { canManage?: boolea
         {fan.state === "ok" ? <div className="grid min-w-0 gap-4">
           <h3 className="break-words font-semibold">{selectedName?.displayName || selectedName?.username || `Fan ${fanId}`}</h3>
           <MemoryProgressView progress={fan.data.progress} /><RecoveryView progress={fan.data.recovery} />
-          <button type="button" className={bButton} disabled={!manage || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button>
+          {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button> : null}
           <FanFacts memory={fan.data.memory} manage={manage} busy={busy} edit={edit} setEdit={setEdit} onSave={save} />
           <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Source excerpts</h4>
             <form className="flex min-w-0 flex-wrap gap-2" onSubmit={e => { e.preventDefault(); void loadFan(accountId, fanId, false, query); }}>

@@ -1,3 +1,4 @@
+import { syntheticAdminSessionRpc } from "./synthetic-admin-session-rpc";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -11,11 +12,12 @@ import { GET as linkAuthEntry } from "../app/link/auth/route";
 
 async function main() {
   Object.assign(process.env, { NODE_ENV:"production", DASHBOARD_PASSWORD:"offline-routing-password" });
+  process.env.SUPABASE_URL="https://session-fixture.invalid"; process.env.SUPABASE_SERVICE_KEY="synthetic-only";
   const origin = "https://dashboard.tgaiclone.xyz";
-  const admin = await signSession();
   const previous = globalThis.fetch;
   let calls = 0;
-  globalThis.fetch = async () => { calls++; throw new Error("Login entry must not query private data"); };
+  globalThis.fetch = async (input, init) => { const rpc = syntheticAdminSessionRpc(input, init); if(rpc) return rpc; calls++; throw new Error("Login entry must not query private data"); };
+  const admin = await signSession();
   try {
     for (const cookie of ["", `${AGENCY_PORTAL_COOKIE}=moxy`, `${AGENCY_PORTAL_COOKIE}=lynq`, `${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy`, `${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=lynq`, `${SESSION_COOKIE}=${admin}`, `${SESSION_COOKIE}=${admin}; ${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy`]) {
       for (const path of ["/", "/twin"]) {

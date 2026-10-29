@@ -11,6 +11,7 @@ import * as portals from "../lib/partner-portals";
 import * as creatorPolicy from "../lib/creator-dashboard-policy";
 import * as dashboardCreatorRoute from "../lib/dashboard-creator-route";
 import * as channelNav from "../lib/channel-nav";
+import * as onlyfansScope from "../lib/onlyfans-preview/scope";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -48,6 +49,7 @@ const components = compile("components/Sidebar.tsx", {
   "@/lib/creator-dashboard-policy": creatorPolicy,
   "@/lib/dashboard-creator-route": dashboardCreatorRoute,
   "@/lib/channel-nav": channelNav,
+  "@/lib/onlyfans-preview/scope": onlyfansScope,
   "@/components/ChannelSwitch": { __esModule: true, default: () => null },
   "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => React.createElement("a", props, children) },
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
@@ -97,6 +99,7 @@ pathname = `/clones/${clone}`;
 assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Every operational creator profile uses the shared shell");
 const mainShell = compile("components/MainShell.tsx", {
  "@/lib/channel-nav": channelNav,
+  "@/lib/onlyfans-preview/scope": onlyfansScope,
  "./DashboardAccessProvider": accessModule,
  "@/lib/dashboard-creator-route": dashboardCreatorRoute,
  "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
@@ -394,4 +397,5 @@ for (const name of ["LYNQ", "Twin Technologies", "Unassigned"]) {
   assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", name), false);
 }
 assert.equal(agencyPolicy.agencyDashboardPath("/api/agency-overview", portals.TOP_ONLYFANS_AGENCY.name), true);
+
 

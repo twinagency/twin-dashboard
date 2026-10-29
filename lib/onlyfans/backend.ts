@@ -1,3 +1,4 @@
+import { inboxSearchParams, type InboxSearch } from "./inbox-search";
 // ── The Twin side's OnlyFans backend port ────────────────────────────────
 //
 // This is the *server-side* boundary between the dashboard and the consolidated
@@ -30,6 +31,7 @@ import type {
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
 import { parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
+import { parseMessageAttachments } from "./message-attachments";
 import { parseOperations, type OperationsSnapshot } from "./operations";
 import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
 
@@ -74,10 +76,12 @@ export type OnlyFansBackend = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
+    search?: InboxSearch | string,
   ): Promise<BackendResult<CursorPage<ConversationSummary>>>;
   getConversation(
     accountId: string,
     conversationId: string,
+    cursor?: string | null,
   ): Promise<BackendResult<ConversationDetail>>;
   getEarnings?(window:EarningsWindow):Promise<BackendResult<NativeEarnings>>;
   getOperations?(accountId: string): Promise<BackendResult<OperationsSnapshot>>;
@@ -262,7 +266,7 @@ export function createHttpOnlyFansBackend(options: {
       }, creatorId !== null);
     },
 
-    listConversations(accountId, cursor, aiOnly) {
+    listConversations(accountId, cursor, aiOnly, search) {
       if (!ID_PATTERN.test(accountId)) {
         return Promise.resolve({
           ok: false,
@@ -271,9 +275,8 @@ export function createHttpOnlyFansBackend(options: {
           error: "That account reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      const params = new URLSearchParams();
+      const params = inboxSearchParams(aiOnly, search);
       if (cursor) params.set("cursor", cursor);
-      if (aiOnly) params.set("filter", "ai");
       const query = params.size ? `?${params}` : "";
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations${query}`, (body) => {
         if (!isRecord(body) || !isRecord(body.page)) return null;
@@ -286,7 +289,7 @@ export function createHttpOnlyFansBackend(options: {
       });
     },
 
-    getConversation(accountId, conversationId) {
+    getConversation(accountId, conversationId, cursor) {
       if (!ID_PATTERN.test(accountId) || !ID_PATTERN.test(conversationId)) {
         return Promise.resolve({
           ok: false,
@@ -295,8 +298,10 @@ export function createHttpOnlyFansBackend(options: {
           error: "That conversation reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}`, (body) => {
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, (body) => {
         if (!isRecord(body) || !isRecord(body.conversation)) return null;
+        const messages = body.conversation.messages;
+        if (Array.isArray(messages) && messages.some(message => isRecord(message) && message.attachments !== undefined && !parseMessageAttachments(message.attachments))) return null;
         return body.conversation as ConversationDetail;
       });
     },

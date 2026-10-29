@@ -5,7 +5,7 @@ import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 import Link from "@/components/NavigationLink";
 import CreatorAvatar from "./CreatorAvatar";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import type { Clone } from "@/lib/types";
@@ -150,6 +150,7 @@ export default function CloneForm({
   catalogueBundles,
   appearanceImageUrl,
   appearanceColor,
+  onlyFansMedia,
 }: {
   clone: Clone;
   promptPreview: PromptPreview;
@@ -159,6 +160,7 @@ export default function CloneForm({
   catalogueBundles: MediaProps["catalogueBundles"];
   appearanceImageUrl?: string;
   appearanceColor: string;
+  onlyFansMedia?: ReactNode;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -414,7 +416,8 @@ export default function CloneForm({
           </AdminOnly>
 
           <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
-            <MediaManager
+            {onlyFansMedia}
+            {!onlyFansMedia || photos.length || videos.length || bundles.length || catalogueBundles.length ? <MediaManager
               creatorName={clone.name}
               cloneId={clone.id}
               photos={photos}
@@ -422,7 +425,7 @@ export default function CloneForm({
               bundles={bundles}
               catalogueBundles={catalogueBundles}
               categoryPricing={clone.category_pricing}
-            />
+            /> : null}
           </div>
         </main>
 

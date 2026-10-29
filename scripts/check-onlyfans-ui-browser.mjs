@@ -63,7 +63,7 @@ try {
   check(await account.getAttribute("aria-pressed")==="true", "Account selection follows the requested creator");
   check(await page.locator(".of-account-copy small").filter({hasText:"@"+handle}).isVisible(), "Selected account handle stays visible");
   await page.getByRole("heading",{name:"Notes",exact:true}).waitFor();
-  check(await page.getByRole("heading",{name:"Recent purchases",exact:true}).isVisible(), "Fan panel keeps notes and purchase sections");
+  check(await page.getByRole("heading",{name:"Purchased media",exact:true}).isVisible(), "Fan panel keeps notes and purchase sections");
   check(await page.locator(".dashboard-sidebar").getByRole("link",{name:"Content",exact:true}).isVisible(), "Full workspace navigation remains visible");
   await page.setViewportSize({width:390,height:1000});
   await page.locator("[data-of-mobile-panel=controls]").click();

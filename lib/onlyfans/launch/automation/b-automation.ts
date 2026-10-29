@@ -51,8 +51,8 @@ export function parseRuntime(value: unknown, accountId: string): BRuntime | null
     historyRecoveryRequired: value.historyRecoveryRequired === true, providerConnectionVerified: value.providerConnectionVerified === true };
 }
 
-export type ActionRule = { action: ControlAction; label: string; enabled: boolean; reason: string | null; confirm: boolean };
-const LABEL: Record<Exclude<ControlAction, "manual_message">, string> = { pause_automation: "Pause", resume_automation: "Resume automatic replies",
+export type ActionRule = { action: Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">; label: string; enabled: boolean; reason: string | null; confirm: boolean };
+const LABEL: Record<Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">, string> = { pause_automation: "Pause", resume_automation: "Resume automatic replies",
   request_takeover: "Take over", release_takeover: "Hand back", mark_no_contact: "Mark no-contact" };
 
 /** What this operator may do to this conversation right now. Read-only and no-contact fail closed. */
@@ -71,7 +71,7 @@ export function actionRules(c: Pick<BConversation, "automationMode" | "takeoverS
 }
 
 /** Expected mode after an acknowledged action. Only used as a hint until the next read confirms. */
-export const AFTER: Record<Exclude<ControlAction, "manual_message">, string> = {
+export const AFTER: Record<Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">, string> = {
   pause_automation: "Pause recorded.", resume_automation: "Resume recorded.", request_takeover: "Takeover requested. It is effective only once the conversation shows it.",
   release_takeover: "Hand back recorded.", mark_no_contact: "No-contact recorded.",
 };

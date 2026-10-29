@@ -395,3 +395,64 @@
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.workspace-account-controls) { flex:1; flex-wrap:wrap; justify-content:center; gap:5px; }
  .platform.platform.platform.platform[data-of-inbox-shell] :global(.of-workspace-context) { display:none; }
 }
+
+/* Keep category browsing visible above the vault grid at every viewport. */
+.platform :global(.of-folder-browser) { margin: 0 0 20px; padding: 16px; border: 1px solid #cde4f5; border-radius: 12px; background: #f6fbff; }
+.platform :global(.of-folder-browser [data-of-vault-organization]) { margin: 0; padding: 0; border: 0; }
+.platform :global(.of-folder-browser .of-folder-heading > h3) { display: flex; align-items: center; gap: 8px; font-size: 16px; color: #24445e; }
+.platform :global(.of-folder-count) { padding: 2px 8px; border-radius: 999px; background: #dff1fd; font-size: 12px; color: #087faf; }
+.platform :global(.of-folder-grid) { display: flex; gap: 10px; margin-top: 10px; padding: 2px 2px 6px; overflow-x: auto; }
+.platform :global(.of-folder-grid > button) { display: flex; align-items: center; gap: 9px; min-height: 60px; min-width: 0; flex: 0 0 156px; padding: 10px; border: 1px solid #d7e6f1; border-radius: 10px; background: #fff; color: #40617b; text-align: left; }
+.platform :global(.of-folder-grid > button > svg) { flex-shrink: 0; color: #209ed6; }
+.platform :global(.of-folder-grid > button > span) { min-width: 0; overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+.platform :global(.of-folder-grid > button > strong) { margin-left: auto; font-size: 12px; color: #61758e; }
+.platform :global(.of-folder-grid > button[aria-pressed="true"]) { border-color: #219fd8; background: #e3f4ff; box-shadow: 0 0 0 1px #219fd8; }
+.platform :global(.of-folder-grid > button:focus-visible) { outline: 2px solid #087faf; outline-offset: 3px; }
+.platform :global(.of-folder-grid > button:disabled) { opacity: .55; }
+.platform :global(.of-folder-browser [data-of-vault-organization] > label) { max-width: 320px; }
+
+.platform :global(.of-folder-heading) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.platform :global(.of-folder-heading > button) { min-height: 36px; padding: 6px 10px; }
+
+.embedded.platform.platform.platform { display: block; height: auto; overflow: visible; border: 1px solid #dce8f2; border-radius: 14px; }
+
+
+/* Collections remain visible beside the library, with compact visual covers. */
+.platform :global(.of-library-layout) { display:grid; grid-template-columns:190px minmax(0,1fr); gap:24px; align-items:start; }
+.platform :global(.of-library-sidebar) { min-width:0; position:sticky; top:88px; padding:16px 14px; background:#f6fbff; border:1px solid #d7e8f4; border-radius:14px; }
+.platform :global(.of-library-sidebar [data-of-vault-organization]) { margin:0; padding:0; border:0; }
+.platform :global(.of-library-sidebar .of-folder-heading > h3) { font-size:15px; }
+.platform :global(.of-library-sidebar .of-folder-heading > button) { width:100%; background:#fff; margin:4px 0; }
+.platform :global(.of-library-main) { min-width:0; }
+.platform :global(.of-folder-nav) { display:flex; flex-direction:column; gap:5px; max-height:56vh; overflow-y:auto; margin-top:14px; padding:2px; }
+.platform :global(.of-folder-nav > button) { display:flex; align-items:center; gap:8px; min-height:42px; padding:9px; border:1px solid transparent; border-radius:8px; background:transparent; text-align:left; color:#3f5e74; }
+.platform :global(.of-folder-nav svg) { width:18px; flex-shrink:0; color:#239acf; }
+.platform :global(.of-folder-nav span) { min-width:0; overflow-wrap:anywhere; font-size:12px; font-weight:600; }
+.platform :global(.of-folder-nav strong) { margin-left:auto; font-size:11px; color:#607c91; }
+.platform :global(.of-folder-nav > button[aria-pressed="true"]) { border-color:#b5dbf3; background:#e0f1ff; color:#076eac; }
+.platform :global(.of-folder-nav > button:focus-visible), .platform :global(.of-collection-grid > button:focus-visible) { outline:2px solid #087faf; outline-offset:2px; }
+.platform :global(.of-collection-section) { margin-bottom:18px; }
+.platform :global(.of-collection-heading) { display:flex; justify-content:space-between; align-items:center; gap:12px; margin:0 0 10px; }
+.platform :global(.of-collection-heading h3) { font-weight:650; font-size:15px; color:#26445d; }
+.platform :global(.of-collection-heading > span) { font-size:12px; color:#6c8296; }
+.platform :global(.of-collection-grid) { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:10px; }
+.platform :global(.of-collection-grid > button) { overflow:hidden; min-width:0; border:1px solid #d5e4ef; border-radius:11px; background:#fff; text-align:left; }
+.platform :global(.of-collection-grid > button[aria-pressed="true"]) { border-color:#159bd5; box-shadow:0 0 0 1px #159bd5; }
+.platform :global(.of-collection-cover) { display:flex; height:66px; align-items:center; justify-content:center; overflow:hidden; background:linear-gradient(135deg,#e7f6ff,#d2eafa); color:#2f99ca; }
+.platform :global(.of-collection-cover img) { width:100%; height:100%; object-fit:cover; }
+.platform :global(.of-collection-name) { display:block; padding:8px; font-size:11px; font-weight:650; overflow-wrap:anywhere; color:#35556e; }
+.platform :global(.of-collection-name small) { display:block; margin-top:3px; font-size:10px; font-weight:400; color:#70899c; }
+.platform :global(.of-preview-pending) { display:flex; height:100%; flex-direction:column; justify-content:center; align-items:center; gap:9px; padding:12px; color:#6b8296; font-size:12px; text-align:center; }
+.platform :global(.of-preview-pending button) { display:flex; gap:5px; align-items:center; padding:7px 10px; background:#fff; border:1px solid #bfd7e9; border-radius:8px; color:#087faf; }
+@media (min-width:1440px) { .platform.platform :global(.of-library-main [data-of-vault-grid].of-media-grid) { grid-template-columns:repeat(5,minmax(0,1fr)); } }
+@media (max-width:1100px) { .platform :global(.of-library-layout) { grid-template-columns:168px minmax(0,1fr); gap:16px; } .platform :global(.of-collection-grid) { grid-template-columns:repeat(3,minmax(0,1fr)); } .platform :global(.of-collection-cover) { height:48px; } }
+@media (max-width:700px) {
+ .platform :global(.of-library-layout) { grid-template-columns:minmax(0,1fr); gap:16px; }
+ .platform :global(.of-library-sidebar) { position:static; padding:12px; }
+ .platform :global(.of-library-sidebar .of-folder-heading > button) { width:auto; }
+ .platform :global(.of-folder-nav) { flex-direction:row; max-height:none; overflow-x:auto; margin-top:8px; }
+ .platform :global(.of-folder-nav > button) { flex:0 0 auto; background:#fff; border-color:#dfebf4; }
+ .platform :global(.of-folder-nav strong) { margin-left:4px; }
+ .platform :global(.of-collection-grid) { display:flex; overflow-x:auto; padding-bottom:4px; }
+ .platform :global(.of-collection-grid > button) { flex:0 0 124px; }
+}

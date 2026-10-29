@@ -48,7 +48,7 @@ const ALL_ACTIONS: AvailableAction[] = [
 ];
 
 /** An unresolved send blocks every competing write for that conversation. */
-export const UNRESOLVED_OUTCOMES: DeliveryOutcome[] = ["dispatching", "unknown"];
+export const UNRESOLVED_OUTCOMES: DeliveryOutcome[] = ["dispatching", "accepted_pending", "unknown", "partial"];
 
 export function isDeliveryUnresolved(outcome: DeliveryOutcome): boolean {
   return UNRESOLVED_OUTCOMES.includes(outcome);
@@ -109,7 +109,7 @@ export function availableActions(input: {
   return { available, blocked };
 
   function blockReason(action: AvailableAction): string | null {
-    if (!viewer.canManage) {
+    if (!viewer.canManage && !(viewer.canChat && ["send_manual_message", "request_takeover", "release_takeover"].includes(action))) {
       return viewer.kind === "view_as"
         ? "Read only view. Changes are made by the account owner."
         : "Your role cannot change conversations for this account.";
@@ -132,7 +132,7 @@ export function availableActions(input: {
     // Resolving evidence is decided before the other holds: an unresolved send
     // is exactly what it exists to settle.
     if (action === "resolve_delivery_evidence") {
-      return hasIncident ? null : "There is no unresolved delivery to resolve.";
+      return !hasIncident ? "There is no unresolved delivery to resolve." : deliveryIncident && ["dispatching", "accepted_pending"].includes(deliveryIncident.outcome) ? "This send is still being processed. Wait for its receipt before resolving it." : null;
     }
 
     // Then the unresolved hold, which withdraws only the actions that could
@@ -183,7 +183,7 @@ export function canSubmitCommand(
   actionSet: ActionSet,
   action: AvailableAction,
 ): boolean {
-  if (!viewer.canManage) return false;
+  if (!viewer.canManage && !(viewer.canChat && ["send_manual_message", "request_takeover", "release_takeover"].includes(action))) return false;
   return actionSet.available.some((entry) => entry.action === action);
 }
 
@@ -201,7 +201,7 @@ export function canonicalPayload(payload: CommandPayload): string {
     case "manual_message":
       return payload.catalogItemId == null ? `message:${payload.body}` : `message:item-${payload.catalogItemId}:${payload.body}`;
     case "delivery_resolution":
-      return `resolution:${payload.attemptId}:${payload.decision}`;
+      return `resolution:${payload.attemptId}:${payload.decision}:${payload.providerMessageId ?? ""}`;
     case "none":
       return "none";
   }

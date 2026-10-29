@@ -1,3 +1,4 @@
+import type { InboxSearch } from "../onlyfans/inbox-search";
 // Deterministic fixture implementation of OnlyFansDataSource.
 //
 // This is the OF-D0 data source. It reads only ./fixtures.ts, is synchronous
@@ -148,13 +149,13 @@ export function createFixtureOnlyFansDataSource(
     return { status: "ready", data: account };
     },
 
-    async listConversations(accountId: string, cursor?: string | null, aiOnly?: boolean) {
+    async listConversations(accountId: string, cursor?: string | null, aiOnly?: boolean, search?: InboxSearch) {
       await wait(latencyMs);
       if (!inScope(viewer, accountId)) return scopeDenied();
       const requestedPage = parseCursor(cursor);
       const override = scenarios.conversations?.(accountId, requestedPage);
       if (override) return override;
-      const items = (fixtureConversations[accountId] ?? []).filter(item => !aiOnly || isAiChatting(item));
+      const items = (fixtureConversations[accountId] ?? []).filter(item => (!aiOnly || isAiChatting(item)) && (!search?.query || `${item.fan.displayName} ${item.fan.fanId}`.toLowerCase().includes(search.query.trim().toLowerCase())) && (search?.filter !== "unread" || item.unreadCount > 0) && (search?.filter !== "attention" || item.requiresAttention));
       if (items.length === 0) return { status: "empty" };
       return { status: "ready", data: page(items, requestedPage) };
     },

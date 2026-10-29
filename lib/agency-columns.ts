@@ -17,6 +17,8 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "status",
     "photos_enabled",
     "videos_enabled",
+    "video_sequences_enabled",
+    "sell_via_mini_app",
     "voice_enabled",
     "text_prompt",
     "voice_prompt",

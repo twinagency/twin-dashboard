@@ -103,6 +103,7 @@ jobs:
       - name: Moxy owner scope and retained partner permissions
         run: |
           node --import tsx scripts/check-moxy-owner-access.ts
+          node --import tsx scripts/check-moxy-viewonly-forms.ts
           node --import tsx scripts/check-sidebar-layout.tsx
 
   test:

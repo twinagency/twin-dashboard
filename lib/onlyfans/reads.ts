@@ -1,3 +1,4 @@
+import type { InboxSearch } from "./inbox-search";
 // ── The authenticated, scoped read service ───────────────────────────────
 //
 // Three reads, one authority, no writes. This module is deliberately pure: it
@@ -196,13 +197,13 @@ export async function readAccounts(
 
 export async function readConversations(
   input: ReadInput,
-  request: { accountId: string; cursor: string | null; aiOnly?: boolean },
+  request: { accountId: string; cursor: string | null; aiOnly?: boolean; search?: InboxSearch },
 ): Promise<ReadResult<ConversationsReadBody>> {
   const denial = authorizeRead(input.auth);
   if (denial) return denial;
   if (!input.backend) return unavailable(NOT_CONFIGURED);
 
-  const result = await input.backend.listConversations(request.accountId, request.cursor, request.aiOnly);
+  const result = await input.backend.listConversations(request.accountId, request.cursor, request.aiOnly, request.search);
   if (!result.ok) return mapFailure(result);
 
   const stray = result.data.items.find((item) => item.accountId !== request.accountId);
@@ -220,13 +221,13 @@ export async function readConversations(
 
 export async function readConversation(
   input: ReadInput,
-  request: { accountId: string; conversationId: string },
+  request: { accountId: string; conversationId: string; cursor?: string | null },
 ): Promise<ReadResult<ConversationReadBody>> {
   const denial = authorizeRead(input.auth);
   if (denial) return denial;
   if (!input.backend) return unavailable(NOT_CONFIGURED);
 
-  const result = await input.backend.getConversation(request.accountId, request.conversationId);
+  const result = await input.backend.getConversation(request.accountId, request.conversationId, request.cursor);
   if (!result.ok) return mapFailure(result);
 
   const detail = result.data;

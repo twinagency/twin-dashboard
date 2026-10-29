@@ -1,7 +1,7 @@
 /** Synthetic transports for command acknowledgement and local action gates. */
 import assert from "node:assert/strict";
 import { createControlBackend } from "../lib/onlyfans/controls-backend";
-import { CONTROL_SCHEMA, parseControlAck } from "../lib/onlyfans/controls";
+import { CONTROL_SCHEMA, controlRefusalNote, parseControlAck } from "../lib/onlyfans/controls";
 import { createFetchOnlyFansTransport } from "../lib/onlyfans-preview/server-data-source";
 import { availableActions, createCommandRequest } from "../lib/onlyfans-preview/actions";
 import { operatorViewer } from "../lib/onlyfans-preview/fixture-data-source";
@@ -43,6 +43,18 @@ async function main() {
     const result = await createControlBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: fake })(command);
     assert(!result.ok && result.outcome === "unconfirmed");
   }
+  const configurationRefusal = { schemaVersion: CONTROL_SCHEMA, ok: false, outcome: "refused", error: "Conversation controls are not configured." };
+  assert.equal(controlRefusalNote(503, configurationRefusal), configurationRefusal.error);
+  for (const changed of [{ schemaVersion: "other" }, { ok: true }, { outcome: "unconfirmed" }, { error: "private-token-or-provider-error" }]) {
+    const note = controlRefusalNote(503, { ...configurationRefusal, ...changed });
+    assert.match(note, /server connection or configuration needs attention/);
+    assert(!note.includes("private-token"));
+  }
+  assert.match(controlRefusalNote(401, null), /session has expired/);
+  assert.match(controlRefusalNote(403, null), /team access/);
+  assert.match(controlRefusalNote(404, null), /no longer available/);
+  assert.match(controlRefusalNote(409, null), /conversation changed or has an active hold/);
+  assert.match(controlRefusalNote(413, null), /too large/);
   const request = createCommandRequest({ command: command.action, accountId: command.accountId,
     conversationId: command.conversationId, expectedRevision: command.expectedRevision, payload: NO_PAYLOAD });
   const posted: string[] = [];

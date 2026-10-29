@@ -33,10 +33,13 @@ export async function checkOnlyFansOverview(page, origin) {
     await overview.getByRole("heading", { name: "Overview", exact: true }).waitFor();
     assert.deepEqual(await overview.locator("[data-of-overview-metric]").evaluateAll(elements => elements.map(element => element.getAttribute("data-of-overview-metric"))), [
       "Recorded net earnings", "Recorded gross earnings", "Pending net", "Pending gross",
-      "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts", "Need attention",
+      "Cleared net", "Cleared payments", "Refunded payments", "Connected accounts",
+      "Connection issues", "History freshness issues", "Payment imports incomplete", "Sending readiness",
     ]);
+    assert.equal(await overview.locator('[data-of-overview-metric="Sending readiness"] strong').innerText(), "Not verified here");
     assert.match(await overview.locator(".of-scope-line").innerText(), /Workspace totals · All authorised OnlyFans accounts/);
-    assert.equal(await overview.locator('.of-creator-strip-items a[aria-current="true"]').getAttribute("href"), "/onlyfans/overview?period=7d&account=acc-a");
+    assert.equal(await overview.locator('.of-creator-strip-items a[aria-current="true"]').getAttribute("href"), "/onlyfans/overview?period=all&account=acc-a");
+    assert.equal(await overview.getByRole("combobox", { name: "Reporting period", exact: true }).inputValue(), "all");
     const sales = overview.locator(".of-sale-row");
     assert.equal(await sales.count(), 4);
     const recorded = await sales.allTextContents();
@@ -50,13 +53,19 @@ export async function checkOnlyFansOverview(page, origin) {
       page.waitForURL(url => url.pathname === "/onlyfans/overview" && url.searchParams.get("period") === "30d" && url.searchParams.get("account") === "acc-a"),
       overview.getByRole("button", { name: "Apply / refresh", exact: true }).click(),
     ]);
-    await page.getByText("USD · UTC · Rolling 30 days", { exact: true }).waitFor();
+    await page.getByText("USD · UTC · Last 30 days", { exact: true }).waitFor();
     assert.equal(await page.locator(".of-sale-row").count(), 4, "Account activity is independent of the summary period");
     if (process.env.ONLYFANS_TEST_EVIDENCE) {
       // Hiding carets mutates even hidden inputs and can race React hydration.
       // Preserve the DOM while capturing this read-only server-rendered page.
       await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "authenticated-onlyfans-overview.png"), fullPage: true, caret: "initial" });
     }
+    await overview.getByRole("combobox", { name: "Reporting period", exact: true }).selectOption("7d");
+    await Promise.all([
+      page.waitForURL(url => url.searchParams.get("period") === "7d" && url.searchParams.get("account") === "acc-a"),
+      overview.getByRole("button", { name: "Apply / refresh", exact: true }).click(),
+    ]);
+    assert.equal(await page.locator(".of-sale-row").count(), 4, "Seven-day summary keeps recorded account activity");
     await page.goto(origin + "/onlyfans/overview?account=acc-not-authorised", { waitUntil: "domcontentloaded", timeout: 45000 });
     await page.getByText("That account is not available to this session.", { exact: true }).waitFor({ timeout: 15000 });
     assert.equal(await page.locator(".of-sale-row").count(), 0, "An unlisted account must not expose sales activity");

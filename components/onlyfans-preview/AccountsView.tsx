@@ -10,7 +10,7 @@
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import Link from "next/link";
 import { CreatorPlatformHeading } from "./CreatorPlatformPage";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { formatAge } from "@/lib/onlyfans-preview/fixtures";
@@ -33,11 +33,15 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean }) {
+function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEditable, showPreviewChrome, openConnection }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; agencyConnectionEditable: boolean; showPreviewChrome: boolean; openConnection: boolean }) {
+  const card = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (openConnection && !connectionEditable) { card.current?.scrollIntoView({ block: "start" }); card.current?.focus({ preventScroll: true }); }
+  }, [openConnection, connectionEditable]);
   return (
-    <Card className="flex h-full flex-col p-4" data-of-account-id={account.accountId}>
+    <Card ref={card} tabIndex={-1} id={connectionEditable ? undefined : `connection-${account.accountId}`} className="flex h-full flex-col p-4 scroll-mt-6" data-of-account-id={account.accountId}>
       <div className="of-account-identity">
-        <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} large />
+        <CreatorPortrait creatorId={account.binding.creatorId} name={account.binding.creatorName} providerAvatarUrl={account.creatorProfile?.avatarUrl} large />
         <div className="min-w-0">
           <div className="of-account-name">{account.binding.creatorName}</div>
           <div className="mt-0.5 truncate text-sm text-muted">@{account.binding.handle}</div><span className="of-account-brand"><img src="/brand/platforms/onlyfans.svg" alt="" />OnlyFans</span>
@@ -50,13 +54,14 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         <div><dt>Last sync</dt><dd><FreshnessLine freshness={account.syncFreshness} /></dd></div>
       </dl>
 
+      {account.syncHealth ? <dl className="mt-3 space-y-2 text-xs">{Object.entries(account.syncHealth).map(([area, status]) => <div key={area}><dt className="font-semibold capitalize">{area}</dt><dd>{status.lastSuccessAt || status.observedAt ? new Date((status.lastSuccessAt ?? status.observedAt)!).toLocaleString("en-AU", { timeZone: "Australia/Brisbane" }) + " AEST" : "No successful observation recorded"}{status.pending !== undefined ? ` · ${status.pending} pending` : ""}{status.pendingConversations !== undefined ? ` · ${status.pendingConversations} conversations pending` : ""}{status.quarantined ? ` · ${status.quarantined} quarantined` : ""}{status.coverage ? ` · ${status.coverage}` : ""}{status.reason ? ` · ${status.reason}` : ""}</dd></div>)}</dl> : null}
       {account.healthReason ? (
         <p className="mt-3 text-xs leading-5 text-[#8a5f06]" data-of-health-reason>
           {account.healthReason}
         </p>
       ) : null}
 
-      <details className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
+      <details open={openConnection && !connectionEditable || undefined} className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
         <summary>Account details</summary>      <dl className="mt-4 space-y-1.5 text-xs">
         <div className="flex items-center justify-between gap-3">
           <dt className="text-muted">Manual send</dt>
@@ -112,7 +117,7 @@ function AccountCard({ account, readOnly, connectionEditable, agencyConnectionEd
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
       {agencyConnectionEditable ? <div className="mt-3 flex flex-wrap items-start gap-2"><AdminOnlyFansSignIn creators={[{id:account.binding.creatorId,name:account.binding.creatorName}]} accountId={account.accountId}/></div> : null}
-      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} /> : null}
+      {connectionEditable ? <ConnectionEditor accountId={account.accountId} creatorId={account.binding.creatorId} creatorName={account.binding.creatorName} initiallyOpen={openConnection} /> : null}
     </Card>
   );
 }
@@ -121,6 +126,7 @@ export default function AccountsView({
   controls,
   accountsState,
   activeAccountId,
+  openConnectionAccountId = null,
   onSelectAccount,
   readOnly,
   creatorName,
@@ -133,6 +139,7 @@ export default function AccountsView({
   controls?: ReactNode;
   accountsState: RequestState<OfAccount[]>;
   activeAccountId: string | null;
+  openConnectionAccountId?: string | null;
   onSelectAccount: (accountId: string) => void;
   readOnly: boolean;
   /** From the account binding the server returned; null when nothing came back. */
@@ -151,7 +158,7 @@ export default function AccountsView({
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
   const connected = accounts.filter((account) => account.health === "connected").length;
-  const needsAttention = accounts.length - connected;
+  const needsAttention = accounts.filter(account => account.health !== "connected" || account.needsAttention || account.syncFreshness.stale).length;
 
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">
@@ -181,7 +188,8 @@ export default function AccountsView({
             <div className="of-account-counts">
               <Stat label="Accounts" value={String(list.length)} />
               <Stat label="Connected" value={String(connected)} />
-              <Stat label="Need attention" value={String(needsAttention)} />
+              <Stat label="Connection issues" value={String(needsAttention)} />
+              <Stat label="History freshness issues" value={String(accounts.filter(account => account.syncFreshness.stale).length)} />
             </div>
 
             {list.length === 0 ? (
@@ -196,6 +204,7 @@ export default function AccountsView({
                 {list.map((account) => (
                   <div key={account.accountId} data-of-selected={activeAccountId === account.accountId || undefined} role="group" tabIndex={0} aria-label={`Select ${account.binding.creatorName} account`} onKeyDown={event => { if (event.target === event.currentTarget && ["Enter", " "].includes(event.key)) { event.preventDefault(); onSelectAccount(account.accountId); } }} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
+                      openConnection={openConnectionAccountId === account.accountId}
                       agencyConnectionEditable={agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)}
                       connectionEditable={!agencyConnections && connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>
@@ -208,4 +217,5 @@ export default function AccountsView({
     </div>
   );
 }
+
 

@@ -17,20 +17,20 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
-export default function ConnectionEditor({ accountId,creatorId,creatorName }: { accountId: string;creatorId?:string;creatorName?:string }) {
+export default function ConnectionEditor({ accountId,creatorId,creatorName,initiallyOpen = false }: { accountId: string;creatorId?:string;creatorName?:string;initiallyOpen?:boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
+  const [open, setOpen] = useState(initiallyOpen), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [data, setData] = useState<Connection | null>(null), [notice, setNotice] = useState("");
   const [owner, setOwner] = useState(""), [xHash, setXHash] = useState(""), [proxy, setProxy] = useState("");
   const [modelEnabled, setModelEnabled] = useState(false), [modelId, setModelId] = useState(""), [apiKey, setApiKey] = useState("");
   const [hours, setHours] = useState("6"), [captureReady, setCaptureReady] = useState(false);
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
-  const [automateNew, setAutomateNew] = useState(false);
   const [hasRetry, setHasRetry] = useState(false);
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const statusTarget = useRef<HTMLDivElement>(null);
   const captureGeneration = useRef(0);
   const endpoint = `/api/onlyfans-connections/accounts/${encodeURIComponent(accountId)}`;
   const clearSecrets = useCallback(() => {
@@ -50,10 +50,19 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
       const next = response.ok ? parseConnection(await response.json(), accountId) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
-      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); setAutomateNew(next.automateNewConversations); }
+      setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); }
       return true;
     } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
+  useEffect(() => {
+    if (initiallyOpen) { setOpen(true); void read(); }
+  }, [initiallyOpen, read]);
+  useEffect(() => {
+    if (initiallyOpen && data?.accountId) {
+      statusTarget.current?.scrollIntoView({ block: "start" });
+      statusTarget.current?.focus({ preventScroll: true });
+    }
+  }, [initiallyOpen, data?.accountId]);
   useEffect(() => {
     if (!open || denied) return;
     const timer = window.setInterval(() => { if (document.visibilityState === "visible" && !submitting.current) void read(false); }, 15000);
@@ -120,13 +129,13 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
   function activate() {
     if (!data || !/^\d+$/.test(limit) || !/^\d+$/.test(throttle)) return;
     const command: ConnectionRequest = { action: "activate", expectedRevision: data.revision,
-      payload: { limitUnits: Number(limit), throttleSeconds: Number(throttle), mediaEnabled: media, automateNewConversations: automateNew } };
+      payload: { limitUnits: Number(limit), throttleSeconds: Number(throttle), mediaEnabled: media, automateNewConversations: false } };
     if (Number(limit) < data.usedUnits || !validConnectionRequest(command)) { setNotice("Enter a valid total allowance at least equal to used units, and a send interval from 1 to 86400 seconds."); return; }
     void send(command);
   }
 
   const state = connectionState(data);
-  return <div className="mt-4 min-w-0 border-t border-line pt-4" data-of-connection-editor={accountId} onClick={event => event.stopPropagation()}>
+  return <div ref={statusTarget} tabIndex={-1} id={`connection-${accountId}`} className="mt-4 min-w-0 scroll-mt-24 border-t border-line pt-4" data-of-connection-editor={accountId} onClick={event => event.stopPropagation()}>
     <button type="button" className={buttonClass} aria-expanded={open} disabled={busy || denied} data-of-connection-open
       onClick={() => { setOpen(!open); if (!open && !hasRetry) void refresh(); }}>Manage connection</button>
     {open ? <div className="mt-4 min-w-0">
@@ -138,6 +147,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
           <dt className="text-muted">Used allowance</dt><dd>{data.usedUnits} / {data.limitUnits}</dd>
         </dl>
         <p className="mt-2 text-xs text-muted" data-of-connection-detail>{CONNECTION_DETAILS[state]}</p>
+        {data.lastError ? <details className="mt-2 text-xs" data-of-connection-error><summary>Recorded connection error</summary><code className="mt-1 block break-all">{data.lastError}</code></details> : null}
         {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
         <ConnectionSyncStatus connection={data} state={state} />
         <div className="mt-3 flex flex-wrap gap-2">
@@ -172,8 +182,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName }: { 
             <label className="block text-xs">Total send allowance, including {data.usedUnits} already used<input data-of-connection-limit className={inputClass} type="number" min={Math.max(1, data.usedUnits)} max={10000} step={1} value={limit} onChange={event => setLimit(event.target.value)} required /></label>
             <label className="block text-xs">Minimum seconds between sends<input data-of-connection-throttle className={inputClass} type="number" min={1} max={86400} step={1} value={throttle} onChange={event => setThrottle(event.target.value)} required /></label>
             <label className="flex items-start gap-2 text-xs"><input data-of-connection-media type="checkbox" checked={media} onChange={event => setMedia(event.target.checked)} /><span>Allow eligible paid media sends</span></label>
-            <label className="flex items-start gap-2 text-xs"><input data-of-connection-automate-new type="checkbox" checked={automateNew} onChange={event => setAutomateNew(event.target.checked)} /><span>Automatically reply to new conversations</span></label>
-            <p className="text-xs text-muted">Automatic replies require a saved matching model credential and creator settings. This option applies to new conversations received after activation; existing paused, takeover and no-contact conversations keep their saved state.</p>
+            <p className="text-xs text-muted" data-of-connection-automate-new-note>New conversations are never enabled automatically; enable each fan in the inbox.</p>
             <p className="text-xs text-muted">Enabling outgoing permits this account’s worker to send messages within these limits. Used allowance is retained.</p>
             <button type="submit" className={buttonClass} data-of-connection-activate disabled={state !== "connected"}>Enable outgoing messages</button>
           </fieldset>
@@ -230,3 +239,4 @@ export function RegisterConnection({ creators }: { creators: ConnectionCreator[]
     </div> : null}
   </Card>;
 }
+

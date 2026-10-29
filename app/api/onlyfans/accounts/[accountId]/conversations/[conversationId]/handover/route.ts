@@ -13,7 +13,7 @@ export async function GET(_request: Request, context: { params: Promise<{ accoun
     const response = await ctx.fetch(purpose.baseUrl.replace(/\/+$/, "") + `/onlyfans/api/v1/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}/handover`, {
       method: "GET", cache: "no-store", redirect: "error", credentials: "omit", signal: AbortSignal.timeout(8000),
       headers: { Authorization: `Bearer ${purpose.token}`, "X-OnlyFans-Schema-Version": ONLYFANS_PREVIEW_SCHEMA_VERSION } });
-    const value = response.ok ? handoverForViewer(await response.json(), accountId, conversationId, ctx.actor, ctx.canManage, ctx.auth.agency) : null;
+    const value = response.ok ? handoverForViewer(await response.json(), accountId, conversationId, ctx.actor, ctx.canChat, ctx.auth.agency) : null;
     if (value) return NextResponse.json(value, { headers: PRIVATE_HEADERS });
     if ([403, 404].includes(response.status)) return NextResponse.json({ error: "That conversation is not available." }, { status: 404, headers: PRIVATE_HEADERS });
   } catch { /* fail closed: uncertain ownership cannot enable staff controls */ }

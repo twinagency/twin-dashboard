@@ -91,7 +91,7 @@ export async function memoryFan(
   fan: string,
   write = false,
 ) {
-  const g = await bGate(request, account, write);
+  const g = await bGate(request, account, write, "chat");
   if (!("ctx" in g)) return g;
   if (!decimalId(fan)) return invalid();
   const call = configuredNativeConfigurationBackend(g.ctx.fetch);

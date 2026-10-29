@@ -1,7 +1,7 @@
 import { CONTENT_SCHEMA } from "./content";
 import { vaultMediaId } from "./vault";
 export type AssetMetadata = { mediaId: string; fingerprint: string; description: string | null; tags: string[] | null };
-export type FolderSummary = { folderId: string; name: string; count: number };
+export type FolderSummary = { folderId: string; name: string; count: number; coverMediaId?: string | null; coverKind?: "photo" | "video" | "gif" | null; automatic?: boolean };
 export type FolderMetadata = FolderSummary & { fingerprint: string; archived: boolean };
 export type AssetPatch = { patch: { description?: string | null; tags?: string[] }; expectedFingerprint: string };
 export type FolderPatch = { action: "create" | "rename" | "archive" | "add" | "remove"; name: string | null;
@@ -35,7 +35,7 @@ export function parseVaultResource(v: unknown, account: string, resource: string
   const key = resource === "folders" ? "folders" : resource.startsWith("folders/") ? "folder" : "asset";
   if (!exact(v,["schemaVersion","ok","accountId",key])) return null;
   const data = v[key];
-  if (key === "folders") return Array.isArray(data) && data.length <= 200 && data.every(x=>folder(x)&&exact(x,["folderId","name","count"])) && new Set(data.map(x=>x.folderId)).size === data.length ? data as FolderSummary[] : null;
+  if (key === "folders") return Array.isArray(data) && data.length <= 200 && data.every(x=>folder(x)&&(exact(x,["folderId","name","count"]) || exact(x,["folderId","name","count","coverMediaId","coverKind","automatic"]) && typeof x.automatic === "boolean" && (x.coverMediaId === null && x.coverKind === null || vaultMediaId(x.coverMediaId) && ["photo","video","gif"].includes(x.coverKind as string)))) && new Set(data.map(x=>x.folderId)).size === data.length ? data as FolderSummary[] : null;
   if (key === "folder") return object(data) && folder(data) && exact(data,["folderId","name","count","fingerprint","archived"]) && data.folderId === resource.split("/")[1] && vaultEditHash(data.fingerprint) && data.archived === false ? data as FolderMetadata : null;
   return object(data) && exact(data,["mediaId","fingerprint","description","tags"]) && data.mediaId === resource.split("/")[1] && vaultEditHash(data.fingerprint) &&
     (data.description === null || text(data.description,2000)) && (data.tags === null || Array.isArray(data.tags) && data.tags.length <= 12 && data.tags.every(t=>text(t,80))) ? data as AssetMetadata : null;
@@ -45,3 +45,4 @@ export function parseVaultEditAck(v: unknown, account: string, resource: string,
   if (!(resource.startsWith("assets/") ? vaultMediaId(v.targetId) : folderReference(v.targetId)) || resource !== "folders" && v.targetId !== resource.split("/")[1]) return null;
   return { targetId: v.targetId as string, fingerprint: v.fingerprint };
 }
+

@@ -156,13 +156,13 @@ export function applyAccounts(
  * Begin an accounts read. Returns the generation the result must come back
  * under, so an accounts response for a previous scope is refused.
  */
-export function beginAccounts(state: PreviewSelectionState): {
+export function beginAccounts(state: PreviewSelectionState, options: { background?: boolean } = {}): {
   state: PreviewSelectionState;
   generation: number;
 } {
   return {
     generation: state.scopeGeneration,
-    state: { ...state, accounts: { status: "loading" } },
+    state: options.background && ["ready", "stale"].includes(state.accounts.status) ? state : { ...state, accounts: { status: "loading" } },
   };
 }
 
@@ -200,6 +200,7 @@ export type PendingRequest = {
 export function requestConversations(
   state: PreviewSelectionState,
   accountId: string,
+  options: { background?: boolean } = {},
 ): PendingRequest {
   const entry = entryOf(state, accountId);
   const seq = entry.listSeq + 1;
@@ -210,7 +211,7 @@ export function requestConversations(
       ...entry,
       listSeq: seq,
       loadingMore: false,
-      conversations: { status: "loading" },
+      conversations: options.background ? entry.conversations : { status: "loading" },
     }),
   };
 }
@@ -260,6 +261,25 @@ export function applyConversations(
       ...(supportsSelection ? {} : { selectedConversationId: null, detail: {} }),
     }),
   };
+}
+
+/** Refresh the newest page without losing loaded history or the selection. */
+export function applyConversationRefresh(
+  state: PreviewSelectionState, accountId: string, generation: number, seq: number,
+  result: RequestState<CursorPage<ConversationSummary>>,
+): ApplyResult {
+  const entry = entryOf(state, accountId);
+  const current = entry.conversations;
+  if ((result.status === "ready" || result.status === "stale") &&
+      (current.status === "ready" || current.status === "stale") && result.data.nextCursor) {
+    const fresh = new Set(result.data.items.map(item => item.conversationId));
+    const retained = current.data.items.filter(item => !fresh.has(item.conversationId));
+    return applyConversations(state, accountId, generation, seq, {
+      ...result, data: { ...result.data, items: [...result.data.items, ...retained],
+        nextCursor: retained.length ? (current.data.nextCursor ?? result.data.nextCursor) : result.data.nextCursor },
+    });
+  }
+  return applyConversations(state, accountId, generation, seq, result);
 }
 
 /** Append one page onto the rows already shown, for the same list read. */
@@ -335,6 +355,7 @@ export function requestConversation(
   state: PreviewSelectionState,
   accountId: string,
   conversationId: string,
+  options: { background?: boolean } = {},
 ): PendingRequest {
   const entry = entryOf(state, accountId);
   // Sequenced on the newest request *issued*, not the newest applied. Deriving
@@ -348,7 +369,7 @@ export function requestConversation(
       ...entry,
       selectedConversationId: conversationId,
       detailSeq: { ...entry.detailSeq, [conversationId]: seq },
-      detail: { ...entry.detail, [conversationId]: { status: "loading" } },
+      detail: { ...entry.detail, [conversationId]: options.background ? (entry.detail[conversationId] ?? { status: "loading" }) : { status: "loading" } },
     }),
   };
 }
@@ -369,6 +390,13 @@ export function applyConversation(
     // different thread is cached under its own key and is never displayed while
     // another conversation is selected, so it needs no guard.
     return { state, applied: false };
+  }
+  const cached = entry.detail[conversationId];
+  if ((result.status === "ready" || result.status === "stale") && (cached?.status === "ready" || cached?.status === "stale") && cached.data.messages.length > 100) {
+    result = { ...result, data: { ...result.data,
+      messages: mergeHistory(cached.data.messages, result.data.messages),
+      previousCursor: cached.data.previousCursor,
+    } };
   }
   const applied = entry.appliedDetailSeq[conversationId] ?? 0;
   return {
@@ -424,4 +452,30 @@ export function isLoadingMore(state: PreviewSelectionState, accountId: string): 
  */
 export function cachedConversationIds(state: PreviewSelectionState, accountId: string): string[] {
   return Object.keys(entryOf(state, accountId).detail).sort();
+}
+
+
+function mergeHistory(older: ConversationDetail["messages"], newer: ConversationDetail["messages"]): ConversationDetail["messages"] {
+  const byId = new Map(older.map(message => [message.messageId, message]));
+  for (const message of newer) byId.set(message.messageId, message);
+  return [...byId.values()].sort((a, b) => Date.parse(a.occurredAt) - Date.parse(b.occurredAt) || Number(a.messageId) - Number(b.messageId));
+}
+
+export function appendOlderConversation(state: PreviewSelectionState, accountId: string, conversationId: string,
+  generation: number, seq: number, result: RequestState<ConversationDetail>): ApplyResult {
+  if (generation !== state.scopeGeneration) return { state, applied: false };
+  const entry = entryOf(state, accountId);
+  if (seq < (entry.detailSeq[conversationId] ?? 0)) return { state, applied: false };
+  const cached = entry.detail[conversationId];
+  if ((result.status === "ready" || result.status === "stale") && (cached?.status === "ready" || cached?.status === "stale")) {
+    if (result.data.accountId !== accountId || result.data.conversationId !== conversationId) return { state, applied: false };
+    const data = { ...result.data, messages: mergeHistory(result.data.messages, cached.data.messages) };
+    // Apply directly: normal refresh deliberately retains the oldest loaded cursor.
+    return { applied: true, state: withEntry(state, accountId, { ...entry,
+      appliedDetailSeq: { ...entry.appliedDetailSeq, [conversationId]: seq },
+      detail: { ...entry.detail, [conversationId]: { ...result, data } },
+    }) };
+  }
+  // A denied/unavailable read must not retain private cached data as authority.
+  return applyConversation(state, accountId, conversationId, generation, seq, result);
 }

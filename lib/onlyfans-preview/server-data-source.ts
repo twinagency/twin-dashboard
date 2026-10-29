@@ -1,3 +1,4 @@
+import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
 // The live frontend read adapter.
 //
 // It speaks to the dashboard's read and scoped control handlers. Each handler
@@ -20,7 +21,7 @@
 // cannot reach its backend.
 
 import type { OnlyFansDataSource } from "./data-source";
-import { isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
+import { controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
@@ -48,10 +49,12 @@ export type OnlyFansTransport = {
     accountId: string,
     cursor: string | null,
     aiOnly?: boolean,
+    search?: InboxSearch,
   ): Promise<TransportReply<CursorPage<ConversationSummary>>>;
   readConversation(
     accountId: string,
     conversationId: string,
+    cursor?: string | null,
   ): Promise<TransportReply<ConversationDetail>>;
   submitControl?(request: CommandRequest): Promise<RecordedControlResult>;
 };
@@ -141,8 +144,10 @@ export function createFetchOnlyFansTransport(
         request: command, note, recordedRevision, intentId });
       const manualBody = command.command === "send_manual_message" && command.payload.kind === "manual_message" ? command.payload.body : null;
       const manual = manualBody !== null;
+      const resolution = command.command === "resolve_delivery_evidence" && command.payload.kind === "delivery_resolution";
       const action = manual ? "manual_message" : command.command;
-      if ((!manual && (!isControlAction(action) || command.payload.kind !== "none")) ||
+      if (resolution && (command.payload.kind !== "delivery_resolution" || command.payload.decision !== "delivered" || !/^[1-9][0-9]{0,15}$/.test(command.payload.providerMessageId ?? ""))) return result("refused", "An exact provider message ID is required for reconciliation.");
+      if ((!manual && !resolution && (!isControlAction(action) || command.payload.kind !== "none")) ||
           (manualBody !== null && (!manualBody.trim() || new TextEncoder().encode(manualBody).length > 4000))) {
         return result("refused", "That action is not configured for this account.");
       }
@@ -151,13 +156,13 @@ export function createFetchOnlyFansTransport(
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, expectedRevision: command.expectedRevision,
+            ...(resolution && command.payload.kind === "delivery_resolution" ? { attemptId: command.payload.attemptId, decision: command.payload.decision, providerMessageId: Number(command.payload.providerMessageId), requestKey: command.idempotencyKey } : {}),
             ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
               ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}) } : {}) }),
         });
         if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) {
-          return result("refused", response.status === 409
-            ? "The conversation changed or has an active hold. Refresh before trying again."
-            : "The change was not accepted. Check your session and refresh the conversation.");
+          const refusal = await response.json().catch(() => null);
+          return result("refused", controlRefusalNote(response.status, refusal));
         }
         if (response.ok) {
           const ack = parseControlAck(await response.json(), { ...command, action });
@@ -181,10 +186,9 @@ export function createFetchOnlyFansTransport(
       });
     },
 
-    readConversations(accountId, cursor, aiOnly) {
-      const params = new URLSearchParams();
+    readConversations(accountId, cursor, aiOnly, search) {
+      const params = inboxSearchParams(aiOnly, search);
       if (cursor) params.set("cursor", cursor);
-      if (aiOnly) params.set("filter", "ai");
       const query = params.size ? `?${params}` : "";
       return request(`/accounts/${encodeURIComponent(accountId)}/conversations${query}`, (body) => {
         if (typeof body !== "object" || body === null) return null;
@@ -200,9 +204,9 @@ export function createFetchOnlyFansTransport(
       });
     },
 
-    readConversation(accountId, conversationId) {
+    readConversation(accountId, conversationId, cursor) {
       return request(
-        `/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}`,
+        `/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
         (body) => {
           if (typeof body !== "object" || body === null) return null;
           const conversation = (body as { conversation?: unknown }).conversation;
@@ -275,17 +279,17 @@ export function createServerOnlyFansDataSource(options: {
       return toState({ outcome: "ok", data: found }, () => false, (account) => account.syncFreshness);
     },
 
-    async listConversations(accountId, cursor, aiOnly) {
+    async listConversations(accountId, cursor, aiOnly, search) {
       return toState(
-        await transport.readConversations(accountId, cursor ?? null, aiOnly),
+        await transport.readConversations(accountId, cursor ?? null, aiOnly, search),
         (page) => page.items.length === 0,
         (page) => oldestStale(page.items.map((conversation) => conversation.freshness)),
       );
     },
 
-    async getConversation(accountId, conversationId) {
+    async getConversation(accountId, conversationId, cursor) {
       return toState(
-        await transport.readConversation(accountId, conversationId),
+        await transport.readConversation(accountId, conversationId, cursor),
         () => false,
         (conversation) => conversation.freshness,
       );

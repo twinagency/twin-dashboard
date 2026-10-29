@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: OnlyFans sync status and AI hold explanations
+        run: |
+          node --import tsx scripts/check-onlyfans-sync-warning.tsx
+          npm run test:ai-live
+
       - name: Install browsers for interface verification
         timeout-minutes: 10
         run: |
@@ -84,6 +89,14 @@ jobs:
       - name: OnlyFans render layout and preserved content controls
         run: node scripts/check-onlyfans-render-browser.mjs
 
+      - name: OnlyFans takeover and blocked-control feedback
+        run: |
+          node --import tsx scripts/check-onlyfans-controls.ts
+          node --import tsx scripts/check-onlyfans-crm-video.ts
+          node --import tsx scripts/check-onlyfans-ai-visibility.tsx
+          node --import tsx scripts/check-inbox-refresh.ts
+          node scripts/check-onlyfans-takeover-browser.mjs
+
       - name: Keep OnlyFans visual review evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,6 +110,8 @@ jobs:
           node scripts/check-creator-preparation.cjs
           node --import tsx scripts/check-onlyfans-connection-status.ts
           node scripts/check-agency-team.cjs
+          node --import tsx scripts/check-moxy-viewonly-forms.ts
+          node --import tsx scripts/check-moxy-owner-access.ts
           node scripts/check-agency-team-onboarding.cjs
           node scripts/check-agency-team-ui.cjs
           node scripts/check-staff-creator-scope.cjs
@@ -165,6 +180,30 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Package the CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        run: |
+          test -f .next/standalone/server.js
+          test -z "$(find .next/standalone -type f -name '.env*' -print -quit)"
+          mkdir -p crm-release/standalone/.next crm-release/standalone/public
+          cp -a .next/standalone/. crm-release/standalone/
+          cp -a .next/static crm-release/standalone/.next/
+          cp -a public/. crm-release/standalone/public/
+          printf '%s\n' "$GITHUB_SHA" > crm-release/SOURCE_COMMIT
+          tar -C crm-release -czf onlyfans-crm-release.tgz .
+          sha256sum onlyfans-crm-release.tgz > onlyfans-crm-release.sha256
+
+      - name: Keep the exact CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-crm-release-${{ github.sha }}
+          path: |
+            onlyfans-crm-release.tgz
+            onlyfans-crm-release.sha256
+          if-no-files-found: error
+          retention-days: 7
 
       # These checks use isolated fixtures, never production database credentials.
       - name: Behavioural checks
@@ -253,5 +292,6 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-agency-team-onboarding.sql
+
 
 

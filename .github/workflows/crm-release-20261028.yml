@@ -1,0 +1,63 @@
+name: CRM verified release 20261028
+on:
+  push:
+    branches: [codex/crm-video-repairs-20261028]
+    paths: [.github/workflows/crm-release-20261028.yml]
+concurrency:
+  group: deploy-dashboard
+  cancel-in-progress: false
+permissions:
+  contents: read
+  actions: read
+env:
+  AWS_REGION: ap-southeast-2
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+  SOURCE_SHA: 81b74018841803be2f6356de6c960653c416fdde
+jobs:
+  promote:
+    if: github.repository == 'twinagency/twin-dashboard' && github.ref == 'refs/heads/codex/crm-video-repairs-20261028'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 81b74018841803be2f6356de6c960653c416fdde
+          path: source
+      - uses: actions/checkout@v4
+        with:
+          path: release
+      - name: Verify exact candidate CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for id in 40706579597 40706590424 40706590452; do
+            gh api "repos/twinagency/twin-dashboard/actions/runs/$id" > run.json
+            python3 -c 'import json,os; v=json.load(open("run.json")); assert v["head_sha"]==os.environ["SOURCE_SHA"] and v["conclusion"]=="success"'
+          done
+          python3 -m py_compile release/deployment/promote-crm-release-20261028.py
+      - name: Existing deployment credential
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Verify running versions before building
+        run: python3 release/deployment/promote-crm-release-20261028.py --preflight
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Build the tested source and push an immutable digest
+        id: image
+        working-directory: source
+        run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$SOURCE_SHA" --label org.opencontainers.image.revision="$SOURCE_SHA" -t "$ECR_REPO:$SOURCE_SHA" .
+          docker push "$ECR_REPO:$SOURCE_SHA"
+          DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:$SOURCE_SHA")
+          echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
+      - name: Wait for existing creator uploads
+        working-directory: source
+        run: python3 deployment/creator-upload-idle.py --brand=moxy
+      - name: Promote only the dashboard, preserve runtime config and rollback
+        env:
+          IMAGE_DIGEST: ${{ steps.image.outputs.digest }}
+        run: python3 release/deployment/promote-crm-release-20261028.py --image "$IMAGE_DIGEST"

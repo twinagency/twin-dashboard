@@ -16,9 +16,9 @@ const digest = (value: string) => createHash("sha256").update(value).digest("hex
 export async function POST(request: NextRequest, context: {
   params: Promise<{ accountId: string; conversationId: string }>;
 }) {
-  const ctx = await requireOnlyFansRead({ agency: true, write: true });
+  const ctx = await requireOnlyFansRead({ agency: true, write: true, capability: "chat" });
   if (ctx instanceof NextResponse) return ctx;
-  if (!ctx.canManage || !ctx.actor) return refuse(403, "Your team access is read-only.");
+  if (!ctx.canChat || !ctx.actor) return refuse(403, "Your team access is read-only.");
   // Behind the Apache proxy, nextUrl and Host are the internal upstream (http://127.0.0.1:3001),
   // so the browser Origin is checked against the dashboard's canonical origin (lib/form-origin).
   if (!trustedFormOrigin(request) ||
@@ -36,8 +36,11 @@ export async function POST(request: NextRequest, context: {
         !isControlAction(body.action) || !Number.isInteger(body.expectedRevision) ||
         (body.expectedRevision as number) < 0 || (body.expectedRevision as number) >= 2 ** 31 - 1) throw new Error();
     const manual = body.action === "manual_message";
+    const resolution = body.action === "resolve_delivery_evidence";
     const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : [])].sort().join(",");
-    if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : "action,expectedRevision")) throw new Error();
+    if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : resolution ? "action,attemptId,decision,expectedRevision,providerMessageId,requestKey" : "action,expectedRevision")) throw new Error();
+    if (resolution && (body.decision !== "delivered" || typeof body.attemptId !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(body.attemptId) ||
+        !Number.isSafeInteger(body.providerMessageId) || (body.providerMessageId as number) <= 0 || typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) throw new Error();
     if (manual && (typeof body.body !== "string" || !body.body.trim() || new TextEncoder().encode(body.body).length > 4000 ||
         typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey))) throw new Error();
     if (manual && Object.hasOwn(body, "catalogItemId") && body.catalogItemId !== null &&
@@ -47,15 +50,18 @@ export async function POST(request: NextRequest, context: {
   if (!backend) return refuse(503, "Conversation controls are not configured.");
   const action = body.action;
   if (!isControlAction(action)) return refuse(400, "That conversation control is unavailable.");
+  if (!ctx.canManage && !["manual_message", "request_takeover", "release_takeover"].includes(action)) return refuse(403, "This action requires management permission.");
   const expectedRevision = body.expectedRevision as number;
   // This shared-password dashboard has sessions, not individually named staff.
   // Audit the verified session without storing its reusable credential.
   const actor = ctx.actor;
   const commandKey = digest(JSON.stringify([actor, accountId, conversationId, action, expectedRevision,
+    ...(action === "resolve_delivery_evidence" ? [body.attemptId, body.providerMessageId, body.decision, body.requestKey] : []),
     ...(action === "manual_message" ? [body.body, body.requestKey, ...(Object.hasOwn(body, "catalogItemId") ? [body.catalogItemId] : [])] : [])]));
   const result = await backend({ accountId, conversationId, action, expectedRevision, actor, commandKey,
+    ...(action === "resolve_delivery_evidence" ? { attemptId: body.attemptId as string, providerMessageId: body.providerMessageId as number, decision: "delivered" as const } : {}),
     ...(action === "manual_message" ? { body: body.body as string,
       ...(Object.hasOwn(body, "catalogItemId") ? { catalogItemId: body.catalogItemId as number | null } : {}) } : {}) });
   return result.ok ? answer(result.ack) : answer({ schemaVersion: CONTROL_SCHEMA,
-    ok: false, outcome: result.outcome, error: result.error }, result.status);
+    ok: false, outcome: result.outcome, error: result.error, ...(result.code ? { code: result.code } : {}) }, result.status);
 }

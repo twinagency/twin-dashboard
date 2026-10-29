@@ -14,8 +14,16 @@ export async function checkCombinedEarnings(page,context,origin){
  await page.locator("[data-combined-onlyfans]").waitFor();
  await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),"combined earnings overflows mobile");
  if(process.env.ONLYFANS_TEST_EVIDENCE)await page.screenshot({path:path.join(process.env.ONLYFANS_TEST_EVIDENCE,"combined-earnings-mobile.png"),fullPage:true});
- await context.clearCookies();await page.getByRole("button",{name:"Refresh earnings",exact:true}).click();
- await page.getByText("An internal operator session is required to read combined earnings.",{exact:true}).waitFor();
+ await context.clearCookies();
+ const denied=page.waitForResponse(r=>new URL(r.url()).pathname==="/api/combined-earnings"&&r.status()===401);
+ await page.getByRole("button",{name:"Refresh earnings",exact:true}).click();
+ assert.equal((await denied).status(),401);
+ await page.waitForFunction(()=>location.pathname==="/twin"||document.body.textContent.includes("An internal operator session is required to read combined earnings."));
+ if(new URL(page.url()).pathname==="/twin"){
+  await page.getByRole("heading",{name:"Admin sign in",exact:true}).waitFor();
+ }else{
+  await page.getByText("An internal operator session is required to read combined earnings.",{exact:true}).waitFor();
+ }
  assert.equal(await page.locator("[data-combined-onlyfans]").count(),0);
  await context.addCookies([{name:"allie_admin_session",value:process.env.ONLYFANS_TEST_COOKIE,url:origin}]);
  await page.setViewportSize({width:1440,height:1000});

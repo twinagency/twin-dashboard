@@ -1,14 +1,16 @@
 "use client";
 import { useCallback,useEffect,useRef,useState } from "react";
 import { useRouter } from "next/navigation";
+import { Folder } from "lucide-react";
 import { inputCls } from "@/components/clone/fields";
 import { parseVaultResource,parseVaultEditAck,validVaultEdit,type FolderSummary,type FolderMetadata,type VaultEditRequest,type FolderPatch } from "@/lib/onlyfans/vault-editing";
 const button="rounded-lg border border-line px-3 py-2 text-xs font-semibold text-accent disabled:opacity-50";
 type Pending={resource:string;body:VaultEditRequest};
-export default function VaultOrganization({accountId,selectedIds,folderId,onFolderChange,onChanged,onBusy,compact=false}:{
+export default function VaultOrganization({accountId,selectedIds,folderId,onFolderChange,onChanged,onBusy,compact=false,folderCount,readOnly=false,refreshKey=0,onFolders}:{
   accountId:string;selectedIds:string[];folderId:string;
-  onFolderChange:(id:string)=>void;onChanged:()=>void;onBusy:(value:boolean)=>void;compact?:boolean;
+  onFolderChange:(id:string)=>void;onChanged:()=>void;onBusy:(value:boolean)=>void;compact?:boolean;folderCount?:number;readOnly?:boolean;refreshKey?:number;onFolders?:(folders:FolderSummary[])=>void;
 }){
+  const foldersCallback=useRef(onFolders);foldersCallback.current=onFolders;
   const [toolsOpen,setToolsOpen]=useState(false);
   const [targetId,setTargetId]=useState(folderId);
   const router=useRouter();const active=useRef(false),submitting=useRef(false),generation=useRef(0);
@@ -27,15 +29,16 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
       if(!active.current||stamp!==generation.current)return false;
       if(results.some(r=>[401,403].includes(r.status))){setDenied(true);setFolder(null);setFolders(null);setName("");setRetry(null);setNotice("Your session cannot manage this vault. Sign in again.");router.refresh();return false;}
       if(results.some(r=>r.data===null))throw new Error("Metadata unavailable");
-      setFolders(results[0].data as FolderSummary[]);
+      setFolders(results[0].data as FolderSummary[]);foldersCallback.current?.(results[0].data as FolderSummary[]);
       const nextFolder=results.find(r=>r.resource.startsWith("folders/"))?.data as FolderMetadata|undefined;setFolder(nextFolder??null);
       return true;
     }catch{if(active.current&&stamp===generation.current){setFolder(null);setFolders(null);setNotice("Vault organization could not be read. Refresh to try again.");}return false;}
   },[accountId,base,targetId,router]);
-  useEffect(()=>{active.current=true;setBusy(true);void load().then(ok=>{if(active.current){setBusy(false);if(ok)setNotice("");}});return()=>{active.current=false;generation.current++;};},[load]);
+  useEffect(()=>{active.current=true;setBusy(true);void load().then(ok=>{if(active.current){setBusy(false);if(ok)setNotice("");}});return()=>{active.current=false;generation.current++;};},[load,folderCount]);
+  useEffect(()=>{if(active.current&&!busy&&!retry&&!submitting.current)void load();},[refreshKey]);
   useEffect(()=>{onBusy(busy||!!retry);return()=>onBusy(false);},[busy,retry,onBusy]);
   async function save(command:Pending){
-    if(submitting.current||!validVaultEdit(command.resource,command.body))return;
+    if(readOnly||submitting.current||!validVaultEdit(command.resource,command.body))return;
     submitting.current=true;setBusy(true);setNotice("Saving vault organization…");
     let pending:Pending|null=command,message="Outcome not confirmed. Refresh or retry the same request.",changedScope=false,sessionLost=false;
     try{
@@ -62,20 +65,29 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
     void save({resource,body});
   }
   return <section className="mt-4 rounded-lg border border-line p-3" data-of-vault-organization>
-    <h3 className="text-sm font-semibold">Folders</h3>
-    {!compact ? <p className="mt-1 text-xs text-muted">Create your own categories with folders. These folders organize your Twin library; OnlyFans folders are not imported.</p> : null}
+    <div className="of-folder-heading"><h3 className="text-sm font-semibold">Folders &amp; categories{folders ? <span className="of-folder-count">{folders.length}</span> : null}</h3>
+      {compact && !denied && !readOnly ? <button type="button" className={button} aria-label={toolsOpen ? "Hide folder tools" : "New folder / add to folder"} disabled={busy||!!retry} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(value=>!value)}>{toolsOpen ? "Hide tools" : "+ New folder"}</button> : null}
+    </div>
+    <p className="mt-1 text-xs text-muted">Categories fill automatically as media is described. Unsorted holds media awaiting descriptions.</p>
     {notice?<p className="mt-2 text-xs" role="status" data-of-vault-edit-notice>{notice}</p>:null}
-    {folders?.length === 0 ? <p className="mt-2 text-xs text-muted">No folders yet. Enter a name below to create your first folder.</p> : null}
-    {!denied ? <label className="mt-3 block text-sm">Browse folder<select data-of-vault-folder-filter className={`${inputCls} mt-1 w-full`} disabled={busy || !!retry || folders === null} value={folderId} onChange={event => onFolderChange(event.target.value)}><option value="">All folders</option>{folders?.map(item => <option key={item.folderId} value={item.folderId}>{item.name} ({item.count})</option>)}</select></label> : null}
-    {compact && !denied ? <button type="button" className={`${button} mt-2 min-h-11`} disabled={busy||!!retry} aria-expanded={toolsOpen} onClick={()=>setToolsOpen(value=>!value)}>{toolsOpen ? "Hide folder tools" : "New folder / add to folder"}</button> : null}
-    {!denied && (!compact || toolsOpen) ? <fieldset disabled={busy || !!retry} className="mt-3 min-w-0 space-y-3">
+    {folders?.length === 0 ? <p className="mt-2 text-xs text-muted">No categories yet. Media needs descriptions or tags before it can be sorted automatically. You can also create your own folder.</p> : null}
+    {!denied && folders !== null ? <nav className="of-folder-nav" aria-label="Media folders">
+      <button type="button" data-of-folder-card="" aria-pressed={!folderId} disabled={busy || !!retry} onClick={() => onFolderChange("")}>
+        <Folder size={22} aria-hidden="true" /><span>All media</span>
+      </button>
+      {folders.map(item => <button key={item.folderId} type="button" data-of-folder-card={item.folderId} aria-pressed={folderId === item.folderId} disabled={busy || !!retry} onClick={() => onFolderChange(item.folderId)}>
+        <Folder size={22} aria-hidden="true" /><span>{item.name}</span><strong>{item.count.toLocaleString()}</strong>
+      </button>)}
+    </nav> : null}
+    {!denied && (!compact || toolsOpen) ? <label className="mt-3 block text-sm">Browse folder<select data-of-vault-folder-filter className={`${inputCls} mt-1 w-full`} disabled={busy || !!retry || folders === null} value={folderId} onChange={event => onFolderChange(event.target.value)}><option value="">All folders</option>{folders?.map(item => <option key={item.folderId} value={item.folderId}>{item.name} ({item.count})</option>)}</select></label> : null}
+    {!denied && !readOnly && (!compact || toolsOpen) ? <fieldset disabled={busy || !!retry} className="mt-3 min-w-0 space-y-3">
       <label className="block min-w-0 text-sm">Folder name<input data-of-vault-folder-name className={`${inputCls} mt-1 w-full`} placeholder="Name your folder" maxLength={120} value={name} onChange={e=>setName(e.target.value)}/></label>
       <button type="button" data-of-vault-folder-create className={`${button} min-h-11`} disabled={!folders||!name.trim()} onClick={()=>folderCommand("create")}>Create folder</button>
       <label className="block min-w-0 text-sm">Folder to manage<select data-of-vault-folder className={`${inputCls} mt-1 w-full`} disabled={folders===null} value={targetId} onChange={e=>setTargetId(e.target.value)}><option value="">Choose a folder</option>{folders?.map(f=><option key={f.folderId} value={f.folderId}>{f.name} ({f.count})</option>)}</select></label>
       <button type="button" data-of-vault-folder-add className={`${button} min-h-11`} disabled={!folder||!selectedIds.length} onClick={()=>folderCommand("add")}>Add selected assets</button>
       <p className="text-xs text-muted">{selectedIds.length} media selected. Choose a destination folder above to organize them.</p>
     </fieldset> : null}
-    {!denied && (!compact || toolsOpen)?<details className="mt-3"><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Manage folders{folders ? ` (${folders.length})` : ""}</summary><fieldset disabled={busy||!!retry} className="mt-3 space-y-3 min-w-0">
+    {!denied && !readOnly && (!compact || toolsOpen)?<details className="mt-3"><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Manage folders{folders ? ` (${folders.length})` : ""}</summary><fieldset disabled={busy||!!retry} className="mt-3 space-y-3 min-w-0">
       <p className="text-xs text-muted">Use Folder name above when renaming the selected folder.</p>
       <p className="text-xs text-muted">Current view: {folderId?(folders?.find(f=>f.folderId===folderId)?.name??"Selected folder"):"All assets"}</p>
       <div className="flex flex-wrap gap-2">
@@ -91,3 +103,4 @@ export default function VaultOrganization({accountId,selectedIds,folderId,onFold
     {!denied && (!compact || toolsOpen || folders===null)?<button type="button" className={`${button} mt-3`} disabled={busy||!!retry} onClick={()=>{setBusy(true);void load().then(()=>active.current&&setBusy(false));}}>Refresh organization</button>:null}
   </section>;
 }
+

@@ -1,3 +1,4 @@
+import { readWithRecovery } from "../read-recovery";
 /** Shared browser/server helpers for launch sections D (memory) and E (automation). No credentials. */
 export type BReply<T> =
   | { kind: "ok"; data: T }
@@ -29,7 +30,7 @@ export const B_CAPABILITIES: BCapabilityStatus[] = [
   { id: "memory.coverage", label: "Stored-memory and archive progress", source: "real", note: "Separate native progress indicators; unknown provider totals remain unknown." },
 ];
 
-type Opts = { method?: "GET" | "POST" | "PATCH"; body?: unknown; signal?: AbortSignal; timeoutMs?: number };
+type Opts = { method?: "GET" | "POST" | "PATCH"; body?: unknown; signal?: AbortSignal; timeoutMs?: number; readRecovery?: boolean };
 
 /** One attempt. An aborted request is "stale" and must be ignored by the caller. */
 export async function bFetch(url: string, opts: Opts = {}): Promise<BReply<unknown>> {
@@ -38,7 +39,7 @@ export async function bFetch(url: string, opts: Opts = {}): Promise<BReply<unkno
     signal: AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(timeoutMs)]) };
   if (body !== undefined) { init.headers = { "Content-Type": "application/json" }; init.body = JSON.stringify(body); }
   let response: Response;
-  try { response = await fetch(url, init); }
+  try { response = method === "GET" && opts.readRecovery ? await readWithRecovery(url, init) : await fetch(url, init); }
   catch { return signal?.aborted ? { kind: "stale" } : method === "GET" ? { kind: "unavailable", error: "The read did not complete." } : { kind: "unconfirmed", error: B_UNCONFIRMED }; }
   if (signal?.aborted) return { kind: "stale" };
   let value: Record<string, unknown> | null = null;
