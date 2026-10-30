@@ -41,7 +41,7 @@ export default function TopBar({
   signOut = "live",
   signOutAction,
 }: {
-  clones: { id: string; name: string; color: string; photoUrl?: string }[];
+  clones: { id: string; name: string; color: string; photoUrl?: string; providerAvatarUrl?: string }[];
   activeCloneId: string | null;
   allTimeStars: number;
   /** Rate for the all-time figure (blends per-girl rates). Falls back to the viewer's rate. */
@@ -97,19 +97,19 @@ export default function TopBar({
   const combined = audience === "admin" && channel === "all" && ["/dashboard", "/overview"].includes(pathname) || channel === "onlyfans" && pathname === "/onlyfans/overview";
   const [rosterRead, setRosterRead] = useState<{channel: string; status: "ready" | "unavailable"; creators: typeof clones} | null>(null);
   useEffect(() => {
-    if (audience !== "admin" || channel === "all" || lockCreatorScope) return;
+    if ((audience !== "admin" && channel !== "onlyfans") || channel === "all" || lockCreatorScope) return;
     const controller = new AbortController();
     void (async () => {
       try {
         const response = await fetch(`/api/channel-roster?channel=${channel}`, { cache: "no-store", signal: controller.signal });
         const data = response.ok ? await response.json() as ChannelRoster : null;
         const source = data?.schemaVersion === "channel-roster.v1" ? data[channel] : null;
-        if (!controller.signal.aborted) setRosterRead({ channel, status: source?.status === "ready" ? "ready" : "unavailable", creators: source?.status === "ready" ? mergeChannelCreators(data!).map(creator => ({id: creator.id, name: creator.name, color: creator.color, photoUrl: creator.photoUrl})) : [] });
+        if (!controller.signal.aborted) setRosterRead({ channel, status: source?.status === "ready" ? "ready" : "unavailable", creators: source?.status === "ready" ? mergeChannelCreators(data!).map(creator => ({id: creator.id, name: creator.name, color: creator.color, photoUrl: creator.photoUrl, providerAvatarUrl: creator.providerAvatarUrl})) : [] });
       } catch { if (!controller.signal.aborted) setRosterRead({channel, status:"unavailable", creators:[]}); }
     })();
     return () => controller.abort();
   }, [audience, channel, lockCreatorScope]);
-  const channelScoped = audience === "admin" && channel !== "all" && !lockCreatorScope;
+  const channelScoped = (audience === "admin" || channel === "onlyfans") && channel !== "all" && !lockCreatorScope;
   const channelReady = rosterRead?.channel === channel && rosterRead.status === "ready";
   const scopedClones = channelScoped ? channelReady ? (rosterRead?.creators ?? []).map(creator => ({...creator, photoUrl: creator.photoUrl ?? clones.find(known => known.id === creator.id)?.photoUrl})) : [] : clones;
   const scopeId = combined ? null : channel === "onlyfans" ? searchParams.get("creator") : activeCloneId;

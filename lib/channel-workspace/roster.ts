@@ -24,7 +24,7 @@ async function onlyfansRoster(context: ReadContext): Promise<RosterSource<Worksp
   try {
     const result = await readAccounts(context, { creatorId: null, accountId: null });
     if (!result.ok) return failed(result.state === "unavailable" ? "The OnlyFans account service is unavailable. Refresh to try again." : "OnlyFans accounts could not be loaded. Refresh to try again.");
-    return { status: "ready", error: null, items: result.body.accounts.map(account => ({ id: account.accountId, creatorId: account.binding.creatorId, creatorName: account.binding.creatorName, handle: account.binding.handle, health: account.health })) };
+    return { status: "ready", error: null, items: result.body.accounts.map(account => ({ id: account.accountId, creatorId: account.binding.creatorId, creatorName: account.binding.creatorName, handle: account.binding.handle, avatarUrl: account.creatorProfile?.avatarUrl ?? null, health: account.health })) };
   } catch { return failed("OnlyFans accounts could not be loaded. Refresh to try again."); }
 }
 export async function readChannelRoster(context: ReadContext, channel: "all" | "telegram" | "onlyfans"): Promise<ChannelRoster> {
