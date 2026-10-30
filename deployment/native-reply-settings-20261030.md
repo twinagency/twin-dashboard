@@ -1,11 +1,15 @@
-# Native reply settings candidate
+# Native reply settings release
 
-Adds independent `nativeReplyPacingEnabled` and `nativeReplyFormatEnabled` checkboxes to the existing creator configuration editor. Missing fields remain readable and their controls are disabled until the backend supports them. Only changed fields are submitted through the existing revision/fingerprint, permission and idempotency flow. Neither setting changes activation or contextual sales mode.
+Deployed on 30 October 2026 to both dashboard consumers from `2e4dfea7acbc5fa3fe14b64dc2d3bb981b5da7db`, image `sha256:60c4edf7947e3af3cbe33454b2df90db508d58572a7a40bf3d5698ec2a33d1fb`. Later documentation commits do not require a new runtime image.
 
-Base: dashboard commit `3a516c8a60401f8d9ed9b30d3e2666f90d7af821`. Changes: `components/onlyfans-preview/ConfigurationEditor.tsx`, `lib/onlyfans/configuration.ts`, and `scripts/check-native-reply-settings.ts`.
+The existing configuration editor now exposes independent `nativeReplyPacingEnabled` and `nativeReplyFormatEnabled` controls. It accepts older API responses with missing fields and disables unsupported controls. Only changed fields go through the existing authenticated revision/fingerprint and idempotency flow. Neither control changes activation or contextual sales mode. The live contextual settings UI is preserved.
 
-Validation: contract script passed for old API responses, independent true/false values, rejection of non-booleans, contextual-field compatibility and activation-write rejection. Focused editor TypeScript checking passed with the existing dependency fixture. Full Next build and browser interaction were not run.
+The compatible dashboards were deployed before the backend, because the earlier strict parser rejects new response keys. Both images and runtime settings were verified. The second consumer retained its environment, mounts, command, entrypoint and port bindings.
 
-Deploy this compatible parser before the companion backend starts returning the new fields: the old exact-key parser rejects unknown fields. Both backend flags default off. Nothing was deployed or enabled in this session. Backend live sender reconciliation, remaining integration/load validation, and an exact compatible rollback are release blockers documented in the backend candidate's `docs/onlyfans/reply-pacing-20261030/RELEASE.md`.
+Contract and focused editor checks passed. The [release workflow](https://github.com/twinagency/twin-dashboard/actions/runs/41015046700) passed creator/upload tests, full test/build jobs, image/source checks, dashboard recovery and signup/upload boundary checks.
 
-Do not merge contextual offers or enable new accounts as part of this change. Nicky/Nikki remains excluded. Reverting this UI after a backend rollout requires reverting the backend response fields first, or retaining this additive parser.
+The final all-creator catalogue-preview audit failed after checking 20 of 1,313 videos with a generic error; its exact cause is unproven. A comparison using the byte-identical checker on the previous image completed all 1,313: 1,309 passed and four failed. Media routes and this checker were not modified. The audit is not marked green; the subsequent public-homepage workflow step was skipped. Manual browser interaction has not been claimed.
+
+Pacing was enabled for Maile alone through the audited backend endpoint at 07:22:30 UTC. Formatting remains off everywhere. No new account activation, reconnection, fan test message or purchase occurred. Nicky/Nikki remains excluded.
+
+See the [backend release record](https://github.com/twinagency/twin-onlyfans-backend/blob/codex/reply-pacing-208785-20261030/docs/onlyfans/reply-pacing-20261030/RELEASE.md) for exact integration, load, live-observation and rollback evidence. Reverting this UI requires reverting the new backend response fields first, or retaining this compatible parser.
