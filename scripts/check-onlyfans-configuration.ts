@@ -13,6 +13,17 @@ async function main() {
     replyOverridePresent: true, resolvedReplyModel: null, modelOptions: ["synthetic/model"] };
   const read = { schemaVersion: CONFIGURATION_SCHEMA, ok: true, accountId: "acc-a", configuration };
   assert(parseConfiguration(read, "acc-a"));
+  for (const key of ["nativeReplyPacingEnabled", "nativeReplyFormatEnabled"] as const) {
+    for (const value of [true, false]) {
+      assert(parseConfiguration({ ...read, configuration: { ...configuration, [key]: value } }, "acc-a"));
+      assert(validConfigurationRequest({ patch: { [key]: value }, expectedRevision: 7, expectedFingerprint: "a".repeat(64) }));
+    }
+    for (const value of [null, undefined, "true", 0, 1]) {
+      assert.equal(parseConfiguration({ ...read, configuration: { ...configuration, [key]: value } }, "acc-a"), null);
+      assert.equal(validConfigurationRequest({ patch: { [key]: value }, expectedRevision: 7, expectedFingerprint: "a".repeat(64) }), false);
+    }
+    assert.equal(parseConfiguration({ ...read, configuration: { ...configuration, salesConfigurationValid: false, [key]: true } }, "acc-a"), null);
+  }
   for (const changed of [{ fingerprint: "bad" }, { persona: null }, { personaTruncated: true }, { defaultModel: false },
     { creatorFacts: { unknown: "private" } }, { factFields: [] }, { readOnlyFacts: ["unknown"] }, { modelOptions: ["a", "a"] }, { sharedFacts: { ...configuration.sharedFacts, state: "current" } },
     { sharedFacts: { ...configuration.sharedFacts, overrideKeys: ["unknown"] } }, { unexpected: true },
@@ -54,7 +65,7 @@ async function main() {
     canonicalConfiguration({ patch: { creatorFacts: { age: "28", job: "x" }, persona: "x" } }));
   const posted: string[] = [];
   const wire: typeof fetch = async (url, init) => {
-    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a" + (init?.method === "GET" ? "?contextual=1" : ""));
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a" + (init?.method === "GET" ? "?contextual=1&replyPolicy=1" : ""));
     assert.equal(init?.credentials, "omit"); assert.equal(init?.redirect, "error"); assert.equal(init?.cache, "no-store");
     const headers = new Headers(init?.headers);
     assert.equal(headers.get("authorization"), "Bearer synthetic-configuration-only"); assert.equal(headers.get("cookie"), null);
@@ -75,3 +86,4 @@ async function main() {
   console.log("PASS configuration: exact scoped metadata/acknowledgement, strict partial patches, stable identities, separate credential, no cookie/redirect forwarding, historical retry and uncertainty");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

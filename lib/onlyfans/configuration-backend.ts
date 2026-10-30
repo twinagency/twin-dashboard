@@ -10,7 +10,7 @@ export function createConfigurationBackend(options: { baseUrl: string; token: st
   return {
     async get(accountId: string, includeActivation = false) {
       try {
-        const response = await call(url(accountId) + (includeActivation ? "?activation=1&contextual=1" : "?contextual=1"), { method: "GET", headers });
+        const response = await call(url(accountId) + (includeActivation ? "?activation=1&contextual=1&replyPolicy=1" : "?contextual=1&replyPolicy=1"), { method: "GET", headers });
         if (response.ok) { const data = parseConfiguration(await response.json(), accountId); if (data) return { ok: true as const, data }; }
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "Creator configuration could not be read." };
       } catch { return { ok: false as const, status: 503, error: "Creator configuration could not be read." }; }
@@ -33,3 +33,4 @@ export function configuredConfigurationBackend(fetchImpl?: typeof fetch) {
   const options = configuredBackendPurpose("CONFIGURATION");
   return options ? createConfigurationBackend({ ...options, fetchImpl }) : null;
 }
+
