@@ -19,7 +19,7 @@ export type Configuration = {
   fasttDiscountResend: boolean; fasttPostBuyUpsell: boolean;
   dailyCostCapCents: number; reasoningEffort: string | null; reasoningOptions: Record<string, string[]>;
 };
-export type ConfigurationPatch = { nativeReplyPacingEnabled?: boolean; nativeReplyFormatEnabled?: boolean; fasttScope?: FanSelection; persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
+export type ConfigurationPatch = { fasttContextualSalesMode?: "off" | "shadow" | "live"; nativeReplyPacingEnabled?: boolean; nativeReplyFormatEnabled?: boolean; fasttScope?: FanSelection; persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
   defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean; fasttDiscountResend?: boolean; fasttPostBuyUpsell?: boolean; dailyCostCapCents?: number; reasoningEffort?: string | null };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
@@ -35,7 +35,8 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["nativeReplyPacingEnabled", "nativeReplyFormatEnabled", "fasttScope", "persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["fasttContextualSalesMode", "nativeReplyPacingEnabled", "nativeReplyFormatEnabled", "fasttScope", "persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if ("fasttContextualSalesMode" in patch && !["off", "shadow", "live"].includes(patch.fasttContextualSalesMode as string)) return false;
   if (["nativeReplyPacingEnabled", "nativeReplyFormatEnabled"].some(key => key in patch && typeof patch[key] !== "boolean")) return false;
   if ("fasttScope" in patch && !validFanSelection(patch.fasttScope)) return false;
   if ("dailyCostCapCents" in patch && (!Number.isInteger(patch.dailyCostCapCents) || Number(patch.dailyCostCapCents) < 0 || Number(patch.dailyCostCapCents) > 1_000_000)) return false;
