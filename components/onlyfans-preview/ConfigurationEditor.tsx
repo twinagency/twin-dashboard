@@ -24,6 +24,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
   const [onRequestSales, setOnRequestSales] = useState(false);
+  const [replyPacing, setReplyPacing] = useState(false), [replyFormat, setReplyFormat] = useState(false);
   const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
   const [scopeMode, setScopeMode] = useState<"selected" | "all">("selected"), [scopeFans, setScopeFans] = useState("");
   const [dailyBudget, setDailyBudget] = useState("0"), [effort, setEffort] = useState("");
@@ -53,6 +54,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
       setOnRequestSales(next.onRequestSalesEnabled);
+      setReplyPacing(next.nativeReplyPacingEnabled ?? false); setReplyFormat(next.nativeReplyFormatEnabled ?? false);
       setDiscountResend(next.fasttDiscountResend); setPostBuyUpsell(next.fasttPostBuyUpsell);
       if (next.activation) {
         setScopeMode(next.activation.selection?.mode === "all" || !next.activation.selection && next.activation.allFansAllowed && !next.activation.allowedFans.length ? "all" : "selected");
@@ -84,6 +86,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
     if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
+    if (data.salesConfigurationValid && data.nativeReplyPacingEnabled !== undefined && replyPacing !== data.nativeReplyPacingEnabled) patch.nativeReplyPacingEnabled = replyPacing;
+    if (data.salesConfigurationValid && data.nativeReplyFormatEnabled !== undefined && replyFormat !== data.nativeReplyFormatEnabled) patch.nativeReplyFormatEnabled = replyFormat;
     if (data.salesConfigurationValid && discountResend !== data.fasttDiscountResend) patch.fasttDiscountResend = discountResend;
     if (data.salesConfigurationValid && postBuyUpsell !== data.fasttPostBuyUpsell) patch.fasttPostBuyUpsell = postBuyUpsell;
     if (Number(dailyBudget) !== data.dailyCostCapCents || !dailyBudget.trim()) patch.dailyCostCapCents = dailyBudget.trim() ? Number(dailyBudget) : NaN;
@@ -191,6 +195,24 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
         </div>
         <div className="rounded-lg border border-line p-3">
           <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-reply-pacing checked={replyPacing}
+              disabled={!data.salesConfigurationValid || data.nativeReplyPacingEnabled === undefined}
+              onChange={event => setReplyPacing(event.target.checked)} />
+            Varied reply timing
+          </label>
+          <p className="mt-2 text-xs text-muted">Group incoming messages and vary reply timing, targeting 25 to 90 seconds when capacity allows.</p>
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-reply-format checked={replyFormat}
+              disabled={!data.salesConfigurationValid || data.nativeReplyFormatEnabled === undefined}
+              onChange={event => setReplyFormat(event.target.checked)} />
+            Flexible reply length
+          </label>
+          <p className="mt-2 text-xs text-muted">Allow a short acknowledgment or a fuller reply when the conversation needs it.</p>
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
             <input type="checkbox" data-of-edit-request-sales checked={onRequestSales}
               disabled={!data.salesConfigurationValid} onChange={event => setOnRequestSales(event.target.checked)} />
             Offer saved content when a fan asks
@@ -243,3 +265,4 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     {!data && !denied ? <button className={`${buttonClass} mt-3`} disabled={busy} onClick={() => { setBusy(true); void read().then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } }); }}>Refresh editor</button> : null}
   </Card>;
 }
+
