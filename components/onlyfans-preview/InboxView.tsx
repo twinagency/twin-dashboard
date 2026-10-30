@@ -25,7 +25,7 @@ import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import OnlyFansAvatar from "./OnlyFansAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
-import { conversationTimeline, isAiChatting, effectiveAiStatus, replyOwnership } from "@/lib/onlyfans/ai-visibility";
+import { conversationTimeline, conversationAttention, isAiChatting, effectiveAiStatus, replyOwnership } from "@/lib/onlyfans/ai-visibility";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { ActionSet } from "@/lib/onlyfans-preview/actions";
 import { formatAge } from "@/lib/onlyfans-preview/fixtures";
@@ -932,6 +932,28 @@ export default function InboxView({
                   className="hidden min-h-9 shrink-0 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold text-muted hover:text-ink lg:inline-flex">
                   <UserRound className="size-3.5" aria-hidden="true" />{profileOpen ? "Hide fan details" : "Fan details"}</button>
               </div>
+
+
+              {conversationAttention(detail.summary).length ? <section data-of-attention-notice role="status"
+                aria-label="Conversation needs attention" className="max-h-48 shrink-0 overflow-y-auto border-b border-amber-200 bg-amber-50 px-3.5 py-3 text-slate-900">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    {conversationAttention(detail.summary).map(notice => <div key={notice.key} data-of-attention-reason={notice.key}>
+                      <p className="text-sm font-semibold">{notice.title}</p>
+                      <p className="whitespace-normal break-words text-xs leading-5">{notice.detail}</p>
+                      <p className="whitespace-normal break-words text-xs leading-5"><strong>Next step:</strong> {notice.nextAction}</p>
+                    </div>)}
+                    <div className="flex flex-wrap gap-2">
+                      {actionSet?.available.some(entry => entry.action === "request_takeover") ? <button type="button"
+                        data-of-attention-takeover disabled={commandPending} onClick={() => onCommand("request_takeover", NO_PAYLOAD)}
+                        className="of-control-button of-primary">{commandPending && pendingAction === "request_takeover" ? "Requesting takeover…" : "Take over to reply"}</button> : null}
+                      <button type="button" data-of-attention-controls className="of-control-button of-secondary"
+                        onClick={() => { setProfileOpen(true); setMobilePanel("controls"); }}>Open reply controls</button>
+                    </div>
+                  </div>
+                </div>
+              </section> : null}
 
               <Thread detail={detail} principal={draftPrincipal} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
