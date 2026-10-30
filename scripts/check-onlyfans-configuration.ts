@@ -54,7 +54,7 @@ async function main() {
     canonicalConfiguration({ patch: { creatorFacts: { age: "28", job: "x" }, persona: "x" } }));
   const posted: string[] = [];
   const wire: typeof fetch = async (url, init) => {
-    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a" + (init?.method === "GET" ? "?contextual=1" : ""));
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a" + (init?.method === "GET" ? "?contextual=1&replyPolicy=1" : ""));
     assert.equal(init?.credentials, "omit"); assert.equal(init?.redirect, "error"); assert.equal(init?.cache, "no-store");
     const headers = new Headers(init?.headers);
     assert.equal(headers.get("authorization"), "Bearer synthetic-configuration-only"); assert.equal(headers.get("cookie"), null);
@@ -66,6 +66,13 @@ async function main() {
   };
   const backend = createConfigurationBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic-configuration-only", fetchImpl: wire });
   assert((await backend.get("acc-a")).ok);
+  const activationBackend = createConfigurationBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: async (url) => {
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a?activation=1&contextual=1&replyPolicy=1");
+    return Response.json({ ...read, configuration: { ...configuration, fasttContextualSalesMode: "shadow",
+      nativeReplyPacingEnabled: true, nativeReplyFormatEnabled: false } });
+  } });
+  const negotiated = await activationBackend.get("acc-a", true);
+  assert(negotiated.ok && negotiated.data.fasttContextualSalesMode === "shadow" && negotiated.data.nativeReplyPacingEnabled === true);
   const lost = await backend.save("acc-a", command); assert(!lost.ok && lost.outcome === "unconfirmed");
   assert((await backend.save("acc-a", command)).ok); assert.equal(posted[0], posted[1]);
   for (const status of [400, 401, 403, 404, 409, 413, 503, 500]) {
