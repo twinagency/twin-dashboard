@@ -1,0 +1,27 @@
+# Incident recovery for the separate Telegram monitor, not the Next.js dashboard.
+# Applied 2026-10-31 Brisbane to twin-bot-prod, dash service only.
+# Base was the running image:
+# sha256:af41dd70e3f0be2cf33c3e030ab142672c23b4698bc0d295d06aeeca03b7c1d2
+# Tag that existing image twin-inbox-cache-base:20261031 before building.
+# Live final image: twin-inbox-cache:20261031-fast
+# Live compose override:
+# /home/ubuntu/twin-v2/deployment/inbox-cache-20261031/compose.override.json
+#
+# Root causes:
+# - A six-creator summary LRU repeatedly evicted entries across the 24-creator roster.
+# - fans() called chats(), calculating ownership for every fan and discarding it.
+# Preserve chats()' default ownership behavior for all other callers.
+#
+# Validated in isolated containers with network disabled:
+# check-dashboard-bounded.ts (35 checks), check-dashboard-guard.ts (36),
+# check-dashboard-ops.ts (48), check-dashboard-history.ts.
+# Tests establish identical fan fields/statistics and retain chat ownership behavior.
+#
+# Source must also be applied to dashboard/server.ts in the Telegram bot repository
+# before that repository next replaces this monitor image. The connected GitHub
+# installation currently exposes twin-dashboard and twin-onlyfans-backend only.
+# This file preserves the deployed fix; it does not change the dashboard deploy.
+ARG BASE_IMAGE=twin-inbox-cache-base:20261031
+FROM ${BASE_IMAGE}
+RUN node --input-type=module -e 'import fs from "node:fs"; const p="dashboard/server.ts"; let s=fs.readFileSync(p,"utf8"); for(const [a,b] of [["const MAX_SUMMARIES = 6,","const MAX_SUMMARIES = 32,"],["export function chats() {","export function chats(includeOwned = true) {"],["owned: [...ownedKeys(id)]","owned: includeOwned ? [...ownedKeys(id)] : []"],["return chats().map((c) => {","return chats(false).map((c) => {"]]){if(s.split(a).length!==2)throw Error("unexpected source: "+a);s=s.replace(a,b)}fs.writeFileSync(p,s);'
+LABEL twin.inbox.cache.repair="20261031-capacity32" twin.inbox.list.repair="skip-unused-ownership"
