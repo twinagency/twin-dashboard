@@ -23,6 +23,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [facts, setFacts] = useState<Partial<Record<FactKey, string>>>({});
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
+  const [contextualMode, setContextualMode] = useState<"off" | "shadow" | "live">("off");
   const [onRequestSales, setOnRequestSales] = useState(false);
   const [replyPacing, setReplyPacing] = useState(false), [replyFormat, setReplyFormat] = useState(false);
   const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
@@ -53,6 +54,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setData(next); setPersona(next.persona ?? "");
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
+      setContextualMode(next.fasttContextualSalesMode ?? "off");
       setOnRequestSales(next.onRequestSalesEnabled);
       setReplyPacing(next.nativeReplyPacingEnabled ?? false); setReplyFormat(next.nativeReplyFormatEnabled ?? false);
       setDiscountResend(next.fasttDiscountResend); setPostBuyUpsell(next.fasttPostBuyUpsell);
@@ -85,6 +87,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (Object.keys(changed).length) patch.creatorFacts = changed;
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
+    if (data.salesConfigurationValid && data.fasttContextualSalesMode !== undefined && contextualMode !== data.fasttContextualSalesMode) patch.fasttContextualSalesMode = contextualMode;
     if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
     if (data.salesConfigurationValid && data.nativeReplyPacingEnabled !== undefined && replyPacing !== data.nativeReplyPacingEnabled) patch.nativeReplyPacingEnabled = replyPacing;
     if (data.salesConfigurationValid && data.nativeReplyFormatEnabled !== undefined && replyFormat !== data.nativeReplyFormatEnabled) patch.nativeReplyFormatEnabled = replyFormat;
@@ -185,6 +188,14 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </select></label>
         </div>
         <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p></div></details>
+        <div className="min-w-0">
+          <label className="text-sm">Contextual offers<select data-of-edit-contextual className={inputClass}
+            disabled={!data.salesConfigurationValid || data.fasttContextualSalesMode === undefined}
+            value={contextualMode} onChange={event => setContextualMode(event.target.value as "off" | "shadow" | "live")}>
+            <option value="off">Off</option><option value="shadow">Preview</option><option value="live">On</option>
+          </select></label>
+          <p className="mt-1 text-xs text-muted">Offer relevant available content during AI conversations.</p>
+        </div>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Daily model budget (USD cents)<input data-of-edit-budget type="number" min={0} max={1_000_000} step={1} className={inputClass} value={dailyBudget} onChange={event => setDailyBudget(event.target.value)} /></label>
           <label className="min-w-0 text-sm">Reasoning effort<select data-of-edit-reasoning className={inputClass} value={effort} onChange={event => setEffort(event.target.value)}>

@@ -30,10 +30,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: OnlyFans sync status and AI hold explanations
+      - name: OnlyFans settings, sync status and AI holds
         run: |
           node --import tsx scripts/check-onlyfans-sync-warning.tsx
           npm run test:ai-live
+          node --import tsx scripts/check-contextual-offers.ts
 
       - name: Install browsers for interface verification
         timeout-minutes: 10
@@ -303,6 +304,3 @@ jobs:
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql
           psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-agency-team-onboarding.sql
-
-
-
