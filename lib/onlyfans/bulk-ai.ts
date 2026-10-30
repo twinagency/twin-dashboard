@@ -1,57 +1,70 @@
-import { availableActions, createCommandRequest } from "../onlyfans-preview/actions";
 import type { OnlyFansDataSource } from "../onlyfans-preview/data-source";
 import type { OfAccount, PreviewViewer, ConversationSummary } from "../onlyfans-preview/types";
+import { BULK_LIMIT, parseBulkAck, type BulkRequest } from "./bulk-controls";
 
-export type BulkProgress = { checked: number; enabled: number; alreadyOn: number; protected: number };
-
-/** Uses existing revision-checked commands. Never guesses that an uncertain write failed. */
-export async function enableExistingFanChats(options: {
+export type BulkProgress = { phase: "discovering" | "updating"; discovered: number; checked: number;
+  enabled: number; disabled: number; alreadyOn: number; alreadyOff: number; protected: number;
+  reasons: Record<string, number> };
+export type BulkOptions = {
   account: OfAccount; viewer: PreviewViewer; source: OnlyFansDataSource;
   cancelled: () => boolean; progress: (value: BulkProgress) => void;
-}): Promise<BulkProgress> {
-  const { account, viewer, source, cancelled, progress } = options;
-  if (!viewer.canManage || source.kind !== "live") throw Error("This session cannot enable chats.");
-  const result: BulkProgress = { checked: 0, enabled: 0, alreadyOn: 0, protected: 0 };
-  const seen = new Set<string>(), cursors = new Set<string>();
-  const candidates: ConversationSummary[] = [];
+  submitBatch: (request: BulkRequest) => Promise<unknown>;
+};
+
+/** Freeze the discovered list, then use bounded, revision-checked server batches. */
+export async function changeExistingFanChats(options: BulkOptions, enabled: boolean): Promise<BulkProgress> {
+  const { account, viewer, source, cancelled, progress, submitBatch } = options;
+  if (!viewer.canManage || source.kind !== "live") throw Error("This session cannot change AI replies.");
+  const result: BulkProgress = { phase: "discovering", discovered: 0, checked: 0, enabled: 0, disabled: 0,
+    alreadyOn: 0, alreadyOff: 0, protected: 0, reasons: {} };
+  const report = () => progress({ ...result, reasons: { ...result.reasons } });
+  const stopped = () => { if (cancelled()) throw Error("Stopped. Confirmed changes remain saved. Refresh to check the current state."); };
+  const seen = new Set<string>(), cursors = new Set<string>(), candidates: ConversationSummary[] = [];
   let cursor: string | null = null;
-  // Finish discovering the stored chats before writing; a failed page is not a complete rollout.
+  report();
   do {
-    if (cancelled()) throw Error("Stopped. Changes already recorded remain in place.");
-    const page = await source.listConversations(account.accountId, cursor, false);
+    stopped();
+    const page = await source.listConversations(account.accountId, cursor, !enabled);
     if (page.status === "empty") break;
-    if (page.status !== "ready" && page.status !== "stale") throw Error("Could not read all chats. Refresh and try again.");
+    if (page.status !== "ready" && page.status !== "stale") throw Error("Could not read all chats. No batch was started. Refresh and try again.");
     for (const summary of page.data.items) {
       if (summary.accountId !== account.accountId) throw Error("The chat list changed account. Refresh before continuing.");
       if (!seen.has(summary.conversationId)) { seen.add(summary.conversationId); candidates.push(summary); }
     }
+    result.discovered = candidates.length; report();
     cursor = page.data.nextCursor;
-    if (cursor && (cursors.has(cursor) || cursors.size >= 1000)) throw Error("Chat pagination could not finish. Refresh before continuing.");
+    if (cursor && (cursors.has(cursor) || cursors.size >= 1000)) throw Error("Chat pagination could not finish. No batch was started.");
     if (cursor) cursors.add(cursor);
   } while (cursor);
-  for (const summary of candidates) {
-    if (cancelled()) throw Error("Stopped. Changes already recorded remain in place.");
-    result.checked++;
-    if (summary.automationMode === "automated" && summary.takeoverState === "none") result.alreadyOn++;
-    else if (summary.revision !== 0 || summary.automationMode !== "paused" || summary.takeoverState !== "none") result.protected++;
-    else {
-      const read = await source.getConversation(account.accountId, summary.conversationId);
-      if (read.status !== "ready" && read.status !== "stale") throw Error("A chat could not be checked. Refresh before continuing.");
-      const detail = read.data, current = detail.summary;
-      if (detail.accountId !== account.accountId || detail.conversationId !== summary.conversationId ||
-          current.accountId !== account.accountId || current.conversationId !== summary.conversationId) throw Error("A chat changed account. Refresh before continuing.");
-      const actions = availableActions({ account, summary: current, viewer, deliveryIncident: detail.deliveryIncident });
-      if (current.revision !== 0 || !actions.available.some(a => a.action === "resume_automation")) result.protected++;
-      else {
-        if (cancelled()) throw Error("Stopped. Changes already recorded remain in place.");
-        const response = await source.submitCommand(createCommandRequest({ command: "resume_automation", accountId: account.accountId,
-          conversationId: current.conversationId, expectedRevision: current.revision, payload: { kind: "none" } }));
-        if (response.simulated || !response.applied || response.outcome !== "recorded")
-          throw Error("A chat change was not confirmed. Stopped here. Refresh the inbox before trying again.");
-        result.enabled++;
-      }
+  const action = enabled ? "resume_automation" : "pause_automation";
+  const targets: ConversationSummary[] = [];
+  for (const row of candidates) {
+    if (row.takeoverState === "none" && row.automationMode === (enabled ? "automated" : "paused")) {
+      if (enabled) result.alreadyOn++; else result.alreadyOff++;
+      result.checked++;
+    } else if (row.takeoverState !== "none" || row.automationMode !== (enabled ? "paused" : "automated")) {
+      result.protected++; result.checked++;
+      const reason = row.automationMode === "no_contact" ? "contact_blocked" : "human_control";
+      result.reasons[reason] = (result.reasons[reason] ?? 0) + 1;
+    } else targets.push(row);
+  }
+  result.phase = "updating"; report();
+  for (let offset = 0; offset < targets.length; offset += BULK_LIMIT) {
+    stopped();
+    const items = targets.slice(offset, offset + BULK_LIMIT).map(row => ({
+      conversationId: row.conversationId, expectedRevision: row.revision,
+    }));
+    const request: BulkRequest = { action, items };
+    const ack = parseBulkAck(await submitBatch(request), { ...request, accountId: account.accountId });
+    if (!ack) throw Error("This batch was not fully confirmed. Some changes may be saved. Refresh before continuing.");
+    for (const item of ack.results) {
+      result.checked++;
+      if (item.outcome === "recorded") { if (enabled) result.enabled++; else result.disabled++; }
+      else { result.protected++; result.reasons[item.reason] = (result.reasons[item.reason] ?? 0) + 1; }
     }
-    progress({ ...result });
+    report();
   }
   return result;
 }
+export const enableExistingFanChats = (options: BulkOptions) => changeExistingFanChats(options, true);
+export const disableExistingFanChats = (options: BulkOptions) => changeExistingFanChats(options, false);
