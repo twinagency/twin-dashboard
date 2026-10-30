@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRequire } from "node:module";
-import { conversationTimeline, isAiChatting } from "../lib/onlyfans/ai-visibility";
+import { conversationTimeline, conversationAttention, effectiveAiStatus, replyOwnership, isAiChatting } from "../lib/onlyfans/ai-visibility";
 import { accounts, conversationDetails } from "../lib/onlyfans-preview/fixtures";
 import { readConversations } from "../lib/onlyfans/reads";
 import { createFetchOnlyFansTransport } from "../lib/onlyfans-preview/server-data-source";
@@ -14,7 +14,7 @@ import type { Handover } from "../lib/onlyfans/handover";
 
 async function main() {
   const base = Object.values(conversationDetails).find(d => d.accountId === accounts[0].accountId)!;
-  const summary: ConversationSummary = { ...base.summary, revision: 8, automationMode: "automated", takeoverState: "none" };
+  const summary: ConversationSummary = { ...base.summary, revision: 8, automationMode: "automated", takeoverState: "none", requiresAttention: false, attentionReasons: [], historyHeld: false, delivery: "sent" };
   const paused = { ...summary, conversationId: "paused-fan", automationMode: "paused" as const };
   assert(isAiChatting(summary));
   for (const automationMode of ["paused", "human_controlled", "no_contact"] as const) assert(!isAiChatting({ ...summary, automationMode }));
@@ -78,6 +78,29 @@ async function main() {
   assert(!filteredHtml.includes('data-of-conversation-id="paused-fan"'));
   const refreshed = renderToStaticMarkup(<InboxView {...props} />);
   assert.equal((refreshed.match(/data-of-handover-event/g) || []).length, 2, "Reloading keeps persisted history visible");
+
+  const review = { ...summary, requiresAttention: true, attentionReasons: ["human_review"] };
+  assert.equal(conversationAttention(review)[0].title, "Human review needed");
+  assert.match(conversationAttention(review)[0].nextAction, /Take over to reply/);
+  assert(!effectiveAiStatus(review, { ...accounts[0], health: "connected", runtime: {
+    enabled: true, deliveryEnabled: true, sender: { state: "running", observedAt: new Date().toISOString() },
+  } } as typeof accounts[0]).includes("Ready for new input"));
+  assert.equal(replyOwnership(review, accounts[0]).label === "Action required", false);
+  assert.equal(conversationAttention({ ...summary, requiresAttention: true, attentionReasons: [] })[0].key, "unavailable");
+  assert.equal(conversationAttention({ ...summary, requiresAttention: true, attentionReasons: ["future_reason"] })[0].key, "unavailable");
+  assert.equal(conversationAttention({ ...summary, requiresAttention: false, attentionReasons: ["intentionally_paused"] }).length, 0);
+  assert.equal(conversationAttention({ ...summary, requiresAttention: false, attentionReasons: [], historyHeld: true })[0].key, "history_repair");
+  assert.equal(conversationAttention({ ...summary, requiresAttention: false, attentionReasons: [], delivery: "unknown" })[0].key, "delivery_problem");
+  assert.equal(conversationAttention({ ...summary, requiresAttention: false, attentionReasons: [] }).length, 0);
+  assert.equal(conversationAttention({ ...summary, requiresAttention: true, attentionReasons: ["needs_reply"] })[0].title, "Unread fan messages");
+  const attentionHtml = renderToStaticMarkup(<InboxView {...props} detailState={{ status: "ready", data: { ...detail, summary: review } }} />);
+  assert.match(attentionHtml, /data-of-attention-notice/);
+  assert.match(attentionHtml, /data-of-attention-reason="human_review"/);
+  assert.match(attentionHtml, /Next step:/);
+  assert.match(attentionHtml, /Open reply controls/);
+  assert(!attentionHtml.includes("Ready for new input"));
+  assert(!html.includes("data-of-attention-notice"), "No notice for a healthy conversation without attention reasons");
+
   console.log("PASS AI visibility: saved modes, takeover states, filter forwarding and scoping, filtered pagination, late list/page rejection, AI-only attribution, persisted chronological handovers and rendered badges.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
