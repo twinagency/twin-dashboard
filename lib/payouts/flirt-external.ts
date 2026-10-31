@@ -64,9 +64,10 @@ export async function flirtExternalPayouts(viewer: PayoutViewer): Promise<{
     const creator = byId.get(row.creator_account_id);
     if (!creator) continue;
     if (row.currency !== "USD" && row.currency !== "AUD") throw new PayoutError("Invalid payout currency.", 503);
+    const currency: "USD" | "AUD" = row.currency;
     const amount = safeCents(row.amount_cents);
     if (!row.voided_at) {
-      creator.paid[row.currency] += amount;
+      creator.paid[currency] += amount;
       if (row.currency === "USD" && row.original_aud_cents != null) {
         creator.originalAudPaidCents += safeCents(row.original_aud_cents);
         creator.pairedUsdCents += amount;
