@@ -108,6 +108,7 @@ export const ONLYFANS_CHANNEL: ChannelDefinition = {
     { key: "of-inbox", label: "Inbox", href: "/onlyfans/inbox", icon: "Messages", availability: "built" },
     { key: "of-accounts", label: "Creators", href: "/onlyfans/accounts", icon: "Users", availability: "built", note: "Creators, their OnlyFans accounts and connections." },
     { key: "of-content", label: "Content", href: "/onlyfans/content", icon: "Media", availability: "built", note: "Your media library and prepared offers." },
+    { key: "of-revenue", label: "Revenue", href: "/onlyfans/revenue", icon: "Dollar", availability: "built", note: "Revenue across all creators, by creator and by source." },
     { key: "of-sales", label: "Earnings", href: "/onlyfans/sales", icon: "Revenue", availability: "built", note: "Recorded transactions and open offers." },
     { key: "of-campaigns", label: "Campaigns", href: "/onlyfans/campaigns", icon: "Flows", availability: "built", note: "Saved message campaigns and recipient delivery." },
     // Team, configuration and technical controls.
