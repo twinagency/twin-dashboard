@@ -83,15 +83,19 @@ export async function payoutSnapshot(viewer: PayoutViewer, selected?: string | n
 export async function recordPayout(viewer: PayoutViewer, input: unknown) {
   if (!viewer.canManage || viewer.audience === "creator") throw new PayoutError("Administrator access required.", 403);
   const value = parsePayout(input);
-  if (viewer.cloneIds && !viewer.cloneIds.includes(value.cloneId)) throw new PayoutError("Creator access denied.", 403);
   const db = payoutClient(viewer);
-  const creator = await db.from("clones").select("id").eq("id", value.cloneId).maybeSingle();
-  if (creator.error || !creator.data) throw new PayoutError("Creator access denied.", 403);
-  const entry = { clone_id: value.cloneId, amount_cents: value.amountCents, currency: value.currency, paid_on: value.paidOn, reference: value.reference, payment_method: value.method, request_id: value.requestId, recorded_by: viewer.actor };
+  const nativeAllowed = !viewer.cloneIds || viewer.cloneIds.includes(value.cloneId);
+  const creator = nativeAllowed ? await db.from("clones").select("id").eq("id", value.cloneId).maybeSingle() : { data: null, error: null };
+  if (creator.error) throw new PayoutError("Creator access denied.", 403);
+  const externalAllowed = !creator.data && viewer.brand === "flirt" &&
+    (await flirtExternalPayouts(viewer)).creators.some(row => row.id === value.cloneId);
+  if (!creator.data && !externalAllowed) throw new PayoutError("Creator access denied.", 403);
+  const owner = creator.data ? { clone_id: value.cloneId } : { creator_account_id: value.cloneId };
+  const entry = { ...owner, amount_cents: value.amountCents, currency: value.currency, paid_on: value.paidOn, reference: value.reference, payment_method: value.method, request_id: value.requestId, recorded_by: viewer.actor };
   const result = await db.from("telegram_creator_payouts").insert(entry).select("id").single();
   if (!result.error) return { id: result.data.id };
   if (result.error.code === "23505") {
-    const existing = await db.from("telegram_creator_payouts").select("id,clone_id,amount_cents,currency,paid_on,reference,payment_method,recorded_by").eq("request_id", value.requestId).maybeSingle();
+    const existing = await db.from("telegram_creator_payouts").select("id,clone_id,creator_account_id,amount_cents,currency,paid_on,reference,payment_method,recorded_by").eq("request_id", value.requestId).maybeSingle();
     const row = existing.data;
     if (!existing.error && row && Object.entries(entry).filter(([key]) => key !== "request_id").every(([key, v]) => String(row[key as keyof typeof row]) === String(v))) return { id: row.id };
     throw new PayoutError("This payment request has already been used. Reload before recording another payment.", 409);
@@ -104,8 +108,16 @@ export async function voidPayout(viewer: PayoutViewer, input: unknown) {
   const value = input as { id?: unknown; reason?: unknown } | null;
   if (!value || typeof value.id !== "string" || !UUID.test(value.id) || typeof value.reason !== "string" || !value.reason.trim() || value.reason.trim().length > 240) throw new PayoutError("Enter a reason for correcting this entry.");
   const db = payoutClient(viewer);
+  if (viewer.brand === "flirt") {
+    const current = await db.from("telegram_creator_payouts").select("clone_id,creator_account_id").eq("id", value.id).maybeSingle();
+    if (current.error || !current.data) throw new PayoutError("This payout is unavailable.", 404);
+    const nativeAllowed = !!current.data.clone_id && (!viewer.cloneIds || viewer.cloneIds.includes(current.data.clone_id));
+    const externalAllowed = !!current.data.creator_account_id &&
+      (await flirtExternalPayouts(viewer)).creators.some(row => row.id === current.data!.creator_account_id);
+    if (!nativeAllowed && !externalAllowed) throw new PayoutError("Creator access denied.", 403);
+  }
   let query = db.from("telegram_creator_payouts").update({ voided_at: new Date().toISOString(), voided_by: viewer.actor, void_reason: value.reason.trim() }).eq("id", value.id).is("voided_at", null);
-  if (viewer.cloneIds) query = query.in("clone_id", viewer.cloneIds);
+  if (viewer.cloneIds && viewer.brand !== "flirt") query = query.in("clone_id", viewer.cloneIds);
   const result = await query.select("id").maybeSingle();
   if (result.error) throw new PayoutError("The correction could not be saved.", 503);
   if (!result.data) throw new PayoutError("This entry is unavailable or already voided.", 409);
