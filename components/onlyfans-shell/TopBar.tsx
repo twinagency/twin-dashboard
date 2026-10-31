@@ -104,7 +104,7 @@ export default function TopBar({
   const pageMeta = getPageMeta(pathname, scopedClones, scopeId);
   const workspaceLabel = !isCreator && isDashboardWorkspaceRoute(pathname) ? dashboardWorkspacePageLabel(pathname) : null;
   const pageLabel = isCreator
-    ? CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings"
+    ? (pathname === "/creator/chats" ? "Chats" : CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings")
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);

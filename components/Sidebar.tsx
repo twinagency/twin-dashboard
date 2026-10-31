@@ -5,6 +5,7 @@ import { agencyDashboardPath } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
+import { CREATOR_CHATS_CLONE_IDS } from "@/lib/creator-chats-policy";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, then a focused executive workspace followed by CRM. The
@@ -105,6 +106,8 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
 ];
 
+const CREATOR_CHATS_LINK: NavLink = { kind: "route", href: "/creator/chats", label: "Chats", icon: "Messages", color: "neutral" };
+const withCreatorChats = (links: NavLink[], cloneId: string | null) => cloneId && CREATOR_CHATS_CLONE_IDS.includes(cloneId) ? [links[0], CREATOR_CHATS_LINK, ...links.slice(1)] : links;
 const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
   kind: "route",
   href: item.href,
@@ -256,7 +259,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // narrows navigation and authority; it does not fork the Tether design.
   const usesBrandedCore = isCreator || isJessKate || isTether;
   const primaryLinks = isCreator
-    ? CREATOR_LINKS.filter(link => agencyName?.trim().toLowerCase() !== "flirt" || link.kind !== "route" || link.href !== "/creator/ppvs")
+    ? withCreatorChats(CREATOR_LINKS.filter(link => agencyName?.trim().toLowerCase() !== "flirt" || link.kind !== "route" || link.href !== "/creator/ppvs"), activeCloneId)
     : isFlirtOwner ? FLIRT_OWNER_LINKS : NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
