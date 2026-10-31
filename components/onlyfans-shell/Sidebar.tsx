@@ -6,6 +6,7 @@ import { agencyDashboardPath } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL, TOP_ONLYFANS_AGENCY } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
+import { CREATOR_CHATS_CLONE_IDS } from "@/lib/creator-chats-policy";
 import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
@@ -118,6 +119,8 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
 ];
 
+const CREATOR_CHATS_LINK: NavLink = { kind: "route", href: "/creator/chats", label: "Chats", icon: "Messages", color: "neutral" };
+const withCreatorChats = (links: NavLink[], cloneId: string | null) => cloneId && CREATOR_CHATS_CLONE_IDS.includes(cloneId) ? [links[0], CREATOR_CHATS_LINK, ...links.slice(1)] : links;
 const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
   kind: "route",
   href: item.href,
@@ -415,7 +418,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const primaryLinks = moxyNavigation || twinAgencyNavigation
     ? MOXY_LINKS
     : isCreator
-    ? CREATOR_LINKS
+    ? withCreatorChats(CREATOR_LINKS, activeCloneId)
     : isPreview
     ? [...NAV_LINKS, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
     : isAdmin
