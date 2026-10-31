@@ -90,8 +90,7 @@ export async function recordPayout(viewer: PayoutViewer, input: unknown) {
   const externalAllowed = !creator.data && viewer.brand === "flirt" &&
     (await flirtExternalPayouts(viewer)).creators.some(row => row.id === value.cloneId);
   if (!creator.data && !externalAllowed) throw new PayoutError("Creator access denied.", 403);
-  const owner = creator.data ? { clone_id: value.cloneId } : { creator_account_id: value.cloneId };
-  const entry = { ...owner, amount_cents: value.amountCents, currency: value.currency, paid_on: value.paidOn, reference: value.reference, payment_method: value.method, request_id: value.requestId, recorded_by: viewer.actor };
+  const entry = { clone_id: creator.data ? value.cloneId : null, creator_account_id: externalAllowed ? value.cloneId : null, amount_cents: value.amountCents, currency: value.currency, paid_on: value.paidOn, reference: value.reference, payment_method: value.method, request_id: value.requestId, recorded_by: viewer.actor };
   const result = await db.from("telegram_creator_payouts").insert(entry).select("id").single();
   if (!result.error) return { id: result.data.id };
   if (result.error.code === "23505") {
