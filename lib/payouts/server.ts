@@ -1,4 +1,5 @@
 import { payoutClient, payoutTerms, type PayoutViewer } from "./access";
+import { flirtExternalPayouts } from "./flirt-external";
 export { requirePayoutViewer } from "./access";
 export type { PayoutViewer } from "./access";
 import { PayoutError, UUID, parsePayout, safeCents, type PayoutCurrency, type PayoutSnapshot } from "./model";
@@ -38,7 +39,7 @@ async function creatorEarnings(ids: string[], viewer: PayoutViewer): Promise<Map
 }
 
 export async function payoutSnapshot(viewer: PayoutViewer, selected?: string | null, page = 0): Promise<PayoutSnapshot> {
-  if (selected && (!UUID.test(selected) || viewer.cloneIds && !viewer.cloneIds.includes(selected))) throw new PayoutError("Creator access denied.", 403);
+  if (selected && !UUID.test(selected)) throw new PayoutError("Creator access denied.", 403);
   if (!Number.isInteger(page) || page < 0 || page > 100_000) throw new PayoutError("Invalid history page.");
   const db = payoutClient(viewer);
   let query = db.from("clones").select("id,name").order("name");
@@ -47,17 +48,23 @@ export async function payoutSnapshot(viewer: PayoutViewer, selected?: string | n
   if (clones.error) throw new PayoutError("Creator list is temporarily unavailable.", 503);
   const rows = (clones.data || []) as { id: string; name: string }[];
   const ids = rows.map(row => row.id);
-  if (selected && !ids.includes(selected)) throw new PayoutError("Creator access denied.", 403);
+  const external = await flirtExternalPayouts(viewer);
+  if (selected && !ids.includes(selected) && !external.creators.some(row => row.id === selected)) {
+    throw new PayoutError("Creator access denied.", 403);
+  }
   const pageSize = 50;
-  if (!ids.length) return { audience: viewer.audience, canManage: viewer.canManage, brand: viewer.brand, creators: [], history: [], historyCount: 0, page: 0, pageSize, checkedAt: new Date().toISOString() };
-  const historyIds = selected ? [selected] : ids;
+  if (!ids.length && !external.creators.length) return { audience: viewer.audience, canManage: viewer.canManage, brand: viewer.brand, creators: [], history: [], historyCount: 0, page: 0, pageSize, checkedAt: new Date().toISOString() };
+  const historyIds = selected ? ids.filter(id => id === selected) : ids;
+  // FLIRT combines local clone payouts with external creator-account payouts.
+  // Fetch native payments from the beginning before paginating the merged list.
+  const start = viewer.brand === "flirt" ? 0 : page * pageSize;
   const [earned, summary, history] = await Promise.all([
-    creatorEarnings(ids, viewer).catch(() => null),
-    db.rpc("telegram_payout_summary", { p_clone_ids: ids }),
-    db.from("telegram_creator_payouts").select("id,clone_id,amount_cents,currency,paid_on,reference,payment_method,voided_at", { count: "exact" }).in("clone_id", historyIds).order("paid_on", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false }).range(page * pageSize, (page + 1) * pageSize - 1),
+    ids.length ? creatorEarnings(ids, viewer).catch(() => null) : Promise.resolve(new Map<string, number>()),
+    ids.length ? db.rpc("telegram_payout_summary", { p_clone_ids: ids }) : Promise.resolve({ data: [], error: null }),
+    historyIds.length ? db.from("telegram_creator_payouts").select("id,clone_id,amount_cents,currency,paid_on,reference,payment_method,voided_at", { count: "exact" }).in("clone_id", historyIds).order("paid_on", { ascending: false }).order("created_at", { ascending: false }).order("id", { ascending: false }).range(start, (page + 1) * pageSize - 1) : Promise.resolve({ data: [], count: 0, error: null }),
   ]);
   if (summary.error || history.error) throw new PayoutError("Payment history is temporarily unavailable. Please try again.", 503);
-  const creators = rows.map(row => ({ id: row.id, name: row.name, earnedUsdCents: earned?.get(row.id) ?? null, paid: { USD: 0, AUD: 0 }, lastPaidOn: null as string | null }));
+  const creators = [...rows.map(row => ({ id: row.id, name: row.name, earnedUsdCents: earned?.get(row.id) ?? null, paid: { USD: 0, AUD: 0 }, lastPaidOn: null as string | null })), ...external.creators];
   const byId = new Map(creators.map(row => [row.id, row]));
   for (const row of summary.data as { clone_id: string; currency: PayoutCurrency; paid_cents: number | string; last_paid_on: string | null }[] || []) {
     const creator = byId.get(row.clone_id);
@@ -65,7 +72,12 @@ export async function payoutSnapshot(viewer: PayoutViewer, selected?: string | n
     creator.paid[row.currency] = safeCents(row.paid_cents);
     if (row.last_paid_on && (!creator.lastPaidOn || row.last_paid_on > creator.lastPaidOn)) creator.lastPaidOn = row.last_paid_on;
   }
-  return { audience: viewer.audience, canManage: viewer.canManage, brand: viewer.brand, creators, history: (history.data || []).map(row => ({ id: row.id, cloneId: row.clone_id, creatorName: byId.get(row.clone_id)!.name, amountCents: safeCents(row.amount_cents), currency: row.currency as PayoutCurrency, paidOn: row.paid_on, reference: row.reference, method: row.payment_method, voided: !!row.voided_at })), historyCount: history.count || 0, page, pageSize, checkedAt: new Date().toISOString() };
+  const nativeHistory = (history.data || []).map(row => ({ id: row.id, cloneId: row.clone_id, creatorName: byId.get(row.clone_id)!.name, amountCents: safeCents(row.amount_cents), currency: row.currency as PayoutCurrency, paidOn: row.paid_on, reference: row.reference, method: row.payment_method, voided: !!row.voided_at }));
+  const externalHistory = selected ? external.history.filter(row => row.cloneId === selected) : external.history;
+  const mergedHistory = viewer.brand === "flirt"
+    ? [...nativeHistory, ...externalHistory].sort((a, b) => b.paidOn.localeCompare(a.paidOn) || b.id.localeCompare(a.id)).slice(page * pageSize, (page + 1) * pageSize)
+    : nativeHistory;
+  return { audience: viewer.audience, canManage: viewer.canManage, brand: viewer.brand, creators, history: mergedHistory, historyCount: (history.count || 0) + externalHistory.length, page, pageSize, checkedAt: new Date().toISOString() };
 }
 
 export async function recordPayout(viewer: PayoutViewer, input: unknown) {
