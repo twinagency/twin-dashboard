@@ -1,8 +1,8 @@
 export const PAYOUT_CURRENCIES = ["USD", "AUD"] as const;
 export type PayoutCurrency = typeof PAYOUT_CURRENCIES[number];
 export type PayoutTotals = Record<PayoutCurrency, number>;
-export type PayoutCreator = { id: string; name: string; earnedUsdCents: number | null; paid: PayoutTotals; lastPaidOn: string | null };
-export type PayoutRecord = { id: string; cloneId: string; creatorName: string; amountCents: number; currency: PayoutCurrency; paidOn: string; reference: string; method: string; voided: boolean };
+export type PayoutCreator = { id: string; name: string; earnedUsdCents: number | null; paid: PayoutTotals; lastPaidOn: string | null; statement?: { grossUsdCents: number; agencyCutBps: number; platformBalanceUsdCents: number | null; availableBalanceUsdCents: number | null } };
+export type PayoutRecord = { id: string; cloneId: string; creatorName: string; amountCents: number; currency: PayoutCurrency; paidOn: string; reference: string; method: string; voided: boolean; originalAudCents?: number | null };
 export type PayoutSnapshot = { audience: "admin" | "creator"; canManage: boolean; brand: "twin" | "moxy" | "flirt"; creators: PayoutCreator[]; history: PayoutRecord[]; historyCount: number; page: number; pageSize: number; checkedAt: string };
 export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export class PayoutError extends Error {
