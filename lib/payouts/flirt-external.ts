@@ -50,7 +50,7 @@ export async function flirtExternalPayouts(viewer: PayoutViewer): Promise<{
       return {
         id: row.creator_account_id, name: names.get(row.creator_account_id)!,
         earnedUsdCents: Math.round(gross * (10000 - cut) / 10000),
-        paid: { USD: 0, AUD: 0 }, lastPaidOn: null as string | null,
+        paid: { USD: 0, AUD: 0 }, lastPaidOn: null as string | null, originalAudPaidCents: 0, pairedUsdCents: 0,
         statement: {
           grossUsdCents: gross, agencyCutBps: cut,
           platformBalanceUsdCents: row.platform_balance_usd_cents == null ? null : safeCents(row.platform_balance_usd_cents),
@@ -67,6 +67,10 @@ export async function flirtExternalPayouts(viewer: PayoutViewer): Promise<{
     const amount = safeCents(row.amount_cents);
     if (!row.voided_at) {
       creator.paid[row.currency] += amount;
+      if (row.currency === "USD" && row.original_aud_cents != null) {
+        creator.originalAudPaidCents += safeCents(row.original_aud_cents);
+        creator.pairedUsdCents += amount;
+      }
       if (!creator.lastPaidOn || creator.lastPaidOn < row.paid_on) creator.lastPaidOn = row.paid_on;
     }
     history.push({
