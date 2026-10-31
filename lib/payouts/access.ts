@@ -10,10 +10,10 @@ import { getViewerTermsFor } from "../platform-cut";
 import type { AgencyIdentity } from "../agency-identity";
 import { PayoutError, payoutBrand, type PayoutSnapshot } from "./model";
 
-export type PayoutViewer = { audience: "admin" | "creator"; cloneIds: string[] | null; canManage: boolean; actor: string; brand: PayoutSnapshot["brand"]; access?: AgencyIdentity | null; dataScope?: string };
+export type PayoutViewer = { audience: "admin" | "creator"; cloneIds: string[] | null; canManage: boolean; actor: string; brand: PayoutSnapshot["brand"]; access?: AgencyIdentity | null; dataScope?: string; creatorAccountId?: string };
 export async function requirePayoutViewer(): Promise<PayoutViewer> {
   const creator = await getCreatorWorkspace();
-  if (creator) return { audience: "creator", cloneIds: creator.cloneIds, canManage: false, actor: `creator:${creator.accountId}`, brand: payoutBrand(creator.name), access: creator, dataScope: "default" };
+  if (creator) return { audience: "creator", cloneIds: creator.cloneIds, creatorAccountId: creator.accountId, canManage: false, actor: `creator:${creator.accountId}`, brand: payoutBrand(creator.name), access: creator, dataScope: "default" };
   const access = await getDashboardAccess();
   const viewAs = await activeViewAs(await cookies());
   if (access) {
