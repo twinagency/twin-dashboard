@@ -89,7 +89,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     <div className="of-scope-line"><span>{scopeLabel}{selection.kind === "creator" ? ` · ${figures.includedCount} included ${figures.includedCount === 1 ? "account" : "accounts"}` : ""}</span><span>{currency} · UTC · {periodLabel}</span></div>
     {selection.kind === "invalid" ? <p className="of-notice" role="alert">{selection.reason} {SCOPE_UNAVAILABLE}. Choose a creator from the strip, or select the highlighted one again to show all creators.</p>
       : figures.mode === "unavailable" && scoped ? <p className="of-notice" role="status">{SCOPE_UNAVAILABLE}. {reasons ?? ""}</p>
-      : reasons ? <p className="of-notice" role="status">{figures.netCents !== null ? "Sync delayed. Showing recorded payments; newer activity may be missing. " : ""}{reasons}</p> : null}
+      : reasons ? <p className="of-notice" role="status">{figures.providerSourced ? "Net and gross are OnlyFans' own totals while the full payment history imports; payment counts and the pending/cleared split follow once it finishes. " : figures.netCents !== null ? "Sync delayed. Showing recorded payments; newer activity may be missing. " : ""}{figures.providerSourced ? "" : reasons}</p> : null}
     {subtotalNote ? <p className="of-notice" role="status">{subtotalNote}</p> : null}
     {history && figures.completeCount !== null ? <p className="of-panel-description" role="status">{figures.completeCount} of {figures.includedCount} accounts have a complete payment import.</p> : null}
     {history ? <div className="of-panel" role="status" aria-label="Payment history import">

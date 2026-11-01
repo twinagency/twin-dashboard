@@ -59,7 +59,7 @@ export async function loadOnlyFansRevenue(backend: OnlyFansBackend | null, perio
   try { const read = await backend.getEarnings?.(window);
     if (read?.ok) base.earnings = read.data; else base.earningsError = read && !read.ok ? read.error : "Earnings are not configured for this workspace.";
   } catch { base.earningsError = "Earnings could not be refreshed."; }
-  const figures = computeFigures(base.earnings, base.earningsError, resolveSelection(base.accounts, base.accountsError, null, null));
+  const figures = computeFigures(base.earnings, base.earningsError, resolveSelection(base.accounts, base.accountsError, null, null), period);
   const { creators, unmatched } = rollUpCreators(base.accounts, figures.byAccount);
   return { ...base, figures, creators, unmatched };
 }
