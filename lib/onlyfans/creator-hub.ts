@@ -1,5 +1,5 @@
 import type { OnlyFansBackend } from "./backend";
-import { EARNINGS_REASONS, type NativeEarnings } from "./earnings";
+import { EARNINGS_REASONS, providerSum, type NativeEarnings } from "./earnings";
 import type { OverviewPeriod } from "./overview";
 import type { OfAccount } from "../onlyfans-preview/types";
 
@@ -16,10 +16,20 @@ export async function loadHubEarnings(backend: OnlyFansBackend | null, period: O
   } catch { return { earnings: null, error: "Earnings could not be refreshed." }; }
 }
 
-export type HubEarnings = { state: "value"; netCents: number; grossCents: number; paymentCount: number } | { state: "unavailable"; reason: string };
+export type HubEarnings = { state: "value"; netCents: number; grossCents: number; paymentCount: number | null; note?: string } | { state: "unavailable"; reason: string };
 
-/** Sums only this creator's accounts, and only when every one of them has a complete payment import. */
-export function creatorEarnings(earnings: NativeEarnings | null, error: string | null, accountIds: string[]): HubEarnings {
+/** Ledger figure when every account's import is complete; otherwise OnlyFans' own period total when stored. */
+export function creatorEarnings(earnings: NativeEarnings | null, error: string | null, accountIds: string[], period?: OverviewPeriod): HubEarnings {
+  const ledger = ledgerEarnings(earnings, error, accountIds);
+  if (ledger.state === "value") return ledger;
+  const sum = providerSum(earnings, period, accountIds);
+  if (!sum) return ledger;
+  const when = new Date(sum.fetchedAt).toLocaleString("en-AU", { timeZone: "Australia/Brisbane", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  return { state: "value", netCents: sum.netCents, grossCents: sum.grossCents, paymentCount: null,
+    note: `OnlyFans-reported, as of ${when} AEST${sum.accounts < sum.wanted ? ` · ${sum.accounts} of ${sum.wanted} accounts` : ""}` };
+}
+
+function ledgerEarnings(earnings: NativeEarnings | null, error: string | null, accountIds: string[]): HubEarnings {
   const no = (reason: string): HubEarnings => ({ state: "unavailable", reason });
   if (!earnings) return no(error ?? "Earnings are not available.");
   if (earnings.status !== "current") return no(earnings.reasons.map(reason => EARNINGS_REASONS[reason]).join(" ") || "Earnings are not available.");

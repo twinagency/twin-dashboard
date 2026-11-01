@@ -17,6 +17,23 @@ export type EarningsScope={accountIds:string[]};
 export const PROVIDER_PERIODS=["7d","30d","90d","all"] as const;
 export type ProviderPeriod=typeof PROVIDER_PERIODS[number];
 export type ProviderTotal={accountId:string;period:ProviderPeriod;grossCents:number;netCents:number;windowStart:string;windowEnd:string;fetchedAt:string};
+/** Sums OnlyFans' own totals for one period over the given accounts (null = every account). Null when none are stored. Pure. */
+export function providerSum(earnings:NativeEarnings|null|undefined,period:ProviderPeriod|null|undefined,accountIds:readonly string[]|null):{netCents:number;grossCents:number;accounts:number;wanted:number;fetchedAt:string}|null{
+ if(!earnings||!period||!earnings.providerTotals?.length)return null;
+ const mine=earnings.providerTotals.filter(t=>t.period===period&&(!accountIds||accountIds.includes(t.accountId)));
+ const wanted=accountIds?accountIds.length:earnings.accountCount;
+ if(!mine.length||mine.length>wanted)return null;
+ const fetchedAt=mine.reduce((a,b)=>Date.parse(b.fetchedAt)<Date.parse(a.fetchedAt)?b:a).fetchedAt;
+ return {netCents:mine.reduce((s,t)=>s+t.netCents,0),grossCents:mine.reduce((s,t)=>s+t.grossCents,0),accounts:mine.length,wanted,fetchedAt};
+}
+/** The stored period a reporting window matches: all time, or 7/30/90 days within a day and a half. Null otherwise. */
+export function providerPeriodFor(window:EarningsWindow):ProviderPeriod|null{
+ const start=Date.parse(window.start),days=(Date.parse(window.end)-start)/86400000;
+ if(start<=Date.parse("2016-01-02T00:00:00Z"))return "all";
+ for(const [p,n] of [["7d",7],["30d",30],["90d",90]] as const)if(Math.abs(days-n)<=1.5)return p;
+ return null;
+}
+export const wholeDollars=(cents:number)=>(cents<0?"−":"")+"$"+Math.round(Math.abs(cents)/100).toLocaleString("en-US");
 const SCOPE_ID=/^[A-Za-z0-9._:-]{1,64}$/;
 /** The optional account filter, validated and de-duplicated. Null when it is empty or any id is not a safe id. */
 export function normalizeEarningsScope(ids:readonly string[]|null|undefined):string[]|null{
