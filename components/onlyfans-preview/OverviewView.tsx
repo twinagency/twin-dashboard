@@ -27,15 +27,22 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     : selection.kind === "invalid" ? "Selection not available" : `All creators · ${selection.accountCount} ${selection.accountCount === 1 ? "account" : "accounts"}`;
   const subtotalNote = figures.subtotal ? `Verified subtotal: ${figures.completeCount} of ${figures.includedCount} included accounts, not the complete total.` : null;
   const metricNote = (base: string) => figures.sourceNote ? `${base} · ${figures.sourceNote}` : base;
-  const metrics = [
-    { label: "Recorded net earnings", value: money(figures.netCents), Icon: Wallet, period: true },
-    { label: "Recorded gross earnings", value: money(figures.grossCents), Icon: Banknote, period: true },
-    { label: "Recorded payments", value: count(figures.paymentCount), Icon: CheckCheck, period: true },
-    { label: "Pending net", value: money(figures.pendingNetCents, true), Icon: Wallet, period: true },
-    { label: "Pending gross", value: money(figures.pendingGrossCents, true), Icon: Banknote, period: true },
-    { label: "Cleared net", value: money(figures.clearedNetCents, true), Icon: Wallet, period: true },
-    { label: "Cleared payments", value: count(figures.clearedCount, true), Icon: CheckCheck, period: true },
-    { label: "Refunded payments", value: count(figures.refundedCount, true), Icon: RotateCcw, period: true },
+  // Headline earnings: whole dollars with thousands separators ("$3,801,372"). Line items elsewhere keep cents.
+  const whole = (value: number | null | undefined) => value == null ? unavailableText : (value < 0 ? "−" : "") + "$" + Math.round(Math.abs(value) / 100).toLocaleString("en-US");
+  const provider = figures.providerSourced;
+  // While OnlyFans' own totals stand in, ledger-only figures (counts, pending/cleared split) are hidden instead of a wall of "Unavailable".
+  const ledgerOnly = provider ? [] : [
+    { label: "Recorded payments", value: count(figures.paymentCount), Icon: CheckCheck, period: true, sourced: true },
+    { label: "Pending net", value: money(figures.pendingNetCents, true), Icon: Wallet, period: true, sourced: false },
+    { label: "Pending gross", value: money(figures.pendingGrossCents, true), Icon: Banknote, period: true, sourced: false },
+    { label: "Cleared net", value: money(figures.clearedNetCents, true), Icon: Wallet, period: true, sourced: false },
+    { label: "Cleared payments", value: count(figures.clearedCount, true), Icon: CheckCheck, period: true, sourced: false },
+    { label: "Refunded payments", value: count(figures.refundedCount, true), Icon: RotateCcw, period: true, sourced: false },
+  ];
+  const metrics: { label: string; value: string; Icon: typeof Wallet; period: boolean; sourced?: boolean }[] = [
+    { label: provider ? "Net earnings" : "Recorded net earnings", value: whole(figures.netCents), Icon: Wallet, period: true, sourced: true },
+    { label: provider ? "Gross earnings" : "Recorded gross earnings", value: whole(figures.grossCents), Icon: Banknote, period: true, sourced: true },
+    ...ledgerOnly,
     { label: "Connected accounts", value: data.accountsError ? "Unavailable" : count(connected), Icon: Users, period: false },
     { label: "Connection issues", value: data.accountsError ? "Unavailable" : count(connectedAccounts.length - connected), Icon: CircleAlert, period: false },
     { label: "History freshness issues", value: data.accountsError ? "Unavailable" : count(connectedAccounts.filter(account => account.syncFreshness.stale).length), Icon: CircleAlert, period: false },
@@ -97,8 +104,8 @@ export default function OverviewView({ data }: { data: OverviewData }) {
       <p>{history.accounts.map(a => creatorName(a.accountId) + ": " + (a.status === "complete" ? "history imported" : a.status === "held" ? "import needs review" : "importing") + " (" + a.importedPayments.toLocaleString("en-US") + " payments)").join(" · ")}</p>
       <EarningsAutoRefresh />
     </div> : <EarningsAutoRefresh />}
-    <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
-      <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? (label.startsWith("Recorded") ? metricNote(periodLabel) : periodLabel) : "Current account state"}</small>
+    <section className="of-metrics" aria-label="OnlyFans summary">{metrics.map(({ label, value, Icon, period, sourced }) => <article className="of-metric" key={label} data-of-overview-metric={label}>
+      <span className="of-metric-label">{label}</span><span className="of-metric-icon"><Icon size={21} /></span><strong>{value}</strong><small>{period ? (sourced ? metricNote(periodLabel) : periodLabel) : "Current account state"}</small>
     </article>)}</section>
     <p className="of-panel-footnote">Connection status, history freshness, payment reconciliation and sending readiness are separate checks. <Link href={data.activityAccount ? workspaceHref("/onlyfans/launch", { creatorId: null, accountId: data.activityAccount.accountId }) : "/onlyfans/launch"}>Review account launch controls</Link> for operational holds and prerequisites.</p>
     {figures.byAccount ? <div className="of-overview-panels" aria-label="Earnings breakdown">
