@@ -1,4 +1,4 @@
-import { earningsStamp, type EarningsWindow, type NativeEarnings, EARNINGS_REASONS } from "./onlyfans/earnings";
+import { earningsStamp, providerPeriodFor, providerSum, type EarningsWindow, type NativeEarnings, EARNINGS_REASONS } from "./onlyfans/earnings";
 
 export type OverviewOnlyFansRevenue = {
   schemaVersion: "overview-onlyfans-revenue.v1";
@@ -34,6 +34,11 @@ export function overviewOnlyFansRevenue(earnings: NativeEarnings): OverviewOnlyF
   if (earnings.status === "current" && earnings.pendingCount === 0 && earnings.clearedNetCents !== null) {
     return { schemaVersion: "overview-onlyfans-revenue.v1", window: earnings.window, status: "current", currency: "USD",
       netCents: earnings.clearedNetCents, asOf: earnings.recentLedgerAt, includesPending: false, reason: null };
+  }
+  const provider = providerSum(earnings, providerPeriodFor(earnings.window), null);
+  if (provider) {
+    return { schemaVersion: "overview-onlyfans-revenue.v1", window: earnings.window, status: "delayed", currency: "USD",
+      netCents: provider.netCents, asOf: provider.fetchedAt, includesPending: false, reason: null };
   }
   return unavailableOverviewRevenue(earnings.window,
     earnings.reasons.map(reason => EARNINGS_REASONS[reason]).join(" ") || "OnlyFans net earnings are not available for every recorded payment.");

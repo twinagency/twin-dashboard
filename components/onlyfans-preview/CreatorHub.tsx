@@ -18,7 +18,7 @@ import type { OfAccount } from "@/lib/onlyfans-preview/types";
 import type { NativeEarnings } from "@/lib/onlyfans/earnings";
 import type { OverviewPeriod } from "@/lib/onlyfans/overview";
 import { HUB_PERIOD_LABEL, aiArea, creatorEarnings, paymentArea, syncArea, type HubArea } from "@/lib/onlyfans/creator-hub";
-import { formatRecordedMoney } from "@/lib/onlyfans/workspace";
+import { wholeDollars } from "@/lib/onlyfans/earnings";
 import { HEALTH_LABEL, MODE_LABEL } from "./labels";
 import CreatorPortrait from "./CreatorPortrait";
 
@@ -61,7 +61,7 @@ export default function CreatorHub({ accounts }: { accounts: OfAccount[] }) {
 
   const first = owned[0];
   const linkScope = { creatorId, accountId: scope.accountId ?? (owned.length === 1 ? first.accountId : null) };
-  const earnings = creatorEarnings(data.earnings, data.error, owned.map(account => account.accountId));
+  const earnings = creatorEarnings(data.earnings, data.error, owned.map(account => account.accountId), data.period);
   const needAttention = owned.filter(account => account.needsAttention).length;
 
   return (
@@ -88,8 +88,8 @@ export default function CreatorHub({ accounts }: { accounts: OfAccount[] }) {
         <div className="of-hub-cards">
           <Card className="p-4" data-of-hub-card="earnings">
             <div className="text-xs text-muted">Earnings, {HUB_PERIOD_LABEL[data.period].toLowerCase()}<Hint text="Net recorded earnings from this creator's verified payment history. Shown as Unavailable, never zero, when the import for any of this creator's accounts is incomplete." /></div>
-            <div className="mt-1 font-mono text-2xl font-semibold">{earnings.state === "value" ? formatRecordedMoney(earnings.netCents, "USD") : "Unavailable"}</div>
-            <div className="mt-1 text-[11px] text-muted">{earnings.state === "value" ? `${earnings.paymentCount.toLocaleString("en-US")} payments` : earnings.reason}</div>
+            <div className="mt-1 font-mono text-2xl font-semibold">{earnings.state === "value" ? wholeDollars(earnings.netCents) : "Unavailable"}</div>
+            <div className="mt-1 text-[11px] text-muted">{earnings.state === "value" ? (earnings.note ?? `${(earnings.paymentCount ?? 0).toLocaleString("en-US")} payments`) : earnings.reason}</div>
             <Link href={workspaceHref("/onlyfans/sales", linkScope)} className="of-text-link mt-2">Open earnings</Link>
           </Card>
           <Card className="p-4" data-of-hub-card="conversations">
