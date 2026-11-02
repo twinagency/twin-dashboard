@@ -9,7 +9,7 @@ const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-r
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers });
 export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
+  if (!creator || (creator.readOnly && !creator.contentUploadsAllowed)) return reply({ error: "session_expired" }, 401);
   const { id } = await context.params;
   if (!isUploadId(id)) return reply({ error: "file_not_found" }, 404);
   const db = serviceClient();

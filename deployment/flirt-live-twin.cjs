@@ -36,9 +36,13 @@ const SCOPED_CREATORS = Object.freeze({
   "7cfbddae-ad3e-4c44-b247-3f24ff3c5a4b": Object.freeze({ cloneId: "4fff7866-c7e9-4af2-926a-36e727c0a77f", name: "Zoey Foxx" }), // Zoey Foxx
   "9f078a5e-5a2e-4e84-b123-19290751025a": Object.freeze({ cloneId: "7626a96d-809e-47f1-b96b-d2e3bc583328", name: "Amber Richardson" }), // Amber Richardson
   "405303ac-059c-42a5-abef-8628ecb7dd71": Object.freeze({ cloneId: "fe9dad6f-33a0-402e-84fd-03dc3b0158ba", name: "Brooke Aries" }), // Brooke Aries
+  // Luna Skyee keeps uploading her own content (contentUploads), so earnings must not make her login read-only for files.
+  "032d8512-ac99-434a-abea-6b1ac5aa67fc": Object.freeze({ cloneId: "4994b010-f976-4cd1-b053-d72986fb455d", name: "Luna Skyee", source: "agency_invite", contentUploads: true }), // Luna Skyee
 });
 // Additional creator-only records; all current scoped creators are also agency-assigned.
-const SCOPED_ONLY_CLONES = Object.freeze([]);
+const SCOPED_ONLY_CLONES = Object.freeze([
+  "4994b010-f976-4cd1-b053-d72986fb455d", // Luna Skyee (creator login only, not in the agency-wide set)
+]);
 function scopedCreator(accountId) { return Object.prototype.hasOwnProperty.call(SCOPED_CREATORS, accountId) ? SCOPED_CREATORS[accountId] : null; }
 // Data routing only. Management and onboarding gates keep using isLiveAccess.
 function isScopedLiveCreator(access) {
