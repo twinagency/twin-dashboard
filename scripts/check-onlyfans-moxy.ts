@@ -22,12 +22,13 @@ async function main() {
     return Response.json(ack);
   }});
   assert((await backend.save('fixture-a',change,'verified-session')).ok);assert.equal(count,1);
-  for(const outcome of ['lost','malformed','scope','conflict']) {
+  for(const outcome of ['lost','malformed','scope','unavailable','conflict']) {
     let calls=0;
     const b=createMoxyBackend({baseUrl:'https://fixture.invalid',token:'synthetic',fetchImpl:async()=>{
       calls++;if(outcome==='lost') throw Error('response lost');
       if(outcome==='malformed')return new Response('invalid');
       if(outcome==='scope')return Response.json({...ack,accountId:'fixture-b'});
+      if(outcome==='unavailable')return Response.json({error:'service_unavailable'},{status:503});
       return Response.json({error:'moxy_revision_conflict'},{status:409});
     }});
     const saved=await b.save('fixture-a',change,'verified-session');assert(!saved.ok);

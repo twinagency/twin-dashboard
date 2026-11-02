@@ -34,7 +34,7 @@ return route.fulfill({json:{ok:true,schemaVersion:'of-configuration.v3',accountI
  decisions:[{id:'fixture',fanId:101,kind:'campaign',status:'held',reason:'missing_approved_product_mapping',decision:null,intentId:null}]}}});
 });
 await page.goto(base);await page.locator('[data-moxy-mode]').waitFor();assert.equal(await page.locator('[data-owner]').textContent(),'true');
-assert(await page.locator('option[value="on"]').isDisabled());await page.getByText('Recent decisions (1)',{exact:true}).click();
+assert(await page.locator('option[value="on"]').evaluate(el=>el.disabled));await page.getByText('Recent decisions (1)',{exact:true}).click();
 for(const width of [1280,390,320]){await page.setViewportSize({width,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  await page.screenshot({path:path.join(dir,`controls-${width}.png`),fullPage:true});}
 await page.getByLabel('Mode',{exact:true}).selectOption('preview');await page.getByRole('button',{name:'Save mode'}).click();

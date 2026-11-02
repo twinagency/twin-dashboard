@@ -98,7 +98,7 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
           <option value="">Select a creator setup</option><option value="amelia">Amelia</option><option value="cristina">Cristina</option>
         </select></label> : null}
       <div className="flex flex-wrap items-end gap-3"><label className="grid gap-1 text-sm">Mode
-        <select className="min-h-11 rounded-lg border border-line bg-white px-3" value={nextMode} disabled={!editable} onChange={e => setNextMode(e.target.value as MoxyMode)}>
+        <select aria-label="Mode" className="min-h-11 rounded-lg border border-line bg-white px-3" value={nextMode} disabled={!editable} onChange={e => setNextMode(e.target.value as MoxyMode)}>
           <option value="off">Off</option><option value="preview">Preview</option><option value="on" disabled={!onReady}>On</option>
         </select></label>
         <span title="Off retains Moxy ownership and stops new Moxy work. Preview records decisions without sending. On requires current verified prerequisites." aria-label="Mode help" className="mb-3 cursor-help text-blue-700">ⓘ</span>

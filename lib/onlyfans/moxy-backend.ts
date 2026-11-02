@@ -19,7 +19,7 @@ export function createMoxyBackend(options: { baseUrl: string; token: string; fet
         const response = await call(url(accountId), { method: "PUT", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ ...change, actor }) });
         const raw: unknown = await response.json();
         if (response.ok && moxyAck(raw, accountId, change)) return { ok: true as const, ack: raw };
-        if ([400,401,403,404,409,413,503].includes(response.status)) {
+        if ([400,401,403,404,409,413].includes(response.status)) {
           return { ok: false as const, status: response.status, outcome: "refused", error:
             record(raw) && typeof raw.error === "string" && raw.error.length <= 2000 ? raw.error : "The change was not accepted. Refresh and review readiness." };
         }
