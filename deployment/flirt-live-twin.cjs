@@ -14,6 +14,8 @@ const CLONES = Object.freeze([
   "7c2e9452-1d4e-475c-86ef-07a797f52ce5", // Olivia Jade
   "7626a96d-809e-47f1-b96b-d2e3bc583328", // Amber Richardson (advoree)
   "fe9dad6f-33a0-402e-84fd-03dc3b0158ba", // Brooke Aries (@brookeariesx)
+  "4994b010-f976-4cd1-b053-d72986fb455d", // Luna Skyee (@lunaskyee11)
+  "46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d", // Victoria Waldrip (@woahvickyyy)
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }
@@ -38,10 +40,10 @@ const SCOPED_CREATORS = Object.freeze({
   "405303ac-059c-42a5-abef-8628ecb7dd71": Object.freeze({ cloneId: "fe9dad6f-33a0-402e-84fd-03dc3b0158ba", name: "Brooke Aries" }), // Brooke Aries
   // Luna Skyee keeps uploading her own content (contentUploads), so earnings must not make her login read-only for files.
   "032d8512-ac99-434a-abea-6b1ac5aa67fc": Object.freeze({ cloneId: "4994b010-f976-4cd1-b053-d72986fb455d", name: "Luna Skyee", source: "agency_invite", contentUploads: true }), // Luna Skyee
+  "97721fb3-daf4-4fc5-b217-a0d7c9a27dca": Object.freeze({ cloneId: "46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d", name: "Victoria Waldrip", source: "agency_invite", contentUploads: true }), // Victoria Waldrip (Vicky)
 });
 // Additional creator-only records; all current scoped creators are also agency-assigned.
 const SCOPED_ONLY_CLONES = Object.freeze([
-  "4994b010-f976-4cd1-b053-d72986fb455d", // Luna Skyee (creator login only, not in the agency-wide set)
 ]);
 function scopedCreator(accountId) { return Object.prototype.hasOwnProperty.call(SCOPED_CREATORS, accountId) ? SCOPED_CREATORS[accountId] : null; }
 // Data routing only. Management and onboarding gates keep using isLiveAccess.

@@ -36,7 +36,7 @@ async function main() {
   // Static contract first: Luna is in the scoped map with the exact source and clone.
   assert.deepEqual(live.scopedCreator(LUNA_ACCOUNT), { cloneId: LUNA_CLONE, name: "Luna Skyee", source: "agency_invite", contentUploads: true });
   assert.equal(live.scopedCreator(BROOKE_ACCOUNT).contentUploads, undefined, "only Luna gets the upload exception");
-  assert.equal(live.CLONES.includes(LUNA_CLONE), false, "Luna is creator-login scope only, not added to the agency-wide set");
+  assert.equal(live.CLONES.includes(LUNA_CLONE), true, "Luna is on the FLIRT agency list like the other girls");
 
   const previous = globalThis.fetch;
   const writes: string[] = [];

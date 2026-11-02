@@ -16,11 +16,13 @@ test('live access requires the complete verified assignment', () => {
     '7c2e9452-1d4e-475c-86ef-07a797f52ce5',
     '7626a96d-809e-47f1-b96b-d2e3bc583328',
     'fe9dad6f-33a0-402e-84fd-03dc3b0158ba',
+    '4994b010-f976-4cd1-b053-d72986fb455d',
+    '46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d',
   ]);
   assert.equal(live.isLiveAccess(access), true);
   for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: [...access.cloneIds.slice(1), '11111111-1111-1111-1111-111111111111'] }, { ...access, cloneIds: Array(access.cloneIds.length).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
   access.cloneIds.length = 0;
-  assert.equal(live.identity().cloneIds.length, 11);
+  assert.equal(live.identity().cloneIds.length, 13);
 });
 test('configuration cannot connect to another project or an anonymous key', () => {
   const env = { FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', FLIRT_LIVE_TWIN_URL: `https://${live.PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) };
@@ -44,15 +46,14 @@ test('deferred SDK chains resolve the client within each request and preserve me
   assert.equal(await broken.from('clones').select('*').catch(error => error.message), 'unavailable');
 });
 
-test('Luna Skyee is scoped to her own clone with the content-upload exception, and nobody else gets it', () => {
+test('Luna Skyee is scoped to her own clone with the content-upload exception, and only Luna and Vicky get it', () => {
   const accountId = '032d8512-ac99-434a-abea-6b1ac5aa67fc';
   const cloneId = '4994b010-f976-4cd1-b053-d72986fb455d';
   const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
   assert.deepEqual(live.scopedCreator(accountId), { cloneId, name: 'Luna Skyee', source: 'agency_invite', contentUploads: true });
   assert.equal(live.isScopedLiveCreator(access), true);
   assert.equal(live.isLiveData(access), true);
-  assert.equal(live.CLONES.includes(cloneId), false);
-  assert.equal(live.isLiveAccess({ ...live.identity(), cloneIds: [...live.CLONES, cloneId] }), false);
+  assert.equal(live.CLONES.includes(cloneId), true);
   for (const invalid of [{ ...access, cloneIds: [live.CLONES[0]] }, { ...access, accountId: 'unassigned' }]) assert.equal(live.isScopedLiveCreator(invalid), false);
   for (const other of ['22952fd9-0a82-4da2-a172-f1a0d1aa2c6d', 'c9c6d09d-71e4-424d-9150-07147c9bd5d2', '405303ac-059c-42a5-abef-8628ecb7dd71']) {
     assert.equal(live.scopedCreator(other).contentUploads, undefined, `${other} stays fully read-only`);
@@ -77,4 +78,12 @@ test('Olivia existing login stays scoped to her own clone after agency assignmen
   ]) assert.equal(live.isScopedLiveCreator(invalid), false);
 });
 
-
+test('Victoria Waldrip (Vicky) is scoped to her own clone with content uploads and is on the FLIRT agency list', () => {
+  const accountId = '97721fb3-daf4-4fc5-b217-a0d7c9a27dca';
+  const cloneId = '46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d';
+  const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
+  assert.deepEqual(live.scopedCreator(accountId), { cloneId, name: 'Victoria Waldrip', source: 'agency_invite', contentUploads: true });
+  assert.equal(live.isScopedLiveCreator(access), true);
+  assert.equal(live.CLONES.includes(cloneId), true);
+  assert.equal(live.isScopedLiveCreator({ ...access, cloneIds: ['4994b010-f976-4cd1-b053-d72986fb455d'] }), false);
+});
