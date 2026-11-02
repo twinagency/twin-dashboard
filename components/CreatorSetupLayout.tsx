@@ -11,7 +11,7 @@ export const CREATOR_SETUP_NAVIGATE_EVENT = "creator-setup:navigate";
 type CreatorSetupLayoutProps = {
   brand: "moxy" | "flirt" | "twin";
   logoSrc: string;
-  activeSection: "questionnaire" | "content";
+  activeSection: "questionnaire" | "content" | "choice" | "onlyfans";
   applicationStatus?: string;
   children: ReactNode;
 };
@@ -47,10 +47,10 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
           </div>
         </details>
       </div>
-      <nav className={styles.steps} aria-label="Creator setup sections">
+      {(activeSection === "content" || activeSection === "questionnaire") && <nav className={styles.steps} aria-label="Creator setup sections">
         <a href="/creator/onboarding?step=content" data-creator-setup-tab="content" aria-current={activeSection === "content" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=content", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">1</span>Content</a>
         <a href="/creator/onboarding?step=questionnaire" data-creator-setup-tab="questionnaire" aria-current={activeSection === "questionnaire" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=questionnaire", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">2</span>Questionnaire</a>
-      </nav>
+      </nav>}
     </header>
     <main className={styles.main}>
       <div className={styles.content} data-onboarding-active-step={activeSection}>{activeSection === "questionnaire" && <CreatorUploadActivity />}{children}</div>

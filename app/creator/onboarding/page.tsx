@@ -280,6 +280,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const hasApplicationState = !!application && application.status !== "draft";
   const applicationLocked = creator.readOnly || !creatorOnboardingEditable(application?.status, optional);
+  // Scoped creators with contentUploadsAllowed can still add and manage content files; answers and consent stay locked.
+  const contentLocked = (creator.readOnly && !creator.contentUploadsAllowed) || !creatorOnboardingEditable(application?.status, optional);
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
   const categorizedContentComplete = CREATOR_CONTENT_REQUIREMENTS.every(({ kind, minimum }) => contentCounts[kind] >= minimum);
@@ -306,7 +308,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
 
   if (optional) return (
-    <CreatorSetupLayout brand="flirt" logoSrc="/brand/flirt-logo.webp" activeSection={activeSection === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
+    <CreatorSetupLayout brand="flirt" logoSrc="/brand/flirt-wordmark-master.png" activeSection={activeSection === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
       {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
       {completionView ? <section data-creator-setup-panel data-setup-complete>
         <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>
@@ -348,7 +350,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           </CreatorOnboardingActionForm>
           {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
       </section> : <section data-creator-setup-panel>
-        <CreatorContentIntake locked={applicationLocked} loginPath={loginPath}
+        <CreatorContentIntake locked={contentLocked} loginPath={loginPath}
           savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
           savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
           initialFolders={contentFolders(answers)} />
@@ -423,7 +425,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </div>
                 {optional && <div><ContinueToStep step={afterContent}>Continue without uploading</ContinueToStep></div>}
                 <div className="grid gap-4 md:grid-cols-2">
-                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
+                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={contentLocked} optional={optional} />)}
                 </div>
                 {legacyContentFiles > 0 && <CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} />}
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}

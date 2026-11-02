@@ -126,3 +126,6 @@
 .root[data-studio-setup="true"] .content :global([data-setup-heading]) { font-weight: 550; letter-spacing: -.035em; }
 @media (max-width: 480px) { .root[data-studio-setup="true"] .content :global([data-setup-complete]) { padding: 28px 19px; } }
 
+
+.root[data-creator-setup-section="choice"] .main, .root[data-creator-setup-section="choice"] .headerInner { max-width: 1040px; }
+@media (min-width: 1000px) { .root[data-creator-setup-section="choice"] { grid-template-columns: minmax(300px, 29%) minmax(0, 1fr); } .root[data-creator-setup-section="choice"] .main { padding-left: 40px; padding-right: 40px; padding-top: 44px; } }

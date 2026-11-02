@@ -13,6 +13,7 @@ const CLONES = Object.freeze([
   "3484f7d9-0cda-4f52-84de-e104c238ce5e", // Trashy (@trashybagqueen)
   "7c2e9452-1d4e-475c-86ef-07a797f52ce5", // Olivia Jade
   "7626a96d-809e-47f1-b96b-d2e3bc583328", // Amber Richardson (advoree)
+  "4994b010-f976-4cd1-b053-d72986fb455d", // Luna Skyee (@lunaskyee11)
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }
@@ -28,6 +29,8 @@ const SCOPED_CREATORS = Object.freeze({
   "c9c6d09d-71e4-424d-9150-07147c9bd5d2": Object.freeze({ cloneId: "2e5eb05f-cc88-4ba6-870a-924948d4b09a", name: "Mrs Callace" }), // Mrs Callace
   "eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a": Object.freeze({ cloneId: "0328e7b3-a1e5-465a-9a30-c9cf6519cba1", name: "Briana Redd" }), // Briana Redd
   "f003afbf-d57a-4a24-8376-234e2abfb4fb": Object.freeze({ cloneId: "3484f7d9-0cda-4f52-84de-e104c238ce5e", name: "trashy", source: "twin" }), // trashy, her own signup login (trashybagqueen)
+  // Luna keeps uploading her own content (contentUploads), so earnings must not make her login read-only for files.
+  "032d8512-ac99-434a-abea-6b1ac5aa67fc": Object.freeze({ cloneId: "4994b010-f976-4cd1-b053-d72986fb455d", name: "Luna Skyee", source: "agency_invite", contentUploads: true }), // Luna Skyee
 });
 // Additional creator-only records; all current scoped creators are also agency-assigned.
 const SCOPED_ONLY_CLONES = Object.freeze([]);

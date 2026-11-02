@@ -1,4 +1,6 @@
-import { isFlirtOnlyFansOwner } from "./flirt-owner";
+﻿import { isFlirtOnlyFansOwner } from "./flirt-owner";
+import { flirtOnlyFansCreatorIds } from "./flirt-scope";
+import { serviceClientForAccess } from "@/lib/supabase-service";
 /** Request-side authentication; absent access is never proof of an operator. */
 import { NextResponse, type NextRequest } from "next/server";
 import { createHash } from "node:crypto";
@@ -33,7 +35,7 @@ export function denialResponse(denial: ReadDenial): NextResponse {
  *     if (ctx instanceof NextResponse) return ctx;
  */
 export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean } = {}): Promise<ReadContext | NextResponse> {
-  let agency: (AgencyIdentity & { kind?: string }) | null = null;
+  let agency: (AgencyIdentity & { kind?: string; userId?: string; canManage?: boolean }) | null = null;
   let viewAs: unknown = null;
   try {
     [agency, viewAs] = await Promise.all([getDashboardAccess(), getViewAsBannerInfo()]);
@@ -50,7 +52,23 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   }
 
   const operatorSession = await isAuthed();
-  if (isFlirtOnlyFansOwner(agency, operatorSession) && !viewAs) agency = null;
+  if (agency && isFlirtOnlyFansOwner(agency, operatorSession) && !viewAs) {
+    try {
+      const db=serviceClientForAccess(agency);
+      const [creators,assignments]=await Promise.all([
+        db.from("clones").select("id,intake").limit(5001),
+        db.from("agency_creators").select("agency_id,clone_id").limit(5001),
+      ]);
+      if(creators.error||assignments.error||!creators.data||!assignments.data)throw new Error("ownership unavailable");
+      // The independently authenticated virtual Flirt owner delegates through
+      // the existing native agency boundary, using its fixed owner identity.
+      agency={...agency,userId:agency.id,canManage:true,
+        cloneIds:flirtOnlyFansCreatorIds(creators.data,assignments.data,agency.id)};
+    } catch {
+      return denialResponse({ok:false,status:503,state:"unavailable",code:"flirt_scope_unavailable",
+        error:"OnlyFans creator ownership could not be verified. Refresh before trying again."});
+    }
+  }
 
   const grant = options.agency && agency && agency.kind !== "creator" && !viewAs && agency.name !== "Twin Technologies"
     ? agencyGrant(agency, agencyCanManage(agency)) : null;
@@ -96,3 +114,4 @@ export function badRequest(error: string): NextResponse {
 
 /** Kept so a route never reaches for the raw request object by habit. */
 export type OnlyFansRouteRequest = NextRequest;
+

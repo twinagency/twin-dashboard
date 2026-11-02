@@ -2,7 +2,7 @@
    Presentation only; financial/status colours and access rules are unchanged. */
 html[data-app-brand="flirt"]:not([data-agency]):not([data-brand-theme]){
  --font-sans:var(--font-flirt),sans-serif;--font-heading:var(--font-flirt),sans-serif;--font-display:var(--font-flirt),sans-serif;
- --color-bg:#f7f2fb;--color-ink:#24102f;--color-accent:#842bdd;--color-accent-2:#842bdd;--color-brand:#842bdd;--color-accent-tint:#f1e6fc;
+ --color-bg:#f8f7f5;--color-ink:#1c1b1e;--color-accent:#f50070;--color-accent-2:#c8005c;--color-brand:#f50070;--color-accent-tint:#fde6f1;
  font-family:var(--font-flirt),sans-serif;
 }
 html[data-app-brand="flirt"]:not([data-agency]) .dashboard-sidebar,

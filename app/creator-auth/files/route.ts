@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } });
 export async function GET(req: NextRequest) {
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
+  if (!creator || (creator.readOnly && !creator.contentUploadsAllowed)) return reply({ error: "session_expired" }, 401);
   const kind = req.nextUrl.searchParams.get("kind") || "";
   const page = Number(req.nextUrl.searchParams.get("page") || 0);
   if ((kind !== "all_content" && !galleryKind(kind)) || !Number.isSafeInteger(page) || page < 0 || page > 100) return reply({ error: "invalid_category" }, 400);
