@@ -80,6 +80,11 @@ async function main() {
     assert.notEqual((await foldersPOST(post("/creator-auth/content-folders"))).status, 401);
     // Everything that edits her profile or application stays read-only.
     assert.equal((await onboardingPOST(post("/creator-auth/onboarding"))).status, 403);
+    // The content step must not render locked for her; questionnaire and consent keep the full lock.
+    const page = readFileSync("app/creator/onboarding/page.tsx", "utf8");
+    assert.match(page, /contentLocked = \(creator\.readOnly && !creator\.contentUploadsAllowed\)/);
+    assert.match(page, /<CreatorContentIntake locked=\{contentLocked\}/);
+    assert.match(page, /locked=\{contentLocked\} optional=\{optional\} \/>/);
     // Identity edits keep the plain read-only gate (no content exception).
     assert.match(readFileSync("app/creator-auth/identity/route.ts", "utf8"), /creator\.readOnly \|\|/);
     assert.doesNotMatch(readFileSync("app/creator-auth/identity/route.ts", "utf8"), /contentUploadsAllowed/);
