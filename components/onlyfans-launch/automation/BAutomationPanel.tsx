@@ -6,6 +6,7 @@ import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccoun
 import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
 import EngagementPanel from "./EngagementPanel";
 import AccountControls from "./AccountControls";
+import MoxyControls from "./MoxyControls";
 import { bTime, type BReply } from "@/lib/onlyfans/launch/b-common";
 import { BAccountSwitcher, BError, BLoading, BPending, bButton, bDanger } from "../b-shared/BShared";
 
@@ -34,6 +35,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
+  const [moxySelected, setMoxySelected] = useState<boolean | null>(null);
   const epoch = useRef(0), ctl = useRef<AbortController | null>(null), convCtl = useRef<AbortController | null>(null), current = useRef("");
   current.current = accountId;
 
@@ -66,7 +68,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }, []);
   useEffect(() => {
     // Account switch: drop everything shown for the old account before the new reads land.
-    setNotice(""); setConfirming(null); setBusy(null);
+    setNotice(""); setConfirming(null); setBusy(null); setMoxySelected(null);
     if (accountId) void loadAccountData(accountId); else { ctl.current?.abort(); convCtl.current?.abort(); epoch.current++; }
     return () => { ctl.current?.abort(); convCtl.current?.abort(); };
   }, [accountId, loadAccountData]);
@@ -139,7 +141,8 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {convs.state === "ok" && convs.data.more ? <p className="mt-2 text-xs text-muted" data-b-more>Only the most recent conversations are shown. More exist.</p> : null}
       </div>
 
-      <EngagementPanel key={accountId} accountId={accountId} manage={manage} />
+      <MoxyControls key={accountId} accountId={accountId} manage={manage} onOwnership={setMoxySelected} />
+      {moxySelected === false ? <EngagementPanel key={accountId} accountId={accountId} manage={manage} /> : null}
 
     </> : null}
   </section>;
