@@ -14,6 +14,19 @@ for (const patch of [{ percentComplete: 100 }, { lifetimeTotalMessages: 0 }, { i
   { initialHistory: {...recent.initialHistory, discoveryComplete: false} }, { initialHistory: {...recent.initialHistory, providerErrors: { invalid_page: 1 }} },
   { memoryProcessing: {...recent.memoryProcessing, budgetHold: "profile-budget-exhausted"} },
   { memoryModelAccounting: {...recent.memoryModelAccounting, providerReportedUsd: "NaN"} }]) assert.equal(parseRecentHistory({...recent,...patch}),null);
+const ih = recent.initialHistory;
+const withInitial = (patch: object) => ({ ...recent, initialHistory: { ...ih, ...patch } });
+const unavailableReady = { conversationsDiscovered: 3, conversationsReady: 2, conversationsAwaitingWork: 1, conversationsUnavailable: 1,
+  providerErrors: { provider_thread_unavailable: 1 }, blockingProviderErrors: {} };
+assert(parseRecentHistory(withInitial(unavailableReady)), "Unavailable threads do not block readiness");
+assert.equal(parseRecentHistory(withInitial({ ...unavailableReady, conversationsAwaitingWork: 2, conversationsDiscovered: 4 })), null, "Other awaiting work still blocks");
+assert.equal(parseRecentHistory(withInitial({ ...unavailableReady, blockingProviderErrors: { conflicting_history: 1 }, providerErrors: { provider_thread_unavailable: 1, conflicting_history: 1 } })), null, "Blocking errors still block");
+assert.equal(parseRecentHistory(withInitial({ ...unavailableReady, conversationsUnavailable: 2 })), null, "Unavailable cannot exceed awaiting");
+assert.equal(parseRecentHistory(withInitial({ ...unavailableReady, conversationsUnavailable: -1 })), null, "Bad unavailable count refused");
+assert.equal(parseRecentHistory(withInitial({ ...unavailableReady, blockingProviderErrors: { x: "1" } })), null, "Bad blocking errors refused");
+assert.equal(parseRecentHistory(withInitial({ conversationsDiscovered: 3, conversationsReady: 2, conversationsAwaitingWork: 1, providerErrors: { provider_thread_unavailable: 1 } })), null,
+  "Older backend without the new fields keeps the strict rules");
+assert(parseRecentHistory({ ...withInitial({ state: "incomplete", ...unavailableReady }), memoryProcessing: { ...recent.memoryProcessing, state: "incomplete", messagesProcessed: 6, messagesAwaitingProcessing: 1 } }), "Incomplete with unavailable parses");
 const connection = { accountId:"of-1",revision:1,status:"verified",ownerId:"1",expiresAt:"2026-11-03T03:00:00Z",verifiedAt:"2026-11-02T03:00:00Z",lastError:null,
   outgoingEnabled:false,policyRevision:1,usedUnits:0,limitUnits:100,mediaEnabled:false,automateNewConversations:false };
 const response = (c: object) => ({ schemaVersion:"of-connections.v1",ok:true,connection:c });
@@ -21,4 +34,4 @@ assert(parseConnection(response(connection),"of-1"),"Older backend still parses"
 assert(parseConnection(response({...connection,recentHistory:recent}),"of-1"),"Recent readiness and incomplete lifetime coexist");
 assert.equal(parseConnection(response({...connection,recentHistory:{...recent,percentComplete:95}}),"of-1"),null);
 assert.equal(parseConnection(response({...connection,unrecognized:true}),"of-1"),null,"Unknown fields remain refused");
-console.log("Recent history contract: 12 checks passed");
+console.log("Recent history contract: 20 checks passed");
