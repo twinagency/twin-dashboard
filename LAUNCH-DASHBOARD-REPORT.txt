@@ -1,0 +1,26 @@
+LAUNCH DASHBOARD REPORT, screens A, B, C (scope reduced by coordinator; D and E belong to another agent)
+Branch codex/onlyfans-launch-dashboard, base 927b2d7. Commit: see git log -1 (single local commit). Nothing pushed.
+
+FILES (all new, no shared file edited)
+ components/onlyfans-launch/AbcWorkspace.tsx, a-shared.tsx, readiness/ReadinessScreen.tsx, purchases/PurchasesScreen.tsx, personality/PersonalityScreen.tsx
+ lib/onlyfans/launch/a-types.ts, a-fixtures.ts, a-backend.ts, a-route.ts
+ app/api/onlyfans-launch/abc/accounts/[accountId]/[...path]/route.ts
+ scripts/check-onlyfans-launch.ts, scripts/check-onlyfans-launch-browser.mjs
+ LAUNCH-SHARED-CHANGES.txt (page, nav, package.json, env, full backend contracts), screenshots/*.png
+
+REAL VS FIXTURE
+ A readiness: PARTIAL. "Live checks" are real (account health and send capability from /api/onlyfans/accounts, AI config from the configuration contract). Full blocker list needs launch/v1/readiness: BACKEND PENDING, FIXTURE-ONLY on explicit click (shows the 23 Oct blockers: ledger held at offset 40, 0 catalogue, outgoing disabled, upload blocked, paid-post unverified).
+ B purchases: BACKEND PENDING (Chat 1 contract). FIXTURE-ONLY on click, actions disabled in fixture. Evidence-only resolution enforced client and server.
+ C personality: PARTIAL. Persona, facts, model, sales switch = existing real ConfigurationEditor (embedded). Drafts, approval, budget, behaviour = BACKEND PENDING (Chat 3), FIXTURE-ONLY on click.
+ No screen is reported connected or complete. Status: code complete for A/B/C UI + proxy; NOT integrated, NOT deployed, NOT live verified.
+
+COVERAGE: permission (access probe, read-only disables all writes, server 403), loading/empty/error/denied/pending states, account switching with stale-response guard, keyboard tabs (arrows), 390px no horizontal scroll, server-derived actor and command key, credentials server-side only (ONLYFANS_LAUNCH_TOKEN), unconfirmed outcome on lost reply.
+
+TESTS
+ npx tsc --noEmit : clean (0 errors)
+ node --import tsx scripts/check-onlyfans-launch.ts : 13 passed, 0 failed
+ PREVIEW_CHROME=$HOME/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome node scripts/check-onlyfans-launch-browser.mjs : 27 passed, 0 failed
+ (browser check bundles the real components with esbuild and mocks /api with page.route; not the real Next page/session)
+SCREENSHOTS: /home/ronan/twin/twin-dashboard-wt-launch/screenshots/ (A-*, B-*, C-*, mobile-*)
+
+BLOCKERS: backend contracts for readiness, purchases, personality drafts (see LAUNCH-SHARED-CHANGES.txt); page/nav/package.json wiring by head dev; real Next page not browser-tested (auth).

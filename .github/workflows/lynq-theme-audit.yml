@@ -1,0 +1,82 @@
+name: LYNQ visual regression
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app/**
+      - components/**
+      - lib/dashboard-creator-route.ts
+      - scripts/check-lynq-theme.mjs
+      - scripts/check-sidebar-layout.tsx
+      - .github/workflows/lynq-theme-audit.yml
+  push:
+    branches: [main, fix/lynq-theme-override-and-core]
+    paths:
+      - app/**
+      - components/**
+      - scripts/check-lynq-theme.mjs
+      - scripts/check-sidebar-layout.tsx
+      - .github/workflows/lynq-theme-audit.yml
+  workflow_run:
+    workflows: [deploy-dashboard]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: lynq-visual-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  visual:
+    if: github.event_name != 'workflow_run'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - name: Type and sidebar permission checks
+        run: |
+          npx tsc --noEmit
+          npx tsx scripts/check-sidebar-layout.tsx
+      - name: Install browser
+        run: npx playwright install chromium
+      - name: Verify mobile and desktop colours, original animation and absence of generated sphere
+        run: node scripts/check-lynq-theme.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lynq-visual-verification
+          path: |
+            test-results/lynq-theme/*.png
+            test-results/lynq-theme/results.json
+          retention-days: 3
+          if-no-files-found: ignore
+  deployed-styles:
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Read-only check of the actual deployed LYNQ HTML and CSS
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin='https://dashboard.tgaiclone.xyz';
+          const response=await fetch(origin+'/lynq',{cache:'no-store',signal:AbortSignal.timeout(20000)});
+          assert.equal(response.status,200);
+          const html=await response.text();
+          assert.match(html,/data-lynq-core="particles"/,'Original compact particle animation is deployed');
+          const urls=[...html.matchAll(/<link\b[^>]*rel="stylesheet"[^>]*href="([^"]+)"/g)].map(m=>new URL(m[1],origin));
+          assert.ok(urls.length>0);
+          let css='';
+          for(const url of urls){
+            assert.equal(url.origin,origin);
+            const r=await fetch(url,{signal:AbortSignal.timeout(20000)});assert.equal(r.status,200);css+=await r.text();
+          }
+          assert.match(css,/data-brand-theme[=\s]*["']?lynq-light/);
+          assert.match(css,/--lynq-orange\s*:/);assert.match(css,/--lynq-pink\s*:/);assert.match(css,/--lynq-blue\s*:/);
+          assert.doesNotMatch(css,/lynq-orb-float|html:has\(\.dashboard-sidebar a\[aria-label=["']?LYNQ/,'Competing dark palette and generated sphere must be absent from shipped styles');
+          console.log('LIVE LYNQ VERIFIED: compact particle core present; light orange/pink/blue theme present; old dark selector and large sphere animation absent.');
+          console.log('Stylesheets checked:',urls.map(u=>u.pathname).join(', '));
+          JS

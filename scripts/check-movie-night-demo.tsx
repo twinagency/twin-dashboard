@@ -1,0 +1,148 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import ts from 'typescript';
+import React, { act } from 'react';
+import * as model from '../components/inbox/movie-night-model';
+import * as fanPhoto from '../components/inbox/useDemoFanAvatar';
+import { checkRonanDemoProfile } from './check-ronan-demo-profile';
+
+const requireLocal = createRequire(import.meta.url);
+
+export async function checkMovieNightDemo() {
+  let state = model.newMovieDemo();
+  assert.deepEqual(model.demoTotals(state), { purchases: 4, spent: 126 });
+  state = model.movieDemoReducer(state, { type: 'start' });
+  state = model.movieDemoReducer(state, { type: 'tick' });
+  const paused = model.movieDemoReducer(state, { type: 'pause' });
+  assert.deepEqual(model.movieDemoReducer(paused, { type: 'tick' }), paused, 'Paused playback cannot emit a reply');
+  const human = model.movieDemoReducer(state, { type: 'takeover' });
+  assert.deepEqual(model.movieDemoReducer(human, { type: 'start', auto: true }), human, 'Takeover blocks automatic messages');
+  assert.deepEqual(model.movieDemoReducer(human, { type: 'tick' }), human);
+  state = model.newMovieDemo();
+  for (const scene of model.DEMO_SCENES) {
+    state = model.movieDemoReducer(state, { type: 'start' });
+    for (const _event of scene.events) {
+      if (!state.playing) state = model.movieDemoReducer(state, { type: 'start' });
+      state = model.movieDemoReducer(state, { type: 'tick' });
+    }
+  }
+  assert.equal(state.purchased, true); assert.equal(state.memorySaved, true);
+  assert.deepEqual(model.demoTotals(state), { purchases: 5, spent: 144 });
+  assert.equal(state.messages.filter(message => message.offer).length, 1);
+  assert.equal(state.messages.filter(message => message.role === 'system').length, 1);
+  for (let n = 0; n < 10; n++) state = model.movieDemoReducer(model.movieDemoReducer(state, { type: 'start' }), { type: 'tick' });
+  assert.deepEqual(model.demoTotals(state), { purchases: 5, spent: 144 }, 'Completed replay cannot duplicate the sale');
+  assert.deepEqual(model.movieDemoReducer(state, { type: 'reset' }), model.newMovieDemo());
+
+  const { JSDOM } = requireLocal('jsdom');
+  const dom = new JSDOM('<html><body><div id="demo-root"></div></body></html>', { url: 'https://dashboard.test/inbox?creator=briana&presentation=movie-night' });
+  Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
+  dom.window.HTMLElement.prototype.scrollTo = () => {};
+  dom.window.HTMLDialogElement.prototype.showModal = function() { this.setAttribute('open',''); };
+  dom.window.HTMLDialogElement.prototype.close = function() { this.removeAttribute('open'); };
+  let serial = 0; const timers = new Map<number, () => void>();
+  dom.window.setTimeout = (callback: () => void) => { timers.set(++serial, callback); return serial; };
+  dom.window.clearTimeout = (id: number) => timers.delete(id);
+  let requests = 0; const savedFetch = globalThis.fetch;
+  globalThis.fetch = async () => { requests++; throw Error('No external services in the movie demo'); };
+  const imports: Record<string, unknown> = {
+    '../IntelligenceCoreIcon': { __esModule: true, default: ({size}: {size: number}) => <canvas width={size * 2} height={size * 2} aria-hidden="true"/> },
+    'next/link': { __esModule: true, default: ({children, ...props}: React.ComponentProps<'a'>) => <a {...props}>{children}</a> },
+    '../fans/PlatformMark': { __esModule: true, default: () => <span>OnlyFans</span> },
+    '../dashboard/portraits': { portraitUrl: (key: string) => `/api/dashboard/portrait?image=${key}` },
+    '../dashboard/fan-avatars': { fanAvatarUrl: () => '/dashboard/fans/fan-01.webp' },
+    './movie-night-model': model,
+    './useDemoFanAvatar': fanPhoto,
+    './MovieNightDemo.module.css': { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) },
+  };
+  const js = ts.transpileModule(readFileSync('components/inbox/MovieNightDemo.tsx','utf8'), { fileName: 'MovieNightDemo.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true }}).outputText;
+  const mod = { exports: {} as any };
+  new Function('require','module','exports',js)((name: string) => Object.hasOwn(imports,name) ? imports[name] : requireLocal(name),mod,mod.exports);
+  const Demo = mod.exports.default;
+  const { createRoot } = requireLocal('react-dom/client');
+  const root = createRoot(document.getElementById('demo-root')!);
+  const click = async (name: string) => act(async () => {
+    const button = [...document.querySelectorAll<HTMLButtonElement>('button')].find(item => item.textContent?.trim() === name || item.getAttribute('aria-label') === name);
+    assert.ok(button, name); assert.equal(button.disabled, false, `${name} enabled`); button.click();
+  });
+  const tick = async () => act(async () => { const item = timers.entries().next().value; assert.ok(item, 'pending timer'); timers.delete(item[0]); item[1](); });
+  await act(async () => root.render(<Demo/>));
+  const avatarSources = () => [...document.querySelectorAll<HTMLImageElement>('.conversationRow img,.chatHeader img')].map(img=>img.getAttribute('src'));
+  assert.deepEqual(avatarSources(),[fanPhoto.DEMO_UPLOADED_FAN_PHOTO,fanPhoto.DEMO_UPLOADED_FAN_PHOTO]);
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp']);
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'M',bubbles:true})));
+  assert.deepEqual(avatarSources(),[fanPhoto.DEMO_UPLOADED_FAN_PHOTO,fanPhoto.DEMO_UPLOADED_FAN_PHOTO]);
+  assert.equal(document.querySelectorAll('[data-demo-message]').length,0,'Changing avatar cannot start the conversation');
+  assert.match(document.body.textContent!, /Scripted conversation.*Simulated purchase/);
+  assert.match(document.body.textContent!, /Bri/);
+  assert.match(document.body.textContent!, /Ronan/);
+  assert.doesNotMatch(document.body.textContent!, /Anastasia|Ben|popcorn|thriller|Friday/i);
+  assert.equal(model.DEMO_SCENES[0].events[0].text, 'you still awake?');
+  for (const memory of model.DEMO_MEMORIES) assert.ok(model.DEMO_HISTORY.some(item => item.id === memory.source), 'Every memory has a visible source record');
+  assert.equal(document.querySelector('[aria-label="Presenter controls"]'),null, 'Recording view hides playback controls by default');
+  assert.doesNotMatch(document.body.textContent!, /Play all|Reset demo|CONVERSATION PROGRESS|Next scene/);
+  await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})));
+  await tick();
+  assert.equal(document.querySelectorAll('[data-demo-message]').length, 1);
+  const timersBeforePhoto=timers.size;
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  assert.equal(timers.size,timersBeforePhoto,'Changing avatar preserves the pending reply');
+  assert.equal(document.querySelectorAll('[data-demo-message]').length,1,'Changing avatar preserves message progress');
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp']);
+  await click('Take over'); assert.equal(timers.size, 0, 'Takeover cancels pending reply');
+  assert.equal((document.querySelector('textarea') as HTMLTextAreaElement).disabled, false);
+  await act(async () => { document.querySelector('textarea')!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})); });
+  await act(async () => { document.querySelector('textarea')!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})); });
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Typing M does not change the photo');
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true,ctrlKey:true})));
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true,repeat:true})));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Modifiers and held keys cannot switch photos');
+  assert.equal(timers.size, 0, 'Typing in composer cannot trigger a scene');
+  await click('Return to autonomous');
+  await click('Toggle presenter controls');
+  assert.ok(document.querySelector('[aria-label="Presenter controls"]'), 'Prototype badge opens optional presenter controls');
+  await click('Continue scene'); await tick();
+  assert.equal(timers.size, 0, 'Memory reveal waits for the presenter before a reply');
+  assert.equal(document.querySelectorAll('[data-demo-message]').length, 1, 'No reply appears while the presenter explains memory');
+  await click('Reset demo'); assert.equal(timers.size, 0, 'Reset cancels pending timers');
+  assert.equal(document.querySelectorAll('[data-demo-message]').length, 0);
+  await click('Play all');
+  for(let n = 0; timers.size && n < 100; n++) await tick();
+  assert.equal(timers.size, 0, 'Autoplay completes without looping');
+  assert.equal(document.querySelector('[data-demo-spend]')?.textContent, 'US$144.00');
+  assert.equal(document.querySelector('[data-demo-purchases]')?.textContent, '5');
+  assert.equal(document.querySelector('[data-offer-status]')?.getAttribute('data-offer-status'),'purchased');
+  await click('Fan record'); assert.match(document.body.textContent!, /Just purchased/);
+  assert.match(document.body.textContent!, /Shower video/);
+  assert.match(document.body.textContent!, /now get some sleep, you earned it/);
+  assert.doesNotMatch(document.body.textContent!, /800 Stars/);
+  await click('View earlier conversation'); assert.ok(document.querySelector('dialog[open]'));
+  await click('Close earlier conversation'); assert.equal(document.querySelector('dialog[open]'),null);
+  await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'p',bubbles:true})));
+  assert.doesNotMatch(document.body.textContent!, /Ready for another take|CONVERSATION PROGRESS|Play all|Reset demo/);
+  await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'p',bubbles:true})));
+  await click('Reset demo');
+  await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'p',bubbles:true})));
+  assert.equal(document.querySelector('[aria-label="Presenter controls"]'),null);
+  await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})));
+  await tick(); assert.equal(document.querySelectorAll('[data-demo-message]').length, 1, 'Hidden controls still accept next-scene shortcut');
+  const profileLink=document.querySelector<HTMLAnchorElement>('a[aria-label="View Ronan’s profile"]');
+  assert.ok(profileLink,'Profile button is visible with presenter controls hidden');
+  assert.equal(new URL(profileLink.href).searchParams.get('step'),'1');
+  profileLink.addEventListener('click',event=>event.preventDefault());
+  await act(async()=>profileLink.click());
+  assert.equal(timers.size,0,'Opening the profile pauses the sequence');
+  assert.equal(new URLSearchParams(window.location.search).get('step'),'1','Browser Back also has the checkpoint');
+  await act(async()=>root.render(<Demo key="return" initialStep={model.DEMO_EVENT_COUNT}/>));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Photo preference survives navigation');
+  assert.equal(document.querySelector('[data-demo-spend]')?.textContent,'US$144.00');
+  assert.equal(timers.size,0,'Returning to the completed chat never restarts it');
+  assert.equal(document.querySelectorAll('[data-offer-status="purchased"]').length,1);
+  await act(async () => root.unmount()); assert.equal(timers.size, 0, 'Leaving the demo cancels scheduled replies');
+  assert.equal(requests, 0); assert.equal(dom.window.localStorage.length, 0, 'Demo does not alter saved inbox or ledger');
+  globalThis.fetch = savedFetch; dom.window.close();
+  await checkRonanDemoProfile();
+  console.log('Movie-night presentation: replay, pause, takeover, reset, keyboard controls, ownership and single purchase update passed; no external operations or saved-state changes');
+}

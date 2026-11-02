@@ -1,0 +1,89 @@
+TONTOK — PLAN 2026-09-28
+Open PPV marketplace inside Telegram. Anyone signs up, uploads, sells, we take a cut.
+
+LOW LEVEL
+
+WHAT IT IS
+- A separate mini app, separate bot, separate brand ("TonTok"). Not a twin-bot feature.
+- Anyone makes an account, uploads content, sets prices, sells it. Their personal
+  Telegram promotes their TonTok page, but the two stay separate accounts.
+- Direct competitor to Telescope (1.6M MAU, #5 top-grossing Telegram mini app,
+  see TELESCOPE-RESEARCH-2026-09-28.txt).
+
+PAYMENTS — DECIDED
+- Launch on Telegram Stars, same checkout code already built and proven in
+  twin-dashboard (catalogue-checkout.ts, catalogue-api.ts, the Catalogue.tsx
+  mini app). Reuse it, don't rewrite it.
+- Stars can't split one payment to two accounts. We hold the balance, pay
+  creators out on a schedule (weekly/monthly), take our % before payout. Same
+  21-day-hold constraint we already live with on Twin.
+- TON added later as a second option: pure crypto-in, no fiat, no KYC on our
+  side (see PAYMENTS-TONPAY-RESEARCH files). Fan connects a TON wallet via TON
+  Connect, pays with TON Pay, it lands straight in the creator's own wallet,
+  we never touch it. Real, but TON Pay itself has no card/Apple Pay path yet
+  — that requires a third-party on-ramp (Mercuryo is the easiest, it's already
+  the on-ramp baked into Tonkeeper) and doesn't remove KYC, it just moves whose
+  problem it is. Don't block launch on this.
+
+WHY NOT CARD-TO-TON OURSELVES
+- Checked twice. TON's own SDK is blockchain-only, no Apple Pay/card method.
+- Any fiat-touching payment always passes through a KYC'd party somewhere:
+  Apple/Google IAP for Stars, or a licensed on-ramp (Mercuryo/MoonPay/Transak)
+  for direct TON. No documented way for us to sit in that chain without
+  either being the licensed party or paying one to be.
+- Only path with zero KYC on our side: fan already holds TON, pays wallet to
+  wallet. That's the TON Pay use case, not a card replacement.
+
+WHAT TO REUSE FROM TWIN (BUILD NOTHING TWICE)
+- Mini app shell, item grid, bundle cards, blur/unlock UI: app/catalogue/[slug]
+- Checkout, ownership, delivery, refunds: lib/catalogue-checkout.ts,
+  lib/catalogue-api.ts
+- Payment flow just fixed today: pay -> close to chat -> photo shows clear on
+  return. Same pattern applies here, chat = TonTok's own DM/bot thread instead
+  of a business connection.
+
+WHAT'S NEW, NOT A TWIN FEATURE
+1. Self-serve creator signup (name, TON wallet address for payout, no wallet
+   needed yet if launching Stars-only)
+2. Multi-tenant storefronts inside one app (Telescope's card/profile model)
+3. Our cut + payout scheduling logic (doesn't exist anywhere in Twin, we've
+   only ever paid ourselves)
+4. Content moderation / who's allowed to sign up — we're still the platform
+   host even though creators handle their own payment side. This is the one
+   piece that doesn't disappear just because payment is decentralized.
+5. Anonymous ops structure (LLC/shell, no personal names), same as Telescope
+   and every other player in this space — do this before going public/listed
+   in any directory.
+
+TO DO — ORDERED
+1. Decide moderation/signup policy (invite-only at first vs open) BEFORE build
+2. Stand up separate bot + mini app, wire the existing catalogue checkout code
+   to a multi-tenant creator table instead of the clones table
+3. Creator signup flow: name, storefront, upload, pricing
+4. Payout ledger + scheduled payout job (new — nothing like this exists yet)
+5. Launch Stars-only, invite a handful of creators first
+6. Add TON Pay as a second payment option once stable
+7. List on findmini/minitelegram/tapps.center once ready (same as main plan)
+8. Anonymous shell entity before any public directory listing
+
+DO NOT
+- do not wait on TON Pay's fiat/Apple Pay support to launch, it's not built
+- do not promise creators instant payout on Stars, the 21-day hold is Telegram's,
+  not ours to remove
+- do not open signup publicly before moderation policy is decided
+- do not confuse this with the existing 18-clone mini app rollout (see
+  FULL-PLAN-MINIAPPS-2026-09-28.txt) — that's rolling out what we already
+  built to our own clones; TonTok is a new, separate, open product
+
+HIGH LEVEL
+
+TonTok is a new product, not a Twin feature: an open marketplace where
+anyone signs up, uploads and sells, aimed at the same space Telescope already
+proves is worth $1.6M MAU/top-5-grossing. We already own the hardest part,
+a working Stars checkout, mini app and delivery pipeline, so the fastest path
+is Stars-first using that exact code, with TON added later as a second,
+lower-fee option once TON Pay itself supports it properly. The one thing that
+doesn't get outsourced by "creators handle their own payments" is who we let
+sign up and what they're allowed to post — that responsibility stays ours
+either way, and needs a decision before this goes anywhere near a public
+directory listing.

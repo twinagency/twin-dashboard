@@ -1,0 +1,37 @@
+{
+  "evidence": {
+    "nipples": "no",
+    "genitals": "unclear",
+    "anus": "unclear",
+    "bare_buttocks": "unclear",
+    "full_nudity": "unclear",
+    "sexual_activity": "no",
+    "sex_toy": "no",
+    "swimwear": "no",
+    "lingerie": "no",
+    "mirror_reflection": "no",
+    "suggestive_pose": "yes"
+  },
+  "identifying": "A blonde woman with blue body paint and a painted paintbrush design on her torso, hand on chest, against a white backdrop.",
+  "details": "A blonde woman with a thin gold necklace and a ring on one finger is shown from the nose down to the mid-torso. Blue body paint covers one arm, shoulder and part of the torso, with a trompe-l'oeil design of orange and grey paintbrushes across the chest. The opposite side of the upper torso is bare skin with a hand resting over it. A white backdrop fills the left and a dark area with green foliage is behind her on the right.",
+  "short_label": "blue body paint torso close-up",
+  "visible": [
+    "blue body paint on arm and torso",
+    "painted paintbrush design on chest",
+    "gold chain necklace",
+    "ring on finger",
+    "blonde hair",
+    "bare upper torso skin",
+    "hand placed over chest",
+    "white backdrop",
+    "dark foliage background"
+  ],
+  "tags": [
+    "solo"
+  ],
+  "uncertainty_reasons": {
+    "genitals": "out_of_frame",
+    "anus": "out_of_frame",
+    "bare_buttocks": "out_of_frame"
+  }
+}

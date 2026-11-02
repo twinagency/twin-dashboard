@@ -1,0 +1,29 @@
+name: Creator upload capacity regression
+on:
+  push:
+    branches: ["fix/creator-upload-capacity-*"]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Actual upload route, capacity boundary and parallel quota checks
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          node scripts/check-creator-video-upload.cjs
+          node scripts/check-creator-upload-picker.cjs
+          npm run test:creator-upload-receipts
+          npm run test:creator-flow
+
+          node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-cleanup.test.cjs
+          node deployment/creator-flow-upload-memory.test.cjs

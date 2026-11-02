@@ -1,0 +1,138 @@
+const assert = require('node:assert/strict');
+const { resolve, basename } = require('node:path');
+const { build } = require('esbuild');
+const { JSDOM } = require('jsdom');
+const { rmSync } = require('node:fs');
+
+(async () => {
+  const stem = resolve('node_modules/.cache/compact-onboarding-' + basename(process.cwd()));
+  await build({ entryPoints: { Wizard: 'components/CreatorQuestionnaireWizard.tsx', Draft: 'lib/creator-questionnaire-draft.ts', Compact: 'lib/creator-questionnaire-compact.ts', Questions: 'lib/creator-questionnaire-profile.ts', Legacy: 'lib/creator-questionnaire.ts' }, outdir: stem, bundle: true, platform: 'node', format: 'cjs', packages: 'external', jsx: 'automatic', define: { 'window.location.assign': 'globalThis.__compactNavigate' } });
+  const { COMPACT_QUESTIONNAIRE_PAGES: pages, COMPACT_QUESTIONNAIRE_ALIASES: aliases, previousCompactSavePage } = require(stem + '/Compact.js');
+  const { CREATOR_PROFILE_QUESTIONNAIRE: questions, CREATOR_PROFILE_QUESTIONS: profile, CREATOR_ACCOUNT_QUESTIONS: account, creatorProfileAnswers } = require(stem + '/Questions.js');
+  const draft = require(stem + '/Draft.js');
+  assert.equal(profile.length, 22);
+  assert.equal(account.length, 4);
+  assert.equal(pages.length, 5);
+  assert.deepEqual(pages.at(-1).sections[0].questions, account, 'account details have their own final page');
+  assert.equal(require(stem + '/Legacy.js').CREATOR_QUESTIONNAIRE.length, 83, 'other portals retain their questionnaire');
+  for (const id of ['pronouns', 'fav_about_body', 'private_details', 'disliked_foods', 'education_history', 'love_language', 'notable_collabs', 'other_projects']) assert.ok(!profile.some(q => q.id === id), id + ' is not an optional extra');
+  const old = { height: '170 cm', visual_appearance: 'Brown eyes', tattoos: 'Rose', piercings: 'Ears', fav_music_genre: 'Pop', fav_artist: 'Artist', sports_watch: 'Football', fav_team: 'Team', unique_about_you: 'Fun fact', hidden_talents: 'Singing', random_facts: 'More facts', fav_about_self: 'My humour', from_grew_up: 'Brisbane', currently_live: 'Sydney', siblings_family: 'One sister', kids: 'No children', turn_ons: 'Confidence', kinks_fetishes: 'Private answer', countries_travelled: 'Italy', fav_destination: 'Rome', introvert_extrovert: 'Introvert', party_or_home: 'Staying in' };
+  const original = JSON.stringify(old), hydrated = creatorProfileAnswers(old);
+  assert.equal(hydrated.appearance_profile, 'Height: 170 cm\nAppearance: Brown eyes\nTattoos and piercings: Tattoos: Rose\nPiercings: Ears');
+  assert.equal(hydrated.music_preferences, 'Music: Pop\nArtists: Artist');
+  assert.equal(hydrated.sports_preferences, 'Sports: Football\nTeams: Team');
+  assert.equal(hydrated.personal_highlights, 'Personal facts: Interesting facts: Fun fact\nHidden talents: Singing\nOther facts: More facts\nFavourite qualities: My humour');
+  assert.equal(hydrated.home_background, 'Grew up: Brisbane\nLives now: Sydney');
+  assert.equal(hydrated.family_profile, 'Siblings and family: One sister\nChildren: No children');
+  assert.equal(hydrated.turn_ons_including_kinks, 'Turn-ons: Confidence\nKinks: Private answer');
+  assert.equal(hydrated.travel_favourites, 'Places visited: Italy\nFavourite place: Rome');
+  assert.equal(hydrated.social_style, 'Personality: Introvert\nSocial life: Staying in');
+  assert.equal(JSON.stringify(old), original, 'hydration never mutates historical answers');
+  for (const id of Object.keys(hydrated)) {
+    assert.equal(creatorProfileAnswers({ ...old, [id]: 'Edited' })[id], 'Edited');
+    assert.equal(creatorProfileAnswers({ ...old, [id]: '' })[id], '', 'explicit blank must not resurrect an older answer');
+  }
+  assert.ok(!Object.hasOwn(creatorProfileAnswers({}), 'preferred_name'));
+  assert.equal(creatorProfileAnswers({ preferred_name: '', stage_name: 'Earlier' }).preferred_name, '');
+  const ids = pages.flatMap(p => draft.questionnairePageQuestions(p).map(q => q.id));
+  assert.equal(new Set(ids).size, 26);
+  assert.deepEqual([...ids].sort(), questions.map(q => q.id).sort());
+  assert.ok(pages.every(p => draft.questionnairePageQuestions(p).length <= 6));
+  for (const [oldSlug, next] of Object.entries(aliases)) assert.equal(draft.creatorQuestionnairePage(oldSlug, true).slug, next);
+  for (const page of pages) {
+    const answers = Object.fromEntries(draft.questionnairePageQuestions(page).map(q => [q.id, 'Existing answer']));
+    assert.equal(draft.creatorQuestionnairePage(page.slug).slug, 'personal-contact');
+    assert.deepEqual(draft.parseQuestionnairePagePatch(page, answers), answers);
+  }
+  assert.deepEqual(draft.parseQuestionnairePagePatch(previousCompactSavePage('quick-family'), { tattoos_piercings: 'Old tab edit' }), { tattoos_piercings: 'Old tab edit' });
+  assert.throws(() => draft.parseQuestionnairePagePatch(previousCompactSavePage('quick-family'), { wardrobe_sizes: 'Unsupported' }));
+  assert.throws(() => draft.parseQuestionnairePagePatch(pages[0], { preferred_name: 'x'.repeat(5001) }));
+  assert.throws(() => draft.parseQuestionnairePagePatch(pages[0], { education_history: 'Removed' }));
+
+  const dom = new JSDOM('<div id="root"></div>', { url: 'https://creator.example/creator/onboarding?step=questionnaire' });
+  for (const name of ['window', 'document', 'HTMLElement', 'Event', 'MouseEvent', 'FormData']) global[name] = dom.window[name];
+  Object.defineProperty(global, 'navigator', { value: dom.window.navigator, configurable: true });
+  global.IS_REACT_ACT_ENVIRONMENT = true;
+  global.requestAnimationFrame = callback => { callback(); return 1; };
+  dom.window.HTMLElement.prototype.scrollIntoView = function () {};
+  dom.window.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  dom.window.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  const navigations = [];
+  global.__compactNavigate = url => navigations.push(url);
+  const React = require('react'), { act } = React, { createRoot } = require('react-dom/client');
+  const Wizard = require(stem + '/Wizard.js').default;
+  let root = createRoot(document.getElementById('root'));
+  const render = async (page = pages[0], answers = {}, optional = true, locked = false) => act(async () => root.render(React.createElement(Wizard, { page, initialAnswers: answers, initialRevision: 'old-revision', optional, locked })));
+  const reset = async () => { await act(async () => root.unmount()); root = createRoot(document.getElementById('root')); navigations.length = 0; };
+  const click = async label => act(async () => { const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === label); assert.ok(button, label); button.click(); });
+  const type = async (selector, value) => act(async () => {
+    const input = document.querySelector(selector); assert.ok(input, selector);
+    Object.getOwnPropertyDescriptor(input.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype, 'value').set.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const field = id => new FormData(document.querySelector('[data-questionnaire-page]')).get(id);
+  const slug = () => document.querySelector('[data-questionnaire-page]').dataset.questionnairePage;
+  const headerNavigate = async href => act(async () => assert.equal(window.dispatchEvent(new dom.window.CustomEvent('creator-setup:navigate', { cancelable: true, detail: { href } })), false));
+  let requests = [], fail = false;
+  global.fetch = async (url, init) => { requests.push({ url, body: JSON.parse(init.body) }); return { ok: !fail, status: fail ? 503 : 200, json: async () => fail ? {} : { revision: 'new-revision' } }; };
+  await render(pages[0], { email_address: 'private@example.invalid', full_name: 'Private legal name' });
+  assert.doesNotMatch(document.body.textContent, /Section \d|of 5|22 questions/);
+  assert.equal(document.querySelector('[name="email_address"]'), null, 'account fields are not rendered on the profile screen');
+  await type('[name="preferred_name"]', 'Ava');
+  await type('[name="languages"]', 'English');
+  assert.ok(Number(document.querySelector('[role="progressbar"]').getAttribute('aria-valuenow')) > 0);
+  await click('No pets'); assert.equal(field('pets'), 'No pets'); assert.equal(document.querySelector('[aria-label="Pet name and breed"]'), null);
+  await click('Yes'); await type('[aria-label="Pet name and breed"]', 'Milo, Labrador'); assert.equal(field('pets'), 'Yes — Milo, Labrador');
+  await click('Introvert'); await click('Staying in'); assert.equal(field('social_style'), 'Personality: Introvert\nSocial life: Staying in');
+  await click('Single'); await click('Private'); assert.equal(field('relationship_status'), 'Single\nSharing: Private');
+  await click('Preview profile'); assert.equal(document.querySelector('dialog').open, true);
+  assert.match(document.querySelector('dialog').textContent, /Meet Ava|Milo, Labrador/);
+  assert.doesNotMatch(document.querySelector('dialog').textContent, /private@example.invalid|Private legal name/);
+  await click('Back to questions'); assert.equal(document.querySelector('dialog').open, false);
+  fail = true; await click('Continue'); assert.equal(slug(), pages[0].slug); assert.equal(field('preferred_name'), 'Ava'); assert.equal(navigations.length, 0);
+  fail = false; await click('Continue'); assert.equal(slug(), pages[1].slug); assert.equal(navigations.length, 0, 'section transitions do not reload');
+  assert.equal(requests.at(-1).body.answers.pets, 'Yes — Milo, Labrador');
+  assert.ok(!Object.hasOwn(requests.at(-1).body.answers, 'email_address'), 'page saves cannot overwrite offscreen answers');
+  await click('Back'); assert.equal(field('preferred_name'), 'Ava'); assert.equal(field('pets'), 'Yes — Milo, Labrador');
+
+  // Edits during a pending background save use the returned revision before
+  // navigation, and repeated Continue taps do not create duplicate saves.
+  await reset(); await render(); requests = [];
+  let release;
+  global.fetch = async (url, init) => { requests.push(JSON.parse(init.body)); return new Promise(resolve => { release = resolve; }); };
+  await type('[name="preferred_name"]', 'First');
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 1050)); });
+  assert.equal(requests.length, 1);
+  await type('[name="preferred_name"]', 'Latest');
+  await click('Continue'); await click('Saving…');
+  assert.equal(slug(), pages[0].slug); assert.equal(requests.length, 1);
+  await act(async () => release({ ok: true, status: 200, json: async () => ({ revision: 'first-revision' }) }));
+  assert.equal(requests.length, 2); assert.equal(requests[1].revision, 'first-revision'); assert.equal(requests[1].answers.preferred_name, 'Latest');
+  await act(async () => release({ ok: true, status: 200, json: async () => ({ revision: 'second-revision' }) }));
+  assert.equal(slug(), pages[1].slug); assert.equal(navigations.length, 0);
+  await click('Back'); assert.equal(field('preferred_name'), 'Latest');
+
+  await reset(); await render();
+  global.fetch = async () => ({ ok: false, status: 409, json: async () => ({}) });
+  await type('[name="preferred_name"]', 'Keep my edit'); await headerNavigate('/creator/onboarding?step=content');
+  assert.equal(navigations.length, 0); assert.equal(document.querySelector('[name="preferred_name"]').value, 'Keep my edit'); assert.match(document.body.textContent, /changed in another window/);
+  await reset(); await render(pages[2], { drink_of_choice: 'I don’t drink' });
+  assert.equal(document.querySelector('[aria-label="Favourite drink"]'), null);
+  await click('I drink'); assert.ok(document.querySelector('[aria-label="Favourite drink"]'));
+  await reset(); await render(pages[2], { drink_of_choice: "I don't drink" });
+  assert.equal(document.querySelector('[aria-label="Favourite drink"]'), null, 'old non-drinker answers must not imply drinking');
+  assert.equal(field('drink_of_choice'), "I don't drink", 'legacy values stay verbatim until edited');
+  await reset(); await render(pages[0], { pets: 'No pets at the moment, maybe later' });
+  assert.equal(document.querySelector('[aria-label="Pet name and breed"]').value, 'No pets at the moment, maybe later');
+  assert.equal([...document.querySelectorAll('button')].find(b => b.textContent === 'Yes').getAttribute('aria-pressed'), 'false', 'free-text legacy answers do not invent a yes selection');
+  await reset(); await render(pages[3], {}, false); assert.equal(document.querySelector('[name="boundaries"]').required, true);
+  await reset(); await render(pages.at(-1));
+  global.fetch = async () => ({ ok: true, status: 200, url: 'https://creator.example/creator/onboarding?status=questionnaire_saved' });
+  await click('Review and finish'); assert.equal(navigations.pop(), '/creator/onboarding?step=content&review=1#creator-setup-submit');
+  await reset(); await render(); global.fetch = async () => { throw Error('blank skip should not submit'); };
+  await click('Skip questions'); assert.equal(navigations.pop(), '/creator/onboarding?step=content&review=1#creator-setup-submit');
+  await reset(); await render(); await headerNavigate('/creator'); assert.equal(navigations.pop(), '/creator');
+  await reset(); await render(pages[0], { preferred_name: 'Read only' }, true, true); assert.equal(document.querySelector('[name="preferred_name"]').disabled, true);
+  await act(async () => root.unmount()); rmSync(stem, { recursive: true, force: true });
+  console.log('Creator profile flow passed: 22 questions; historical hydration and clear preservation; conditional choices; private preview; per-answer progress; in-place navigation; serialized save/edit races; failure and conflict protection; finish, skip and read-only behaviour.');
+})().catch(error => { console.error(error); process.exitCode = 1; });

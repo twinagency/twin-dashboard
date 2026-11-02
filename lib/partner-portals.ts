@@ -1,0 +1,32 @@
+/** Public portal branding. Access still comes from verified database membership. */
+// Uses the shared Twin-branded /agency/login portal.
+export const TOP_ONLYFANS_AGENCY = { id: "a8e39c45-917d-468e-9b7a-a5aecb0c6a20", name: "Top Onlyfans Agency", slug: "top-onlyfans-agency" } as const;
+export const JESS_KATE_PORTAL = {
+  id: "40563447-698f-4ec2-b175-c816f877a1f6",
+  name: "Jess and Kate AI",
+  slug: "jess-and-kate-ai",
+  loginPath: "/jess-and-kate-ai",
+  loginEmail: "jess-and-kate-ai@dashboard.tgaiclone.xyz",
+} as const;
+export const TETHER_PORTAL = {
+  id: "95b1f78a-1eb2-43d2-84f3-630c2a125ee6",
+  name: "Tether",
+  slug: "tether",
+  loginPath: "/tether",
+} as const;
+export const LYNQ_PORTAL = {
+  id: "74b03b70-397e-49ab-841f-8adb8241d87d",
+  name: "LYNQ",
+  slug: "lynq",
+  loginPath: "/link",
+  aliases: ["/lynq"],
+} as const;
+export const PARTNER_PORTALS = [
+  LYNQ_PORTAL,
+  { id: "bc670215-110b-4ea0-8f5c-af3dfe21d253", name: "Moxy", slug: "moxy", loginPath: "/moxy", aliases: [] },
+  { ...JESS_KATE_PORTAL, aliases: [] },
+  { ...TETHER_PORTAL, aliases: [] },
+] as const;
+export function portalForPath(path: string) {
+  return PARTNER_PORTALS.find(portal => [portal.loginPath, ...portal.aliases].some(prefix => path === prefix || path.startsWith(prefix + "/")));
+}

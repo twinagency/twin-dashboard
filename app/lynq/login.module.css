@@ -1,0 +1,193 @@
+.scene {
+  --color-bg: #faf9fc;
+  --color-panel: #ffffff;
+  --color-ink: #19191f;
+  --color-muted: #656575;
+  --color-line: #e6e2ed;
+  --color-accent: #293bea;
+  --color-crit: #b82450;
+  --lynq-orange: #ff8b35;
+  --lynq-pink: #e94b9c;
+  --lynq-blue: #293bea;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: max(32px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #faf9fc;
+  color: #19191f;
+  color-scheme: light;
+}
+
+.wash {
+  position: absolute;
+  z-index: -1;
+  inset: -8%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 62% 54% at 6% 12%, rgb(255 139 53 / 0.74), transparent 100%),
+    radial-gradient(ellipse 60% 60% at 4% 70%, rgb(233 75 156 / 0.48), transparent 100%),
+    radial-gradient(ellipse 58% 65% at 94% 90%, rgb(63 85 255 / 0.22), transparent 100%);
+  animation: wash-drift 22s ease-in-out infinite alternate;
+}
+
+.workspace {
+  width: min(100%, 460px);
+  margin-block: auto;
+}
+
+.brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 26px;
+}
+
+.card {
+  position: relative;
+  padding: 40px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 0.92);
+  border-radius: 28px;
+  background: #ffffff;
+  box-shadow: 0 2px 4px rgb(31 25 52 / 0.035), 0 20px 64px rgb(65 38 88 / 0.095);
+}
+
+.card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, var(--lynq-orange), var(--lynq-pink), var(--lynq-blue));
+}
+
+.eyebrow {
+  margin: 0 0 12px;
+  color: #656575;
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.heading {
+  margin: 0;
+  color: #19191f;
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-size: clamp(30px, 5vw, 36px);
+  font-weight: 750;
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+
+.description {
+  margin: 13px 0 30px;
+  max-width: 30ch;
+  color: #656575;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* Only this page's presentation changes. The shared form owns all existing
+   validation, submission, pending, error and authentication behaviour. */
+.card form label {
+  color: #19191f;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.card form input {
+  min-height: 52px;
+  border: 1px solid #e6e2ed;
+  border-radius: 12px;
+  padding: 13px 15px;
+  background: #ffffff;
+  color: #19191f;
+  font-size: 16px;
+  box-shadow: 0 1px 2px rgb(31 25 52 / 0.025);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.card form input:focus {
+  outline: 0;
+  border-color: #293bea;
+  box-shadow: 0 0 0 3px rgb(41 59 234 / 0.12);
+}
+
+.card form input:autofill,
+.card form input:-webkit-autofill,
+.card form input:-webkit-autofill:hover,
+.card form input:-webkit-autofill:focus {
+  color: #19191f !important;
+  caret-color: #19191f;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #19191f !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
+.card form button[type="submit"] {
+  min-height: 52px;
+  border-radius: 12px;
+  background: linear-gradient(110deg, #293bea, #6540df 62%, #b8359e);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 650;
+  box-shadow: 0 8px 20px rgb(41 59 234 / 0.18);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.card form button[type="submit"]:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 11px 24px rgb(41 59 234 / 0.23);
+}
+
+.card form button[type="submit"]:focus-visible {
+  outline: 2px solid #293bea;
+  outline-offset: 4px;
+}
+
+.card form [role="alert"] {
+  border: 1px solid #f1cbda;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fff4f8;
+  color: #b82450;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.footer {
+  margin: 24px 0 0;
+  color: #56515f;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+@keyframes wash-drift {
+  from { transform: translate3d(-1%, -1%, 0) scale(1); }
+  to { transform: translate3d(1%, 2%, 0) scale(1.035); }
+}
+
+@media (max-width: 480px) {
+  .scene { padding-right: 20px; padding-left: 20px; }
+  .card { padding: 32px 26px; border-radius: 24px; }
+  .brand { margin-bottom: 24px; }
+  .wash {
+    background:
+      radial-gradient(ellipse 95% 44% at 0% 12%, rgb(255 139 53 / 0.76), transparent 100%),
+      radial-gradient(ellipse 95% 52% at 0% 60%, rgb(233 75 156 / 0.48), transparent 100%),
+      radial-gradient(ellipse 90% 44% at 95% 100%, rgb(63 85 255 / 0.22), transparent 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wash { animation: none; }
+  .card form input,
+  .card form button[type="submit"] { transition: none; }
+}

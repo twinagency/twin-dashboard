@@ -1,0 +1,15 @@
+/* Local to the new onboarding/team surfaces; existing pages keep their styling. */
+[data-agency-team-page] .twin-surface { background: var(--color-panel, #fff); border: 1px solid var(--color-line, #dfe8f1); border-radius: 13px; min-width: 0; }
+[data-agency-team-page] .twin-media-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; }
+[data-agency-team-page] h1 { font-size: clamp(24px, 2.2vw, 32px); font-weight: 700; letter-spacing: -.035em; }
+[data-agency-team-page] .twin-media-heading p, [data-agency-team-page] .twin-help { color: var(--color-muted, #60758e); font-size: 13px; line-height: 1.6; margin-top: 8px; }
+[data-agency-team-page] .twin-primary-link, [data-agency-team-page] .twin-outline-link { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border-radius: 9px; font-size: 14px; font-weight: 600; text-decoration: none; cursor: pointer; }
+[data-agency-team-page] .twin-primary-link { background: var(--color-accent, #248bee); color: #fff; }
+[data-agency-team-page] .twin-outline-link { border: 1px solid var(--color-line, #dfe8f1); }
+[data-agency-team-page] .twin-team-layout { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(270px, 1fr); gap: 24px; align-items: start; }
+[data-agency-team-page] .twin-team-form label { display: block; font-size: 13px; }
+[data-agency-team-page] .twin-team-form input:not([type="hidden"]):not([type="checkbox"]), [data-agency-team-page] .twin-team-form select { display: block; width: 100%; padding: 11px; border: 1px solid var(--color-line, #dfe8f1); border-radius: 9px; background: var(--color-panel, #fff); color: inherit; margin-top: 6px; }
+[data-agency-team-page] summary { overflow-wrap: anywhere; }
+[data-agency-team-page] :is(button,a,input,select):focus-visible { outline: 2px solid var(--color-accent, #248bee); outline-offset: 3px; }
+[data-agency-team-page] button:active { transform: translateY(1px); }
+@media(max-width:800px) { [data-agency-team-page] .twin-team-layout { grid-template-columns: minmax(0,1fr); } }

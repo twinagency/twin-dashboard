@@ -1,0 +1,68 @@
+MINI APP + TON ROLLOUT — PLAN 2026-09-28 (per girl, Alanna first)
+Plan only. Nothing here is built until Ronan says go.
+
+LOW LEVEL
+
+WHERE WE ARE
+- Alanna's Mini App sells with Stars and TON. TON is first, side by side with Stars,
+  "50% off" tag. Rate 0.01212 TON per Star (TON at $1.65), 50% off on top.
+  350 Star photo = 2.12 TON with the discount.
+- One real on-chain buy tested end to end (0.01 TON, confirmed 26s, delivered to chat).
+- Today, real fans: 21 tapped buy, 7 opened Stars checkout, 1 paid. 1 tried TON, did not pay.
+- Opens are not tracked, only buy taps.
+
+STEP 0 — RONAN'S TESTS (before anything else)
+- Buy a photo, a video and a bundle with TON. Close the app mid payment once and reopen:
+  it must still confirm and deliver.
+- Buy one with Stars to make sure nothing regressed.
+- Known gap: TON has no automatic refund. A refund is a manual send from the wallet.
+
+STEP 1 — FIX VIDEO DELIVERY FIRST (see VIDEO-DELIVERY-FIX-PLAN-2026-09-28.txt)
+- Stretch fix in the bot (small). Compression on upload + backfill (bigger).
+- Reason it is first: no point sending every fan to a store whose videos arrive stretched
+  and take a minute to load.
+
+STEP 2 — WIRE THE APP INTO ALANNA'S CHAT FLOW (A/B, not a replacement)
+- Today: bot sends Stars-locked media in chat.
+- New arm: bot sends the blurred preview + a button that opens the Mini App on that exact
+  item: t.me/alannapow_bot?startapp=<item id>. Fan pays Stars or TON there.
+- Build: Mini App reads start_param and opens that item (dashboard). Bot flow gets a
+  per-clone switch "sell through app" with a percentage (start 50). Walk the full toggle
+  chain (migration, mapClone, both repos' types, actions, control, bot reader). Ships a check.
+- Measure for 3 to 5 days: paid sales per offer sent, each arm. Keep the winner.
+- Add open tracking at the same time (one row per app open, with the item if deep linked).
+
+STEP 3 — TELL HER FANS
+- Active fans (wrote in the last 24h): the bot sends one message with the app button and
+  pins it in the chat (business connection supports send + pin).
+- Everyone else, all time: MTProto from her real account, inside the existing daily and
+  hourly caps, staggered over days. Same message, pinned.
+- Copy rules: no em dashes, in her voice, never mentions AI. Leads with the 50% TON price.
+- Exclude test account rcy07 from counts.
+
+STEP 4 — THE OTHER GIRLS (config, one at a time)
+- Per girl: register the Mini App in BotFather, enable catalogue settings, captions on
+  every item, bundles named, TON wallet + rate + discount set, one test buy each rail.
+- Order: by revenue. Do not start until Alanna's A/B has a result.
+
+STANDING JOBS
+- TON rate is fixed at the price of the day. Re-set it weekly (or add a daily refresh job)
+  or the TON price drifts away from the Star price.
+- Revenue pages count TON sales as their Star amount, tagged "ton". Payout math for a girl
+  paid in TON must use the wallet, not the dashboard number.
+
+DO NOT
+- do not mass message before Step 0 and Step 1 are done
+- do not switch the fleet to app-only selling before the A/B says it wins
+- do not exceed MTProto caps to speed up the announcement
+- do not log out or reconnect any creator session for this
+
+HIGH LEVEL
+
+The store works and takes TON, so the money lands at once instead of after 21 days. Before
+pushing fans into it, fix how videos arrive (stretched, slow), because that is what a buyer
+sees right after paying. Then test the new way of selling, a blurred preview with a button
+into the app, against the current in-chat unlock on Alanna only, and let the numbers pick.
+Announce to her fans through the bot for the active ones and through her real account for
+the rest, slowly and inside the caps. Once Alanna has a result, the other girls are setup
+work, not new code.

@@ -1,0 +1,411 @@
+import { isUploadId, saveIdempotentCreatorUpload } from "@/lib/creator-upload-receipts";
+import { tracedCreatorUpload, uploadStage, uploadDiagnostic } from "@/lib/creator-upload-diagnostics";
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { execFile } from "node:child_process";
+import { randomUUID } from "crypto";
+import { openAsBlob } from "node:fs";
+import { open } from "node:fs/promises";
+import { promisify } from "node:util";
+import { supabaseAdmin } from "@/lib/supabase";
+import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
+import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
+import { creatorRequestUrl } from "@/lib/creator-origin";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
+import {
+  creatorContentCompleted,
+  creatorContentRequirement,
+  isCreatorContentKind,
+  CREATOR_CONTENT_REQUIREMENTS,
+} from "@/lib/creator-content-requirements";
+import { creatorImageDecodes } from "@/lib/creator-image-validation";
+import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
+import { activeViewAs } from "@/lib/view-as";
+
+import { withDashboardAccess } from "@/lib/dashboard-access";
+import { trustedFormOrigin } from "@/lib/form-origin";
+import { boundedFormData, CreatorUploadError, type StagedCreatorFile } from "@/lib/creator-upload-stream";
+import { creatorUploadMaxBytes, MAX_CREATOR_REQUEST_BYTES, MAX_CREATOR_IMAGE_BYTES, MAX_CREATOR_VIDEO_BYTES, MAX_CREATOR_ACCOUNT_BYTES, MAX_CREATOR_ACCOUNT_FILES } from "@/lib/creator-upload-limits";
+
+export const runtime = "nodejs";
+
+function back(req: Request, status: string, step?: "content" | "voice") {
+  if (req.headers.get("accept")?.includes("application/json")) {
+    const success = status === "content_saved" || status === "voice_saved";
+    return NextResponse.json({ status, ...uploadDiagnostic() }, {
+      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : ["upload_error", "upload_storage_error", "upload_metadata_error", "upload_staging_error", "upload_staging_full"].includes(status) ? 503 : 400,
+      headers: { "Cache-Control": "private, no-store", ...(status === "upload_busy" ? { "Retry-After": "5" } : {}) },
+    });
+  }
+  const url = creatorRequestUrl(req, "/creator/onboarding");
+  url.searchParams.set("status", status);
+  if (step) url.searchParams.set("step", step);
+  url.hash = "step-result";
+  return NextResponse.redirect(url, 303);
+}
+
+function safeName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "upload";
+}
+
+const extensionMime: Record<string, string> = {
+  jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif",
+  mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+};
+const MAX_REQUEST_BYTES = MAX_CREATOR_REQUEST_BYTES;
+const MAX_BATCH_BYTES = MAX_CREATOR_VIDEO_BYTES;
+const MAX_ACCOUNT_BYTES = MAX_CREATOR_ACCOUNT_BYTES;
+const MAX_ACCOUNT_FILES = MAX_CREATOR_ACCOUNT_FILES;
+const MAX_VIDEO_DURATION_SECONDS = 30 * 60;
+const MAX_VIDEO_PIXELS = 4096 * 2160;
+const MAX_VIDEO_EDGE = 4096;
+// Transfers stream to disk, so they can overlap without holding whole videos in RAM.
+const MAX_ACTIVE_UPLOADS = 4;
+const MAX_ACCOUNT_UPLOADS = 2;
+const activeUploadAccounts = new Map<string, number>();
+const accountSaves = new Map<string, Promise<void>>();
+let mediaValidation = Promise.resolve();
+let activeUploadRequests = 0;
+const execFileAsync = promisify(execFile);
+
+async function lockAccountSave(accountId: string) {
+  const previous = accountSaves.get(accountId) || Promise.resolve();
+  let unlock!: () => void;
+  const current = new Promise<void>(resolve => { unlock = resolve; });
+  accountSaves.set(accountId, current);
+  await previous;
+  return () => {
+    if (accountSaves.get(accountId) === current) accountSaves.delete(accountId);
+    unlock();
+  };
+}
+
+async function validateMedia(file: StagedCreatorFile, mime: string) {
+  const previous = mediaValidation;
+  let unlock!: () => void;
+  mediaValidation = new Promise<void>(resolve => { unlock = resolve; });
+  await previous;
+  try { return await contentSignatureMatches(file, mime); }
+  finally { unlock(); }
+}
+
+function mediaToolPath(tool: "ffmpeg" | "ffprobe") {
+  return process.platform === "win32" ? `${tool}.exe` : `/usr/bin/${tool}`;
+}
+
+function mediaToolOptions(timeout: number) {
+  const env: NodeJS.ProcessEnv = process.platform === "win32"
+    ? { NODE_ENV: process.env.NODE_ENV, PATH: process.env.PATH, SystemRoot: process.env.SystemRoot }
+    : { NODE_ENV: process.env.NODE_ENV, PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" };
+  return { timeout, maxBuffer: 64 * 1024, windowsHide: true, killSignal: "SIGKILL" as const, env };
+}
+
+function normalizedContentMime(file: StagedCreatorFile, allowed: string[]): string | null {
+  const declared = file.type.toLowerCase();
+  if (allowed.includes(declared)) return declared;
+  const extension = file.name.toLowerCase().split(".").pop() || "";
+  const inferred = extensionMime[extension];
+  return inferred && allowed.includes(inferred) ? inferred : null;
+}
+
+async function existingUploadUsage(accountId: string) {
+  const pageSize = 500;
+  let bytes = 0;
+  let count = 0;
+  while (count < MAX_ACCOUNT_FILES) {
+    const { data, error } = await supabaseAdmin
+      .from("creator_files")
+      .select("size_bytes")
+      .eq("creator_account_id", accountId)
+      .range(count, Math.min(count + pageSize, MAX_ACCOUNT_FILES) - 1);
+    if (error) return { bytes: 0, count: 0, error };
+    for (const file of data || []) bytes += Number(file.size_bytes) || 0;
+    const received = data?.length || 0;
+    count += received;
+    if (received < pageSize) break;
+  }
+  return { bytes, count, error: null };
+}
+
+function ascii(bytes: Uint8Array, start: number, length: number) {
+  return String.fromCharCode(...bytes.slice(start, start + length));
+}
+
+async function videoProbeMatches(file: StagedCreatorFile, mime: string): Promise<boolean> {
+  const filePath = file.path;
+  try {
+    const { stdout, stderr } = await execFileAsync(mediaToolPath("ffprobe"), [
+      "-v", "error",
+      "-protocol_whitelist", "file",
+      "-select_streams", "v:0",
+      // Read container metadata, then decode a real frame below. Counting every
+      // packet needlessly scans the entire video before storage can begin.
+      "-show_entries", "format=format_name,duration,size:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic",
+      "-of", "json",
+      filePath,
+    ], mediaToolOptions(60_000));
+    if (String(stderr).trim()) return false;
+    const probe = JSON.parse(String(stdout)) as {
+      format?: { format_name?: string; duration?: string; size?: string };
+      streams?: Array<{ codec_type?: string; codec_name?: string; width?: number; height?: number; duration?: string; disposition?: { attached_pic?: number } }>;
+    };
+    const formats = new Set(String(probe.format?.format_name || "").split(","));
+    const expectedContainer = mime === "video/webm"
+      ? formats.has("webm") || formats.has("matroska")
+      : ["mov", "mp4", "m4a", "3gp", "3g2", "mj2"].some((format) => formats.has(format));
+    const stream = probe.streams?.[0];
+    const width = Number(stream?.width);
+    const height = Number(stream?.height);
+    const streamDuration = Number(stream?.duration);
+    const formatDuration = Number(probe.format?.duration);
+    const duration = Number.isFinite(streamDuration) && streamDuration > 0 ? streamDuration : formatDuration;
+    const reportedSize = Number(probe.format?.size);
+    const supportedCodecs = new Set(["h264", "hevc", "vp8", "vp9", "av1", "prores", "mpeg4"]);
+    if (Number.isFinite(duration) && duration > MAX_VIDEO_DURATION_SECONDS) throw new CreatorUploadError("upload_video_too_long");
+    if (width > MAX_VIDEO_EDGE || height > MAX_VIDEO_EDGE || width * height > MAX_VIDEO_PIXELS) throw new CreatorUploadError("upload_video_resolution");
+    const probeValid = expectedContainer && stream?.codec_type === "video" && !!stream.codec_name
+      && supportedCodecs.has(stream.codec_name)
+      && stream.disposition?.attached_pic !== 1
+      && Number.isFinite(width) && width > 0 && width <= MAX_VIDEO_EDGE
+      && Number.isFinite(height) && height > 0 && height <= MAX_VIDEO_EDGE
+      && width * height <= MAX_VIDEO_PIXELS
+      && Number.isFinite(duration) && duration > 0 && duration <= MAX_VIDEO_DURATION_SECONDS
+      && Number.isFinite(reportedSize) && reportedSize === file.size;
+    if (!probeValid) return false;
+
+    const decoded = await execFileAsync(mediaToolPath("ffmpeg"), [
+      "-v", "error",
+      "-xerror",
+      "-abort_on", "empty_output",
+      "-nostdin",
+      "-threads", "1",
+      "-protocol_whitelist", "file",
+      "-i", filePath,
+      "-map", "0:v:0",
+      "-frames:v", "1",
+      "-f", "null",
+      "-",
+    ], mediaToolOptions(15_000));
+    return !String(decoded.stderr).trim();
+  } catch (error) {
+    if (error instanceof CreatorUploadError) throw error;
+    return false;
+  }
+}
+
+async function voiceProbeMatches(file: StagedCreatorFile): Promise<boolean> {
+  try {
+    const { stdout, stderr } = await execFileAsync(mediaToolPath("ffprobe"), ["-v", "error", "-protocol_whitelist", "file", "-select_streams", "a:0", "-show_entries", "format=duration,size:stream=codec_type,codec_name", "-of", "json", file.path], mediaToolOptions(30_000));
+    const probe = JSON.parse(String(stdout));
+    if (String(stderr).trim() || probe.streams?.[0]?.codec_type !== "audio" || !probe.streams[0].codec_name || !(Number(probe.format?.duration) > 0) || Number(probe.format?.size) !== file.size) return false;
+    const decoded = await execFileAsync(mediaToolPath("ffmpeg"), ["-v", "error", "-xerror", "-nostdin", "-threads", "1", "-protocol_whitelist", "file", "-i", file.path, "-map", "0:a:0", "-t", "1", "-f", "null", "-"], mediaToolOptions(15_000));
+    return !String(decoded.stderr).trim();
+  } catch { return false; }
+}
+
+async function contentSignatureMatches(file: StagedCreatorFile, mime: string): Promise<boolean> {
+  if (file.size < 32) return false;
+  const handle = await open(file.path, "r");
+  const header = Buffer.alloc(32);
+  try { await handle.read(header, 0, header.length, 0); } finally { await handle.close(); }
+  const bytes = header;
+  const headerMatches =
+    (mime === "image/jpeg" && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
+    (mime === "image/png" && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)) ||
+    (mime === "image/gif" && (ascii(bytes, 0, 6) === "GIF87a" || ascii(bytes, 0, 6) === "GIF89a")) ||
+    (mime === "image/webp" && ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WEBP");
+  if (mime.startsWith("image/") && !headerMatches) return false;
+
+  const box = ascii(bytes, 4, 4);
+  const brand = ascii(bytes, 8, 4);
+  const nonVideoIsoBmffBrands = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis"]);
+
+  if (mime.startsWith("image/")) return creatorImageDecodes(file.path, mime);
+
+  if (file.size < 1024) return false;
+  if ((mime === "video/mp4" || mime === "video/quicktime") && box === "ftyp" && nonVideoIsoBmffBrands.has(brand)) return false;
+  if (mime === "video/webm" && ![0x1a, 0x45, 0xdf, 0xa3].every((byte, index) => bytes[index] === byte)) return false;
+  return videoProbeMatches(file, mime);
+}
+
+export async function POST(req: NextRequest) {
+  // This streaming route is excluded from middleware's full-body buffer.
+  // Enforce the same origin/action gate here before reading any upload bytes.
+  if (req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
+  if (await activeViewAs(req.cookies)) return new NextResponse("View-as is read-only", { status: 403 });
+  // Middleware normally sanitizes audience/path headers. Do not consult any of
+  // those caller-controlled headers or a separate operator cookie on this route.
+  // The validated creator account below owns every row in the shared dashboard database.
+  return tracedCreatorUpload(() => withDashboardAccess(null, () => uploadForCreator(req)), req.headers.get("x-creator-upload-id"));
+}
+
+async function uploadForCreator(req: NextRequest) {
+  const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
+  if (!creator) {
+    if (req.headers.get("accept")?.includes("application/json")) return NextResponse.json({ status: "session_expired" }, { status: 401 });
+    return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
+  }
+  if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
+  const accountId = creator.accountId;
+  const uploadId = req.headers.get("x-creator-upload-id");
+  if (uploadId && !isUploadId(uploadId)) return back(req, "upload_conflict");
+
+  const contentLength = Number(req.headers.get("content-length") || 0);
+  if (contentLength > MAX_REQUEST_BYTES) return back(req, "upload_too_large");
+  const accountUploads = activeUploadAccounts.get(accountId) || 0;
+  if (activeUploadRequests >= MAX_ACTIVE_UPLOADS || accountUploads >= MAX_ACCOUNT_UPLOADS) return back(req, "upload_busy");
+  activeUploadAccounts.set(accountId, accountUploads + 1);
+  activeUploadRequests += 1;
+
+  let staged: Awaited<ReturnType<typeof boundedFormData>> | undefined;
+  let releaseSave: (() => void) | undefined;
+  try {
+  const [{ data: application, error: applicationError }, uploadUsage] = await Promise.all([
+    supabaseAdmin.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    existingUploadUsage(accountId),
+  ]);
+  if (applicationError || uploadUsage.error) return back(req, "upload_error");
+  if (!creatorUploadsEditable(application?.status, creator)) return back(req, "application_locked");
+  if (!uploadId && uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
+  uploadStage("receiving");
+  staged = await boundedFormData(req);
+  uploadStage("validating");
+  const kind = staged.fields.get("kind") || "";
+  const contentRequirement = creatorContentRequirement(kind);
+  if (kind !== "voice" && kind !== "content" && !isCreatorContentKind(kind)) return back(req, "upload_error");
+  const step = kind === "voice" ? "voice" : "content";
+  // Finishing optional Moxy intake must not prevent later content uploads.
+  // Ownership, read-only demos, rejected applications and strict runtimes stay protected.
+  if (!creatorUploadsEditable(application?.status, creator)) return back(req, "application_locked", step);
+  const files = staged.files;
+  if (uploadId && files.length !== 1) return back(req, "upload_conflict", step);
+  if (!files.length) return back(req, "upload_empty", step);
+  if (files.length > 25) return back(req, "upload_too_many", step);
+
+  const maxBytes = creatorUploadMaxBytes(kind);
+  const aggregateBytes = files.reduce((total, file) => total + file.size, 0);
+  if (aggregateBytes > MAX_BATCH_BYTES) return back(req, "upload_too_large", step);
+  if (!uploadId && uploadUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES) return back(req, "upload_quota", step);
+  const bucket = kind === "voice" ? "voice-samples" : "onboarding-content";
+  const now = new Date().toISOString();
+  const normalizedMimes = new Map<StagedCreatorFile, string>();
+
+  for (const file of files) {
+    if (file.size > maxBytes) return back(req, "upload_too_large", step);
+    if (kind === "voice") {
+      if (!(file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "application/octet-stream") || !(await voiceProbeMatches(file))) return back(req, "upload_wrong_type", step);
+    }
+    if (kind === "content") {
+      const mime = normalizedContentMime(file, [...new Set(CREATOR_CONTENT_REQUIREMENTS.flatMap(item => item.accept.split(",")))]);
+      if (!mime || !(mime.startsWith("image/") || mime.startsWith("video/"))) return back(req, "upload_wrong_type", step);
+      if (mime.startsWith("image/") && file.size > MAX_CREATOR_IMAGE_BYTES) return back(req, "upload_too_large", step);
+      if (!(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
+      normalizedMimes.set(file, mime);
+    }
+    if (contentRequirement) {
+      const mime = normalizedContentMime(file, contentRequirement.accept.split(","));
+      if (!mime || !mime.startsWith(`${contentRequirement.media}/`) || !(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
+      normalizedMimes.set(file, mime);
+    }
+  }
+
+  // Only saves for the same account serialize. The second file can transfer and
+  // validate while the first is stored. Re-read quotas inside this lock so two
+  // simultaneous requests cannot both spend the same remaining allowance.
+  releaseSave = await lockAccountSave(accountId);
+  const [latestUsage, { data: latestApplication, error: latestApplicationError }] = await Promise.all([
+    existingUploadUsage(accountId),
+    supabaseAdmin.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  if (latestUsage.error || latestApplicationError) return back(req, "upload_error", step);
+  if (!creatorUploadsEditable(latestApplication?.status, creator)) return back(req, "application_locked", step);
+  if (!uploadId && (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES)) return back(req, "upload_quota", step);
+
+  const uploadedPaths: string[] = [];
+  const insertedPaths: string[] = [];
+  const rollbackBatch = async () => {
+    if (!insertedPaths.length) {
+      if (uploadedPaths.length) await supabaseAdmin.storage.from(bucket).remove(uploadedPaths);
+      return;
+    }
+    const { error: deleteError } = await supabaseAdmin.from("creator_files").delete().eq("creator_account_id", accountId).in("storage_path", insertedPaths);
+    if (!deleteError) {
+      await supabaseAdmin.storage.from(bucket).remove(uploadedPaths);
+      return;
+    }
+    const orphanPaths = uploadedPaths.filter((path) => !insertedPaths.includes(path));
+    if (orphanPaths.length) await supabaseAdmin.storage.from(bucket).remove(orphanPaths);
+  };
+
+  for (const file of files) {
+    const mime = normalizedMimes.get(file) || file.type || "application/octet-stream";
+    if (uploadId) {
+      await saveIdempotentCreatorUpload(accountId, uploadId, kind, file, mime);
+      continue;
+    }
+    const objectPath = `creators/${accountId}/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
+    uploadStage("storage");
+    const body = await openAsBlob(file.path, { type: mime });
+    const { error: uploadError } = await supabaseAdmin.storage.from(bucket).upload(objectPath, body, {
+      contentType: mime,
+      cacheControl: "3600",
+      upsert: false,
+    });
+    if (uploadError) {
+      uploadStage("storage", String((uploadError as { statusCode?: string }).statusCode || "provider_error"));
+      await rollbackBatch();
+      return back(req, "upload_storage_error", step);
+    }
+    uploadedPaths.push(objectPath);
+
+    uploadStage("metadata");
+    const { error: rowError } = await supabaseAdmin.from("creator_files").insert({
+      creator_account_id: accountId,
+      kind,
+      bucket,
+      storage_path: objectPath,
+      mime_type: mime,
+      size_bytes: file.size,
+      original_name: file.name,
+      storage_transfer_status: "verified",
+      storage_verified_at: now,
+      source_object_status: "present",
+      source_object_checked_at: now,
+    });
+    if (rowError) {
+      uploadStage("metadata", rowError.code);
+      await rollbackBatch();
+      return back(req, "upload_metadata_error", step);
+    }
+    insertedPaths.push(objectPath);
+  }
+
+  uploadStage("progress");
+  let patch: { content_completed?: boolean; voice_completed?: boolean; updated_at: string };
+  if (kind === "voice") {
+    patch = { voice_completed: true, updated_at: now };
+  } else {
+    const [{ data: verifiedFiles, error: countError }, { data: progress, error: progressReadError }] = await Promise.all([
+      supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", accountId),
+      supabaseAdmin.from("creator_onboarding_progress").select("content_completed").eq("creator_account_id", accountId).maybeSingle(),
+    ]);
+    if (countError || progressReadError) return back(req, "content_saved", "content");
+    patch = { content_completed: creatorContentCompleted(verifiedFiles || [], !!progress?.content_completed), updated_at: now };
+  }
+  const { error: progressError } = await supabaseAdmin.from("creator_onboarding_progress").upsert({ creator_account_id: accountId, ...patch }, { onConflict: "creator_account_id" });
+  if (progressError) return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
+  return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
+  } catch (error) {
+    if (error instanceof CreatorUploadError && ["upload_staging_full", "upload_staging_error"].includes(error.status)) uploadStage("staging", error.status);
+    return back(req, error instanceof CreatorUploadError ? error.status : "upload_error", staged?.fields.get("kind") === "voice" ? "voice" : "content");
+  } finally {
+    releaseSave?.();
+    await staged?.dispose().catch(() => undefined);
+    const remaining = (activeUploadAccounts.get(accountId) || 1) - 1;
+    if (remaining) activeUploadAccounts.set(accountId, remaining);
+    else activeUploadAccounts.delete(accountId);
+    activeUploadRequests = Math.max(0, activeUploadRequests - 1);
+  }
+}
+
+

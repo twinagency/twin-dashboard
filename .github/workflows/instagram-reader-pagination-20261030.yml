@@ -1,0 +1,45 @@
+name: Instagram reader pagination repair
+on:
+  push:
+    branches: [main]
+    paths: [deployment/instagram-reader-pagination-20261030.md]
+permissions:
+  contents: read
+concurrency:
+  group: instagram-reader-maintenance
+  cancel-in-progress: false
+jobs:
+  reader-release:
+    if: github.repository == 'twinagency/twin-dashboard' && github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test the exact reader source using synthetic data
+        run: |
+          python - <<'PY'
+          import json,pathlib
+          files=json.loads(pathlib.Path('deployment/instagram-reader-pagination-20261030-source.json').read_text())
+          root=pathlib.Path('/tmp/instagram-reader-test')
+          root.mkdir(exist_ok=True)
+          for name,body in files.items():
+              assert name.startswith('bridge/') and '..' not in pathlib.PurePosixPath(name).parts
+              p=root/name
+              p.parent.mkdir(parents=True,exist_ok=True)
+              p.write_text(body)
+          PY
+          python -m pip install -q -r /tmp/instagram-reader-test/bridge/requirements.txt pytest httpx
+          cd /tmp/instagram-reader-test
+          python -m pytest -q bridge/tests
+      - name: Existing production deployment connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Apply only the verified Instagram reader repair
+        run: python deployment/instagram-reader-pagination-20261030.py

@@ -1,0 +1,308 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    # Docs are not shipped and not read at runtime, so a docs-only push has
+    # nothing to test. Matches the same filter in deploy.yml.
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'archive/**'
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build:
+    name: Build & Type Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: OnlyFans sync status and AI hold explanations
+        run: |
+          node --import tsx scripts/check-onlyfans-sync-warning.tsx
+          npm run test:ai-live
+
+      - name: Install browsers for interface verification
+        timeout-minutes: 10
+        run: |
+          # Playwright downloads its pinned browser separately. Its OS libraries
+          # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
+          # can publish inconsistent index hashes during an update. Isolate that
+          # feed in this disposable runner; retain all signature/hash checks.
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          # Use the same verified primary HTTPS mirror recovery as deployment.
+          for mirror_list in /etc/apt/apt-mirrors.txt /etc/apt/apt-mirrors-security.txt; do
+            if [ -f "$mirror_list" ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g; s|https://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' "$mirror_list"
+            fi
+          done
+          # Bound both APT connections and the complete dependency operation;
+          # a stalled mirror must fail this required gate rather than hang it.
+          sudo tee /etc/apt/apt.conf.d/99-ci-browser-timeouts > /dev/null <<'APT'
+          Acquire::Retries "1";
+          Acquire::http::Timeout "20";
+          Acquire::https::Timeout "20";
+          DPkg::Lock::Timeout "30";
+          APT
+          # Root timeout can also terminate the root-owned APT child processes.
+          sudo timeout --kill-after=10s 300s "$(command -v node)" node_modules/playwright/cli.js install-deps chromium webkit
+          timeout --kill-after=10s 240s npx playwright install chromium webkit
+
+      - name: OnlyFans phone scrolling and viewport checks
+        run: npm run test:onlyfans-ui-browser
+
+      - name: Keep OnlyFans responsive review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-mobile-review
+          path: test-results/onlyfans-ui/
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Immediate navigation feedback and page prefetch
+        run: |
+          node scripts/check-navigation-feedback.cjs
+          node scripts/check-creator-switch-feedback.cjs
+          node --import tsx scripts/check-messages-read-parallelism.cjs
+          node --import tsx scripts/check-live-telegram.ts
+          node scripts/check-navigation-ui.mjs
+
+      - name: Live dashboard overview data and interaction checks
+        run: |
+          node scripts/check-live-overview-contract.cjs
+          node --import tsx scripts/check-overview-loading.cjs
+          node --import tsx scripts/check-overview-recent.cjs
+          node --import tsx scripts/check-overview-wallet.cjs
+          node --import tsx scripts/check-live-overview-ui.mjs
+
+      - name: Shared operator workspace desktop and mobile checks
+        run: |
+          node scripts/check-twin-agency-refresh.cjs
+          node --import tsx scripts/check-channel-roster.ts
+          node scripts/check-operator-workspace-ui.mjs
+
+      - name: OnlyFans render layout and preserved content controls
+        run: node scripts/check-onlyfans-render-browser.mjs
+
+      - name: OnlyFans takeover and blocked-control feedback
+        run: |
+          node --import tsx scripts/check-onlyfans-controls.ts
+          node --import tsx scripts/check-onlyfans-crm-video.ts
+          node --import tsx scripts/check-onlyfans-ai-visibility.tsx
+          node --import tsx scripts/check-inbox-refresh.ts
+          node scripts/check-onlyfans-takeover-browser.mjs
+
+      - name: Keep OnlyFans visual review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-render-review
+          path: test-results/onlyfans-render/
+          if-no-files-found: ignore
+
+      - name: Creator platform ownership and connection journey
+        run: |
+          node scripts/check-creator-preparation.cjs
+          node --import tsx scripts/check-onlyfans-connection-status.ts
+          node scripts/check-agency-team.cjs
+          node --import tsx scripts/check-moxy-viewonly-forms.ts
+          node --import tsx scripts/check-moxy-owner-access.ts
+          node scripts/check-agency-team-onboarding.cjs
+          node scripts/check-agency-team-ui.cjs
+          node scripts/check-staff-creator-scope.cjs
+          node scripts/check-shared-media.cjs
+          node scripts/check-creator-platforms.cjs
+          node scripts/check-creator-platforms-ui.mjs
+          node scripts/check-creator-sign-in-ui.mjs
+
+      - name: Build isolated agency trial
+        run: node scripts/build-agency-trial.cjs
+
+      - name: Agency trial review file
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-agency-trial
+          path: test-results/agency-trial/index.html
+          retention-days: 7
+
+      - name: Creator profile mobile and save navigation checks
+        run: node scripts/check-creator-profile-ui.mjs
+
+      - name: Creator content mobile and background upload checks
+        run: node scripts/check-creator-content-browser.mjs
+
+      - name: Creator profile review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creator-profile-preview
+          path: test-results/creator-profile/*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Shared operator workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-workspace-preview
+          path: test-results/operator-workspace
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Video preview encoder
+        timeout-minutes: 7
+        run: bash scripts/install-ci-video-tools.sh
+
+      - name: Creator preparation and native media recovery
+        run: node scripts/check-core-workspace-ui.mjs
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Offline contracts and browser-check syntax only. The browser checks themselves run in the
+      # isolated API/worker/dashboard integration harness (ONLYFANS_TEST_OFFER_IMPORT=1), not here.
+      - name: OnlyFans offer import and content sync contracts
+        run: |
+          npm run test:onlyfans-offer-import
+          npm run test:onlyfans-content-sync
+          npm run test:onlyfans-launch
+          npm run test:onlyfans-launch-b
+          npm run test:onlyfans-launch-access
+          npm run test:onlyfans-browser-syntax
+
+      - name: Build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Package the CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        run: |
+          test -f .next/standalone/server.js
+          test -z "$(find .next/standalone -type f -name '.env*' -print -quit)"
+          mkdir -p crm-release/standalone/.next crm-release/standalone/public
+          cp -a .next/standalone/. crm-release/standalone/
+          cp -a .next/static crm-release/standalone/.next/
+          cp -a public/. crm-release/standalone/public/
+          printf '%s\n' "$GITHUB_SHA" > crm-release/SOURCE_COMMIT
+          tar -C crm-release -czf onlyfans-crm-release.tgz .
+          sha256sum onlyfans-crm-release.tgz > onlyfans-crm-release.sha256
+
+      - name: Keep the exact CRM release candidate
+        if: startsWith(github.ref_name, 'codex/crm-video-repairs-')
+        uses: actions/upload-artifact@v4
+        with:
+          name: onlyfans-crm-release-${{ github.sha }}
+          path: |
+            onlyfans-crm-release.tgz
+            onlyfans-crm-release.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+      # These checks use isolated fixtures, never production database credentials.
+      - name: Behavioural checks
+        run: npm run test:offline
+
+      - name: Production login routing smoke
+        run: node scripts/check-login-pages.mjs
+
+      - name: Public marketing access checks
+        run: npx tsx scripts/check-marketing-access.ts
+
+      - name: Moxy overview responsive and interaction checks
+        run: node --import tsx scripts/check-moxy-overview-ui.mjs
+        env:
+          MOXY_REVIEW_OUT: test-results/moxy-overview
+
+      - name: Moxy overview review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moxy-overview-preview
+          path: test-results/moxy-overview
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Alana catalogue responsive and interaction checks
+        run: node scripts/check-alana-catalogue-ui.mjs
+
+      - name: Purchased media reopening and expiry in Chromium and WebKit
+        run: node scripts/check-catalogue-ownership-ui.mjs
+
+      - name: Public site responsive and interaction checks
+        run: node scripts/check-marketing-site.mjs
+
+      - name: Ava responsive and preview integrity checks
+        run: node scripts/check-ava-site.mjs
+
+      - name: Alana catalogue review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alana-catalogue-preview
+          path: test-results/alana-catalogue
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Purchased media regression screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: catalogue-ownership-review
+          path: test-results/catalogue-ownership
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Public site review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-public-site-preview
+          path: test-results/twin-public
+          if-no-files-found: ignore
+          retention-days: 3
+
+  creator-platform-database:
+    name: Creator platform identity and ownership
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: synthetic-platform-test
+          POSTGRES_DB: creator_platforms_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise real PostgreSQL functions on isolated fixtures
+        env:
+          PGPASSWORD: synthetic-platform-test
+        run: |
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-staff-media-schema.sql
+          psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-agency-team-onboarding.sql
+
+
+

@@ -1,0 +1,55 @@
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-topbar{display:none}
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main{padding:0;max-width:none;width:100%;background:#fafafa}
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main::before{display:none}
+
+/* The phone already has the overview's creator picker and a navigation header. */
+@media(max-width:600px){
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-mobile-header{padding:8px 12px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-mobile-header>a img{width:124px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-topbar.moxy-overview-topbar{display:flex;min-height:58px;height:auto;padding:8px 12px;background:#fff}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-creator{display:none}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-account-controls{gap:10px;flex-wrap:nowrap}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime{order:0;margin-left:0;margin-right:auto}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime>span{font-size:10px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime>strong{font-size:16px}
+}
+
+/* Top uses the same composition with Twin colours and its own identity. */
+html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-topbar{display:none}
+html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-main{padding:0;max-width:none;width:100%;background:#fafafa}
+html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-main::before{display:none}
+
+/* The phone already has the overview's creator picker and a navigation header. */
+@media(max-width:600px){
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-mobile-header{padding:8px 12px}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-mobile-header>a img{width:124px}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .dashboard-topbar.moxy-overview-topbar{display:flex;min-height:58px;height:auto;padding:8px 12px;background:#fff}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .moxy-overview-creator{display:none}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .moxy-overview-account-controls{gap:10px;flex-wrap:nowrap}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .moxy-overview-lifetime{order:0;margin-left:0;margin-right:auto}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .moxy-overview-lifetime>span{font-size:10px}
+  html[data-agency="top-onlyfans-agency"]:has([data-moxy-overview]) .moxy-overview-lifetime>strong{font-size:16px}
+}
+
+html[data-agency="top-onlyfans-agency"] {
+  --moxy-overview-accent: #0b2b4b;
+  --moxy-overview-accent-deep: #06172f;
+  --moxy-overview-accent-tint: #e8f0fa;
+  --color-bg: #f6f6f6;
+  --color-elev: #efefef;
+  --color-ink: #181818;
+  --color-muted: #686868;
+  --color-line: #e4e4e4;
+}
+html[data-agency="top-onlyfans-agency"] .dashboard-sidebar { width:245px; background:#06172f; }
+html[data-agency="top-onlyfans-agency"] #mobile-sidebar { width:min(88vw,280px); }
+html[data-agency="top-onlyfans-agency"] .dashboard-mobile-header { background:#06172f; }
+html[data-agency="top-onlyfans-agency"] .canvas-glow { background-image:none; }
+html[data-agency="top-onlyfans-agency"] .moxy-invite-button { background:#0b2b4b; border-color:#345b80; }
+html[data-agency="top-onlyfans-agency"] .moxy-invite-button:hover { background:#17466e; }
+html[data-agency="top-onlyfans-agency"] .moxy-invite-button[aria-current="page"] { box-shadow:0 0 0 2px #06172f,0 0 0 3px #87b8e5; }
+html[data-agency="top-onlyfans-agency"] .moxy-sidebar-row--idle:hover { background:#102c46; }
+html[data-agency="top-onlyfans-agency"] .moxy-sidebar-row--active { background:#173955; }
+html[data-agency="top-onlyfans-agency"] .moxy-sidebar-row--active::before { background:#87b8e5; }
+html[data-agency="top-onlyfans-agency"] :is(.moxy-sidebar-row,.moxy-invite-button):focus-visible { outline-color:#87b8e5; }
+html[data-agency="top-onlyfans-agency"] .moxy-sidebar-utilities>div { border-color:#294057; }

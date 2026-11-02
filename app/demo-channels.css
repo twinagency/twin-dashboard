@@ -1,0 +1,86 @@
+/* Only presentation conversations opt into these native channel surfaces. */
+[data-chat-platform] {
+  --chat-accent: #00aff0;
+  --chat-bg: #fff;
+  --chat-in: #f1f3f5;
+  --chat-out: #e6f7ff;
+  --chat-header: #fff;
+  --chat-meta: #8594a4;
+}
+[data-chat-platform="whatsapp"] {
+  --chat-accent: #008069;
+  --chat-bg: #efeae2;
+  --chat-in: #fff;
+  --chat-out: #d9fdd3;
+  --chat-header: #f0f2f5;
+  --chat-meta: #667781;
+}
+[data-chat-platform="telegram"] {
+  --chat-accent: #3390ec;
+  --chat-bg: #dbe8ef;
+  --chat-in: #fff;
+  --chat-out: #e3ffc9;
+  --chat-meta: #76a55c;
+}
+[data-chat-platform] [data-chat-header] {
+  min-height: 66px;
+  background: var(--chat-header);
+  border-bottom: 1px solid #dfe5e9;
+  border-top: 0;
+}
+[data-chat-platform] [data-chat-header] h2 { font-size: 15px; font-weight: 650; color: #111b21; }
+[data-chat-platform] [data-chat-header] button { color: #54656f; }
+[data-chat-platform] [data-chat-tabs] { background: var(--chat-header); padding-top: 8px; }
+[data-chat-platform] [data-chat-tabs] button[aria-pressed="true"] { box-shadow: inset 0 -2px var(--chat-accent); border-radius: 6px; }
+[data-chat-platform] .tg-thread {
+  background-color: var(--chat-bg);
+  background-image: none;
+  padding: 20px 18px 12px;
+  scrollbar-width: thin;
+}
+[data-chat-platform="whatsapp"] .tg-thread {
+  background-image: url("/brand/platforms/whatsapp-chat-pattern.svg");
+  background-size: 260px 260px;
+}
+[data-chat-platform="telegram"] .tg-thread {
+  background-image: radial-gradient(ellipse at 20% 30%, #c4ded67a, transparent 65%), radial-gradient(ellipse at 80% 80%, #bad7e980, transparent 65%);
+}
+[data-chat-platform] .tg-bubble {
+  border-radius: 8px;
+  padding: 8px 10px 6px;
+  color: #111b21;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 1px 1px #0b141a12;
+  overflow-wrap: anywhere;
+}
+[data-chat-platform] .tg-bubble-in { background: var(--chat-in); }
+[data-chat-platform] .tg-bubble-out { background: var(--chat-out); }
+[data-chat-platform] .tg-tail-in::before, [data-chat-platform] .tg-tail-out::before,
+[data-chat-platform] .tg-tail-in::after, [data-chat-platform] .tg-tail-out::after { display: none; }
+[data-chat-platform="whatsapp"] .tg-tail-in { border-top-left-radius: 0; }
+[data-chat-platform="whatsapp"] .tg-tail-out { border-top-right-radius: 0; }
+[data-chat-platform="telegram"] .tg-bubble { border-radius: 12px; }
+[data-chat-platform="telegram"] .tg-tail-in { border-bottom-left-radius: 3px; }
+[data-chat-platform="telegram"] .tg-tail-out { border-bottom-right-radius: 3px; }
+[data-chat-platform="onlyfans"] .tg-bubble { box-shadow: none; border-radius: 16px; padding: 10px 12px 7px; }
+[data-chat-platform="onlyfans"] .tg-tail-in { border-bottom-left-radius: 4px; }
+[data-chat-platform="onlyfans"] .tg-tail-out { border-bottom-right-radius: 4px; }
+[data-chat-platform] .tg-meta { color: var(--chat-meta); font-size: 10px; gap: 4px; margin-left: 8px; }
+[data-chat-platform="whatsapp"] .tg-bubble-out .tg-meta svg { color: #53bdeb; }
+[data-chat-platform="onlyfans"] .tg-meta svg { color: #00aff0; }
+[data-chat-platform] .tg-daypill { background: #ffffffdc; color: #667781; box-shadow: 0 1px 2px #0b141a12; font-size: 10px; font-weight: 500; }
+[data-chat-platform="telegram"] .tg-daypill { background: #83a1ad70; color: #fff; }
+[data-chat-platform="onlyfans"] .tg-daypill { background: transparent; color: #8a96a3; box-shadow: none; }
+[data-chat-platform] .tg-newline { display: none; }
+[data-chat-platform] [data-thread-status] { background: var(--chat-header); color: #8696a0; font-size: 10px; }
+[data-chat-platform] [data-chat-composer] { background: var(--chat-header); border-top: 1px solid #dfe5e9; }
+[data-chat-platform] [data-chat-composer] textarea { background: #fff; border-color: #e2e7e9; border-radius: 10px; font-size: 13px; }
+[data-chat-platform="whatsapp"] [data-chat-composer] textarea { border-radius: 12px; border-color: #fff; }
+[data-chat-platform] [data-chat-composer] [data-chat-send] { background: var(--chat-accent); color: #fff; }
+[data-chat-platform] [data-chat-composer] button:disabled { opacity: .45; }
+[data-chat-platform="whatsapp"] [data-chat-composer] [data-chat-send] { border-radius: 22px; }
+[data-chat-platform="onlyfans"] [data-chat-composer] [data-chat-send] { border-radius: 20px; }
+@media (max-width: 600px) { [data-chat-platform] .tg-thread { padding: 12px 10px; } }
+
+[data-chat-platform].users-panel-chat::before { background: var(--chat-accent); }

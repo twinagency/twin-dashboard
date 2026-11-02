@@ -1,0 +1,81 @@
+/* Compact marketing previews on phones only. The private dashboard and desktop
+   homepage are intentionally untouched. Devices are decorative, not app embeds. */
+@media (max-width:680px) {
+  .ava-site[data-ava-revision] { --ava-mobile-preview-scale:.78; }
+  .ava-site .ava-header { min-height:64px; padding-block:9px; }
+  .ava-site .ava-header .ava-wordmark { font-size:33px; }
+  .ava-site .ava-header .ava-button { min-height:40px; }
+  .ava-site .ava-hero { padding-block:30px 24px; gap:14px; }
+  .ava-site .ava-hero h1 { font-size:clamp(41px,11.5vw,57px); }
+  .ava-site .ava-hero-copy>p { font-size:15px; line-height:1.6; margin-top:18px; }
+  .ava-site .ava-hero .ava-eyebrow { margin-bottom:14px; }
+  .ava-site .ava-hero-actions { margin-top:20px; }
+  .ava-site .ava-platform-note { margin-top:19px; }
+  .ava-site .ava-hero-visual { padding-top:7px; }
+  .ava-site .ava-phone-stage { width:254px; height:264px; display:block; padding:0; }
+  .ava-site .ava-phone { position:absolute; left:8px; top:10px; transform-origin:top left; transform:scale(var(--ava-mobile-preview-scale)) rotate(-3deg); }
+  .ava-site .ava-phone-secondary { margin:0; left:135px; top:18px; transform:scale(var(--ava-mobile-preview-scale)) rotate(3deg); }
+  .ava-site .ava-chat-disclaimer { margin-top:4px !important; font-size:10px; }
+  .ava-site .ava-capabilities>div { padding-block:17px; }
+  .ava-site .ava-capabilities strong { font-size:21px; }
+  .ava-site .ava-capabilities span { font-size:8px; }
+  .ava-site .ava-product-section { padding-block:36px 30px; gap:24px; }
+  .ava-site .ava-product-copy h2 { font-size:35px; }
+  .ava-site .ava-product-copy>p { font-size:14px; margin-top:16px; }
+  .ava-site .ava-product-copy ul { gap:10px; margin-block:18px 21px; }
+  .ava-site .ava-product-copy .ava-eyebrow { margin-bottom:13px; }
+
+  /* This is a compact product preview, not the full-height dashboard application.
+     Keep the same earnings composition and labels; reduce spacing, not legibility. */
+  .ava-site .ava-dashboard-preview { width:100%; max-width:300px; margin-inline:auto; }
+  .ava-site .ava-dashboard-frame { border-radius:11px; }
+  .ava-site .ava-dashboard-topbar { height:34px; padding-inline:11px; }
+  .ava-site .ava-dashboard-mobile-brand { font-size:23px; }
+  .ava-site .ava-dashboard-account { font-size:9px; gap:5px; }
+  .ava-site .ava-demo-avatar { width:18px; height:18px; font-size:6px; }
+  .ava-site .ava-currency { font-size:8px; padding:2px 4px; }
+  .ava-site .ava-dashboard-body { padding:11px 9px 9px; }
+  .ava-site .ava-dashboard-heading { margin-bottom:9px; }
+  .ava-site .ava-dashboard-heading h3 { font-size:19px; }
+  .ava-site .ava-dashboard-heading p { display:none; }
+  .ava-site .ava-demo-badge { font-size:8px; padding:2px 4px; }
+  .ava-site .ava-dashboard-filters { padding:3px; margin-bottom:9px; gap:4px; border-radius:8px; }
+  .ava-site .ava-dashboard-periods>span { font-size:8px; padding:4px 5px; }
+  .ava-site .ava-chart-switch .ava-icon:first-child { width:21px; height:21px; }
+  .ava-site .ava-earnings-card { padding:10px 9px 7px; border-radius:8px; }
+  .ava-site .ava-earnings-description { font-size:8px; margin-bottom:4px; }
+  .ava-site .ava-mobile-label { display:none; }
+  .ava-site .ava-earnings-values { display:flex; flex-wrap:nowrap; justify-content:space-between; align-items:center; gap:8px; }
+  .ava-site .ava-revenue-value>strong { font-size:24px; line-height:1.15; }
+  .ava-site .ava-stars-value { display:block; padding-left:8px; border-left:1px solid var(--ava-line); flex-shrink:0; }
+  .ava-site .ava-stars-value small { font-size:7px; margin-bottom:3px; }
+  .ava-site .ava-stars-value strong { font-size:9px; gap:3px; }
+  .ava-site .ava-stars-value strong>span { font-size:9px; }
+  .ava-site .ava-balance-value { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:9px; padding-top:8px; }
+  .ava-site .ava-balance-value>small { font-size:9px; }
+  .ava-site .ava-balance-value>strong { font-size:16px; line-height:1.2; margin-top:0; }
+  .ava-site .ava-chart { grid-template-columns:37px minmax(0,1fr); grid-template-rows:88px 18px; margin-top:13px; column-gap:5px; }
+  .ava-site .ava-y-axis,.ava-site .ava-x-axis { font-size:7px; }
+  .ava-site .ava-x-axis { padding-top:5px; }
+  .ava-site .ava-dashboard-stats { gap:7px; margin-top:8px; }
+  .ava-site .ava-dashboard-stats article { padding:7px 9px; border-radius:8px; }
+  .ava-site .ava-dashboard-stats small { font-size:8px; margin-bottom:2px; }
+  .ava-site .ava-dashboard-stats strong { font-size:16px; line-height:1.2; display:block; }
+  .ava-site .ava-dashboard-preview>figcaption { font-size:10px; line-height:1.5; margin-top:10px; }
+
+  .ava-site .ava-features-section { padding-block:35px 29px; }
+  .ava-site .ava-section-intro { margin-bottom:22px; }
+  .ava-site .ava-section-intro h2 { font-size:31px; }
+  .ava-site .ava-personality { padding-block:31px; }
+  .ava-site .ava-personality h2 { font-size:34px; }
+  .ava-site .ava-faq { padding-block:35px; }
+  .ava-site .ava-faq h2 { font-size:31px; }
+  .ava-site .ava-final-cta { padding-block:35px 39px; }
+  .ava-site .ava-final-cta h2 { font-size:35px; }
+}
+@media (max-width:360px) {
+  .ava-site .ava-hero h1 { font-size:41px; }
+  .ava-site .ava-product-copy h2 { font-size:33px; }
+  .ava-site .ava-dashboard-heading h3 { font-size:18px; }
+  .ava-site .ava-revenue-value>strong { font-size:22px; }
+}

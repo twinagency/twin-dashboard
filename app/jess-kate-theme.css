@@ -1,0 +1,190 @@
+@import "./lynq-theme.css";
+
+/* Jess and Kate AI: ivory and cherry, presentation only.
+   RootLayout sets this attribute for this partner's login or verified session.
+   Keeping it on <html> also themes body-portalled menus and mobile navigation.
+   Do not override good/warn/crit/info, revenue series, Stars, emojis, avatars,
+   or the Telegram conversation preview. Those colours communicate meaning. */
+html[data-brand-theme="ivory-cherry"] {
+  --color-bg: #f7f2ec;
+  --color-panel: #fffcf9;
+  --color-elev: #f1e7e5;
+  --color-ink: #211c1e;
+  --color-muted: #74676b;
+  --color-line: #e5d8d8;
+  --color-accent: #7a1734;
+  --color-accent-2: #7a1734;
+  --color-accent-deep: #461323;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #c9a3ad;
+  --color-accent-tint: #f3e1e5;
+  --color-brand: #7a1734;
+  --color-brand-light: #963b55;
+  --jess-kate-blush: #ebcbd2;
+  --shadow-card: 0 1px 2px rgb(33 28 30 / 0.035), 0 8px 24px rgb(70 19 35 / 0.04);
+  --sidebar: #461323;
+  --sidebar-foreground: #f7f2ec;
+  --sidebar-primary: #ebcbd2;
+  --sidebar-primary-foreground: #461323;
+  --sidebar-accent: #ebcbd2;
+  --sidebar-accent-foreground: #461323;
+  --sidebar-border: rgb(235 203 210 / 0.2);
+  --sidebar-ring: #ebcbd2;
+
+  /* Core hero keeps Twin's blue/cyan DNA with restrained warm highlights. */
+  --intelligence-core-glow-rgb: 37, 156, 255;
+  --intelligence-core-edge-rgb: 66, 196, 255;
+  --intelligence-core-front-rgb: 238, 252, 255;
+  --intelligence-core-back-rgb: 103, 232, 249;
+  --intelligence-core-accent-rgb: 255, 169, 77;
+  --intelligence-core-glow-alpha: 0.42;
+}
+
+/* Replace the shared shell's hard-coded navy without changing its geometry. */
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar,
+html[data-brand-theme="ivory-cherry"] .dashboard-mobile-header {
+  background: linear-gradient(180deg, #7a1734 0%, #461323 100%);
+  box-shadow: 8px 0 28px rgb(70 19 35 / 0.08);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav [class~="text-[#9cbad3]"] {
+  color: inherit;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav [class~="text-white/68"] {
+  color: rgb(247 242 236 / 0.82);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
+  background: var(--jess-kate-blush);
+  color: var(--color-accent-deep);
+  box-shadow: inset 0 0 0 1px rgb(247 242 236 / 0.2);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"]:hover {
+  background: var(--color-accent-tint);
+}
+
+/* AI Intelligence Core hero: no box, larger centred sphere, atmospheric glow. */
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 8.9rem;
+  overflow: visible;
+  border-color: transparent;
+  background-color: transparent;
+  padding-top: 0.6rem;
+  padding-bottom: 0.85rem;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"]::before {
+  position: absolute;
+  top: 0.25rem;
+  left: 50%;
+  width: 9rem;
+  height: 7rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 43%, rgb(80 205 255 / 0.28), rgb(37 156 255 / 0.12) 34%, transparent 68%);
+  filter: blur(8px);
+  content: "";
+  pointer-events: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="bg-sky-400/[0.05]"] {
+  background-color: transparent;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] canvas {
+  position: relative;
+  z-index: 1;
+  transform: scale(1.34);
+  transform-origin: center;
+  margin-top: 0.4rem;
+  margin-bottom: 0.65rem;
+  filter: drop-shadow(0 0 10px rgb(64 190 255 / 0.56)) drop-shadow(0 0 22px rgb(37 156 255 / 0.26));
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] > div {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: center;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"] {
+  display: block;
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+  text-shadow: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"]::before {
+  display: block;
+  color: #fff7ef;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  content: "AI Intelligence";
+  text-shadow: 0 1px 10px rgb(255 247 239 / 0.12);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"]::after {
+  display: block;
+  margin-top: 0.22rem;
+  color: #7dd3fc;
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+  content: "Core";
+  text-shadow: 0 0 14px rgb(80 205 255 / 0.45);
+}
+
+/* Neutral working surfaces, no blue wash or decorative pink glow. */
+html[data-brand-theme="ivory-cherry"] .canvas-glow,
+html[data-brand-theme="ivory-cherry"] .dashboard-main::before {
+  background-image: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-main::after {
+  background: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar {
+  background: rgb(255 252 249 / 0.97);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar > [class~="bg-white/82"] {
+  background: rgb(255 252 249 / 0.94);
+  box-shadow: 0 8px 26px rgb(70 19 35 / 0.045);
+}
+
+/* The topbar's sole tabular amount is its cash balance. Preserve semantic green. */
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar .tabular-nums {
+  color: var(--color-good);
+}
+
+html[data-brand-theme="ivory-cherry"] [data-slot="table-header"] {
+  background: var(--color-elev);
+}
+
+html[data-brand-theme="ivory-cherry"] [data-slot="table-body"] [data-slot="table-row"]:hover {
+  background: color-mix(in srgb, var(--jess-kate-blush) 24%, var(--color-panel));
+}
+
+html[data-brand-theme="ivory-cherry"] .earnings-control-active {
+  box-shadow: 0 3px 8px rgb(70 19 35 / 0.16);
+}
+
+/* Grid guides, never the financial bars/lines or status dots. */
+html[data-brand-theme="ivory-cherry"] .recharts-cartesian-grid line {
+  stroke: var(--color-line);
+}

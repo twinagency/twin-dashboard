@@ -1,0 +1,6 @@
+{
+  "name": "twin-onlyfans-integration",
+  "private": true,
+  "scripts": { "dev": "next dev -p 3018", "typecheck": "tsc --noEmit" },
+  "devDependencies": { "playwright": "1.62.1" }
+}

@@ -1,0 +1,61 @@
+/* Ava marketing motion only. Keep all outer layout/device sizes unchanged. */
+.ava-site .ava-chat-history { display: contents; }
+.ava-site .ava-dashboard-bars > i { transform-origin: 50% 100%; }
+
+/* A discreet, keyboard-accessible pause control, without a caption beneath the phones. */
+.ava-site .ava-motion-toggle { display: grid; place-items: center; width: 24px; height: 24px; flex: none; margin: 0 auto; padding: 5px; border: 0; border-radius: 50%; background: transparent; color: var(--ava-muted); cursor: pointer; }
+.ava-site .ava-motion-toggle[hidden] { display: none; }
+.ava-site .ava-motion-toggle svg { width: 14px; height: 14px; }
+.ava-site .ava-motion-toggle .ava-motion-play { display: none; }
+.ava-site .ava-motion-toggle[aria-pressed="true"] .ava-motion-play { display: block; }
+.ava-site .ava-motion-toggle[aria-pressed="true"] .ava-motion-pause { display: none; }
+.ava-site .ava-motion-toggle:hover { color: var(--ava-cherry); background: rgb(122 23 52 / .06); }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* The same history loops inside its fixed Telegram viewport.
+     The header, composer, phone frame and second phone stay completely still. */
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] {
+    display: block;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    scroll-behavior: auto;
+    overflow-anchor: none;
+    --ava-chat-travel: 82px;
+  }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"]::-webkit-scrollbar { display: none; }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] .ava-chat-history {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: inherit;
+    height: calc(100% + var(--ava-chat-travel));
+    min-width: 0;
+  }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] .ava-chat-history > * { flex-shrink: 0; }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] .ava-content-card {
+    flex: 1 0 92px;
+    max-height: none;
+  }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"]:focus-visible { outline: 1px solid #72bbf8; outline-offset: -2px; }
+}
+
+@media (max-width: 680px) and (prefers-reduced-motion: no-preference) {
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] { --ava-chat-travel: 62px; }
+  .ava-site .ava-chat[data-ava-scroll-ready="true"] .ava-content-card { flex-basis: 68px; }
+}
+
+/* Small desktop feedback only. Unwired CTAs remain unwired. */
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .ava-site .ava-button { transition: box-shadow 180ms ease; }
+  .ava-site .ava-button > .ava-icon { transition: transform 180ms ease; }
+  .ava-site .ava-button:hover > .ava-icon { transform: translateX(3px); }
+  .ava-site .ava-button.solid:hover { box-shadow: 0 10px 24px rgb(70 19 35 / .16); }
+  .ava-site .ava-button.cream:hover { box-shadow: 0 6px 18px rgb(0 0 0 / .1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ava-site .ava-chat-history { display: contents; }
+  .ava-site .ava-motion-toggle { display: none; }
+  .ava-site .ava-dashboard-bars > i, .ava-site .ava-button > .ava-icon { transform: none; }
+}

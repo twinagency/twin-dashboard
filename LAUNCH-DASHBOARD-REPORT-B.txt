@@ -1,0 +1,56 @@
+LAUNCH DASHBOARD REPORT B (sections D fan memory, E automation/follow-ups)
+Worktree /home/ronan/twin/twin-dashboard-wt-launch-b, branch codex/onlyfans-launch-dashboard-b, base 927b2d7.
+Status: CODE COMPLETE (local). NOT integrated, NOT deployed, NOT live verified. No push.
+
+COMMITS: see `git log --oneline 927b2d7..HEAD` (one local commit "Add OnlyFans launch B: fan memory and automation panels").
+
+FILES
+ lib/onlyfans/launch/b-common.ts                      fetch helper, reply kinds, capability list (real vs fixture)
+ lib/onlyfans/launch/b-route.ts                       server gate (auth, write needs manager, same-origin JSON), 501 contract_pending helper
+ lib/onlyfans/launch/automation/b-automation.ts       parsers, action rules (read-only, no-contact, state gating)
+ lib/onlyfans/launch/automation/b-automation-client.ts  reads + control POST with ack validation
+ lib/onlyfans/launch/automation/b-follow-ups.ts       follow-up parser + FIXTURE-ONLY data
+ lib/onlyfans/launch/memory/b-memory.ts, b-memory-client.ts  memory parsers, validation, FIXTURE-ONLY data
+ components/onlyfans-launch/b-shared/BShared.tsx      fixture banner, pending card, account switcher, states
+ components/onlyfans-launch/automation/BAutomationPanel.tsx
+ components/onlyfans-launch/memory/BMemoryPanel.tsx
+ app/api/onlyfans-launch/memory/accounts/[accountId]/fans/route.ts and [fanId]/route.ts (GET, PATCH)
+ app/api/onlyfans-launch/automation/accounts/[accountId]/follow-ups/route.ts (GET, POST), emergency-stop/route.ts (POST)
+ scripts/check-onlyfans-launch-b.ts, scripts/check-onlyfans-launch-b-browser.mjs
+ LAUNCH-SHARED-CHANGES.txt (pages, nav, agency-scope regex, package.json, ci, backend contracts)
+ launch-b-screenshots/ (untracked, 12 PNG)
+
+REAL vs FIXTURE
+ REAL (existing backend contracts, via existing dashboard routes):
+  - account list + account handling mode (GET /api/onlyfans/accounts)
+  - conversation list with mode / takeover state / revision
+  - pause, resume, takeover, hand back, mark no-contact (POST /api/onlyfans-controls/...), revision-checked, ack validated, list re-read after
+  - account runtime + delivery policy + history-recovery flag (read only, workspace/settings)
+ NOT CONNECTED (no backend contract):
+  - account-wide mode change: read only, text says unavailable
+  - emergency stop: button exists, route answers 501 contract_pending, UI says "Nothing was stopped"
+ FIXTURE-ONLY (shown only after the operator clicks "Show fixture preview", with a FIXTURE-ONLY banner; nothing saved or sent):
+  - scheduled follow-ups list + cancellation (Chat 4 contract missing)
+  - fan memory: coverage, fan list, summaries, facts, correction of supported fields (Chat 2 contract missing)
+ Real routes for memory/follow-ups exist but return 501 contract_pending after auth; they never fabricate data.
+
+TESTS (exact)
+ npx tsc --noEmit: 0 errors
+ node --import tsx scripts/check-onlyfans-launch-b.ts: 12 passed, 0 failed, 0 skipped
+ scripts/check-onlyfans-launch-b-browser.mjs (real Next dev server, synthetic backend via page.route, desktop 1280 + mobile 390):
+   79 assertions passed, 0 failed, 0 skipped. Covers: anonymous refused, 501 contract_pending, no-origin write 403, bad id 400,
+   keyboard action, revision sent, 409 refresh, no-contact confirm/cancel, takeover/release, read-only disables all, account switch with
+   stale slow response dropped, session loss message, fixture opt-in/labelling, correction validation, no horizontal scroll, no external requests.
+ Browser run used temporary harness pages (removed, not committed). Agency-session path NOT tested.
+
+SCREENSHOTS: /home/ronan/twin/twin-dashboard-wt-launch-b/launch-b-screenshots/
+ automation-{desktop,mobile390,after-*,fixture-followups-*,readonly-*}.png, memory-{coverage,fan}-{desktop,mobile390}.png
+
+SHARED-CHANGE REQUESTS: see LAUNCH-SHARED-CHANGES.txt (pages with canManage, nav, agency-scope regex incl. account list issue,
+ package.json/ci scripts, backend contracts for memory, follow-ups, emergency stop, account mode).
+
+KNOWN LIMITS
+ - No pages/nav yet (shared files); panels unreachable until head dev adds them.
+ - Conversation list first page only.
+ - No-contact has no undo (no backend action); UI says so.
+ - Browser check hardcodes harness URLs; re-point after pages exist.

@@ -1,0 +1,46 @@
+name: Isolated creator demo verification
+on:
+  push:
+    branches: [feat/zane-isolated-earnings-demo]
+  pull_request:
+    paths:
+      - 'lib/creator-demo*'
+      - 'scripts/check-creator-demo*'
+      - 'app/creator/**'
+      - 'app/api/dashboard/**'
+      - 'middleware.ts'
+permissions:
+  contents: read
+concurrency:
+  group: zane-demo-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Video fixture encoder
+        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Synthetic ledger and account isolation
+        run: node --import tsx scripts/check-creator-demo.mjs
+      - name: Existing creator, partner and financial regression checks
+        run: npx tsx scripts/check-creator-workspace.ts && npm run test:offline
+      - name: Production build
+        run: npm run build
+        env: { NEXT_TELEMETRY_DISABLED: '1' }
+      - run: npx playwright install chromium
+      - name: Same production earnings components with synthetic values
+        run: node --import tsx scripts/check-creator-demo-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zane-demo-verification
+          path: test-results/zane-demo
+          if-no-files-found: ignore
+          retention-days: 3

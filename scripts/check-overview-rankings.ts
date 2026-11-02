@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { rankOverviewRows, type RankingRow } from '../lib/overview-rankings-model';
+import { dedupeStarRows } from '../lib/star-dedupe';
+const row=(extra:Partial<RankingRow>={}):RankingRow=>({clone_id:'a',telegram_id:1,amount_stars:100,kind:'media',media_type:'photo',media_id:'photo-a',...extra});
+const rows=[...Array.from({length:1201},()=>row()),row({amount_stars:-100,invoice_payload:'refund'}),row({telegram_id:2,amount_stars:1000,media_id:'photo-b'}),row({clone_id:'b',telegram_id:1,amount_stars:2000,media_id:'photo-c'}),row({clone_id:'foreign',amount_stars:999999}),row({media_id:null,media_type:null})];
+const result=rankOverviewRows(rows,[{id:'a',name:'A'},{id:'b',name:'B'}]);
+assert.equal(result.fans[0].stars,120100);assert.equal(result.fans[0].purchases,1202);
+assert.equal(result.content[0].mediaId,'photo-a');assert.equal(result.content[0].purchases,1201);assert.equal(result.content[0].stars,120000);
+assert.equal(result.unlinked.a,1);assert.ok(!result.fans.some(f=>f.cloneId==='foreign'));
+assert.equal(result.fans.find(f=>f.cloneId==='b')?.stars,2000);
+assert.equal(rankOverviewRows([row({amount_stars:-100})],[{id:'a',name:'A'}]).fans.length,0);
+assert.equal(rankOverviewRows([],[{id:'a',name:'A'}]).content.length,0);
+console.log('Overview rankings: full window beyond recent/page limits, refunds, order counts, missing attribution and creator isolation passed');

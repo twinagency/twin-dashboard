@@ -1,0 +1,50 @@
+name: Managed proxy dashboard
+on:
+  push:
+    branches: ['codex/iproyal-managed-proxy-20261025', 'codex/automatic-proxy-onboarding-20261025', 'codex/visible-agency-proxy-20261025']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: actions/setup-node@v4
+        with: {node-version: 22,cache: npm}
+      - run: npm ci
+      - run: node scripts/check-managed-proxy.cjs
+      - run: node scripts/check-admin-onlyfans-sign-in.cjs
+      - run: node scripts/check-onlyfans-creator-connect.cjs
+      - run: node scripts/check-onlyfans-creator-connect-ui.cjs
+      - run: node --import tsx scripts/check-onlyfans-agency.ts
+      - run: node scripts/check-agency-proxy-onboarding.cjs
+      - run: node scripts/check-proxy-details-ui.cjs
+      - run: node scripts/check-agency-account-proxy-ui.cjs
+      - run: npx tsc --noEmit
+  image:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      REGISTRY: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com
+    steps:
+      - uses: actions/checkout@v4
+        with: {persist-credentials: false}
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - run: |
+          set -euo pipefail
+          docker build --build-arg GIT_SHA="$GITHUB_SHA" --label org.opencontainers.image.revision="$GITHUB_SHA" -t "$REGISTRY/twin-dashboard:proxy-$GITHUB_SHA" .
+          docker push "$REGISTRY/twin-dashboard:proxy-$GITHUB_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$REGISTRY/twin-dashboard:proxy-$GITHUB_SHA" > managed-proxy-image.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: managed-proxy-dashboard-image
+          path: managed-proxy-image.txt

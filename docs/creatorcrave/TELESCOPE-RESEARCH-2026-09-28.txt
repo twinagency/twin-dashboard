@@ -1,0 +1,41 @@
+TELESCOPE RESEARCH — 2026-09-28
+================================
+
+SCALE & USER BASE:
+- Telescope: 1.6M+ monthly active users, ranked #5 in top-grossing Telegram mini apps | web
+- Operated by Baccarat Ventures Limited (UK, registered 19 Mar 2024, company #15577756) | web
+- 10,000+ curated profiles; reaches millions across Telegram ecosystem | web
+- Telegram mini apps ecosystem: $2.5B+ total value, 950M+ monthly active users | web
+- Major competitor games (Hamster Kombat) peaked at 300M, dropped to 27-35M; Major lifestyle app ~70M MAU | web
+
+PLATFORM FEATURES:
+- Discovery platform for browsing creators, communities, channels on Telegram | web
+- Profile-centric with creator cards and trending filters (inferred from architecture) | web
+- Lives inside Telegram's native mini app ecosystem with Explore/Games/Coins tabs available | web
+- Character/creator feeds similar to Luna AI (another competitor, uses card-based discovery) | web
+
+BUSINESS MODEL:
+- Uses Telegram Stars (native in-app currency, users pay via Apple Pay/Google Pay, Telegram+stores take 30%) | web
+- Coin purchases: Apple/Google take up to 30%; direct crypto (USDT/USDC) 0-2.5% fees | web
+- Monetization: in-app purchases, token issuance, ads (most common mini app revenue mix) | web
+- No public affiliate program found, but typical Telegram Stars = 50% revenue share creator models exist | web
+- 21-day withdrawal hold on Stars earnings (standard across Telegram) | web
+
+CONTENT POSITIONING:
+- No public confirmation of NSFW focus in search results (unverified whether adult-specific targeting) | unverified
+- Operates as general discovery platform for "creators, communities, channels" | web
+- Competes directly with: Luna AI (character cards), Spicy Talks (285K MAU, adult AI), Secret Share, Hot Chat | web
+- Creator acquisition: presumed via organic Telegram traffic + platform discovery | unverified
+
+FOUNDERS / OPERATORS:
+- No public founder names found; all operator details behind Baccarat Ventures Limited shell | unverified
+- Registered UK entity, zero public team disclosure | web
+- Rumor of ex-Telegram-clone/AI-companion operators: no evidence found in public search | unverified
+
+RECENT NEWS (SEPT 2026):
+- No September 2026 press coverage, funding announcements, or social chatter found | unverified
+- No Twitter/X presence detected in searches | unverified
+- App store reviews/ratings: not publicly indexed | unverified
+
+BOTTOM LINE:
+Telescope is a real, top-5-grossing Telegram mini app with 1.6M users + 10K profiles, launched by anonymous UK entity (Baccarat Ventures) in early 2026. Monetizes via Telegram Stars in a $2.5B ecosystem. At scale, represents ~1-2% share of Telegram mini app MAU (1.6M of 950M), but if NSFW-focused it's punching directly at adult AI companion market. No founder/CEO/business details public; operates entirely under corporate shell. Revenue model mirrors all Telegram mini apps (30% fees + 21-day hold) but specific coin economy details are obscured.

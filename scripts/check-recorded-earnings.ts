@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {parseNativeEarnings} from '../lib/onlyfans/earnings';
+const window={start:'2026-10-01T00:00:00.000Z',end:'2026-10-23T00:00:00.000Z'};
+const base={schemaVersion:'of-earnings.v1',window,asOf:window.end,accountCount:1,coveredAccountCount:0,status:'unavailable',reasons:['ledger_held'],currency:'USD',clearedGrossCents:null,clearedNetCents:null,clearedCount:null,pendingCount:null,refundedCount:null,recentLedgerAt:window.end,fullLedgerAt:window.end};
+assert.ok(parseNativeEarnings(base,window));
+const recorded={grossCents:3599,netCents:2879,pendingGrossCents:3599,pendingNetCents:2879,paymentCount:3,lastSuccessfulSyncAt:window.end};
+assert.ok(parseNativeEarnings({...base,recorded},window));
+for(const change of [{grossCents:NaN},{pendingGrossCents:3600},{lastSuccessfulSyncAt:'bad'},{paymentCount:-1}])assert.equal(parseNativeEarnings({...base,recorded:{...recorded,...change}},window),null);
+assert.equal(parseNativeEarnings({...base,reasons:['ledger_unavailable'],recorded},window),null);
+assert.ok(parseNativeEarnings({...base,recorded:{...recorded,netCents:null,pendingNetCents:null}},window));
+console.log('Recorded earnings: backward compatibility, pending amounts, delayed sync, invalid values and unknown net passed');

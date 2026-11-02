@@ -1,0 +1,128 @@
+FULL PLAN — MINI APPS, CHANNELS, PAYMENTS 2026-09-28
+what we're leaving on the table, what to build, what NOT to chase.
+
+LOW LEVEL
+
+MONEY LEFT ON TABLE
+- we run 18 personas, 78k fans, 2 mini apps live (Alanna, Bri) | code
+- top 6 standalone AI companion apps do $16-20M/month combined, none run as telegram mini apps | web
+- zero confirmed AI-companion mini app competitors over 1-2M MAU except telescope and lucid dreams' claimed 1.1M | web
+- telegram mini app romance/adult niche estimated $250M-750M TAM by 2027, nobody dominant yet | web
+- realistic ceiling for us at full build-out (18 personas, mini app + channels + affiliate): $30-50M/year by 2028-29, conservative case $50M/year at 20% penetration of a $500M market | web/agent-estimate
+- current run rate is ~$5,300/month star revenue = ~$64k/year, so the gap between where we are and the conservative ceiling is roughly 500-800x | dashboard+web
+- that gap is not "we're doing badly," it's "we built the AI, never built the funnel"
+
+TELESCOPE — THE CLOSEST DIRECT COMPARISON
+- 1.6M monthly active users, ranked #5 top-grossing telegram mini app | web
+- run by Baccarat Ventures Limited, UK shell co, registered mar 2024, zero public founders | web
+- monetizes via telegram stars, same 21-day hold as us | web
+- no confirmed NSFW-specific positioning found publicly, but competes directly in the same discovery-layer space as spicytalks/luna ai | web
+- anonymous ops = they hide who runs it, standard playbook in this niche, worth copying (LLC/shell, no personal names attached)
+
+LUCID DREAMS — POSSIBLE OUTLIER OR MEASUREMENT NOISE
+- now shows 1.1M monthly users vs 92k for uhoney nine weeks ago, a 100x swing in the same directory ecosystem | web
+- either the market consolidated hard toward one winner in 3 weeks, or directory user-count methodology changed — unverified which | web
+- do not plan around this number until independently re-checked
+
+PAYMENTS — TON PAY DOES NOT SOLVE THE 21-DAY HOLD
+- TON Pay is real, launched 2026-02-09 by TON Foundation, built for and integrated into mini apps | web
+- BUT: telegram's own payments-stars policy still says "payments for digital goods and services must be carried out exclusively in telegram stars," no TON Pay exception exists | web (core.telegram.org/bots/payments-stars)
+- TON Pay is for physical goods, services, tips — not digital content unlocks, which is our entire product | web
+- confirmed twice: first research pass and a second direct fact-check against telegram's own docs agree | web
+- the 21-day hold is Apple/Google's chargeback window, forced onto telegram, not telegram's own choice — telegram cannot shorten it without losing app store compliance | web
+- every competitor checked (uhoney, honeychat, luna, gospicy) uses the same pattern: stars inside the mini app (mandatory), CryptoBot or external web/stripe/paddle for players who want faster cash-out, outside the mini app | web
+- REAL FIX AVAILABLE: run a parallel web checkout (external link from bot/mini app to a web page) using crypto (NOWPayments, USDT direct) for fans who want to pay off-platform — this is legal because it's not "inside the mini app," same trick every competitor already runs
+- do not build any plan around TON Pay replacing stars, treat it as dead end for now, revisit only if telegram/TON explicitly adds a digital-goods exception
+
+MONETIZATION LEVERS CONFIRMED BY RESEARCH (numbers, not vibes)
+- affiliate commission sweet spot is 10-20%, not 30-40% — 50%+ attracts spam/fraud accounts | web
+- start_param/referral deep links work technically and are well documented, but need a bot front door — business connections still can't use them | web+code
+- ad networks (adsgram, monetag) pay $2-6 per rewarded unit or $0.012-0.02/click — real but secondary money, not the main lever | web
+- directories (findmini, minitelegram, tapps.center) are free to list on, paid featured placement exists but pricing isn't published, needs a direct sales conversation | web
+
+WHAT'S STRUCTURALLY BLOCKING ALL OF THIS (unchanged since 09-10, still the root cause)
+- clones run as telegram business connections, fans never hit /start, so no start_param, no deep link, no referral, no attribution — this is why users.source is null on all 78k+ rows | code
+- fix is additive: a second front door (real bot per clone) alongside the business connection, not a replacement | code
+- only 2 of 18 clones have the mini app storefront Jesse already built — the other 16 are a config job, not new code | code
+
+TO DO — ORDERED BY LEVERAGE, THIS IS THE PLAN
+
+1. ROLL OUT EXISTING MINI APP TO REMAINING 16 CLONES
+   - Jesse's catalogue feature already works (Alanna, Bri live) — this is BotFather registration + config per clone, not a build
+   - fastest, lowest-risk money on the table, do this first
+
+2. BOT FRONT DOOR PER CLONE
+   - unblocks start_param, referral attribution, affiliate program, directory listings — nothing else on this list works without it
+   - does not touch or replace business connections, which is why the clones convert in the first place
+
+3. WRITE start_param TO users.source ON FIRST CONTACT
+   - permanently fixes attribution, currently 100% blind on 78k+ users
+
+4. AFFILIATE PROGRAM AT 10-20% (not 30-40%, research corrected this number)
+   - set via telegram's native bot referral API, commission period 30-60 days
+   - pay only on realized revenue, zero upfront cost
+
+5. LIST ALL MINI APPS ON findmini / minitelegram / tapps.center
+   - free listings first, then price paid featured placement directly with them (pricing not public, needs a sales call)
+
+6. CROSS-SELL BETWEEN CLONES INSIDE THE MINI APP
+   - fan of one clone sees the other 17, currently never happens, zero-cost to add once front doors exist
+
+7. PARALLEL WEB/CRYPTO CHECKOUT FOR FASTER CASH-OUT
+   - external link from bot to a web page, NOWPayments or direct USDT, same pattern every competitor already uses
+   - solves the 21-day pain without touching in-mini-app stars flow, no policy risk since it's outside the mini app
+
+8. TEST ONE PAID CHANNEL BUY, $50-200, WITH TRACKED start_param
+   - only meaningful once step 2/3 are live and can actually measure cost per buyer
+   - current conversion baseline: 2.23%, judge any spend against that
+
+9. CONSIDER AN ANONYMOUS SHELL STRUCTURE FOR ANY PUBLIC-FACING MINI APP
+   - telescope and most competitors operate behind an anonymous LLC/shell with zero public founder names — standard practice in this niche, not just paranoia
+   - relevant if a fleet-wide "Explore" mini app (all 18 clones in one place) ever goes public-facing/listed in directories
+
+10. USE TON PAY FOR DIGITAL CONTENT (RONAN OVERRIDE, 2026-09-28)
+   - ronan's call: TON Pay was made for this, use it, added to plan over research's objection
+   - research found no explicit telegram exception for digital goods (payments-stars policy page still says stars-only, unchanged as of this check), ronan disagrees and wants it built anyway
+   - flagging once: risk is telegram ToS enforcement / app removal if enforced, not a technical blocker — proceed if ronan accepts that risk
+   - next step to de-risk: find/test a live mini app actually charging TON for digital content today before building, to see if enforcement is real or theoretical
+
+DO NOT
+- do not skip the live-example check on TON Pay before shipping it for digital content, even though it's approved — confirm enforcement risk is theoretical first
+- do not set affiliate commission above 20%, research shows it attracts fraud
+- do not treat lucid dreams' 1.1M user claim as solid until independently re-verified
+- do not spend on paid channel buys before start_param attribution exists — money would be unmeasurable
+- do not replace business connections, they are why the clones convert at all
+
+HIGH LEVEL
+
+THE GAP IS ENORMOUS AND STRUCTURAL, NOT A PRODUCT PROBLEM
+
+We're running at roughly $64k/year while comparable products in this exact niche
+do $16-20M/month combined, and nobody has yet dominated the Telegram mini app
+version of this business. Telescope is real at 1.6M users and top-5 grossing.
+The market ceiling for us specifically, done properly, is a realistic $30-50M/year
+by 2028-29 — not a moonshot number, a market-sized one.
+
+THE FIX IS MOSTLY CONFIG, NOT NEW ENGINEERING
+
+Jesse already built the mini app (catalogue) and it works on 2 of 18 clones.
+Rolling it to the other 16 is the single fastest unlock and doesn't require new
+code. The next unlock, a bot front door per clone, is new but small, and it's
+the one piece that unblocks attribution, affiliate, and paid acquisition all at
+once — right now none of those can exist because business connections never
+trigger /start.
+
+TON PAY IS NOT THE ANSWER TO THE 21-DAY WAIT
+
+Checked twice against Telegram's own policy docs. TON Pay is real and built for
+mini apps, but Telegram still requires Stars exclusively for digital goods —
+that's not changing without an Apple/Google policy shift. The actual fix for
+faster cash-out is what every competitor already does: a parallel web/crypto
+checkout link outside the mini app, not inside it.
+
+THE PLAYBOOK IS ALREADY WRITTEN BY COMPETITORS
+
+Every lever — affiliate %, ad CPM, directory listing, anonymous ops structure,
+web-checkout workaround for the payout delay — is already running somewhere in
+this market and documented. Nothing on this list requires inventing a new
+mechanic, just building the parts we're missing.

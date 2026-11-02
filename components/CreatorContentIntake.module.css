@@ -1,0 +1,91 @@
+.root { display: grid; gap: 16px; }
+.heading { margin-bottom: 4px; }
+.heading h1[data-setup-heading] { margin-bottom: 16px; }
+.heading p { margin: 0; font-size: 15px; line-height: 1.55; color: var(--color-muted); }
+.heading .hint { margin-top: 3px; font-size: 14px; }
+.hint { font-size: 13px; line-height: 1.65; color: var(--color-muted); }
+.contentCard { padding: 16px; border: 1px solid var(--color-line); border-radius: 18px; background: var(--color-panel); overflow: hidden; }
+.emptyCard { display: flex; flex-direction: column; align-items: center; padding: 28px 22px 22px; border-style: dashed; background: linear-gradient(145deg, var(--color-panel), var(--color-bg)); text-align: center; }
+.emptyIcon { margin-bottom: 22px; color: var(--color-ink); }
+.picker { position: relative; width: 100%; min-height: 54px; overflow: hidden; border-radius: 12px; gap: 9px; font-size: 15px; font-weight: 600; }
+.picker:focus-within { outline: 2px solid var(--ring); outline-offset: 4px; }
+.pickerHint { margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--color-muted); }
+.fileLimits { margin-top: 13px; font-size: 11px; line-height: 1.5; color: var(--color-muted); }
+.primary { width: 100%; min-height: 54px; margin-top: 8px; font-size: 15px; font-weight: 600; }
+.handoff .secondary { background: transparent; border-color: var(--ring); color: var(--color-ink); }
+.secondary:hover { background: var(--color-accent-tint); }
+.previewTile { position: relative; overflow: hidden; border: 1px solid var(--color-line); border-radius: 10px; background: var(--color-elev); }
+.thumbnail { display: grid; place-items: center; width: 64px; height: 64px; flex-shrink: 0; overflow: hidden; border-radius: 8px; background: var(--color-elev); color: var(--color-muted); }
+.previewTile .thumbnail { width: 100%; height: 100%; border-radius: 0; }
+.previewFallback { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 14px; color: var(--color-muted); }
+.previewFallback span { max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+.tileState { position: absolute; display: flex; align-items: center; gap: 5px; min-width: 25px; min-height: 25px; border-radius: 999px; background: #181418d9; color: #fff; }
+.addTile { display: flex; justify-content: center; align-items: center; border: 1px solid var(--color-line); background: var(--color-panel); color: var(--color-ink); }
+.uploadStatus { display: grid; gap: 5px; margin-bottom: 16px; font-size: 14px; }
+.uploadStatus h2 { font-family: var(--setup-heading-font); font-size: 20px; font-weight: 600; }
+.uploadStatus > span { font-size: 13px; color: var(--color-muted); }
+.uploadStatus progress { display: block; appearance: none; width: 100%; height: 7px; margin-top: 8px; border: 0; border-radius: 9px; overflow: hidden; background: var(--color-elev); }
+.uploadStatus progress::-webkit-progress-bar { background: var(--color-elev); }
+.uploadStatus progress::-webkit-progress-value { background: var(--ring); border-radius: 9px; }
+.uploadStatus progress::-moz-progress-bar { background: var(--ring); border-radius: 9px; }
+.emptyStatus { margin: 0; }
+.statusLine { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 5px 12px; font-size: 13px; }
+.statusLine strong { font-weight: 600; }
+.statusLine span { color: var(--color-muted); font-size: 12px; }
+.folder > summary, .help > summary, .gallery > summary, .queueDetails > summary { min-height: 48px; display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; font-size: 14px; }
+.folder > summary::-webkit-details-marker, .help > summary::-webkit-details-marker, .gallery > summary::-webkit-details-marker, .queueDetails > summary::-webkit-details-marker { display: none; }
+.folder { border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-panel); }
+.folder > summary { min-height: 50px; padding: 10px 16px; }
+.folderChevron { margin-left: auto; color: var(--color-muted); }
+.folder[open] { padding: 0 14px 14px; }
+.folder[open] > summary { padding-left: 2px; padding-right: 2px; }
+.folder[open] .folderChevron { transform: rotate(90deg); }
+.handoff { text-align: center; padding-top: 2px; }
+.handoff > p { margin-bottom: 8px; font-size: 12px; line-height: 1.6; color: var(--color-muted); }
+.help { color: var(--color-muted); font-size: 13px; line-height: 1.6; }
+.help > summary { justify-content: center; font-size: 13px; text-decoration: underline; text-underline-offset: 4px; }
+.queueDetails > summary, .gallery > summary { justify-content: space-between; border-bottom: 1px solid var(--color-line); color: var(--color-muted); }
+.queueDetails > summary::after, .gallery > summary::after { content: '+'; }
+.queueDetails[open] > summary::after, .gallery[open] > summary::after { content: '−'; }
+.queueDetails ul { margin-top: 12px; }
+
+/* Compact, tappable content and a native modal that retains each brand's theme. */
+.previewGrid, .allFilesGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.previewTile { display: block; width: 100%; padding: 0; aspect-ratio: 1; cursor: pointer; text-align: left; }
+/* A lazy thumbnail can replace its placeholder during a tap. Keep the button
+   as the pointer target so Safari does not cancel that activation. */
+.previewTile * { pointer-events: none; }
+.previewTile:focus-visible, .viewAll:focus-visible, .fileDialog button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.previewTile > img, .previewTile > video { width: 100%; height: 100%; object-fit: cover; }
+.tileState { left: 5px; bottom: 5px; font-size: 10px; padding: 3px 5px; }
+.videoMark { position: absolute; display: grid; place-items: center; top: 7px; right: 7px; width: 26px; height: 26px; border-radius: 50%; background: #0009; color: white; }
+.addTile { flex-direction: row; aspect-ratio: auto; min-height: 46px; margin-top: 10px; border-style: solid; }
+.viewAll { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 10px; border: 1px solid var(--color-line); border-radius: 10px; color: var(--color-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.fileDialog { position: fixed; inset: 0; width: min(760px, calc(100% - 24px)); max-width: none; max-height: calc(100dvh - 24px); margin: auto; padding: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--color-line); border-radius: 18px; background: var(--color-panel); color: var(--color-ink); box-shadow: 0 24px 80px #0006; }
+.fileDialog::backdrop { background: #0009; backdrop-filter: blur(5px); }
+.dialogBody { padding: 0 16px 18px; }
+.dialogHeader { position: sticky; top: 0; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; padding: 15px 0; background: var(--color-panel); border-bottom: 1px solid var(--color-line); }
+.dialogHeader > div { min-width: 0; }
+.dialogHeader h2 { font-family: var(--setup-heading-font); font-size: 24px; }
+.dialogHeader p { overflow-wrap: anywhere; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--color-muted); }
+.closeDialog { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid var(--color-line); border-radius: 50%; cursor: pointer; }
+.backToFiles { display: flex; align-items: center; min-height: 44px; gap: 5px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.largePreview { display: grid; place-items: center; min-height: 160px; border-radius: 12px; background: var(--color-elev); overflow: hidden; }
+.largePreview img, .largePreview video { width: 100%; max-height: 52dvh; object-fit: contain; }
+.largePreview p { padding: 18px; font-size: 13px; }
+.previewNav { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 12px 0; font-size: 12px; }
+.previewNav button { display: flex; align-items: center; gap: 3px; min-height: 44px; padding: 6px; cursor: pointer; }
+.fileDialog button:disabled { opacity: .4; cursor: default; }
+.removeFile { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; width: 100%; border: 1px solid var(--color-line); border-radius: 10px; cursor: pointer; }
+.removeConfirm { padding: 14px; border: 1px solid var(--color-line); border-radius: 12px; font-size: 14px; }
+.removeConfirm > div { display: flex; gap: 10px; margin-top: 10px; }
+.removeConfirm button { flex: 1; min-height: 46px; border: 1px solid var(--color-line); border-radius: 8px; cursor: pointer; }
+.removeConfirm button:first-child { background: #b42335; border-color: #b42335; color: white; }
+.galleryError { margin: 12px 0; padding: 12px; border: 1px solid var(--color-line); border-radius: 10px; font-size: 13px; line-height: 1.6; }
+.galleryError button, .galleryError a { display: inline-flex; align-items: center; min-height: 44px; margin-left: 8px; text-decoration: underline; }
+.helpSteps { display: grid; gap: 10px; padding: 12px 0; counter-reset: help-step; }
+.helpSteps li { display: flex; align-items: flex-start; gap: 10px; }
+.helpSteps li::before { counter-increment: help-step; content: counter(help-step); display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: var(--color-elev); color: var(--color-ink); }
+.formatHelp { margin-top: 12px; font-size: 12px; }
+.formatHelp summary { min-height: 44px; cursor: pointer; }
+@media (min-width: 600px) { .allFilesGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

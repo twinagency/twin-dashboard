@@ -1,0 +1,136 @@
+{
+  "run": "photo-launch-1791799912521",
+  "project": "zqotxvrxuaocsonpizuw",
+  "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+  "model": "qwen/qwen3.8-27b",
+  "transport": "actual HTTP, Next server action, Supabase storage/database and OpenRouter",
+  "cases": [
+    {
+      "id": "dreka-production-control",
+      "elapsed_ms": 71949,
+      "source_sha256": "37d13829fa072e03edd8ec8fb8f83c1e72da98eb4548c4f56fe977c0929f148b",
+      "stored_sha256": "0e860ce2297b4a312a50b20d2e48595019faecf82151015dcacbdfe4bec7c25b",
+      "reference": {
+        "id": "dreka-production-control",
+        "file": "/tmp/photo-source-retained/photo-control-staging-20261012/dreka-15.jpg",
+        "imageSha256": "37d13829fa072e03edd8ec8fb8f83c1e72da98eb4548c4f56fe977c0929f148b",
+        "yes": [
+          "bare_buttocks",
+          "lingerie",
+          "suggestive_pose"
+        ],
+        "not_positive": [
+          "nipples",
+          "genitals",
+          "anus",
+          "full_nudity",
+          "sexual_activity",
+          "sex_toy",
+          "swimwear"
+        ],
+        "uncertain": [],
+        "forbidden_posture": "kneeling because knees are outside the crop"
+      },
+      "row": {
+        "id": "4c8bc8a4-5573-4e19-b207-694d5a54d096",
+        "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+        "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/0e860ce2297b4a312a50b20d2e485950-photo-launch-1791799912521-dreka-production-control.jpg",
+        "caption": null,
+        "star_value": 350,
+        "explicitness": "suggestive",
+        "is_free": false,
+        "tags": [
+          "solo",
+          "ass",
+          "lingerie"
+        ],
+        "visual_description": "A woman with long pink hair in a lavender top and pink thong poses with her back to the camera in front of a white door. She wears a fitted lavender short-sleeved top and a pink thong-style bottom. Her bare buttocks face the camera while she turns her head over her right shoulder to look back. A small dark tattoo is on her right upper arm. The indoor setting has a white paneled door, a wall light switch, and a white ledge in the foreground. Not visible: nipples.",
+        "created_at": "2026-10-12T10:13:05.328428+00:00",
+        "teaser_caption": null,
+        "image_name": "photo-launch-1791799912521-dreka-production-control.jpg",
+        "is_nude": false,
+        "nsfw": false,
+        "auto_desc": "pink hair rear thong pose",
+        "telegram_file_id": null,
+        "analysis_status": "needs_review",
+        "analysis_version": 2,
+        "analysis_model": "qwen/qwen3.8-27b",
+        "analysis_provider": "DeepInfra",
+        "analysis_error": "unclear: genitals, anus",
+        "analysed_at": "2026-10-12T10:13:04.749+00:00",
+        "visual_facts": {
+          "v": 2,
+          "visible": [
+            "long pink hair",
+            "lavender short-sleeved top",
+            "pink thong bottom",
+            "bare buttocks",
+            "tattoo on right upper arm",
+            "over-shoulder backward look",
+            "white paneled door",
+            "wall light switch",
+            "white foreground ledge",
+            "rear-view standing pose"
+          ],
+          "evidence": {
+            "anus": "unclear",
+            "nipples": "no",
+            "sex_toy": "no",
+            "genitals": "unclear",
+            "lingerie": "yes",
+            "swimwear": "no",
+            "full_nudity": "no",
+            "bare_buttocks": "yes",
+            "sexual_activity": "no",
+            "suggestive_pose": "yes",
+            "mirror_reflection": "no"
+          },
+          "uncertainty_reasons": {
+            "anus": "ambiguous_visibility",
+            "genitals": "ambiguous_visibility"
+          }
+        },
+        "metadata_edited_at": null
+      }
+    }
+  ],
+  "checks": [
+    "Real dashboard login and authenticated media page",
+    "1 actual uploads, original identity, private storage JPEG, saved facts/provider/status/prices and refreshed catalogue",
+    "Paid/free values preserved",
+    "Duplicate upload saves once and makes no duplicate model call",
+    "Invalid image reports failure and creates no photo row",
+    "Other creator photo ownership unchanged"
+  ],
+  "material_errors": [],
+  "other_clone_rows_before": [
+    {
+      "id": "a0538f48-0429-43aa-ad73-55879ef31e90",
+      "clone_id": "b5f1d821-211e-44f7-a2ee-d31f93eaeb56"
+    },
+    {
+      "id": "bf9e8abd-346a-4239-a4a1-62a7674986c4",
+      "clone_id": "b5f1d821-211e-44f7-a2ee-d31f93eaeb56"
+    },
+    {
+      "id": "65dc1e07-f5e8-496d-9492-99d3f3d3ddc1",
+      "clone_id": "b5f1d821-211e-44f7-a2ee-d31f93eaeb56"
+    },
+    {
+      "id": "56bb4f22-0944-4f8e-a013-2ecfabc90a7f",
+      "clone_id": "b5f1d821-211e-44f7-a2ee-d31f93eaeb56"
+    },
+    {
+      "id": "bad18956-ab98-46ab-a727-98648ec1259f",
+      "clone_id": "b5f1d821-211e-44f7-a2ee-d31f93eaeb56"
+    }
+  ],
+  "configured_models": {
+    "vision_model": "mistralai/mistral-small-3.2-24b-instruct",
+    "photo_vision_model": "qwen/qwen3.8-27b"
+  },
+  "call_count": 1,
+  "vision_call_count": 1,
+  "status": "transport_pass",
+  "setting_restored": true
+}
