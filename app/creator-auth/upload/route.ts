@@ -243,7 +243,7 @@ async function uploadForCreator(req: NextRequest) {
     if (req.headers.get("accept")?.includes("application/json")) return NextResponse.json({ status: "session_expired" }, { status: 401 });
     return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
   }
-  if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
+  if (creator.readOnly && !creator.contentUploadsAllowed) return new NextResponse("Creator demo is read-only", { status: 403 });
   const accountId = creator.accountId;
   const uploadId = req.headers.get("x-creator-upload-id");
   if (uploadId && !isUploadId(uploadId)) return back(req, "upload_conflict");
