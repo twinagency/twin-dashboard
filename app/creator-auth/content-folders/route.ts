@@ -10,7 +10,7 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 export async function POST(req: NextRequest) {
   if (req.headers.has("next-action") || !trustedFormOrigin(req)) return reply({ error: "Access denied" }, 403);
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator || creator.readOnly) return reply({ error: "Sign in again to save this folder." }, 401);
+  if (!creator || (creator.readOnly && !creator.contentUploadsAllowed)) return reply({ error: "Sign in again to save this folder." }, 401);
   if (Number(req.headers.get("content-length") || 0) > 4096) return reply({ error: "Folder link is too long." }, 413);
   let body: { url?: unknown };
   try { body = await req.json(); } catch { return reply({ error: "Enter a Google Drive or Dropbox folder link." }, 400); }

@@ -7,7 +7,7 @@ import { isUploadId } from "@/lib/creator-upload-receipts";
 const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } });
 export async function GET(req: NextRequest) {
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
+  if (!creator || (creator.readOnly && !creator.contentUploadsAllowed)) return reply({ error: "session_expired" }, 401);
   const ids = (req.nextUrl.searchParams.get("ids") || "").split(",").filter(Boolean);
   if (!ids.length || ids.length > 100 || !ids.every(isUploadId)) return reply({ error: "invalid_upload_ids" }, 400);
   const db = serviceClient();

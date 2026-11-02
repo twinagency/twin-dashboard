@@ -19,6 +19,12 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   submittedAt?: string | null;
   /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
   readOnly: boolean;
+  /**
+   * Narrow exception for a scoped live creator: she may still upload, list, view and
+   * remove her own content files and folder links. Everything else stays read-only.
+   * Content routes check `readOnly && !contentUploadsAllowed`.
+   */
+  contentUploadsAllowed: boolean;
   /** Current server-verified assignment. Never copy a portal hint here. */
   agencyId: string | null;
 };
@@ -93,6 +99,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
       submittedAt: application.data?.submitted_at || null,
       readOnly: briLiveDemo || liveScope,
+      contentUploadsAllowed: !briLiveDemo && liveScope && !!(scoped as { contentUploads?: boolean } | null)?.contentUploads,
       ...(liveScope ? { dataSource: "twin-live" as const } : {}),
     };
     // Branding only, not an assignment, permission or real-account status change.
