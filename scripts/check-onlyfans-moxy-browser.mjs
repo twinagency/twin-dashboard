@@ -29,16 +29,19 @@ if(route.request().method()==='POST'){
 }
 if(fail)return route.fulfill({status:503,json:{ok:false,error:'Fixture configuration unavailable.'}});
 return route.fulfill({json:{ok:true,schemaVersion:'of-configuration.v3',accountId:account,canManage:!reader,
- moxy:{engine:'moxy',moxySelected:true,mode,revision,readiness:{ready,blockers:ready?[]:['real_inventory_mapping_incomplete']},
+ moxy:{engine:'moxy',moxySelected:true,mode,revision,readiness:{ready,blockers:ready?[]:['real_inventory_mapping_incomplete','talker_timing_unresolved','new_unknown_code']},
  settings:{creator_key:account,products:[],sequences:{},catalogue_bindings:{},operational:{}},
+ customs:[{fanId:101,id:'c1',stage:'quoted',owner:'operator-a',quoteCents:5000,deadline:null,overdue:false,waitingOn:'awaiting_fan_payment;deadline_unset'}],
  decisions:[{id:'fixture',fanId:101,kind:'campaign',status:'held',reason:'missing_approved_product_mapping',decision:null,intentId:null}]}}});
 });
 await page.goto(base);await page.locator('[data-moxy-mode]').waitFor();assert.equal(await page.locator('[data-owner]').textContent(),'true');
 assert(await page.locator('option[value="on"]').evaluate(el=>el.disabled));await page.getByText('Recent decisions (1)',{exact:true}).click();
 for(const width of [1280,390,320]){await page.setViewportSize({width,height:900});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  await page.screenshot({path:path.join(dir,`controls-${width}.png`),fullPage:true});}
+await page.getByText('Some products are not matched to real vault media.').first().waitFor();await page.getByText('new_unknown_code',{exact:true}).waitFor();
+await page.locator('[data-moxy-unresolved]').waitFor();await page.getByText('Owned custom requests (1)').click();await page.getByText(/owner operator-a/).waitFor();
 await page.getByLabel('Mode',{exact:true}).selectOption('preview');await page.getByRole('button',{name:'Save mode'}).click();
-await page.getByText('Moxy settings saved.',{exact:true}).waitFor();assert.equal(writes,1);assert.equal(mode,'preview');
+await page.getByText('Moxy settings saved.',{exact:true}).waitFor();assert.equal(writes,1);assert.equal(mode,'preview');await page.getByText('Preview: drafts only, nothing sent.').waitFor();
 ready=true;await page.getByRole('button',{name:'Refresh',exact:true}).click();await page.getByText('Configured prerequisites met',{exact:true}).waitFor();
 await page.getByLabel('Mode',{exact:true}).selectOption('on');lose=true;await page.getByRole('button',{name:'Save mode'}).click();
 await page.getByText(/save outcome is unconfirmed/i).waitFor();await page.locator('[data-moxy-mode="on"]').waitFor();assert.equal(writes,2);

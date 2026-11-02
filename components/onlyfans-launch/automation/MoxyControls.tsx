@@ -1,9 +1,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { moxyAck, parseMoxy, record, starterSettings, type MoxyMode, type MoxyView } from "@/lib/onlyfans/moxy";
+import { CUSTOM_STAGE, explainReason, moxyAck, needsSupply, parseMoxy, record, starterSettings, type MoxyMode, type MoxyView } from "@/lib/onlyfans/moxy";
 import { buttonClass, dangerClass } from "../a-shared";
 
 const words = (value: string) => value.replaceAll("_", " ").replaceAll(":", ": ");
+const WAIT: Record<string, string> = { owner_must_confirm_availability: "owner must confirm availability", owner_must_quote: "owner must quote",
+  awaiting_fan_payment: "fan payment", owner_must_fulfil: "owner must fulfil", deadline_unset: "deadline not set" };
+const Reason = ({ code }: { code: string }) => { const text = explainReason(code);
+  return <>{text}{text === code ? null : <> <code className="text-xs text-gray-600">{code}</code></>}</>; };
+const explainWait = (w: string) => WAIT[w] ?? w;
 export function MoxyStateSummary({ value }: { value: MoxyView }) {
   if (value.engine === "legacy") return <p className="text-sm">Moxy has not been selected for this account.</p>;
   return <>
@@ -13,13 +18,26 @@ export function MoxyStateSummary({ value }: { value: MoxyView }) {
       <dt>Readiness</dt><dd className={value.readiness.ready ? "text-green-700" : "text-amber-700"}>
         {value.readiness.ready ? "Configured prerequisites met" : "Setup needs attention"}</dd>
     </dl>
+    {value.mode === "preview" ? <p data-moxy-preview className="rounded-lg bg-amber-50 p-2 text-sm font-medium">Preview: drafts only, nothing sent.</p> : null}
     {value.readiness.blockers.length ? <ul className="list-disc space-y-1 pl-5 text-sm" aria-label="Moxy readiness blockers">
-      {value.readiness.blockers.map(reason => <li key={reason}>{words(reason)}</li>)}</ul> : null}
+      {value.readiness.blockers.map(reason => <li key={reason}><Reason code={reason} /></li>)}</ul> : null}
+    {value.readiness.blockers.some(needsSupply) ? <div data-moxy-unresolved className="text-sm"><p className="font-medium">Still to be supplied by Jesse</p>
+      <ul className="list-disc space-y-1 pl-5" aria-label="Unresolved creator setup">
+        {value.readiness.blockers.filter(needsSupply).map(reason => <li key={reason}>{explainReason(reason)}</li>)}</ul></div> : null}
+    <details className="text-sm" data-moxy-customs><summary className="cursor-pointer font-medium">Owned custom requests ({value.customs.length})</summary>
+      {value.customs.length === 0 ? <p className="py-2">No open custom requests.</p> : <ul className="mt-2 grid gap-2">
+        {value.customs.map(c => <li key={`${c.fanId}-${c.id}`} className="min-w-0 rounded-lg border border-line p-3">
+          <p className="font-medium">Fan {c.fanId} · {CUSTOM_STAGE[c.stage] ?? c.stage} · owner {c.owner}{c.overdue ? " · OVERDUE" : ""}</p>
+          <p className="mt-1 break-words">Waiting on: {c.waitingOn.split(";").map(explainWait).join("; ")}</p>
+          {c.quoteCents !== null ? <p>Quote: {(c.quoteCents / 100).toFixed(2)}</p> : null}
+          {c.deadline ? <p>Deadline: {c.deadline}</p> : null}
+        </li>)}</ul>}
+    </details>
     <details className="text-sm"><summary className="cursor-pointer font-medium">Recent decisions ({value.decisions.length})</summary>
       {value.decisions.length === 0 ? <p className="py-2">No decisions recorded.</p> : <ul className="mt-2 grid gap-2">
         {value.decisions.map(d => <li key={d.id} className="min-w-0 rounded-lg border border-line p-3">
           <p className="font-medium">Fan {d.fanId} · {words(d.kind)} · {words(d.status)}</p>
-          {d.reason ? <p className="mt-1 break-words">{words(d.reason)}</p> : null}
+          {d.reason ? <p className="mt-1 break-words"><Reason code={d.reason} /></p> : null}
           {typeof d.decision?.reason === "string" ? <p className="mt-1 break-words">{d.decision.reason}</p> : null}
           {typeof d.decision?.text === "string" && d.decision.text ? <blockquote className="mt-2 whitespace-pre-wrap break-words border-l-2 border-blue-300 pl-3">{d.decision.text}</blockquote> : null}
         </li>)}</ul>}
@@ -99,9 +117,9 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
         </select></label> : null}
       <div className="flex flex-wrap items-end gap-3"><label className="grid gap-1 text-sm">Mode
         <select aria-label="Mode" className="min-h-11 rounded-lg border border-line bg-white px-3" value={nextMode} disabled={!editable} onChange={e => setNextMode(e.target.value as MoxyMode)}>
-          <option value="off">Off</option><option value="preview">Preview</option><option value="on" disabled={!onReady}>On</option>
+          <option value="off">Off</option><option value="preview">Preview (drafts only, nothing sent)</option><option value="on" disabled={!onReady}>On</option>
         </select></label>
-        <span title="Off retains Moxy ownership and stops new Moxy work. Preview records decisions without sending. On requires current verified prerequisites." aria-label="Mode help" className="mb-3 cursor-help text-blue-700">ⓘ</span>
+        <span title="Off retains Moxy ownership and stops new Moxy work. Preview writes drafts only; nothing is sent. On requires current verified prerequisites." aria-label="Mode help" className="mb-3 cursor-help text-blue-700">ⓘ</span>
         <button type="button" className={nextMode === "off" ? dangerClass : buttonClass} disabled={!editable || !settings || nextMode === "on" && !onReady} onClick={() => void save()}>
           {busy ? "Saving…" : value.engine === "legacy" ? "Select Moxy" : "Save mode"}</button></div>
       <details className="text-sm"><summary className="cursor-pointer font-medium">Creator setup</summary>

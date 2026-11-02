@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { parseMoxy, validMoxyChange, moxyAck, MOXY_SCHEMA } from '../lib/onlyfans/moxy';
+import { explainReason, needsSupply, REASON_TEXT, parseMoxy, validMoxyChange, moxyAck, MOXY_SCHEMA } from '../lib/onlyfans/moxy';
 import { createMoxyBackend } from '../lib/onlyfans/moxy-backend';
 
 async function main() {
@@ -14,6 +14,15 @@ async function main() {
   for(const invalid of [{...change,actor:'forged'},{...change,expectedRevision:true},{...change,mode:'legacy'},{...change,settings:[]}]) assert(!validMoxyChange(invalid));
   const ack={...current,moxy:{mode:'off',revision:2,readiness:current.moxy.readiness}};
   assert(moxyAck(ack,'fixture-a',change));assert(!moxyAck(ack,'fixture-b',change));assert(!moxyAck(ack,'fixture-a',{...change,expectedRevision:2}));
+  const withCustoms={...current,moxy:{...current.moxy,customs:[{fanId:7,id:'c1',stage:'quoted',owner:'op',quoteCents:5000,deadline:null,overdue:false,waitingOn:'awaiting_fan_payment;deadline_unset'}]}};
+  const parsed=parseMoxy(withCustoms,'fixture-a');assert(parsed&&parsed.engine==='moxy'&&parsed.customs.length===1);
+  const noCustoms=parseMoxy(current,'fixture-a');assert(noCustoms&&noCustoms.engine==='moxy'&&noCustoms.customs.length===0);
+  assert.equal(parseMoxy({...withCustoms,moxy:{...withCustoms.moxy,customs:[{fanId:7}]}},'fixture-a'),null);
+  for(const code of ['talker_timing_unresolved','creator_reply_gap_setting','moxy_owner_lookup_failed','moxy_canonical_owner_required','campaign_provider_recovery_required','graveyard_shift_unknown']) assert(REASON_TEXT[code],code);
+  assert.notEqual(explainReason('moxy_activation_not_ready:a,b'),'moxy_activation_not_ready:a,b');
+  assert.equal(explainReason('brand_new_code'),'brand_new_code');
+  assert(explainReason('operational_field_missing:rate').includes('rate'));
+  assert(needsSupply('talker_timing_unresolved')&&needsSupply('operational_field_missing:x')&&!needsSupply('moxy_off'));
   let count=0;
   const backend=createMoxyBackend({baseUrl:'https://fixture.invalid/',token:'synthetic-config',fetchImpl:async(url,init)=>{
     count++; assert.equal(String(url),'https://fixture.invalid/onlyfans/configuration/v1/accounts/fixture-a/moxy');
