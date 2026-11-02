@@ -1,3 +1,4 @@
+import { parseRecentHistory, type RecentHistory } from "./recent-history";
 /** Public account connection contract. Credentials are write-only. */
 export const CONNECTION_SCHEMA = "of-connections.v1";
 export const CONNECTION_HEADER = "X-OnlyFans-Connection-Version";
@@ -11,7 +12,7 @@ export type ConnectionRunner = { state: ConnectionRunnerState; reason: string | 
 export type Connection = { accountId: string; revision: number; status: ConnectionStatus; ownerId: string | null;
   expiresAt: string | null; verifiedAt: string | null; lastError: string | null; outgoingEnabled: boolean;
   policyRevision: number; usedUnits: number; limitUnits: number; mediaEnabled: boolean; automateNewConversations: boolean; sync?: ConnectionSync; throttleSeconds?: number | null;
-  /** Present only when the backend answered ?runner=1. Connected is not live: see aiLive. */ runner?: ConnectionRunner; aiLive?: boolean };
+  /** Present only when the backend answered ?runner=1. Connected is not live: see aiLive. */ runner?: ConnectionRunner; aiLive?: boolean; recentHistory?: RecentHistory };
 export type ConnectionSave = { ownerId: number; capture: Record<string, unknown>; xHash: string; proxyUrl: string | null;
   expiresAt: string; model: { modelId: string; apiKey: string } | null };
 export type ConnectionRequest = { expectedRevision: number } & (
@@ -99,9 +100,10 @@ export function parseConnection(value: unknown, accountId: string): Connection |
   const c = value.connection;
   const base = ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"];
   // Optional keys are accepted only as known, valid shapes; runner and aiLive travel together, and aiLive can never contradict the runner.
-  const optional = ["sync", "runner", "aiLive", "throttleSeconds"].filter(key => key in c);
+  const optional = ["sync", "runner", "aiLive", "throttleSeconds", "recentHistory"].filter(key => key in c);
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
+    ("recentHistory" in c && !parseRecentHistory(c.recentHistory)) ||
     ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||
     ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
       (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
@@ -134,3 +136,4 @@ export function parseEnrollment(value:unknown):ConnectionEnrollment|null {
     ||!stamp(value.expiresAt)||(value.status==="accepted"&&!value.accountId)||(value.status!=="accepted"&&value.accountId!==null))return null;
   return value as ConnectionEnrollment;
 }
+
