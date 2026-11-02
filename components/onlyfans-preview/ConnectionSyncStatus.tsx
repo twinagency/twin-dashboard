@@ -1,9 +1,11 @@
+import RecentHistoryStatus from "./RecentHistoryStatus";
 import type { Connection } from "@/lib/onlyfans-connections/contract";
 import { connectionAiStatus, connectionSyncLabel, type ConnectionState } from "@/lib/onlyfans-connections/presentation";
 
 export default function ConnectionSyncStatus({ connection, state }: { connection: Connection; state: ConnectionState }) {
   const sync = connection.sync, ai = connectionAiStatus(connection);
   const aiLine = ai ? <p role="status" className="mt-2 text-xs font-semibold text-ink" data-of-ai-live={ai.live ? "live" : "not-running"}>{ai.text}</p> : null;
+  if (connection.recentHistory) return <>{aiLine}<RecentHistoryStatus value={connection.recentHistory} /></>;
   if (!sync) return <>{aiLine}<p className="mt-2 text-xs text-muted">Import progress is not available from this server yet.</p></>;
   return <div className="mt-3 space-y-1 text-xs text-muted" data-of-sync-progress>
     {aiLine}
@@ -15,4 +17,5 @@ export default function ConnectionSyncStatus({ connection, state }: { connection
     <p>Last complete sync: {sync.lastCompleteSyncAt ? new Date(sync.lastCompleteSyncAt).toLocaleString() : "Not completed yet"}</p>
   </div>;
 }
+
 

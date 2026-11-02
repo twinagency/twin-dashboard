@@ -1,4 +1,6 @@
 "use client";
+import { parseRecentHistory } from "@/lib/onlyfans-connections/recent-history";
+import RecentHistoryStatus from "@/components/onlyfans-preview/RecentHistoryStatus";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseWorkspaceScope, workspaceHref } from "@/lib/onlyfans-preview/scope";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -193,17 +195,22 @@ function MemoryProgressView({ progress: p }: { progress: MemoryProgress }) {
 }
 /** Every archive, recovery, discovery and stored-message counter. The inbox sidebar keeps these inside a collapsed disclosure. */
 export function MemoryDiagnostics({ progress, recovery }: { progress: MemoryProgress; recovery: RecoveryProgress }) {
-  return <div className="grid min-w-0 gap-3" data-b-diagnostics><MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
+  const recent = parseRecentHistory(recovery.recentHistory);
+  return <div className="grid min-w-0 gap-3" data-b-diagnostics>{recent ? <RecentHistoryStatus value={recent} /> : null}<MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
 }
 
 export type MemoryStateKey = "not_processed" | "partial" | "no_facts" | "current";
-export type MemoryState = { key: MemoryStateKey; label: string; detail: string };
+export type MemoryState = { key: MemoryStateKey; label: string; detail: string; detailedProgress?: boolean };
 /**
  * Memory state from the fields the service already returns. There is no job status, delay or failure flag in the
  * contract, so "processing", "delayed" and "failed" cannot be told apart from "partial" and are reported as not reported.
  */
 export function memoryState(progress: MemoryProgress, recovery: RecoveryProgress, memory: NativeMemory): MemoryState {
   const hasFacts = Object.keys(memory.facts).length > 0 || Object.values(memory.summaries).some(v => !!v);
+  const recent = parseRecentHistory(recovery.recentHistory);
+  if (recent?.initialHistory.state === "recent_history_ready" && recent.memoryProcessing.state === "ready")
+    return { key: hasFacts ? "current" : "no_facts", label: hasFacts ? "Recent memory ready" : "Recent history processed, no supported facts", detailedProgress: true,
+      detail: `The initial 30-day window is imported and processed. Lifetime history is ${recent.lifetimeHistory.complete ? "complete" : "incomplete; older history is retrieved progressively"}.` };
   const retry = recovery.conversationsRetrying > 0 ? ` Archive retries reported: ${recovery.conversationsRetrying}.` : "";
   if (progress.processedCurrentMessages === 0 && !progress.lastProcessedAt)
     return { key: "not_processed", label: "Not processed", detail: progress.storedMessages ? `${progress.storedMessages} stored messages are waiting to be processed.${retry}` : `No stored messages to process yet.${retry}` };
@@ -218,7 +225,7 @@ export function MemoryStateView({ state }: { state: MemoryState }) {
   return <div className="min-w-0 rounded-lg border border-line p-3 text-sm" data-b-memory-state={state.key}>
     <p className="font-semibold">Memory state: {state.label}</p>
     <p className="mt-1 break-words text-xs text-muted [overflow-wrap:anywhere]">{state.detail}</p>
-    <p className="mt-1 text-xs text-muted">Processing, delayed and failed: Not reported <span className="cursor-help" title="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only." aria-label="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only.">ⓘ</span></p>
+    {!state.detailedProgress ? <p className="mt-1 text-xs text-muted">Processing, delayed and failed: Not reported <span className="cursor-help" title="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only." aria-label="The memory service does not report a running, delayed or failed status for a fan, so those states cannot be shown. Partial states come from stored-message and archive counts only.">ⓘ</span></p> : null}
   </div>;
 }
 function FanFacts({ memory: m, manage, busy, edit, setEdit, onSave }: { memory: NativeMemory; manage: boolean; busy: boolean; edit: Edit | null; setEdit: (edit: Edit | null) => void; onSave: (operation: "set" | "clear") => Promise<void> }) {
@@ -237,3 +244,4 @@ function FanFacts({ memory: m, manage, busy, edit, setEdit, onSave }: { memory: 
     </li>;
   })}</ul></div>;
 }
+
