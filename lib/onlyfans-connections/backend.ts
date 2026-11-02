@@ -41,7 +41,7 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
     },
     async get(accountId: string) {
       try {
-        const response = await call(base + "/" + encodeURIComponent(accountId) + "?progress=1&runner=1&policy=1", { method: "GET", headers });
+        const response = await call(base + "/" + encodeURIComponent(accountId) + "?progress=1&runner=1&policy=1&history=recent", { method: "GET", headers });
         if (response.ok) { const data = parseConnection(await response.json(), accountId); if (data) return { ok: true as const, data }; }
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The recorded account connection could not be read." };
       } catch { return { ok: false as const, status: 503, error: "The recorded account connection could not be read." }; }
