@@ -1,0 +1,19 @@
+name: Recent history contract
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/onlyfans-connections/**'
+      - 'components/onlyfans-preview/*History*'
+      - 'components/onlyfans-preview/ConnectionSyncStatus.tsx'
+      - 'scripts/check-recent-history.ts'
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '24', cache: npm}
+      - run: npm ci
+      - run: npx tsx scripts/check-recent-history.ts

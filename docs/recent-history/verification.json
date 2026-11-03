@@ -1,0 +1,36 @@
+{
+  "date": "2026-11-02",
+  "branch": "codex/recent-history-onboarding-20261102",
+  "contractChecksPassed": 12,
+  "componentBrowserChecks": {
+    "passed": 4,
+    "widths": [
+      375,
+      1280
+    ],
+    "states": [
+      "recent history ready; lifetime incomplete",
+      "provider error and budget hold"
+    ],
+    "assertions": [
+      "No horizontal overflow",
+      "Recent/lifetime states remain separate",
+      "Budget hold visible",
+      "Active and unresolved reservations visible"
+    ],
+    "runtime": {
+      "react": "19",
+      "tsx": "4.23.13",
+      "playwright": "1.61.1",
+      "chromium": "149"
+    },
+    "scope": "Actual RecentHistoryStatus React component and strict parser in Chromium with standalone layout CSS. This does not verify a full Next build or live production CSS."
+  },
+  "fullNextBuildPassed": null,
+  "deployed": false,
+  "blocker": {
+    "liveOnlyFansDashboardGitSha": "3d0ee2e3e2848f9cd5019399a82fe27a67f435c2",
+    "liveImage": "sha256:22be6bc89bf7308e2c2214e03d63313bfc32f2edb6c831bddcd1a06a28258049",
+    "reason": "Live revision cannot be fetched/searched in the connected repository; matching source archive not recovered. Do not replace from another source base or activate new strict response before paired deployment."
+  }
+}
