@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import EarningsAutoRefresh from "./EarningsAutoRefresh";
 import Link from "@/components/NavigationLink";
 import { ArrowRight, ArrowUpRight, Banknote, CheckCheck, CircleAlert, RotateCcw, Users, Wallet } from "lucide-react";
@@ -6,7 +7,7 @@ import CreatorPortrait from "./CreatorPortrait";
 import { HEALTH_LABEL, HealthPill, ModePill } from "./labels";
 import { FreshnessLine } from "./PreviewChrome";
 import { paymentLabel, recordedTime, SCOPE_UNAVAILABLE, type OverviewData } from "@/lib/onlyfans/overview";
-import { formatRecordedMoney } from "@/lib/onlyfans/workspace";
+import OnlyFansMoney, { OnlyFansCurrencyLabel } from "./OnlyFansMoney";
 import { scopeQueryString, workspaceHref } from "@/lib/onlyfans-preview/scope";
 
 export default function OverviewView({ data }: { data: OverviewData }) {
@@ -18,7 +19,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
   const currency = data.earnings?.currency ?? "USD";
   const scoped = selection.kind !== "all";
   const unavailableText = scoped ? SCOPE_UNAVAILABLE : "Unavailable";
-  const money = (value: number | null | undefined, split = false) => value == null ? (split && figures.splitNote ? figures.splitNote : unavailableText) : formatRecordedMoney(value, currency);
+  const money = (value: number | null | undefined, split = false) => value == null ? (split && figures.splitNote ? figures.splitNote : unavailableText) : <OnlyFansMoney cents={value} sourceCurrency={currency} />;
   const count = (value: number | null | undefined, split = false) => value == null ? (split && figures.splitNote ? figures.splitNote : unavailableText) : value.toLocaleString("en-US");
   const selectedIds = selection.kind === "creator" ? selection.accountIds : null;
   const connectedAccounts = selectedIds ? data.accounts.filter(a => selectedIds.includes(a.accountId)) : data.accounts;
@@ -28,7 +29,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
   const subtotalNote = figures.subtotal ? `Verified subtotal: ${figures.completeCount} of ${figures.includedCount} included accounts, not the complete total.` : null;
   const metricNote = (base: string) => figures.sourceNote ? `${base} · ${figures.sourceNote}` : base;
   // Headline earnings: whole dollars with thousands separators ("$3,801,372"). Line items elsewhere keep cents.
-  const whole = (value: number | null | undefined) => value == null ? unavailableText : (value < 0 ? "−" : "") + "$" + Math.round(Math.abs(value) / 100).toLocaleString("en-US");
+  const whole = (value: number | null | undefined) => value == null ? unavailableText : <OnlyFansMoney cents={value} sourceCurrency={currency} whole />;
   const provider = figures.providerSourced;
   // While OnlyFans' own totals stand in, ledger-only figures (counts, pending/cleared split) are hidden instead of a wall of "Unavailable".
   const ledgerOnly = provider ? [] : [
@@ -39,7 +40,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
     { label: "Cleared payments", value: count(figures.clearedCount, true), Icon: CheckCheck, period: true, sourced: false },
     { label: "Refunded payments", value: count(figures.refundedCount, true), Icon: RotateCcw, period: true, sourced: false },
   ];
-  const metrics: { label: string; value: string; Icon: typeof Wallet; period: boolean; sourced?: boolean }[] = [
+  const metrics: { label: string; value: ReactNode; Icon: typeof Wallet; period: boolean; sourced?: boolean }[] = [
     { label: provider ? "Net earnings" : "Recorded net earnings", value: whole(figures.netCents), Icon: Wallet, period: true, sourced: true },
     { label: provider ? "Gross earnings" : "Recorded gross earnings", value: whole(figures.grossCents), Icon: Banknote, period: true, sourced: true },
     ...ledgerOnly,
@@ -73,7 +74,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
         {selection.kind === "creator" && selection.requested.accountId ? <input type="hidden" name="account" value={selection.requested.accountId} /> : null}
         {selection.kind === "creator" && selection.requested.creatorId ? <input type="hidden" name="creator" value={selection.requested.creatorId} /> : null}
         <label><span className="sr-only">Reporting period</span><select name="period" defaultValue={data.period}><option value="7d">Last 7 days</option><option value="30d">Last 30 days</option><option value="90d">Last 90 days</option><option value="all">All time</option></select></label>
-        <span className="of-panel-description" aria-label="Currency">All amounts in {currency}</span>
+        <span className="of-panel-description" aria-label="Currency">Display currency: <OnlyFansCurrencyLabel /></span>
         <button type="submit" className="of-secondary">Apply / refresh</button>
       </form>
     </div>
@@ -93,7 +94,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
       {attentionUnchecked ? <p className="of-empty-copy" role="alert">Some checks could not run. {attentionUnchecked}</p>
         : !attention.length && data.accounts.length ? <p className="of-empty-copy" role="status">All clear. Every creator is connected and payment imports are complete.</p> : null}
     </section>
-    <div className="of-scope-line"><span>{scopeLabel}{selection.kind === "creator" ? ` · ${figures.includedCount} included ${figures.includedCount === 1 ? "account" : "accounts"}` : ""}</span><span>{currency} · UTC · {periodLabel}</span></div>
+    <div className="of-scope-line"><span>{scopeLabel}{selection.kind === "creator" ? ` · ${figures.includedCount} included ${figures.includedCount === 1 ? "account" : "accounts"}` : ""}</span><span><OnlyFansCurrencyLabel /> · UTC · {periodLabel}</span></div>
     {selection.kind === "invalid" ? <p className="of-notice" role="alert">{selection.reason} {SCOPE_UNAVAILABLE}. Choose a creator from the strip, or select the highlighted one again to show all creators.</p>
       : figures.mode === "unavailable" && scoped ? <p className="of-notice" role="status">{SCOPE_UNAVAILABLE}. {reasons ?? ""}</p>
       : reasons ? <p className="of-notice" role="status">{figures.providerSourced ? "Net and gross are OnlyFans' own totals while the full payment history imports; payment counts and the pending/cleared split follow once it finishes. " : figures.netCents !== null ? "Sync delayed. Showing recorded payments; newer activity may be missing. " : ""}{figures.providerSourced ? "" : reasons}</p> : null}
@@ -121,7 +122,7 @@ export default function OverviewView({ data }: { data: OverviewData }) {
       <section className="of-panel"><div className="of-section-heading"><h2>Recent recorded sales</h2><Link href={data.activityAccount ? workspaceHref("/onlyfans/sales", { accountId: data.activityAccount.accountId, creatorId: data.activityAccount.binding.creatorId }) : "/onlyfans/sales"} className="of-text-link">View earnings <ArrowRight size={16} /></Link></div>
         <p className="of-panel-description">{data.activityAccount ? `${data.activityAccount.binding.creatorName} · @${data.activityAccount.binding.handle} · Latest recorded page` : "Account activity"}</p>
         {data.salesError ? <p className="of-empty-copy" role="status">{data.salesError}</p> : data.sales?.transactions.slice(0, 5).map(transaction => <div className="of-sale-row" key={transaction.transactionId}>
-          <div><strong>{transaction.kind.replaceAll("_", " ")}</strong><small>{recordedTime(transaction.occurredAt)} UTC · {transaction.fanId ? `Fan ${transaction.fanId}` : "No fan reference"}</small></div><div><strong>{formatRecordedMoney(transaction.grossCents, transaction.currency)}</strong><span className="of-payment-badge" data-status={transaction.status}>{paymentLabel(transaction.status)}</span></div>
+          <div><strong>{transaction.kind.replaceAll("_", " ")}</strong><small>{recordedTime(transaction.occurredAt)} UTC · {transaction.fanId ? `Fan ${transaction.fanId}` : "No fan reference"}</small></div><div><strong><OnlyFansMoney cents={transaction.grossCents} sourceCurrency={transaction.currency} /></strong><span className="of-payment-badge" data-status={transaction.status}>{paymentLabel(transaction.status)}</span></div>
         </div>)}{data.sales && !data.sales.transactions.length ? <p className="of-empty-copy">No transactions recorded on this page.</p> : null}
         {data.sales ? <p className="of-panel-footnote">Latest activity is for this account only and is not limited to the selected period. {data.sales.nextCursor ? "More records are available in Earnings." : ""}</p> : null}
       </section>
