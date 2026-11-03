@@ -181,7 +181,7 @@ export default function TopBar({
             <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
           </>
         ) : null}
-        {channel === "onlyfans" || onlyFansOnly ? <span className="of-currency-label" title="OnlyFans amounts retain their recorded currency. Summary earnings are in USD.">USD</span> : <CurrencyToggle compact />}
+        {(channel === "onlyfans" || onlyFansOnly) && pathname !== "/onlyfans/overview" ? <span className="of-currency-label" title="OnlyFans amounts retain their recorded currency.">USD</span> : <CurrencyToggle compact />}
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
         {/* Agency and creator portals sign out through their own route so the
