@@ -52,14 +52,14 @@ async function main() {
   const all = make("ignores");
   const allHtml = await html(all.backend, null);
   assert.deepEqual(all.calls, [null]);
-  assert.match(allHtml, /All creators · 3 accounts/); assert.match(allHtml, /USD 45\.00/);
+  assert.match(allHtml, /All creators · 3 accounts/); assert.match(allHtml, /AUD 63\.00/);
 
   // Backend ignores the filter: figures come from per-account totals, labelled, splits unavailable.
   const ig = make("ignores");
   const igHtml = await html(ig.backend, "acct-b");
   assert.deepEqual(ig.calls, [{ accountIds: ["acct-b"] }]);
-  assert.match(igHtml, /Bee Creator · @beebee/); assert.match(igHtml, /USD 24\.00/); assert.match(igHtml, /from per-account totals/);
-  assert.doesNotMatch(igHtml, /USD 45\.00|USD 32\.00|Workspace totals/);
+  assert.match(igHtml, /Bee Creator · @beebee/); assert.match(igHtml, /AUD 33\.60/); assert.match(igHtml, /from per-account totals/);
+  assert.doesNotMatch(igHtml, /AUD 63\.00|AUD 44\.80|Workspace totals/);
   assert.match(igHtml, /Unavailable for a single creator/);
   assert.match(igHtml, /aria-current="true"/);
   assert.match(igHtml, /href="\/onlyfans\/overview\?period=7d"/, "selected chip links back to all creators");
@@ -67,13 +67,13 @@ async function main() {
   // Backend echoes the filter: scoped figures used directly.
   const ec = make("echoes");
   const ecHtml = await html(ec.backend, null, "creator-c");
-  assert.match(ecHtml, /Cee Creator · @ceecee/); assert.match(ecHtml, /USD 4\.00/); assert.doesNotMatch(ecHtml, /USD 45\.00/);
+  assert.match(ecHtml, /Cee Creator · @ceecee/); assert.match(ecHtml, /AUD 5\.60/); assert.doesNotMatch(ecHtml, /AUD 63\.00/);
 
   // Unauthorized or malformed selection: no earnings read, unavailable state, no agency totals.
   const bad = make("ignores");
   for (const [acct, cr] of [["not-mine", null], [null, "not-a-creator"], ["acct-b", "creator-c"]] as const) {
     const h = await html(bad.backend, acct, cr);
-    assert.match(h, /Unavailable for this creator yet/); assert.doesNotMatch(h, /USD 45\.00|USD 24\.00/);
+    assert.match(h, /Unavailable for this creator yet/); assert.doesNotMatch(h, /AUD 63\.00|AUD 33\.60/);
   }
   assert.equal(bad.calls.length, 0, "an invalid selection never reaches the earnings backend");
 

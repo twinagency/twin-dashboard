@@ -20,9 +20,9 @@ async function main(){
  const withFigures=(d:Omit<ViewData,'selection'|'figures'>):ViewData=>({...d,selection,figures:computeFigures(d.earnings,null,selection)});
  const data=withFigures({accounts:[],accountsError:null,earnings,earningsError:null,activityAccount:null,sales:null,salesError:null,period:'7d' as const,window:earnings.window});
  const html=render(<OverviewView data={data}/>);
- assert.match(html,/Recorded net earnings/);assert.match(html,/USD 28\.79/);assert.match(html,/USD 35\.99/);assert.match(html,/Sync delayed/);assert.match(html,/Pending earnings are not available to withdraw/);
+ assert.match(html,/Recorded net earnings/);assert.match(html,/AUD 40\.31/);assert.match(html,/AUD 50\.39/);assert.match(html,/Sync delayed/);assert.match(html,/Pending earnings are not available to withdraw/);
  const unknown=render(<OverviewView data={withFigures({...data,earnings:{...earnings,recorded:{...earnings.recorded,netCents:null,pendingNetCents:null}}})}/>);
- assert.match(unknown,/Recorded net earnings.*?Unavailable/);assert.doesNotMatch(unknown,/USD 0\.00/);
+ assert.match(unknown,/Recorded net earnings.*?Unavailable/);assert.doesNotMatch(unknown,/AUD 0\.00/);
  console.log('Recorded earnings view: pending payments visible, sync warning explicit, unknown net stays unavailable');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
