@@ -18,9 +18,10 @@ const uuid = (value: unknown): value is string => typeof value === "string" && /
 const stamp = (value: unknown): value is string => typeof value === "string" && /Z$/.test(value) && Number.isFinite(Date.parse(value));
 const safeCode = (value: unknown) => value === null || (typeof value === "string" && /^[a-z0-9_]{1,80}$/.test(value));
 export function parseVaultSync(value: unknown): VaultSync | null {
+  // These counters span the entire sync job, rather than a single bounded batch.
   if (!object(value) || !exact(value, ["commandKey", "jobId", "status", "pagesRead", "itemsSeen", "lastError", "requestedAt", "updatedAt", "completedAt"]) ||
     !hash(value.commandKey) || !uuid(value.jobId) || !["pending", "running", "complete", "failed", "superseded"].includes(value.status as string) ||
-    !integer(value.pagesRead, 0, 200) || !integer(value.itemsSeen, 0, 4800) || !safeCode(value.lastError) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
+    !integer(value.pagesRead) || !integer(value.itemsSeen) || !safeCode(value.lastError) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
     !(value.completedAt === null || stamp(value.completedAt))) return null;
   return value as VaultSync;
 }
@@ -90,3 +91,4 @@ export function vaultDuration(seconds: number | null): string {
   const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), remainder = seconds % 60;
   return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
+

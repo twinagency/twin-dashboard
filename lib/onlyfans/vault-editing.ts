@@ -12,8 +12,8 @@ const exact = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).sor
 const text = (v: unknown, n: number): v is string => typeof v === "string" && v.isWellFormed() && !v.includes("\0") && new TextEncoder().encode(v).length <= n;
 export const vaultEditHash = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
 export const folderReference = (v: unknown): v is string => vaultMediaId(v) && BigInt(v) < BigInt("2147483648");
-const count = (v: unknown) => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= 5000;
-const folder = (v: unknown) => object(v) && folderReference(v.folderId) && text(v.name, 480) && !!v.name.trim() && v.name.length <= 120 && count(v.count);
+const count = (v: unknown, maximum = 5000) => Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= maximum;
+const folder = (v: unknown, maximumCount = 5000) => object(v) && folderReference(v.folderId) && text(v.name, 480) && !!v.name.trim() && v.name.length <= 120 && count(v.count, maximumCount);
 export function validVaultResource(resource: string) {
   const parts = resource.split("/");
   return resource === "folders" || parts.length === 2 && (parts[0] === "folders" ? folderReference(parts[1]) : parts[0] === "assets" && vaultMediaId(parts[1]));
@@ -35,7 +35,8 @@ export function parseVaultResource(v: unknown, account: string, resource: string
   const key = resource === "folders" ? "folders" : resource.startsWith("folders/") ? "folder" : "asset";
   if (!exact(v,["schemaVersion","ok","accountId",key])) return null;
   const data = v[key];
-  if (key === "folders") return Array.isArray(data) && data.length <= 200 && data.every(x=>folder(x)&&(exact(x,["folderId","name","count"]) || exact(x,["folderId","name","count","coverMediaId","coverKind","automatic"]) && typeof x.automatic === "boolean" && (x.coverMediaId === null && x.coverKind === null || vaultMediaId(x.coverMediaId) && ["photo","video","gif"].includes(x.coverKind as string)))) && new Set(data.map(x=>x.folderId)).size === data.length ? data as FolderSummary[] : null;
+  // Imported folder summaries can exceed the separate editable-folder budget.
+  if (key === "folders") return Array.isArray(data) && data.length <= 200 && data.every(x=>folder(x, Number.MAX_SAFE_INTEGER)&&(exact(x,["folderId","name","count"]) || exact(x,["folderId","name","count","coverMediaId","coverKind","automatic"]) && typeof x.automatic === "boolean" && (x.coverMediaId === null && x.coverKind === null || vaultMediaId(x.coverMediaId) && ["photo","video","gif"].includes(x.coverKind as string)))) && new Set(data.map(x=>x.folderId)).size === data.length ? data as FolderSummary[] : null;
   if (key === "folder") return object(data) && folder(data) && exact(data,["folderId","name","count","fingerprint","archived"]) && data.folderId === resource.split("/")[1] && vaultEditHash(data.fingerprint) && data.archived === false ? data as FolderMetadata : null;
   return object(data) && exact(data,["mediaId","fingerprint","description","tags"]) && data.mediaId === resource.split("/")[1] && vaultEditHash(data.fingerprint) &&
     (data.description === null || text(data.description,2000)) && (data.tags === null || Array.isArray(data.tags) && data.tags.length <= 12 && data.tags.every(t=>text(t,80))) ? data as AssetMetadata : null;
@@ -45,4 +46,5 @@ export function parseVaultEditAck(v: unknown, account: string, resource: string,
   if (!(resource.startsWith("assets/") ? vaultMediaId(v.targetId) : folderReference(v.targetId)) || resource !== "folders" && v.targetId !== resource.split("/")[1]) return null;
   return { targetId: v.targetId as string, fingerprint: v.fingerprint };
 }
+
 
