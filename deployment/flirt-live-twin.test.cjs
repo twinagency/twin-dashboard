@@ -16,11 +16,12 @@ test('live access requires the complete verified assignment', () => {
     '7c2e9452-1d4e-475c-86ef-07a797f52ce5',
     '7626a96d-809e-47f1-b96b-d2e3bc583328',
     '4994b010-f976-4cd1-b053-d72986fb455d',
+    'fe60c5d0-9e80-44af-9356-6c14c193464b',
   ]);
   assert.equal(live.isLiveAccess(access), true);
   for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: [...access.cloneIds.slice(1), '11111111-1111-1111-1111-111111111111'] }, { ...access, cloneIds: Array(access.cloneIds.length).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
   access.cloneIds.length = 0;
-  assert.equal(live.identity().cloneIds.length, 11);
+  assert.equal(live.identity().cloneIds.length, 12);
 });
 test('configuration cannot connect to another project or an anonymous key', () => {
   const env = { FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', FLIRT_LIVE_TWIN_URL: `https://${live.PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) };
@@ -56,6 +57,16 @@ test('Luna Skyee is scoped to her own clone with the content-upload exception, a
   for (const other of ['22952fd9-0a82-4da2-a172-f1a0d1aa2c6d', 'c9c6d09d-71e4-424d-9150-07147c9bd5d2', 'eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a']) {
     assert.equal(live.scopedCreator(other).contentUploads, undefined, `${other} stays fully read-only`);
   }
+});
+
+test('Clarissa Mason is scoped to her own clone with the content-upload exception', () => {
+  const accountId = 'c9d878da-b049-430e-be9b-235efbed16f4';
+  const cloneId = 'fe60c5d0-9e80-44af-9356-6c14c193464b';
+  const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
+  assert.deepEqual(live.scopedCreator(accountId), { cloneId, name: 'Clarissa Mason', source: 'agency_invite', contentUploads: true });
+  assert.equal(live.isScopedLiveCreator(access), true);
+  assert.equal(live.CLONES.includes(cloneId), true);
+  assert.equal(live.isScopedLiveCreator({ ...access, cloneIds: [live.CLONES[0]] }), false);
 });
 
 test('Olivia existing login stays scoped to her own clone after agency assignment', () => {
