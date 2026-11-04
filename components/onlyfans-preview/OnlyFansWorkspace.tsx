@@ -501,6 +501,22 @@ export default function OnlyFansWorkspace({
     });
   }, [state, source, commit, ref]);
 
+  // Deep link: `?account=<id>&fan=<numeric fan id>` opens that one fan's thread.
+  // A conversation id is "<account>:<fan>" (service/onlyfans_read/contract.py), so
+  // the target needs no list lookup. It only selects within the already-authorised
+  // account; the backend still enforces access when the thread is read.
+  const deepLinkedFan = useRef<string | null>(null);
+  const requestedFan = searchParams.get("fan");
+  useEffect(() => {
+    const accountId = state.selectedAccountId;
+    if (!accountId || !requestedFan || !/^[0-9]{1,20}$/.test(requestedFan)) return;
+    if (requestedScope.accountId && requestedScope.accountId !== accountId) return;
+    const target = `${accountId}:${requestedFan}`;
+    if (deepLinkedFan.current === target) return;
+    deepLinkedFan.current = target;
+    commit(selectConversation(ref.current, accountId, target));
+  }, [state.selectedAccountId, requestedFan, requestedScope.accountId, commit, ref]);
+
   // Open the first conversation once a list arrives, so the surface opens on a
   // real thread instead of an empty pane. This is a presentation default, not a
   // read: it selects from the list that was already fetched.
