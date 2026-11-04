@@ -100,7 +100,7 @@
     "test:onlyfans-read": "tsx scripts/check-onlyfans-read.ts",
     "test:onlyfans-operations": "node --import tsx scripts/check-onlyfans-operations.ts",
     "test:onlyfans-unconfigured": "tsx scripts/check-onlyfans-unconfigured.tsx",
-    "test:onlyfans-media": "node --import tsx scripts/check-onlyfans-vault-media.ts && node scripts/check-onlyfans-vault-origin.cjs && node --import tsx scripts/check-onlyfans-vault-metadata-lifecycle.tsx && node --import tsx scripts/check-onlyfans-vault-folder-lifecycle.cjs",
+    "test:onlyfans-media": "node --import tsx scripts/check-onlyfans-vault-sync-progress.ts && node --import tsx scripts/check-onlyfans-vault-media.ts && node scripts/check-onlyfans-vault-origin.cjs && node --import tsx scripts/check-onlyfans-vault-metadata-lifecycle.tsx && node --import tsx scripts/check-onlyfans-vault-folder-lifecycle.cjs",
     "test:onlyfans-agency": "node --import tsx scripts/check-onlyfans-agency.ts && npm run test:overview-earnings",
     "test:onlyfans-agency-http": "node --import tsx scripts/check-onlyfans-agency-http.ts",
     "test:catalogue-audit": "node scripts/check-catalogue-preview-audit.cjs",
@@ -146,3 +146,4 @@
     "typescript": "^5"
   }
 }
+
