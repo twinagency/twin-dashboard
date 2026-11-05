@@ -23,6 +23,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [facts, setFacts] = useState<Partial<Record<FactKey, string>>>({});
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
+  const [contextualMode, setContextualMode] = useState<"off" | "shadow" | "live">("off");
+  const [replyPacing, setReplyPacing] = useState(false), [replyFormat, setReplyFormat] = useState(false);
   const [onRequestSales, setOnRequestSales] = useState(false);
   const [discountResend, setDiscountResend] = useState(false), [postBuyUpsell, setPostBuyUpsell] = useState(false);
   const [scopeMode, setScopeMode] = useState<"selected" | "all">("selected"), [scopeFans, setScopeFans] = useState("");
@@ -52,6 +54,8 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setData(next); setPersona(next.persona ?? "");
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
+      setContextualMode(next.fasttContextualSalesMode ?? "off");
+      setReplyPacing(next.nativeReplyPacingEnabled ?? false); setReplyFormat(next.nativeReplyFormatEnabled ?? false);
       setOnRequestSales(next.onRequestSalesEnabled);
       setDiscountResend(next.fasttDiscountResend); setPostBuyUpsell(next.fasttPostBuyUpsell);
       if (next.activation) {
@@ -83,6 +87,9 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (Object.keys(changed).length) patch.creatorFacts = changed;
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
+    if (data.salesConfigurationValid && data.fasttContextualSalesMode !== undefined && contextualMode !== data.fasttContextualSalesMode) patch.fasttContextualSalesMode = contextualMode;
+    if (data.salesConfigurationValid && data.nativeReplyPacingEnabled !== undefined && replyPacing !== data.nativeReplyPacingEnabled) patch.nativeReplyPacingEnabled = replyPacing;
+    if (data.salesConfigurationValid && data.nativeReplyFormatEnabled !== undefined && replyFormat !== data.nativeReplyFormatEnabled) patch.nativeReplyFormatEnabled = replyFormat;
     if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
     if (data.salesConfigurationValid && discountResend !== data.fasttDiscountResend) patch.fasttDiscountResend = discountResend;
     if (data.salesConfigurationValid && postBuyUpsell !== data.fasttPostBuyUpsell) patch.fasttPostBuyUpsell = postBuyUpsell;
@@ -181,6 +188,14 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </select></label>
         </div>
         <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p></div></details>
+        <div className="min-w-0">
+          <label className="text-sm">Contextual offers<select data-of-edit-contextual className={inputClass}
+            disabled={!data.salesConfigurationValid || data.fasttContextualSalesMode === undefined}
+            value={contextualMode} onChange={event => setContextualMode(event.target.value as "off" | "shadow" | "live")}>
+            <option value="off">Off</option><option value="shadow">Preview</option><option value="live">On</option>
+          </select></label>
+          <p className="mt-1 text-xs text-muted">Offer relevant available content during AI conversations.</p>
+        </div>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Daily model budget (USD cents)<input data-of-edit-budget type="number" min={0} max={1_000_000} step={1} className={inputClass} value={dailyBudget} onChange={event => setDailyBudget(event.target.value)} /></label>
           <label className="min-w-0 text-sm">Reasoning effort<select data-of-edit-reasoning className={inputClass} value={effort} onChange={event => setEffort(event.target.value)}>
@@ -213,6 +228,24 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
             Post-purchase upsell
           </label>
           <p className="mt-2 text-xs text-muted">Off by default. When on: one follow-up offer is sent 90-240 seconds after a purchase confirmed by the ledger. Turning this off stops its queued actions.</p>
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-reply-pacing checked={replyPacing}
+              disabled={!data.salesConfigurationValid || data.nativeReplyPacingEnabled === undefined}
+              onChange={event => setReplyPacing(event.target.checked)} />
+            Vary reply timing
+          </label>
+          <p className="mt-2 text-xs text-muted">Group messages sent together and aim to reply within 25–90 seconds. Busy periods and account limits can take longer.</p>
+        </div>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-reply-format checked={replyFormat}
+              disabled={!data.salesConfigurationValid || data.nativeReplyFormatEnabled === undefined}
+              onChange={event => setReplyFormat(event.target.checked)} />
+            Flexible reply length
+          </label>
+          <p className="mt-2 text-xs text-muted">Use short or detailed replies to suit the conversation, with follow-up questions only when useful.</p>
         </div>
         {data.activation ? <section className="rounded-lg border border-line p-3" data-of-activation-readiness>
           <h3 className="text-sm font-semibold">Automation readiness and fan scope</h3>

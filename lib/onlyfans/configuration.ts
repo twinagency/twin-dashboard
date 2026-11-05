@@ -14,10 +14,12 @@ export type Configuration = {
   defaultModel: string | null; replyModelOverride: string | null; replyOverridePresent: boolean;
   resolvedReplyModel: string | null; modelOptions: string[];
   salesConfigurationValid: boolean; onRequestSalesEnabled: boolean;
+  fasttContextualSalesMode?: "off" | "shadow" | "live";
+  nativeReplyPacingEnabled?: boolean; nativeReplyFormatEnabled?: boolean;
   fasttDiscountResend: boolean; fasttPostBuyUpsell: boolean;
   dailyCostCapCents: number; reasoningEffort: string | null; reasoningOptions: Record<string, string[]>;
 };
-export type ConfigurationPatch = { fasttScope?: FanSelection; persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
+export type ConfigurationPatch = { fasttContextualSalesMode?: "off" | "shadow" | "live"; nativeReplyPacingEnabled?: boolean; nativeReplyFormatEnabled?: boolean; fasttScope?: FanSelection; persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
   defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean; fasttDiscountResend?: boolean; fasttPostBuyUpsell?: boolean; dailyCostCapCents?: number; reasoningEffort?: string | null };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
@@ -33,7 +35,9 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["fasttScope", "persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["fasttContextualSalesMode", "nativeReplyPacingEnabled", "nativeReplyFormatEnabled", "fasttScope", "persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort"].includes(key))) return false;
+  if ("fasttContextualSalesMode" in patch && !["off", "shadow", "live"].includes(patch.fasttContextualSalesMode as string)) return false;
+  if (["nativeReplyPacingEnabled", "nativeReplyFormatEnabled"].some(key => key in patch && typeof patch[key] !== "boolean")) return false;
   if ("fasttScope" in patch && !validFanSelection(patch.fasttScope)) return false;
   if ("dailyCostCapCents" in patch && (!Number.isInteger(patch.dailyCostCapCents) || Number(patch.dailyCostCapCents) < 0 || Number(patch.dailyCostCapCents) > 1_000_000)) return false;
   if ("reasoningEffort" in patch && patch.reasoningEffort !== null && (!text(patch.reasoningEffort, 40) || !patch.reasoningEffort.trim())) return false;
@@ -53,7 +57,9 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "configuration"]) ||
     value.schemaVersion !== CONFIGURATION_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.configuration)) return null;
   const c = value.configuration;
-  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort", "reasoningOptions", ...("activation" in c ? ["activation"] : [])]) ||
+  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled", "fasttDiscountResend", "fasttPostBuyUpsell", "dailyCostCapCents", "reasoningEffort", "reasoningOptions", ...("activation" in c ? ["activation"] : []), ...["nativeReplyPacingEnabled", "nativeReplyFormatEnabled", "fasttContextualSalesMode"].filter(key => key in c)]) ||
+    ("fasttContextualSalesMode" in c && !["off", "shadow", "live"].includes(c.fasttContextualSalesMode as string)) ||
+    ["nativeReplyPacingEnabled", "nativeReplyFormatEnabled"].some(key => key in c && typeof c[key] !== "boolean") ||
     ("activation" in c && !parseActivationReadiness(c.activation)) ||
     !revision(c.configurationRevision) || !configurationHash(c.fingerprint) || !optionalText(c.persona, 4096) ||
     typeof c.personaTruncated !== "boolean" || (c.personaTruncated ? c.persona !== null : typeof c.persona !== "string") ||
@@ -90,3 +96,4 @@ export function parseConfigurationAck(value: unknown, expected: ConfigurationReq
 export function canonicalConfiguration(value: unknown): string {
   return JSON.stringify(value, (_key, item) => object(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 }
+

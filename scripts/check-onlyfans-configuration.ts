@@ -54,7 +54,7 @@ async function main() {
     canonicalConfiguration({ patch: { creatorFacts: { age: "28", job: "x" }, persona: "x" } }));
   const posted: string[] = [];
   const wire: typeof fetch = async (url, init) => {
-    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a");
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/configuration/v1/accounts/acc-a" + (init?.method === "GET" ? "?contextual=1" : ""));
     assert.equal(init?.credentials, "omit"); assert.equal(init?.redirect, "error"); assert.equal(init?.cache, "no-store");
     const headers = new Headers(init?.headers);
     assert.equal(headers.get("authorization"), "Bearer synthetic-configuration-only"); assert.equal(headers.get("cookie"), null);
