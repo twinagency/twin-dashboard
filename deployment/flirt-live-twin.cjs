@@ -26,6 +26,7 @@ function isLiveAccess(access) {
 }
 // Exact creator accounts that may read ONE live Twin clone, read-only. Never match by name or email.
 const SCOPED_CREATORS = Object.freeze({
+  "7cfbddae-ad3e-4c44-b247-3f24ff3c5a4b": Object.freeze({ cloneId: "4fff7866-c7e9-4af2-926a-36e727c0a77f", name: "Zoey Foxx" }), // Zoey's existing FLIRT account, read-only live Telegram earnings
   "22952fd9-0a82-4da2-a172-f1a0d1aa2c6d": Object.freeze({ cloneId: "7c2e9452-1d4e-475c-86ef-07a797f52ce5", name: "Olivia Jade", source: "twin" }), // Olivia Jade, her existing FLIRT login
   "c9c6d09d-71e4-424d-9150-07147c9bd5d2": Object.freeze({ cloneId: "2e5eb05f-cc88-4ba6-870a-924948d4b09a", name: "Mrs Callace" }), // Mrs Callace
   "eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a": Object.freeze({ cloneId: "0328e7b3-a1e5-465a-9a30-c9cf6519cba1", name: "Briana Redd" }), // Briana Redd
@@ -57,5 +58,6 @@ function configuration(env = process.env) {
   return { url: env.FLIRT_LIVE_TWIN_URL, key };
 }
 module.exports = { PROJECT, ID, CLONES, enabled, identity, isLiveAccess, scopedCreator, isScopedLiveCreator, isLiveData, configuration };
+
 
 
