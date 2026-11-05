@@ -2,6 +2,24 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const live = require('./flirt-live-twin.cjs');
 const { deferredClient } = require('./deferred-client.cjs');
+test('Zoey creator earnings are limited to her own live Telegram bot', () => {
+  const accountId = '7cfbddae-ad3e-4c44-b247-3f24ff3c5a4b';
+  const cloneId = '4fff7866-c7e9-4af2-926a-36e727c0a77f';
+  const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
+  assert.equal(live.isLiveData(access), true);
+  assert.equal(live.isLiveAccess(access), false, 'creator does not gain agency access');
+  assert.equal(live.scopedCreator(accountId).contentUploads, undefined, 'earnings access stays read-only');
+  for (const otherCloneId of live.CLONES.filter(id => id !== cloneId)) {
+    assert.equal(live.isLiveData({ ...access, cloneIds: [otherCloneId] }), false);
+    assert.equal(live.isLiveData({ ...access, cloneIds: [cloneId, otherCloneId] }), false);
+  }
+  for (const invalid of [
+    { ...access, accountId: 'unassigned' },
+    { ...access, id: 'creator:unassigned' },
+    { ...access, kind: 'agency' },
+    { ...access, dataSource: undefined },
+  ]) assert.equal(live.isLiveData(invalid), false);
+});
 test('live access requires the complete verified assignment', () => {
   const access = live.identity();
   assert.deepEqual(access.cloneIds, [
@@ -86,4 +104,5 @@ test('Olivia existing login stays scoped to her own clone after agency assignmen
     { ...access, cloneIds: [cloneId, live.CLONES[0]] },
   ]) assert.equal(live.isScopedLiveCreator(invalid), false);
 });
+
 
