@@ -10,7 +10,7 @@ import { onOpenCloneSwitcher } from "@/lib/clone-switcher-bus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
-type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
+type CloneLite = { id: string; name: string; color: string; photoUrl?: string; providerAvatarUrl?: string };
 
 // Instagram-style verified badge — always blue, regardless of clone color.
 function VerifiedBadge({ className = "h-3.5 w-3.5" }: { className?: string }) {
@@ -133,7 +133,7 @@ export default function CloneSwitcher({
         }
       >
         {selected && <VerifiedBadge className="absolute right-1.5 top-1.5 h-4 w-4" />}
-        <CreatorAvatar name={creator.name} photoUrl={creator.photoUrl} />
+        <CreatorAvatar name={creator.name} photoUrl={creator.photoUrl} providerPhotoUrl={creator.providerAvatarUrl} avatarId={creator.id} className="h-14 w-14" />
         <span className="creator-name w-full truncate" style={selected ? { color: creator.color } : undefined}>
           {creator.name}
         </span>
@@ -148,7 +148,7 @@ export default function CloneSwitcher({
         aria-label={`Creator account: ${name}`}
         className="flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink"
       >
-        <CreatorAvatar name={name} photoUrl={active?.photoUrl} providerPhotoUrl={providerAvatarUrl} avatarId={active?.id} className={pathname?.startsWith("/onlyfans") ? "h-10 w-10" : "h-5 w-5"} />
+        <CreatorAvatar name={name} photoUrl={active?.photoUrl} providerPhotoUrl={providerAvatarUrl ?? active?.providerAvatarUrl} avatarId={active?.id} className={pathname?.startsWith("/onlyfans") ? "h-10 w-10" : "h-5 w-5"} />
         <span className="creator-name max-w-[10rem] truncate">{name}</span>
         {active ? <VerifiedBadge /> : null}
       </div>
@@ -173,7 +173,7 @@ export default function CloneSwitcher({
       >
         {active ? (
           <>
-            <CreatorAvatar name={active.name} photoUrl={active.photoUrl} providerPhotoUrl={providerAvatarUrl} avatarId={active.id} className={pathname?.startsWith("/onlyfans") ? "h-10 w-10" : "h-5 w-5"} />
+            <CreatorAvatar name={active.name} photoUrl={active.photoUrl} providerPhotoUrl={providerAvatarUrl ?? active?.providerAvatarUrl} avatarId={active.id} className={pathname?.startsWith("/onlyfans") ? "h-10 w-10" : "h-5 w-5"} />
             <span className="creator-name max-w-[10rem] truncate">{active.name}</span>
             <VerifiedBadge />
           </>
