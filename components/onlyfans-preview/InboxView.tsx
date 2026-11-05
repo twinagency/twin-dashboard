@@ -143,7 +143,7 @@ function ConversationList({
 }) {
   const [query, setQuery] = useState(inboxSearch.query);
   const filter = aiOnly ? "ai" : inboxSearch.filter;
-  const localMatch = (row: ConversationSummary) => filter === "ai" ? isAiChatting(row) : filter === "paused" ? ["paused", "no_contact"].includes(row.automationMode) : filter === "review" ? row.attentionReasons?.includes("human_review") || row.automationMode === "human_controlled" || row.takeoverState !== "none" : filter === "delivery" ? row.attentionReasons?.includes("delivery_problem") : true;
+  const localMatch = (row: ConversationSummary) => filter === "ai" ? isAiChatting(row) : filter === "paused" ? ["paused", "no_contact"].includes(row.automationMode) : filter === "review" ? row.attentionReasons?.includes("human_review") || row.attentionReasons?.includes("asked_for_person") || row.automationMode === "human_controlled" || row.takeoverState !== "none" : filter === "delivery" ? row.attentionReasons?.includes("delivery_problem") : true;
   const visibleConversations = conversations.status === "ready" || conversations.status === "stale"
     ? { ...conversations, data: { ...conversations.data, items: conversations.data.items.filter(localMatch) } } : conversations;
   const searchChange = useRef(onInboxSearchChange);
@@ -206,7 +206,8 @@ function ConversationList({
                         {conversation.lastMessagePreview}
                       </span>
                       <span className="mt-1.5 flex flex-wrap items-center gap-1">
-                        {conversation.requiresAttention ? (
+                        {conversation.attentionReasons?.includes("asked_for_person") ? <span data-of-asked-for-person className="rounded-full bg-[#fff1e0] px-1.5 py-0.5 text-[10px] font-semibold text-[#8a4b00]" title="The fan asked for a person. The AI stopped and a team member should reply.">Asked for a person</span> : null}
+                        {conversation.requiresAttention && !conversation.attentionReasons?.includes("asked_for_person") ? (
                           <span className="rounded-full bg-[#fdf2f6] px-1.5 py-0.5 text-[10px] font-semibold text-[#9b2f62]">
                             {conversation.priority === "normal" ? "Attention" : priority.label}
                           </span>

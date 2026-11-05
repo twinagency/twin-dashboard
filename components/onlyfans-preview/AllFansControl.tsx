@@ -2,19 +2,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { OnlyFansDataSource } from "@/lib/onlyfans-preview/data-source";
 import type { OfAccount, PreviewViewer } from "@/lib/onlyfans-preview/types";
-import { parseConfiguration, parseConfigurationAck, type ConfigurationRequest } from "@/lib/onlyfans/configuration";
 import { object, parseNativeReadiness } from "@/lib/onlyfans/launch/native";
-import { enableExistingFanChats, type BulkProgress } from "@/lib/onlyfans/bulk-ai";
+import { enableExistingChats, readActivation, type EnableProgress } from "@/lib/onlyfans/activation-client";
+import { RESULT_SKIP_TEXT, blockerText } from "@/lib/onlyfans/activation-status";
 
 export default function AllFansControl({ account, viewer, source, onChanged }: {
   account: OfAccount; viewer: PreviewViewer; source: OnlyFansDataSource; onChanged: () => void;
 }) {
   const [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
-  const [progress, setProgress] = useState<BulkProgress | null>(null);
+  const [progress, setProgress] = useState<EnableProgress | null>(null);
   const lock = useRef(false), stopped = useRef(false);
   useEffect(() => { stopped.current = false; return () => { stopped.current = true; }; }, []);
   const accountId = account.accountId;
-  const configurationUrl = `/api/onlyfans-configuration/accounts/${encodeURIComponent(accountId)}`;
   const controlUrl = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
   async function request(url: string, body?: unknown) {
     if (stopped.current) throw Error("Stopped. Changes already recorded remain in place.");
@@ -46,24 +45,25 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         await changeAccount("pause");
         if (!stopped.current) setNotice("Account paused. Messages already being sent may still complete.");
       } else {
-        const config = parseConfiguration(await request(configurationUrl), accountId);
-        const state = await readControl();
-        if (!config?.activation?.allFansAllowed || !config.activation.selectionValid || !config.activation.modelCredentialReady)
-          throw Error("This account is not ready for eligible existing chats. Review its AI settings first.");
-        if (!state.autonomy.deliveryEnabled)
-          throw Error("Enable outgoing messages in account settings first.");
-        if (!state.accountControl.enabled && !state.readyToEnable)
-          throw Error("This account needs attention before AI can resume. Review account readiness first.");
-        if (config.activation.selection?.mode !== "all") {
-          const command: ConfigurationRequest = { expectedRevision: config.configurationRevision, expectedFingerprint: config.fingerprint,
-            patch: { fasttScope: { mode: "all", fans: [] } } };
-          if (!parseConfigurationAck(await request(configurationUrl, command), { ...command, accountId }))
-            throw Error("All-fan setting unconfirmed. Refresh before continuing.");
+        const read = await readActivation(accountId);
+        if (!read.ok) throw Error(read.error);
+        let current = read.status;
+        if (!current.activated) {
+          // Only an account an administrator already activated once (a policy exists) can be resumed here.
+          if (current.allowance.state === "none") throw Error("This account has not been activated yet. Open Creators and use Activate account first.");
+          const state = await readControl();
+          if (!state.readyToEnable) throw Error("This account needs attention before AI can resume. Open its AI chatting status in Creators.");
+          await changeAccount("resume");
+          const again = await readActivation(accountId);
+          if (!again.ok) throw Error(again.error);
+          current = again.status;
         }
-        if (!state.accountControl.enabled) await changeAccount("resume");
-        const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => stopped.current,
+        if (current.bulkEnable.blockers.length) throw Error("Not ready: " + current.bulkEnable.blockers.map(blockerText).join(" "));
+        if (current.bulkEnable.counts.wouldEnable === 0) { setNotice("No existing chat is eligible. Human takeovers, no-contact, paused and restricted chats stay as they are."); return; }
+        const result = await enableExistingChats({ accountId, fingerprint: current.fingerprint, cancelled: () => stopped.current,
           progress: value => { if (!stopped.current) setProgress(value); } });
-        if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
+        const skipped = Object.entries(result.skipped).map(([k, n]) => `${n} ${RESULT_SKIP_TEXT[k] ?? k}`).join(", ");
+        if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled out of ${result.checked} checked${skipped ? `. Skipped: ${skipped}` : ""}. New conversations stay off unless you turned on the future conversations setting.`);
       }
     } catch (error) {
       if (!stopped.current) setNotice(error instanceof Error ? error.message : "Stopped. Refresh to check which changes were recorded.");
@@ -77,12 +77,12 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
       <span className="mr-auto text-sm font-semibold">{account.binding.creatorName}: AI replies</span>
       <button type="button" className="min-h-10 rounded-lg bg-[#1764c0] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
         disabled={busy || !viewer.canManage} onClick={() => void run("enable")}
-        title="Enable AI replies for existing chats and use all-fan scope. Manually paused chats, human takeovers and no-contact fans stay protected.">Enable AI replies for existing chats</button>
+        title="Enable AI replies for existing chats within the saved fan scope. Manually paused chats, human takeovers and no-contact fans stay protected.">Enable AI replies for existing chats</button>
       <button type="button" className="min-h-10 rounded-lg border border-line px-3 py-2 text-sm font-semibold disabled:opacity-50"
         disabled={busy || !viewer.canManage} onClick={() => { if (window.confirm("Pause all outgoing activity for " + account.binding.creatorName + "? Queued sends will be cancelled and scheduled campaigns paused. Messages already being sent may finish.")) void run("pause"); }}>Pause account</button>
       {busy ? <button type="button" className="text-sm underline" onClick={() => { stopped.current = true; setBusy(false); setNotice("Stopped after the current request. Refresh to check recorded changes."); onChanged(); }}>Stop changes</button> : null}
     </div>
-    <p className="mt-2 text-xs text-muted">New fans stay off until individually enabled. Human takeovers, paused and no-contact conversations stay protected.</p>
+    <p className="mt-2 text-xs text-muted">New conversations stay off unless the future conversations setting is on. Human takeovers, paused and no-contact conversations stay protected.</p>
     {notice ? <p role="status" className="mt-2 text-xs">{notice}</p> : null}
     {busy && progress ? <p className="mt-1 text-xs">Checked {progress.checked} chats. Enabled {progress.enabled}.</p> : null}
   </section>;
