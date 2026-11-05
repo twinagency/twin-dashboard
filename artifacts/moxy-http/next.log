@@ -1,0 +1,28 @@
+   ▲ Next.js 15.5.19
+   - Local:        http://127.0.0.1:3197
+   - Network:      http://127.0.0.1:3197
+   - Experiments (use with caution):
+     · serverActions
+     · middlewareClientMaxBodySize: "50mb"
+
+ ✓ Starting...
+ ✓ Compiled /instrumentation in 328ms (23 modules)
+ ✓ Ready in 3.6s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 2.1s (185 modules)
+ ○ Compiling /api/onlyfans-configuration/accounts/[accountId]/moxy ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (102kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (250kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled /api/onlyfans-configuration/accounts/[accountId]/moxy in 5.2s (388 modules)
+ GET /api/onlyfans-configuration/accounts/fixture-a/moxy 401 in 7208ms
+ GET /api/onlyfans-configuration/accounts/fixture-a/moxy 200 in 221ms
+ GET /api/onlyfans-configuration/accounts/fixture-a/moxy 200 in 174ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 400 in 137ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 400 in 141ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 413 in 185ms
+ GET /api/onlyfans-configuration/accounts/fixture-b/moxy 404 in 142ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 200 in 167ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 502 in 181ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 409 in 165ms
+ POST /api/onlyfans-configuration/accounts/fixture-a/moxy 502 in 150ms
+[?25h
