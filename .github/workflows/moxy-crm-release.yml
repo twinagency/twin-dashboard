@@ -7,6 +7,7 @@ permissions:
 jobs:
   candidate:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4

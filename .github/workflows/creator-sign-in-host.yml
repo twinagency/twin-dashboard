@@ -8,6 +8,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    environment: production
     timeout-minutes: 4
     steps:
       - name: Existing scoped deployment credentials
