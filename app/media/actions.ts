@@ -4,7 +4,7 @@ import { guardDashboardAction } from "@/lib/agency-management";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
-import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
+import { analysePhoto, analyseVideo, analysisTimeoutMs, EMPTY_CAPTION, unanalysed, type Analysed, type Caption } from "@/lib/caption";
 import { stripBannedDashes } from "@/lib/media-classification";
 import {
   buildSafeRepricePlan,
@@ -117,24 +117,13 @@ async function storePreviewBestEffort(
 // Vision analysis improves matching and automatic pricing, but it must never
 // decide whether an otherwise valid media upload is saved. OpenRouter credit,
 // model availability, or a slow response are all recoverable metadata issues.
-const UPLOAD_ANALYSIS_TIMEOUT_MS = 12_000;
-const EMPTY_CAPTION: Caption = {
-  caption: "",
-  teaser_caption: "",
-  is_nude: false,
-  explicitness: "none",
-  nsfw: false,
-  tags: [],
-  auto_desc: "",
-  visual_description: "",
-};
 
 // `visual_description` (migration pending in the bot repo at the time this
 // was written) may not exist on `photos`/`videos` yet. Mirrors the
 // OPTIONAL_COLUMNS / isMissingColumnError retry pattern in
 // app/clones/actions.ts: a save issued before the migration lands strips the
 // column and still succeeds, rather than failing the whole upload.
-const OPTIONAL_MEDIA_COLUMNS = ["visual_description"] as const;
+const OPTIONAL_MEDIA_COLUMNS = ["visual_description", "analysis"] as const;
 
 function isMissingColumnError(message: string): boolean {
   return /schema cache/i.test(message);
@@ -154,16 +143,20 @@ async function insertMediaRow(table: "photos" | "videos", row: Record<string, un
   if (error) throw new Error(error.message);
 }
 
+// An upload that cannot be analysed in time is KEPT, but recorded as "pending" (deadline) or "failed" (the analysis
+// itself failed): never as confidently classified content. The automatic sweeper (scripts/analyse-pending.ts) retries
+// both, and the bots only offer an item whose analysis is "ok" (or legacy, from before provenance existed).
 async function bestEffortUploadAnalysis(
-  analyse: (signal: AbortSignal) => Promise<Caption>,
-): Promise<Caption> {
+  model: string,
+  analyse: (signal: AbortSignal) => Promise<Analysed>,
+): Promise<Analysed> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), UPLOAD_ANALYSIS_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), analysisTimeoutMs(model));
   try {
     return await analyse(controller.signal);
   } catch (error) {
-    console.warn("Media vision analysis unavailable; saving upload without generated metadata", error);
-    return { ...EMPTY_CAPTION };
+    console.warn("Media vision analysis unavailable; saving upload as pending analysis", error);
+    return unanalysed(controller.signal.aborted ? "pending" : "failed", model, String((error as Error)?.message ?? error).slice(0, 240));
   } finally {
     clearTimeout(timeout);
   }
@@ -291,7 +284,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
 
   // Best-effort INTERNAL analysis only. A model outage must not reject a valid
   // upload, and the fan-facing message is generated later from the live chat.
-  const cap = await bestEffortUploadAnalysis((signal) => captionPhoto(jpeg, model, signal));
+  const { caption: cap, analysis } = await bestEffortUploadAnalysis(model, (signal) => analysePhoto(jpeg, { model, signal }));
 
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
@@ -312,6 +305,9 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
     // Internal-only, factual and explicit; never shown to fans and never used
     // as the bot's matching ground truth (that's still `caption`).
     visual_description: cap.visual_description || null,
+    // Provenance + the authoritative observations. price_source lets the automatic retry re-derive a GUIDE price
+    // once a pending item is analysed, and never touch a manual one.
+    analysis: { ...analysis, price_source: manualUploadPrice(fd) === null ? "guide" : "manual" },
     star_value: starValue,
     // 0 stars is always free. The bot only ever treats an item as unlocked via
     // is_free (flows/media.ts), never by price, so a 0-priced item must carry
@@ -367,7 +363,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   }
 
   // Best-effort INTERNAL analysis only. See the matching photo path above.
-  const cap = await bestEffortUploadAnalysis((signal) => captionVideo(bytes, model, signal));
+  const { caption: cap, analysis } = await bestEffortUploadAnalysis(model, (signal) => analyseVideo(bytes, { model, signal }));
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
 
@@ -382,6 +378,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
     tags: cap.tags,
     auto_desc: cap.auto_desc || null,
     visual_description: cap.visual_description || null,
+    analysis: { ...analysis, price_source: manualUploadPrice(fd) === null ? "guide" : "manual" },
     star_value: starValue,
     // 0 stars is always free, see the matching comment in uploadPhoto.
     is_free: fd.get("is_free") === "true" || starValue <= 0,
@@ -392,6 +389,25 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   } catch (error) {
     return uploadFailure(error);
   }
+}
+
+// An operator's hand edit of the facts is the authority: it is flagged so no automatic repair ever overwrites it, and
+// a held-back ("review"/"failed"/"pending") item an operator has corrected becomes offerable.
+const FACT_FIELDS = ["caption", "tags", "auto_desc", "visual_description", "explicitness", "is_nude"] as const;
+async function withManualMark(
+  table: "photos" | "videos", id: string, cloneId: string, update: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const { data, error } = await supabaseAdmin
+    .from(table).select("caption, tags, auto_desc, visual_description, explicitness, is_nude, analysis")
+    .eq("id", id).eq("clone_id", cloneId).maybeSingle();
+  if (error || !data) return update; // column not migrated yet: nothing to mark
+  const norm = (v: unknown) => JSON.stringify(v ?? null);
+  const row = data as Record<string, unknown>;
+  const changed = FACT_FIELDS.some((f) => f in update && norm(update[f]) !== norm(row[f]));
+  if (!changed) return update;
+  const at = new Date().toISOString();
+  const previous = (row.analysis && typeof row.analysis === "object" ? row.analysis : { version: 0, at }) as Record<string, unknown>;
+  return { ...update, analysis: { ...previous, status: "ok", manual: true, manual_at: at, error: null } };
 }
 
 // ── Update photo metadata ───────────────────────────────────────────────────
@@ -420,7 +436,7 @@ export async function updatePhoto(
   if (fd.has("visual_description")) update.visual_description = stripBannedDashes(String(fd.get("visual_description") ?? "")) || null;
   const { error } = await supabaseAdmin
     .from("photos")
-    .update(update)
+    .update(await withManualMark("photos", photoId, cloneId, update))
     .eq("id", photoId)
     .eq("clone_id", cloneId);
   if (error) throw new Error(error.message);
@@ -451,7 +467,7 @@ export async function updateVideo(
   if (fd.has("visual_description")) update.visual_description = stripBannedDashes(String(fd.get("visual_description") ?? "")) || null;
   const { error } = await supabaseAdmin
     .from("videos")
-    .update(update)
+    .update(await withManualMark("videos", videoId, cloneId, update))
     .eq("id", videoId)
     .eq("clone_id", cloneId);
   if (error) throw new Error(error.message);
