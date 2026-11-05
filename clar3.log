@@ -1,0 +1,9 @@
+preview: 8 rows selected (34 already done in this run), concurrency 6, migrated=true
+mode preview  migrated true
+selected 8  skipped-already-done 34
+proposed 0  applied 0  recovered 0  already-applied 0  conflicts 0  failed 4  needs_review 4
+holds 0 previewed  0 applied
+bundle items updated 0  item conflicts 0
+model cost reported 0.0272 USD
+state dir: /home/ronan/twin/twin-dashboard-wt-clarissa/.media-repair-state/clar-3
+failures (4) listed in /home/ronan/twin/twin-dashboard-wt-clarissa/.media-repair-state/clar-3/failed.jsonl
