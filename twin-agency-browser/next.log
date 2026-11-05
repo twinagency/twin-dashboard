@@ -1,0 +1,39 @@
+   ▲ Next.js 15.5.19
+   - Local:        http://127.0.0.1:3198
+   - Network:      http://127.0.0.1:3198
+   - Experiments (use with caution):
+     · serverActions
+     · middlewareClientMaxBodySize: "50mb"
+
+ ✓ Starting...
+ ○ Compiling /instrumentation ...
+ ✓ Compiled /instrumentation in 691ms (23 modules)
+ ✓ Ready in 11.9s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 3.4s (184 modules)
+ ○ Compiling /api/onlyfans/accounts ...
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (102kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (250kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled /api/onlyfans/accounts in 8.8s (380 modules)
+ GET /api/onlyfans/accounts 401 in 10274ms
+ GET /api/onlyfans/accounts 200 in 299ms
+ ○ Compiling /api/onlyfans/accounts/[accountId]/conversations ...
+ ✓ Compiled /api/onlyfans/accounts/[accountId]/conversations in 2.1s (382 modules)
+ GET /api/onlyfans/accounts/acc-b/conversations 404 in 4197ms
+ ○ Compiling /api/onlyfans-content/accounts/[accountId]/vault/videos/[mediaId]/stream ...
+ ✓ Compiled /api/onlyfans-content/accounts/[accountId]/vault/videos/[mediaId]/stream in 575ms (391 modules)
+ GET /api/onlyfans-content/accounts/acc-a/vault/videos/101/stream 206 in 2464ms
+ HEAD /api/onlyfans-content/accounts/acc-a/vault/videos/101/stream 206 in 208ms
+ ✓ Compiled /api/onlyfans-content/accounts/[accountId]/vault/previews/[mediaId] in 458ms (396 modules)
+ GET /api/onlyfans-content/accounts/acc-b/vault/previews/101 404 in 2136ms
+ GET /api/onlyfans-content/accounts/acc-b/vault/videos/101/stream 404 in 187ms
+ ○ Compiling /api/onlyfans-content/accounts/[accountId]/vault/uploads/[[...path]] ...
+ ✓ Compiled /api/onlyfans-content/accounts/[accountId]/vault/uploads/[[...path]] in 556ms (398 modules)
+ GET /api/onlyfans-content/accounts/acc-b/vault/uploads 404 in 2547ms
+ ✓ Compiled /api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId] in 478ms (402 modules)
+ POST /api/onlyfans-controls/accounts/acc-a/conversations/acc-a:101 200 in 2289ms
+ POST /api/onlyfans-controls/accounts/acc-a/conversations/acc-a:101 503 in 192ms
+ ○ Compiling /api/onlyfans/accounts/[accountId]/conversations/[conversationId]/handover ...
+ ✓ Compiled /api/onlyfans/accounts/[accountId]/conversations/[conversationId]/handover in 512ms (405 modules)
+ GET /api/onlyfans/accounts/acc-a/conversations/acc-a:101/handover 200 in 2318ms
+[?25h
