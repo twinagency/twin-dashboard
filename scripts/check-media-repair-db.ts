@@ -613,6 +613,10 @@ async function main() {
     const wrongPv = path.join(tmp, "other-preview.jsonl");
     writeFileSync(wrongPv, readFileSync(R2.pf, "utf8").replace(/fake photos/g, "fake PHOTOS"));
     const orig2 = allState();
+    // a preview copied WITHOUT its holds.jsonl is refused (holds.jsonl is not covered by the preview hash): nothing written
+    await assert.rejects(() => runRepair(mkCtx({ ...countedNoModel }), APPLY(wrongPv, R2.hlf)), /no holds\.jsonl beside/); checks++;
+    eq(allState(), orig2, "holds guard: a preview copied without holds.jsonl is refused, nothing written");
+    writeFileSync(path.join(tmp, "holds.jsonl"), "");
     await assert.rejects(() => runRepair(mkCtx({ ...countedNoModel }), APPLY(wrongPv, R2.hlf)), /hold list refused: .* reviewed against preview/); checks++;
     eq(allState(), orig2, "hold list: bound to another preview's hash -> refused, nothing written");
     const unbound = path.join(tmp, "unbound.json");

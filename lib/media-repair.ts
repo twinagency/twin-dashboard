@@ -354,6 +354,8 @@ export type RunOpts = {
   preview?: string;
   /** apply only: reviewed operator hold list (bound by sha256 to the preview). Listed rows get a status-only hold instead of their proposal. */
   holdList?: string;
+  /** apply only: acknowledge that the preview has no holds.jsonl beside it */
+  noHolds?: boolean;
 };
 export type RunSummary = {
   mode: Mode; migrated: boolean; selected: number; skippedDone: number;
@@ -478,8 +480,10 @@ async function syncItems(ctx: Ctx, rec: { clone_id: string; storage_path: string
 }
 
 // ── preview file (the reviewed proposals an apply is allowed to write) ───────
-export type LoadedPreview = { proposals: Proposal[]; holds: Hold[]; file: string; sha256: string };
-export function loadPreview(f: string): LoadedPreview {
+export type LoadedPreview = { proposals: Proposal[]; holds: Hold[]; file: string; sha256: string; holdsSha256: string | null };
+/** `allowNoHolds`: apply a preview that has no holds.jsonl beside it (explicit acknowledgement). holds.jsonl is NOT covered by the preview hash, so
+ *  without this a copy of preview.jsonl alone would silently leave the run's needs_review/failed rows legacy (still offered). */
+export function loadPreview(f: string, opts: { allowNoHolds?: boolean } = {}): LoadedPreview {
   if (!f || !existsSync(f)) throw new Error(`apply needs a reviewed preview: ${f ? `file not found: ${f}` : "pass --preview <run id or preview.jsonl>"}`);
   const proposals = new Map<string, Proposal>();
   for (const p of readJsonl<Proposal>(f)) {
@@ -488,12 +492,17 @@ export function loadPreview(f: string): LoadedPreview {
     if (proposals.has(key)) throw new Error(`preview is ambiguous: two proposals for ${key}`);
     proposals.set(key, p);
   }
+  const holdsPath = path.join(path.dirname(f), "holds.jsonl");
+  if (!existsSync(holdsPath) && !opts.allowNoHolds) {
+    throw new Error(`no holds.jsonl beside ${f}: copy the run's holds.jsonl next to the reviewed preview (a preview run writes one, empty when there are no holds), or pass --no-holds to apply the proposals without any holds`);
+  }
   const holds = new Map<string, Hold>();
-  for (const h of readJsonl<Hold>(path.join(path.dirname(f), "holds.jsonl"))) holds.set(`${h.table}:${h.id}`, h); // a re-run of a failed row: last line wins
+  for (const h of readJsonl<Hold>(holdsPath)) holds.set(`${h.table}:${h.id}`, h); // a re-run of a failed row: last line wins
   for (const k of proposals.keys()) holds.delete(k); // a row that later got a real proposal is not held
   const hash = createHash("sha256");
   hash.update(readFileSync(f));
-  return { proposals: [...proposals.values()], holds: [...holds.values()], file: f, sha256: hash.digest("hex") };
+  const holdsSha = existsSync(holdsPath) ? createHash("sha256").update(readFileSync(holdsPath)).digest("hex") : null;
+  return { proposals: [...proposals.values()], holds: [...holds.values()], file: f, sha256: hash.digest("hex"), holdsSha256: holdsSha };
 }
 
 // ── operator hold list ───────────────────────────────────────────────────────
@@ -617,6 +626,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
   }
   if (opts.mode === "apply") return applyPreview(ctx, opts, migrated);
   const sum = newSummary(opts.mode, migrated);
+  { const hp = file(ctx, "holds.jsonl"); if (!existsSync(hp)) writeFileSync(hp, ""); } // a preview folder always carries its holds file (empty when none)
 
   const clones = await fetchClones(ctx.db);
   const bySlug = new Map(clones.map((c) => [c.slug, c]));
@@ -680,7 +690,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
  * written for it (a fresh preview is needed). The old guards (allow-list, metadata_edited_at is null, old-value guards) still apply.
  */
 async function applyPreview(ctx: Ctx, opts: RunOpts, migrated: boolean): Promise<RunSummary> {
-  const pv = loadPreview(opts.preview ?? "");
+  const pv = loadPreview(opts.preview ?? "", { allowNoHolds: opts.noHolds });
   // operator hold list: bound to THIS preview's hash; a mismatch refuses the whole apply before anything is written
   const hl = opts.holdList ? loadHoldList(opts.holdList, pv.sha256) : undefined;
   const sum = newSummary("apply", migrated);
@@ -689,7 +699,7 @@ async function applyPreview(ctx: Ctx, opts: RunOpts, migrated: boolean): Promise
   const byId = new Map(clones.map((c) => [c.id, c]));
   if (opts.cloneSlug && !bySlug.has(opts.cloneSlug)) throw new Error(`no clone with slug ${opts.cloneSlug}`);
   writeFileSync(file(ctx, "preview.used.jsonl"), readFileSync(pv.file));
-  sum.notes.push(`applied preview ${pv.file} sha256 ${pv.sha256}: ${pv.proposals.length} proposals, ${pv.holds.length} holds`);
+  sum.notes.push(`applied preview ${pv.file} sha256 ${pv.sha256} (holds.jsonl sha256 ${pv.holdsSha256 ?? "none"}): ${pv.proposals.length} proposals, ${pv.holds.length} holds`);
 
   const stateFile = file(ctx, "state.jsonl");
   const state = readJsonl<StateEntry>(stateFile);
