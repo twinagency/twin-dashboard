@@ -1,5 +1,6 @@
 "use client";
 
+import { creatorUploadCopy } from "@/lib/flirt-creator-upload-copy";
 import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
 import { useContext, useEffect, useState } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
@@ -83,7 +84,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     <details className={styles.folder}><summary><Link2 size={20} aria-hidden="true" /> {t("Use a folder link", "Usar link de uma pasta")}<ChevronRight className={styles.folderChevron} size={18} aria-hidden="true" /></summary>
       <label className="mt-3 block text-sm font-medium">{t("Google Drive or Dropbox folder", "Pasta do Google Drive ou Dropbox")}<Input type="url" value={folder.draft} disabled={locked} placeholder="https://drive.google.com/drive/folders/…" onChange={event => folder.setDraft(event.target.value)} onBlur={() => { void folder.save(); }} /></label>
       <p className="mt-2 text-xs text-muted">{t("Share a folder your agency can open. Your agency will import the files; a link does not count as saved content yet.", "Compartilhe uma pasta que sua agência consiga abrir. A equipe vai importar os arquivos. O link só passa a contar como conteúdo salvo depois da importação.")}</p>
-      {folder.status && <p role={folder.error ? "alert" : "status"} className="mt-3 text-sm">{folder.status}{folder.error && <button type="button" className="ml-2 min-h-11 underline" onClick={() => { void folder.save(); }}>{t("Retry", "Tentar novamente")}</button>}</p>}
+      {folder.status && <p role={folder.error ? "alert" : "status"} className="mt-3 text-sm">{creatorUploadCopy(folder.status, locale, "Não foi possível salvar o link. Tente novamente.")}{folder.error && <button type="button" className="ml-2 min-h-11 underline" onClick={() => { void folder.save(); }}>{t("Retry", "Tentar novamente")}</button>}</p>}
       {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{t(`${folder.provider} folder`, `Pasta do ${folder.provider}`)}</a><span className="ml-2">{t("Awaiting import", "Aguardando importação")}</span></li>)}</ul>}
     </details>
     <div className={styles.handoff} data-content-questionnaire-handoff>
@@ -95,7 +96,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label={t("Upload queue", "Fila de envio")}><summary>{t("Upload details", "Detalhes do envio")}{attention ? t(", action needed", ", ação necessária") : ""}</summary>
       <ul className="max-h-96 space-y-3 overflow-y-auto">
         {queue.items.map(item => <li key={item.id} className="flex items-start gap-3 rounded-xl border border-border p-3"><Thumbnail item={item} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={item.name}>{item.name}</p>
-          <p className={`mt-1 text-sm ${item.state === "failed" || item.state === "reselect" ? "text-rose-700" : "text-muted"}`}>{item.state === "saved" ? t("Saved", "Salvo") : item.error || (item.state === "saving" ? t("Saving…", "Salvando…") : item.state === "uploading" ? t(`Uploading ${item.percent}%`, `Enviando: ${item.percent}%`) : t("Waiting to upload", "Aguardando envio"))}</p>
+          <p className={`mt-1 text-sm ${item.state === "failed" || item.state === "reselect" ? "text-rose-700" : "text-muted"}`}>{item.state === "saved" ? t("Saved", "Salvo") : item.error ? creatorUploadCopy(item.error, locale, "Não foi possível confirmar este envio. Confira o tipo e o tamanho do arquivo e tente novamente.") : (item.state === "saving" ? t("Saving…", "Salvando…") : item.state === "uploading" ? t(`Uploading ${item.percent}%`, `Enviando: ${item.percent}%`) : t("Waiting to upload", "Aguardando envio"))}</p>
           {item.state === "uploading" && <progress value={item.percent} max={100} aria-label={t(`Uploading ${item.name}`, `Enviando ${item.name}`)} className="mt-2 h-2 w-full accent-accent" />}
           {item.state === "failed" && item.file && <Button type="button" variant="outline" className="mt-2 min-h-11" onClick={() => queue.retry(item.id)}><RotateCcw size={14} /> {t("Retry", "Tentar novamente")}</Button>}
           {item.state === "reselect" && <p className="mt-1 text-xs">{t("Use Add more to reselect the original. Saved files will be checked and skipped.", "Use Adicionar mais para selecionar o arquivo original. Os arquivos já salvos serão identificados e ignorados.")}</p>}

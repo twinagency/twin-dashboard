@@ -1,4 +1,5 @@
 "use client";
+import { useFlirtCreatorLocale } from "./FlirtCreatorLocale";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { recoverableUploadQueue } from "@/lib/creator-upload-recovery";
@@ -161,6 +162,8 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
 export function CreatorUploadActivity() {
   const queue = useContentUploads();
   const router = useContext(AppRouterContext);
+  const { locale, t } = useFlirtCreatorLocale();
   if (!queue?.items.length) return null;
-  return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity><span role="status">{queue.items.filter(item => item.state === "saved").length} of {queue.items.length} files saved</span><button type="button" className="min-h-11 font-medium underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=content", router?.push)}>View uploads</button></div>;
+  const saved = queue.items.filter(item => item.state === "saved").length;
+  return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity><span role="status">{t(`${saved} of ${queue.items.length} files saved`, `${saved.toLocaleString(locale)} de ${queue.items.length.toLocaleString(locale)} arquivos salvos`)}</span><button type="button" className="min-h-11 font-medium underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=content", router?.push)}>{t("View uploads", "Ver envios")}</button></div>;
 }
