@@ -1,3 +1,4 @@
+import { flirtCreatorLocaleCookie, parseFlirtCreatorLocale } from "@/lib/flirt-creator-locale";
 import { flirtOnlyFansRequest } from "@/lib/onlyfans/flirt-request";
 import { renewAgencySession, setAgencySessionCookies, clearAgencySessionCookies } from "@/lib/agency-session";
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
@@ -48,6 +49,16 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
+  const requestedLocale = req.method === "GET" && isCreatorPath(path) && flirtOnboardingOptional()
+    ? parseFlirtCreatorLocale(req.nextUrl.searchParams.get("lang"))
+    : null;
+  if (requestedLocale) {
+    const target = new URL(path + req.nextUrl.search, dashboardOrigin(req));
+    target.searchParams.delete("lang");
+    const response = privateResponse(NextResponse.redirect(target));
+    response.cookies.set(flirtCreatorLocaleCookie(requestedLocale, target.protocol === "https:"));
+    return response;
+  }
   // Login/logout and independently authenticated endpoints must never renew an
   // unrelated agency session or overwrite a new identity's response cookies.
   const skip = isTwinLoginPath(path) || isMarketingPath(path) || path === "/admin-auth"
@@ -103,7 +114,7 @@ async function routeMiddleware(req: NextRequest) {
     if (!["GET", "POST"].includes(req.method) || req.headers.has("next-action") || (req.method === "POST" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }
-  if (isCreatorAuthPath(pathname)) {
+  if (pathname === "/creator-auth/locale" || isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }

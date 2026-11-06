@@ -1,4 +1,6 @@
 "use client";
+
+import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -20,6 +22,42 @@ type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
 type Destination = number | "content" | "dashboard" | "hub" | "finish" | "review";
 
 const pages = COMPACT_QUESTIONNAIRE_PAGES;
+
+const portugueseCopy: Record<string, string> = {
+  "Your answers changed in another window. Copy any unsaved edits, then refresh before continuing.": "Suas respostas foram alteradas em outra janela. Copie as alterações que ainda não foram salvas e atualize a página antes de continuar.",
+  "Your latest changes have not saved. Try again below.": "Suas últimas alterações ainda não foram salvas. Tente novamente abaixo.",
+  "Your latest changes have not saved. Check your connection and try again.": "Suas últimas alterações ainda não foram salvas. Confira sua conexão e tente novamente.",
+  "The questionnaire could not be finished. Your saved answers are still here. Please try again.": "Não foi possível concluir o questionário. Suas respostas salvas continuam disponíveis. Tente novamente.",
+  "We could not finish that step. Your answers are still here. Please try again.": "Não foi possível concluir essa etapa. Suas respostas continuam nesta tela. Tente novamente.",
+
+  "A quick introduction": "Uma breve apresentação",
+  "A little more about you": "Um pouco mais sobre você",
+  "Your favourites": "Seus favoritos",
+  "Your preferences and boundaries": "Suas preferências e seus limites",
+  "Last few details": "Últimos detalhes",
+  "Languages": "Idiomas",
+  "Ethnicity or nationality": "Etnia ou nacionalidade",
+  "Social style": "Jeito de socializar",
+  "Pets": "Animais de estimação",
+  "Relationship": "Relacionamento",
+  "Home": "Onde você mora",
+  "Family": "Família",
+  "Appearance": "Aparência",
+  "Personal facts": "Curiosidades sobre você",
+  "Social profiles": "Perfis nas redes sociais",
+  "Food": "Comida",
+  "Music": "Música",
+  "Movies": "Filmes",
+  "Sports": "Esportes",
+  "Travel": "Viagens",
+  "Drinks": "Bebidas",
+  "Orientation": "Orientação",
+  "Preferences": "Preferências",
+  "Turn-ons, including kinks": "O que desperta seu interesse, incluindo fetiches",
+  "Turn-offs": "O que corta o clima",
+  "Boundaries": "Limites",
+};
+
 const previewLabels: Record<string, string> = {
   languages: "Languages", ethnicity: "Ethnicity or nationality", social_style: "Social style", pets: "Pets", relationship_status: "Relationship",
   home_background: "Home", family_profile: "Family", appearance_profile: "Appearance", personal_highlights: "Personal facts", social_links: "Social profiles",
@@ -29,6 +67,7 @@ const previewLabels: Record<string, string> = {
 
 export default function CreatorProfileQuestionnaire({ page: initialPage, initialAnswers, initialRevision, locked = false, optional = false }: CreatorProfileQuestionnaireProps) {
   const appRouter = useContext(AppRouterContext);
+  const { t, locale } = useFlirtCreatorLocale();
   const navigateTo = (href: string) => { if (appRouter && href.startsWith("/creator/onboarding")) appRouter.push(href); else window.location.assign(href); };
   const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, pages.findIndex(item => item.slug === initialPage.slug)));
   const [answers, setAnswers] = useState(initialAnswers);
@@ -51,6 +90,7 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
   const dialogRef = useRef<HTMLDialogElement>(null);
   const previewButtonRef = useRef<HTMLButtonElement>(null);
   const page = pages[currentIndex];
+  const localized = (copy: string) => t(copy, portugueseCopy[copy] ?? copy);
   const questions = questionnairePageQuestions(page);
   const completed = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => answers[question.id]?.trim() || reviewed.includes(question.id)).length;
   const progress = Math.round(completed / CREATOR_PROFILE_QUESTIONNAIRE.length * 100);
@@ -190,42 +230,42 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
   const closePreview = () => { setPreviewOpen(false); previewButtonRef.current?.focus(); };
   const name = answers.preferred_name?.trim();
   const hasProfile = CREATOR_PROFILE_SECTIONS.some(section => section.questions.some(question => answers[question.id]?.trim()));
-  const saveCopy = locked ? "Saved answers" : saveState === "saved" ? "Saved" : saveState === "saving" ? "Saving…" : saveState === "dirty" ? "Waiting to save" : saveState === "error" || saveState === "conflict" ? "Not saved" : "Autosave on";
+  const saveCopy = locked ? t("Saved answers", "Respostas salvas") : saveState === "saved" ? t("Saved", "Salvo") : saveState === "saving" ? t("Saving…", "Salvando…") : saveState === "dirty" ? t("Waiting to save", "Aguardando salvamento") : saveState === "error" || saveState === "conflict" ? t("Not saved", "Não salvo") : t("Autosave on", "Salvamento automático ativado");
 
   return <div className={styles.root} data-profile-flow>
     <form ref={formRef} onSubmit={event => event.preventDefault()} data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
       <div className={styles.topLine}>
-        <span className={styles.milestone} role="status">{milestone && <><Check size={14} aria-hidden="true" />{milestone}</>}</span>
+        <span className={styles.milestone} role="status">{milestone && <><Check size={14} aria-hidden="true" />{t("Introduction saved", "Apresentação salva")}</>}</span>
 
       </div>
-      <div className={styles.progress} role="progressbar" aria-label="Questionnaire progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${progress}% answered or reviewed`}><span style={{ width: `${progress}%` }} /></div>
+      <div className={styles.progress} role="progressbar" aria-label={t("Questionnaire progress", "Progresso do questionário")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={t(`${progress}% answered or reviewed`, `${progress.toLocaleString(locale)}% respondido ou revisado`)}><span style={{ width: `${progress}%` }} /></div>
       <div className={styles.page} key={page.slug}>
-        <header className={styles.pageHeading}><h1 ref={headingRef} tabIndex={-1}>{page.title === "Your preferences and boundaries" ? "Preferences & boundaries" : page.title}</h1>{page.slug === "quick-v2-account" && <p>Account details stay separate from your public profile.</p>}</header>
+        <header className={styles.pageHeading}><h1 ref={headingRef} tabIndex={-1}>{page.title === "Your preferences and boundaries" ? t("Preferences & boundaries", "Preferências e limites") : localized(page.title)}</h1>{page.slug === "quick-v2-account" && <p>{t("Account details stay separate from your public profile.", "Os dados da sua conta ficam separados do seu perfil público.")}</p>}</header>
         <div className={styles.fields}>{questions.map(question => <CreatorProfileField key={question.id} question={question} value={answers[question.id] || ""} onChange={value => change(question.id, value)} disabled={locked || navigating || conflictRef.current} required={!optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number])} />)}</div>
       </div>
-      {error && <div role="alert" className={styles.error}><p>{error}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>Try saving again</button>}</div>}
+      {error && <div role="alert" className={styles.error}><p>{localized(error)}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>{t("Try saving again", "Tentar salvar novamente")}</button>}</div>}
       <div className={styles.footer} data-questionnaire-navigation>
-        <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />Preview profile</button>
-          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>Skip questions</button>}
+        <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />{t("Preview profile", "Prévia do perfil")}</button>
+          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>{t("Skip questions", "Pular perguntas")}</button>}
         </div>
         <div className={styles.navigation}>
-          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={19} aria-hidden="true" /><span className={styles.srOnly}>Back</span></button>
+          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={19} aria-hidden="true" /><span className={styles.srOnly}>{t("Back", "Voltar")}</span></button>
         <span className={styles.saveStatus} data-save-state={saveState} role="status" aria-live="polite">{saveState === "saving" ? <LoaderCircle size={14} className={styles.spinner} aria-hidden="true" /> : saveState === "saved" || locked ? <Check size={14} aria-hidden="true" /> : null}{saveCopy}</span>
-          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? "Saving…" : currentIndex < pages.length - 1 ? "Continue" : "Review and finish"}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
+          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? t("Saving…", "Salvando…") : currentIndex < pages.length - 1 ? t("Continue", "Continuar") : t("Review and finish", "Revisar e concluir")}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
         </div>
       </div>
     </form>
     <dialog ref={dialogRef} className={styles.preview} aria-labelledby="profile-preview-title" onCancel={event => { event.preventDefault(); closePreview(); }} onClick={event => { if (event.target === event.currentTarget) closePreview(); }}>
       <div className={styles.previewInner}>
-        <div className={styles.previewTop}><span>PROFILE PREVIEW</span><button type="button" aria-label="Close profile preview" onClick={closePreview}><X size={21} /></button></div>
-        <div className={styles.previewHeading}><div className={styles.monogram} aria-hidden="true">{name ? Array.from(name)[0].toUpperCase() : "•"}</div><div><h2 id="profile-preview-title">{name ? `Meet ${name}` : "Your profile"}</h2><p>Your answers, brought together.</p></div></div>
-        {!hasProfile && <p className={styles.emptyPreview}>Your profile will take shape here as you answer.</p>}
+        <div className={styles.previewTop}><span>{t("PROFILE PREVIEW", "PRÉVIA DO PERFIL")}</span><button type="button" aria-label={t("Close profile preview", "Fechar prévia do perfil")} onClick={closePreview}><X size={21} /></button></div>
+        <div className={styles.previewHeading}><div className={styles.monogram} aria-hidden="true">{name ? Array.from(name)[0].toUpperCase() : "•"}</div><div><h2 id="profile-preview-title">{name ? t(`Meet ${name}`, `Conheça ${name}`) : t("Your profile", "Seu perfil")}</h2><p>{t("Your answers, brought together.", "Suas respostas reunidas em um só lugar.")}</p></div></div>
+        {!hasProfile && <p className={styles.emptyPreview}>{t("Your profile will take shape here as you answer.", "Seu perfil aparecerá aqui à medida que você responder.")}</p>}
         {CREATOR_PROFILE_SECTIONS.map(section => {
           const shown = section.questions.filter(question => question.id !== "preferred_name" && answers[question.id]?.trim());
-          return shown.length ? <section key={section.title} className={styles.previewSection}><h3>{section.title}</h3><dl>{shown.map(question => <div key={question.id}><dt>{previewLabels[question.id]}</dt><dd>{answers[question.id]}</dd></div>)}</dl></section> : null;
+          return shown.length ? <section key={section.title} className={styles.previewSection}><h3>{localized(section.title)}</h3><dl>{shown.map(question => <div key={question.id}><dt>{localized(previewLabels[question.id])}</dt><dd>{answers[question.id]}</dd></div>)}</dl></section> : null;
         })}
-        <p className={styles.previewNote}>Updates as you answer.</p>
-        <button type="button" className={styles.continue} onClick={closePreview}>Back to questions</button>
+        <p className={styles.previewNote}>{t("Updates as you answer.", "Atualizado à medida que você responde.")}</p>
+        <button type="button" className={styles.continue} onClick={closePreview}>{t("Back to questions", "Voltar às perguntas")}</button>
       </div>
     </dialog>
   </div>;

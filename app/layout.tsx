@@ -1,3 +1,6 @@
+import { FlirtCreatorLocaleProvider } from "@/components/FlirtCreatorLocale";
+import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import FlirtOnlyFansShell from "@/components/FlirtOnlyFansShell";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
@@ -79,8 +82,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
     const publicPortal = creatorPublicPortal(pathname);
     const link = publicPortal === "link" || isLynq(creator?.name);
+    const locale = await getFlirtCreatorLocale();
     const theme = link ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
-    return <html lang="en" data-app-brand="flirt" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
+    return <html lang={locale} data-app-brand="flirt" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{flirtOnboardingOptional() ? <FlirtCreatorLocaleProvider locale={locale}>{children}</FlirtCreatorLocaleProvider> : children}</body></html>;
   }
   if (isMarketingPath(pathname)) return <html lang="en" data-app-brand="flirt" className={fontClass}><body>{children}</body></html>;
   // These two live under the /agency/ prefix but are authenticated operator

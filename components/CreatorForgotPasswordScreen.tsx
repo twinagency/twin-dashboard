@@ -1,5 +1,7 @@
 "use client";
 
+import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
+
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { creatorRecoveryPath } from "@/lib/creator-recovery";
@@ -18,6 +20,7 @@ import CreatorAuthFrame, {
 
 export default function CreatorForgotPasswordScreen({ brand, authConfig }: { brand: CreatorAuthBrand; authConfig: CreatorPublicAuth }) {
   const [next, setNext] = useState("/creator");
+  const { t, locale } = useFlirtCreatorLocale();
   useEffect(() => { setNext(safeCreatorNext(new URLSearchParams(window.location.search).get("next"))); }, []);
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
@@ -39,8 +42,8 @@ export default function CreatorForgotPasswordScreen({ brand, authConfig }: { bra
   }
 
   return (
-    <CreatorAuthFrame brand={brand} heroTitle="Recover your creator account." heroCopy={tether ? "Use the email attached to your Tether creator access." : link ? "Use the email attached to your LYNQ creator access." : undefined} eyebrow="Creator workspace" title="Reset password" description="Enter the email attached to your creator account.">
-      {status === "sent" ? <div className="grid gap-4"><p className={tether ? "rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-50" : "rounded-lg border border-good/25 bg-good/10 p-3 text-sm text-ink"}>Check your email for the password reset link.</p><Link href={creatorRecoveryPath(paths.login, next)} className={`text-center text-sm ${authLinkClass}`}>Back to sign in</Link></div> : <form onSubmit={submit} className={tether ? "space-y-5" : "grid gap-4"}><label className="block"><span className={tether ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>Email address</span><Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required autoFocus className={tether ? tetherAuthInputClass : undefined} /></label>{status === "error" && <p role="alert" className={tether ? "rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" : "text-sm text-crit"}>Could not send the reset email. Try again.</p>}{tether ? <button type="submit" className={tetherAuthButtonClass} disabled={status === "sending"}>{status === "sending" ? "Sending..." : "Send reset link"}</button> : <Button type="submit" className="w-full" disabled={status === "sending"}>{status === "sending" ? "Sending..." : "Send reset link"}</Button>}<Link href={creatorRecoveryPath(paths.login, next)} className={tether ? `block text-center text-sm ${authLinkClass}` : `text-center text-sm ${link ? authLinkClass : "text-muted hover:text-ink"}`}>Back to sign in</Link></form>}
+    <CreatorAuthFrame brand={brand} locale={locale} heroTitle={t("Recover your creator account.", "Recupere sua conta de criadora.")} heroCopy={tether ? "Use the email attached to your Tether creator access." : link ? "Use the email attached to your LYNQ creator access." : undefined} eyebrow={t("Creator workspace", "Área da criadora")} title={t("Reset password", "Redefinir senha")} description={t("Enter the email attached to your creator account.", "Digite o e-mail cadastrado na sua conta de criadora.")}>
+      {status === "sent" ? <div className="grid gap-4"><p className={tether ? "rounded-xl border border-emerald-300/20 bg-emerald-300/10 p-3 text-sm text-emerald-50" : "rounded-lg border border-good/25 bg-good/10 p-3 text-sm text-ink"}>{t("Check your email for the password reset link.", "Confira seu e-mail para encontrar o link de redefinição de senha.")}</p><Link href={creatorRecoveryPath(paths.login, next)} className={`text-center text-sm ${authLinkClass}`}>{t("Back to sign in", "Voltar para o login")}</Link></div> : <form onSubmit={submit} className={tether ? "space-y-5" : "grid gap-4"}><label className="block"><span className={tether ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>{t("Email address", "E-mail")}</span><Input value={email} onChange={(e) => setEmail(e.target.value)} type="email" autoComplete="email" required autoFocus className={tether ? tetherAuthInputClass : undefined} /></label>{status === "error" && <p role="alert" className={tether ? "rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" : "text-sm text-crit"}>{t("Could not send the reset email. Try again.", "Não foi possível enviar o e-mail de redefinição. Tente novamente.")}</p>}{tether ? <button type="submit" className={tetherAuthButtonClass} disabled={status === "sending"}>{status === "sending" ? t("Sending...", "Enviando…") : t("Send reset link", "Enviar link de redefinição")}</button> : <Button type="submit" className="w-full" disabled={status === "sending"}>{status === "sending" ? t("Sending...", "Enviando…") : t("Send reset link", "Enviar link de redefinição")}</Button>}<Link href={creatorRecoveryPath(paths.login, next)} className={tether ? `block text-center text-sm ${authLinkClass}` : `text-center text-sm ${link ? authLinkClass : "text-muted hover:text-ink"}`}>{t("Back to sign in", "Voltar para o login")}</Link></form>}
     </CreatorAuthFrame>
   );
 }

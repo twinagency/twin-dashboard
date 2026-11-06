@@ -33,3 +33,19 @@ export function readStudioPerformance(payload: unknown, cloneId: string, period:
   });
   return { stars: stats.stars, activeFans: stats.activeUsers, conversations, series, stale: value.stale === true };
 }
+
+const portugueseStatusLabels: Record<CreatorStudioPhase, string> = {
+  draft: "Configuração em andamento",
+  submitted: "Cadastro enviado",
+  reviewing: "Em análise",
+  approved: "Cadastro aprovado",
+  changes: "Ajustes solicitados",
+  withdrawn: "Cadastro retirado",
+  ready: "Sua IA está pronta",
+  paused: "Sua IA está pausada",
+  connected: "Perfil de IA conectado",
+};
+
+export function creatorStudioStatusLabel(status: CreatorStudioStatus, locale: "en" | "pt-BR"): string {
+  return locale === "pt-BR" ? portugueseStatusLabels[status.phase] : status.label;
+}

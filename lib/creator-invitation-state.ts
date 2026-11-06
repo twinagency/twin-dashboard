@@ -1,3 +1,5 @@
+import type { FlirtCreatorLocale } from "./flirt-creator-locale";
+
 export type CreatorInvitationStatus = "required" | "valid" | "invalid" | "expired" | "exhausted" | "disabled" | "unavailable";
 export const invitationMessages: Record<CreatorInvitationStatus, string> = {
   required: "A valid invitation is required. Enter the code from your invitation link.",
@@ -15,4 +17,19 @@ export function invitationStatus(row: { active: boolean; expires_at: string | nu
   if (row.expires_at && Date.parse(row.expires_at) <= now) return "expired";
   if (row.max_uses != null && row.uses >= row.max_uses) return "exhausted";
   return "valid";
+}
+
+const portugueseInvitationMessages: Record<CreatorInvitationStatus, string> = {
+  required: "É necessário um convite válido. Digite o código do seu link de convite.",
+  valid: "Seu convite está pronto.",
+  invalid: "Não reconhecemos este código. Confira o código ou use um novo link de convite.",
+  expired: "Este convite expirou. Peça um novo convite à sua agência.",
+  exhausted: "Este convite atingiu o limite de usos. Peça um novo convite à sua agência.",
+  disabled: "Este convite não está mais ativo. Peça um novo convite à sua agência.",
+  unavailable: "Não foi possível verificar o convite agora. Tente novamente em instantes. Seu convite ainda está disponível para uso.",
+};
+
+export function creatorInvitationMessage(status: CreatorInvitationStatus, locale: FlirtCreatorLocale): string | undefined {
+  const messages = locale === "pt-BR" ? portugueseInvitationMessages : invitationMessages;
+  return Object.hasOwn(messages, status) ? messages[status] : undefined;
 }
