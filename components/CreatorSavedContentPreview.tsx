@@ -152,7 +152,7 @@ export default function CreatorSavedContentPreview({ revision, children, items =
     <div className={styles.previewGrid} aria-label={t("Saved content previews", "Prévia do conteúdo salvo")}>
       {all.slice(0, 6).map(file => <Tile key={file.id} file={file} open={() => { setSelectedId(file.id); setOpen(true); }} />)}
     </div>
-    {!!all.length && <button type="button" className={styles.viewAll} onClick={() => { setSelectedId(null); setOpen(true); }}>View all ({Math.max(fileCount, all.length)}) <ChevronRight size={16} /></button>}
+    {!!all.length && <button type="button" className={styles.viewAll} onClick={() => { setSelectedId(null); setOpen(true); }}>{t("View all", "Ver todos")} ({Math.max(fileCount, all.length)}) <ChevronRight size={16} /></button>}
     {children}
     <dialog ref={dialog} className={styles.fileDialog} aria-label={selected ? t("View file", "Ver arquivo") : t("All your content", "Todo o seu conteúdo")} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) close(); }}>
       {open && <div className={styles.dialogBody}>
@@ -161,7 +161,7 @@ export default function CreatorSavedContentPreview({ revision, children, items =
         {selected ? <>
           <div className={styles.largePreview}>
             {previewUrl ? selected.mime.startsWith("image/") ? <img src={previewUrl} alt={selected.name} referrerPolicy="no-referrer" onError={() => setPreviewError("This photo couldn’t open in your browser.")} /> : <video key={selected.id} controls playsInline preload="metadata" src={previewUrl} aria-label={selected.name} onError={() => setPreviewError("This video couldn’t play in your browser. Try another browser or upload an MP4 copy.")} /> : !previewError && <p role="status">Opening your file…</p>}
-            {previewError && <p role="alert">{previewError}</p>}
+            {previewError && <p role="alert">{t(previewError, selected.mime.startsWith("image/") ? "Não foi possível abrir esta foto no navegador." : "Não foi possível abrir este vídeo no navegador.")}</p>}
           </div>
           <nav className={styles.previewNav} aria-label={t("Browse content", "Navegar pelo conteúdo")}><button type="button" disabled={index <= 0 || removing} onClick={() => setSelectedId(all[index - 1].id)}><ChevronLeft size={18} /> {t("Previous", "Anterior")}</button><span>{index + 1} {t("of", "de")} {Math.max(fileCount, all.length)}</span><button type="button" disabled={removing || moreBusy || (index >= all.length - 1 && !hasMore)} onClick={() => { if (index < all.length - 1) setSelectedId(all[index + 1].id); else void loadMore(true); }}>{t("Next", "Próximo")} <ChevronRight size={18} /></button></nav>
           {confirm ? <div className={styles.removeConfirm}><p>{t("Remove this file?", "Remover este arquivo?")}</p><div><button type="button" disabled={removing} onClick={() => void removeSelected()}>{removing ? t("Removing…", "Removendo…") : t("Yes, remove", "Sim, remover")}</button><button type="button" disabled={removing} onClick={() => setConfirm(false)}>{t("Keep file", "Manter arquivo")}</button></div></div> : <button type="button" className={styles.removeFile} disabled={!canRemove || removing} onClick={() => setConfirm(true)}><Trash2 size={16} /> {t("Remove file", "Remover arquivo")}</button>}

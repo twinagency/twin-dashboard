@@ -417,7 +417,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   // refunds/adjustments. It is neither profit nor a withdrawable wallet balance.
   // Only equals "lifetime" when the window is genuinely all-time.
   const periodCopy: Record<Period, string> = {
-    ALL: "Tudo", "1Y": "1 ano", "6M": "6 meses", "3M": "3 meses",
+    ALL: "Tudo", CUSTOM: "Personalizado", "1Y": "1 ano", "6M": "6 meses", "3M": "3 meses",
     "1M": "1 mês", "2W": "2 semanas", "1W": "1 semana", "1D": "1 dia",
   };
   const periodLabel = (key: Period) => locale === "pt-BR" ? periodCopy[key] : PERIODS.find(item => item.key === key)?.label ?? key;
@@ -1536,15 +1536,15 @@ function CreatorPerformanceRail({
   money: (stars: number) => string;
   pct: (value: number) => string;
 }) {
-  const { locale } = useFlirtCreatorLocale();
+  const { t, locale } = useFlirtCreatorLocale();
   const fmtNum = (n: number) => formatNumber(n, locale);
   const ranked = creators.filter((creator) => creator.revenueStars !== 0 || creator.sales > 0);
   const visible = ranked.slice(0, 6);
 
   return (
-    <section aria-label="Creator performance" className="overflow-hidden rounded-lg border border-line bg-panel">
+    <section aria-label={t("Creator performance", "Desempenho por criadora")} className="overflow-hidden rounded-lg border border-line bg-panel">
       <div className="border-b border-line px-3 py-2.5">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Creator performance</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">{t("Creator performance", "Desempenho por criadora")}</h3>
         <p className="mt-0.5 text-[10px] text-muted">Revenue rank in the selected window</p>
       </div>
       {visible.length === 0 ? (
@@ -1553,8 +1553,8 @@ function CreatorPerformanceRail({
         <>
           <div className="grid grid-cols-[22px_minmax(0,1fr)_auto_42px] gap-2 border-b border-line bg-elev px-3 py-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-muted">
             <span>#</span>
-            <span>Creator</span>
-            <span className="text-right">Revenue</span>
+            <span>{t("Creator", "Criadora")}</span>
+            <span className="text-right">{t("Revenue", "Receita")}</span>
             <span className="text-right">Orders</span>
           </div>
           <ol className="divide-y divide-line">
@@ -1710,7 +1710,7 @@ function RevenueReport({
   cursorColor: string;
   onClose: () => void;
 }) {
-  const { locale } = useFlirtCreatorLocale();
+  const { t, locale } = useFlirtCreatorLocale();
   const fmtNum = (n: number) => formatNumber(n, locale);
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
   // A quiet, predominantly navy scale keeps category comparison legible without
@@ -1757,16 +1757,16 @@ function RevenueReport({
   const bestDow = hasRevenue ? a.byDow.reduce((m, d) => (d.stars > m.stars ? d : m)) : null;
   const facts: { label: string; value: string; moneyValue?: string; isName?: boolean }[] = [];
   if (topFeature && topFeature.stars > 0)
-    facts.push({ label: "Top earner", value: `${topFeature.label} · ${pct(topFeature.share)}` });
+    facts.push({ label: t("Top earner", "Principal fonte de receita"), value: `${topFeature.label} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
-    facts.push({ label: "Top creator", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
+    facts.push({ label: t("Top creator", "Criadora com maior receita"), value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
   // The zone is printed, not assumed. These were computed on the container's
   // UTC clock and labelled nothing at all, so "Peak hour 3 AM" was really 1 PM
   // and evening sales landed on the previous weekday. See lib/report-time.ts.
   const tz = reportTzLabel();
-  if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: `${bestHour.label} ${tz}` });
-  if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: `${bestDow.label} ${tz}` });
+  if (bestHour && bestHour.stars > 0) facts.push({ label: t("Peak hour", "Horário de maior receita"), value: `${bestHour.label} ${tz}` });
+  if (bestDow && bestDow.stars > 0) facts.push({ label: t("Peak day", "Dia de maior receita"), value: `${bestDow.label} ${tz}` });
 
   // Every earning clone, not the top 8 of 12. The cut was silent, and a table
   // that drops a third of the fleet reads as the whole fleet.
@@ -1775,7 +1775,7 @@ function RevenueReport({
   return (
     <Card size="sm" className="gap-0 rounded-md border border-line bg-panel py-0 shadow-none">
       <CardHeader className="border-b border-line bg-elev px-3 py-2.5 sm:px-4 sm:py-3">
-        <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-ink sm:text-sm">Revenue report</CardTitle>
+        <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-ink sm:text-sm">{t("Revenue report", "Relatório de receita")}</CardTitle>
         {/* Four lines of subtitle on a phone, above any data. Hidden there, and
             the ⓘ on the Close row is not the place for it either: the panel titles
             below each carry their own hint. */}
@@ -1788,7 +1788,7 @@ function RevenueReport({
         </CardDescription>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={onClose} className="h-7 rounded border border-line bg-panel px-2.5 text-[11px] text-ink hover:bg-muted/10">
-            Close
+            {t("Close", "Fechar")}
           </Button>
         </CardAction>
       </CardHeader>
@@ -2003,7 +2003,7 @@ function RevenueReport({
         {/* Which clone / which flow - fleet view only (scoped = one clone already) */}
         {!scoped && (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <ReportPanel title="By creator" hint="Ranked by revenue. Metered AI contribution is Star revenue at the canonical conversion rate minus recorded AI and voice cost. It excludes all other business costs.">
+            <ReportPanel title={t("By creator", "Por criadora")} hint="Ranked by revenue. Metered AI contribution is Star revenue at the canonical conversion rate minus recorded AI and voice cost. It excludes all other business costs.">
               {earningClones.length === 0 ? (
                 <ReportEmpty text="No creator earned in this window." />
               ) : (
@@ -2051,11 +2051,11 @@ function RevenueReport({
                   <TableHeader>
                     <TableRow>
                       <TableHead>Creator</TableHead>
-                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">{t("Revenue", "Receita")}</TableHead>
                       <TableHead className="text-right">Share</TableHead>
                       <TableHead className="text-right">AI contribution</TableHead>
                       <TableHead className="text-right">AI margin</TableHead>
-                      <TableHead className="text-right">Sales</TableHead>
+                      <TableHead className="text-right">{t("Sales", "Vendas")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2215,7 +2215,7 @@ function RevenueReport({
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <InsightMetric label="All fans" value={fmtNum(a.funnel.fans)} />
-                <InsightMetric label="Buyers" value={fmtNum(a.funnel.buyers)} hint={`${pct(a.funnel.buyerPct)} of fans`} />
+                <InsightMetric label={t("Buyers", "Compradores")} value={fmtNum(a.funnel.buyers)} hint={`${pct(a.funnel.buyerPct)} of fans`} />
                 <InsightMetric label="Never purchased" value={fmtNum(a.funnel.nonBuyers)} hint={`${pct(1 - a.funnel.buyerPct)} of fans`} />
                 <InsightMetric label="One-time buyers" value={fmtNum(a.funnel.oneTime)} hint={`${pct(a.funnel.oneTimePct)} of buyers`} />
                 <InsightMetric label="Repeat buyers" value={fmtNum(a.funnel.repeat)} hint={`${pct(a.funnel.repeatPct)} of buyers`} />
@@ -2388,7 +2388,7 @@ function BuyerConversionPanel({
   conversion: AnalyticsData["buyerConversion"];
   pct: (n: number) => string;
 }) {
-  const { locale } = useFlirtCreatorLocale();
+  const { t, locale } = useFlirtCreatorLocale();
   const fmtNum = (n: number) => formatNumber(n, locale);
   const lifetimeRate = conversion.lifetimeBuyerRate === null ? "-" : pct(conversion.lifetimeBuyerRate);
   const activeChatRate = conversion.activeChatBuyerRate === null ? "-" : pct(conversion.activeChatBuyerRate);
@@ -2403,19 +2403,19 @@ function BuyerConversionPanel({
 
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "Have they ever bought?",
+      label: t("Have they ever bought?", "Já fizeram alguma compra?"),
       value: lifetimeRate,
       summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} audience accounts have bought`,
       detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts, one with each creator.",
     },
     {
-      label: "Did people who messaged buy?",
+      label: t("Did people who messaged buy?", "Quem enviou mensagem também comprou?"),
       value: activeChatRate,
       summary: `${fmtNum(conversion.activeChatBuyers)} of ${fmtNum(conversion.activeChatters)} people who messaged also bought`,
       detail: "Of the people who sent a message during the dates you picked, how many also bought something during those same dates? This is the buying-conversion number. In All creators, each person is counted once. It shows that both things happened in the same period; it does not prove that one message caused the purchase.",
     },
     {
-      label: "Did past buyers come back?",
+      label: t("Did past buyers come back?", "Compradores anteriores voltaram?"),
       value: buyerEngagementRate,
       summary: `${fmtNum(conversion.activeBuyerProfiles7d)} of ${fmtNum(conversion.lifetimeBuyerProfiles)} past buyers messaged in the last 7 days`,
       detail: "This is not a buying-conversion number. Of the people who have bought before, how many sent a message in the last seven days? It always checks the last seven days, even if you change the earnings date. In All creators, this counts each creator–buyer account, so one person can appear once for each creator they bought from.",
@@ -2426,11 +2426,11 @@ function BuyerConversionPanel({
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div>
-          <h4 className="text-sm font-semibold text-ink">Paying customers</h4>
-          <p className="mt-0.5 text-[11px] text-muted">Did people buy after messaging, and did past buyers come back to chat?</p>
+          <h4 className="text-sm font-semibold text-ink">{t("Paying customers", "Clientes pagantes")}</h4>
+          <p className="mt-0.5 text-[11px] text-muted">{t("Did people buy after messaging, and did past buyers come back to chat?", "Veja quem comprou após enviar uma mensagem e quem voltou a conversar depois de uma compra anterior.")}</p>
         </div>
         <p className="max-w-xl border-l-2 border-line pl-2.5 text-[10px] leading-relaxed text-muted">
-          Each rate answers a different question. A purchase means a completed positive Star payment; refunds and adjustments do not count.
+          {t("Each rate answers a different question. A purchase means a completed positive Star payment; refunds and adjustments do not count.", "Cada taxa responde a uma pergunta diferente. Uma compra é um pagamento concluído de valor positivo em Estrelas. Reembolsos e ajustes ficam fora da contagem.")}
         </p>
       </div>
 
@@ -2449,7 +2449,7 @@ function BuyerConversionPanel({
 
           <div className="mt-3 border-t border-line pt-3">
             <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
-              What buyers purchased this period
+              {t("What buyers purchased this period", "O que os compradores escolheram neste período")}
               <Info text="The three most frequently purchased product types in the selected earnings period, ranked by positive paid-order count. Refunds and adjustments are excluded. The Full revenue report above shows every product type and its revenue." />
             </div>
             {topPurchases.length > 0 ? (
@@ -2457,12 +2457,12 @@ function BuyerConversionPanel({
                 {topPurchases.map((item) => (
                   <div key={item.key} className="flex min-w-0 items-baseline justify-between gap-2 bg-panel px-2.5 py-2 text-[11px]">
                     <span className="min-w-0 break-words font-medium text-ink">{item.label}</span>
-                    <span className="shrink-0 font-mono tabular-nums text-muted">{fmtNum(item.sales)} {item.sales === 1 ? "order" : "orders"}</span>
+                    <span className="shrink-0 font-mono tabular-nums text-muted">{fmtNum(item.sales)} {item.sales === 1 ? t("order", "pedido") : t("orders", "pedidos")}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-1.5 text-[11px] text-muted">No positive paid orders were recorded in the selected period.</p>
+              <p className="mt-1.5 text-[11px] text-muted">{t("No positive paid orders were recorded in the selected period.", "Nenhum pedido pago de valor positivo foi registrado no período selecionado.")}</p>
             )}
           </div>
     </div>
@@ -2491,38 +2491,38 @@ function ConversationFunnelPanel({
   f: AnalyticsData["conversationFunnel"];
   pct: (n: number) => string;
 }) {
-  const { locale } = useFlirtCreatorLocale();
+  const { t, locale } = useFlirtCreatorLocale();
   const fmtNum = (n: number) => formatNumber(n, locale);
   const rate = (a: number, b: number) => (b > 0 ? pct(a / b) : "-");
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "Sent a second message",
+      label: t("Sent a second message", "Enviaram uma segunda mensagem"),
       value: rate(f.arrivalsStarted, f.arrivals),
       summary: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new people`,
       detail: "Of the new people who messaged during the dates you picked, how many sent another message too? This tells you whether new people kept talking after their first message.",
     },
     {
-      label: "Sent 5+ messages",
+      label: t("Sent 5+ messages", "Enviaram 5 ou mais mensagens"),
       value: rate(f.meaningful, f.conversations),
       summary: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} chats`,
       detail: "Of the chats that had at least one message during the dates you picked, how many had five or more messages from the person chatting?",
     },
     {
-      label: "Received an offer",
+      label: t("Received an offer", "Receberam uma oferta"),
       value: rate(f.offered, f.conversations),
       summary: `${fmtNum(f.offered)} of ${fmtNum(f.conversations)} chats`,
       detail: "Of the chats that had a message during the dates you picked, how many were sent a recorded paid offer, such as a paywall or locked item? This confirms an offer was sent, not that the person opened it.",
     },
     {
-      label: "Bought after an offer",
+      label: t("Bought after an offer", "Compraram após uma oferta"),
       value: rate(f.offeredBought, f.offered),
       summary: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} chats with an offer`,
       detail: "Of the chats that received an offer, how many also bought something during the dates you picked? This does not prove that the offer caused the purchase.",
     },
     {
-      label: "Typical time to first purchase",
+      label: t("Typical time to first purchase", "Tempo típico até a primeira compra"),
       value: fmtHours(f.ttfpMedianHours),
-      summary: f.ttfpN > 0 ? `based on ${fmtNum(f.ttfpN)} first purchases` : "no first purchases in these dates",
+      summary: f.ttfpN > 0 ? `based on ${fmtNum(f.ttfpN)} first purchases` : t("no first purchases in these dates", "nenhuma primeira compra neste período"),
       detail: "The typical time between someone first messaging and their first purchase. It only uses people whose first purchase happened during the dates you picked, so it is not an average of every buyer.",
     },
   ];
@@ -2531,11 +2531,11 @@ function ConversationFunnelPanel({
     <div>
       <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
         <div>
-          <h4 className="text-sm font-semibold text-ink">Chat activity &amp; purchases</h4>
-          <p className="mt-0.5 text-[11px] text-muted">A stage-by-stage view of engagement, recorded offers and buying signals.</p>
+          <h4 className="text-sm font-semibold text-ink">{t("Chat activity & purchases", "Atividade nas conversas e compras")}</h4>
+          <p className="mt-0.5 text-[11px] text-muted">{t("A stage-by-stage view of engagement, recorded offers and buying signals.", "Acompanhe o engajamento, as ofertas registradas e as compras em cada etapa.")}</p>
         </div>
         <p className="max-w-xl border-l-2 border-line pl-2.5 text-[10px] leading-relaxed text-muted">
-          “20 of 100” means 20 chats reached that measured stage. Related stages can use different cohorts and do not prove causation.
+          {t("“20 of 100” means 20 chats reached that measured stage. Related stages can use different cohorts and do not prove causation.", "“20 de 100” significa que 20 conversas chegaram à etapa medida. As etapas podem considerar grupos diferentes, sem comprovar uma relação de causa e efeito.")}
         </p>
       </div>
           <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3 xl:grid-cols-5">
@@ -2677,8 +2677,8 @@ function AiCostDrillIn({
   const tiles: { label: string; value: string; money?: boolean }[] = [
     { label: "AI cost", value: `$${stats.costUsd.toFixed(2)}`, money: true },
     { label: "Metered AI contribution (USD)", value: `$${(stats.stars * STAR_USD - stats.costUsd).toFixed(2)}`, money: true },
-    { label: "AI calls", value: fmtNum(stats.aiCalls) },
-    { label: "AI errors", value: fmtNum(stats.aiErrors) },
+    { label: "AI calls", value: formatNumber(stats.aiCalls) },
+    { label: "AI errors", value: formatNumber(stats.aiErrors) },
   ];
   return (
     <Card size="sm" className="mt-3 rounded-lg border border-line bg-panel shadow-none">

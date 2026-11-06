@@ -1,5 +1,3 @@
-import "server-only";
-
 import { cookies } from "next/headers";
 import { flirtOnboardingOptional } from "./flirt-onboarding";
 import { FLIRT_CREATOR_LOCALE_COOKIE, parseFlirtCreatorLocale, type FlirtCreatorLocale } from "./flirt-creator-locale";

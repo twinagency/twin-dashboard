@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useState, useTransition, type ReactNode } from "react";
-import { useRouter } from "next/navigation";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { flirtCreatorCopy, parseFlirtCreatorLocale, type FlirtCreatorLocale } from "@/lib/flirt-creator-locale";
 
 const LocaleContext = createContext({ locale: "en" as FlirtCreatorLocale, enabled: false });
@@ -17,14 +17,14 @@ export function useFlirtCreatorLocale() {
 
 export function FlirtCreatorLanguageSwitch() {
   const { locale, enabled, t } = useFlirtCreatorLocale();
-  const router = useRouter();
+  const router = useContext(AppRouterContext);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
   const [refreshing, startTransition] = useTransition();
 
   async function changeLanguage(value: string) {
     const selected = parseFlirtCreatorLocale(value);
-    if (!selected || saving || refreshing || selected === locale) return;
+    if (!router || !selected || saving || refreshing || selected === locale) return;
     setSaving(true);
     setFailed(false);
     try {
