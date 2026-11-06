@@ -34,6 +34,18 @@ export function fmtMoney(amount: number, c: Currency): string {
   );
 }
 
-export function fmtNum(n: number): string {
-  return Math.round(n).toLocaleString("en-US");
+export function fmtNum(n: number, locale = "en-US"): string {
+  return Math.round(n).toLocaleString(locale);
+}
+
+export type DisplayCurrency = Currency | "BRL";
+
+/** Convert estimates from USD without changing amounts recorded in the ledger. */
+export function usdToDisplayMoney(usd: number, currency: DisplayCurrency, usdRate: number): number {
+  return currency === "USD" ? usd : usd * usdRate;
+}
+
+export function fmtDisplayMoney(amount: number, currency: DisplayCurrency, locale: "en" | "pt-BR"): string {
+  if (locale === "en" && currency !== "BRL") return fmtMoney(amount, currency);
+  return new Intl.NumberFormat(locale, { style: "currency", currency }).format(amount);
 }

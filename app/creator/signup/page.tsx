@@ -1,3 +1,5 @@
+import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
+import { flirtCreatorCopy } from "@/lib/flirt-creator-locale";
 import type { Metadata } from "next";
 import CreatorSignupScreen from "@/components/CreatorSignupScreen";
 import { lookupCreatorInvitation } from "@/lib/creator-invite-agency";
@@ -10,10 +12,12 @@ export const dynamic = "force-dynamic";
 // the page content does, so the two can never say something different again.
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ code?: string }> }): Promise<Metadata> {
   const { code } = await searchParams;
+  const locale = await getFlirtCreatorLocale();
+  const t = flirtCreatorCopy(locale);
   const invitation = await lookupCreatorInvitation(typeof code === "string" ? code.trim().toUpperCase().slice(0, 64) : undefined);
   const agency = invitation.agency;
   return {
-    title: agency ? `Create creator account · ${agency.name}` : "Create creator account · FLIRT",
+    title: `${t("Create creator account", "Criar conta de criadora")} · ${agency?.name || "FLIRT"}`,
     // Only set when the invite has its own icon; leaving it out for every
     // other case keeps Twin's favicon exactly as it was.
     ...(agency?.icon ? { icons: { icon: { url: agency.icon, type: "image/svg+xml" } } } : {}),

@@ -119,6 +119,7 @@ export type DashboardData = {
   period: Period;
   clones: CloneSummary[];
   bucketLabels: string[];
+  bucketLabelsPtBr?: string[];
   // one row per bucket: { bucket: label, [cloneId]: stars }
   series: Record<string, number | string>[];
   recent: RecentTransaction[];
@@ -149,6 +150,7 @@ export type DashboardData = {
 // timestamp to its bucket key.
 function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   const labels: string[] = [];
+  const labelsPtBr: string[] = [];
   const keys: string[] = [];
 
   const monthLabel = (d: Date) =>
@@ -165,13 +167,14 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
     while (cur <= end) {
       keys.push(`${cur.getFullYear()}-${cur.getMonth()}`);
       labels.push(monthLabel(cur));
+      labelsPtBr.push(cur.toLocaleDateString("pt-BR", { month: "short", year: "2-digit", timeZone: REPORT_TZ }));
       cur.setMonth(cur.getMonth() + 1);
     }
     const keyFor = (ts: number) => {
       const d = new Date(ts);
       return `${d.getFullYear()}-${d.getMonth()}`;
     };
-    return { keys, labels, keyFor };
+    return { keys, labels, labelsPtBr, keyFor };
   }
 
   // The day-explanation panel and the revenue chart must mean exactly the
@@ -184,11 +187,14 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
     for (let key = startKey; key <= endKey; key = shiftReportDay(key, 1)) {
       keys.push(key);
       // Noon is stable even in time zones whose DST change happens overnight.
-      labels.push(dayLabel(new Date(reportDayStartMs(key) + 12 * 60 * 60 * 1000)));
+      const noon = new Date(reportDayStartMs(key) + 12 * 60 * 60 * 1000);
+      labels.push(dayLabel(noon));
+      labelsPtBr.push(noon.toLocaleDateString("pt-BR", { month: "short", day: "numeric", timeZone: REPORT_TZ }));
     }
     return {
       keys,
       labels,
+      labelsPtBr,
       keyFor: (ts: number) => reportInstant(new Date(ts)).dayKey,
     };
   }
@@ -199,10 +205,13 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
     const d = new Date(startMs + i * step);
     keys.push(String(i));
     labels.push(gran === "hour" ? hourLabel(d) : dayLabel(d));
+    labelsPtBr.push(gran === "hour"
+      ? d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: REPORT_TZ })
+      : d.toLocaleDateString("pt-BR", { month: "short", day: "numeric", timeZone: REPORT_TZ }));
   }
   const keyFor = (ts: number) =>
     String(Math.min(count - 1, Math.max(0, Math.floor((ts - startMs) / step))));
-  return { keys, labels, keyFor };
+  return { keys, labels, labelsPtBr, keyFor };
 }
 
 export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now(), options?: { overviewCloneId: string | null }): Promise<DashboardData> {
@@ -213,7 +222,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   const windowEnd = window.endMs;
   const gran: Gran = range ? granForSpan(range.endMs - range.startMs) : spec.gran;
 
-  const { keys, labels, keyFor } = buildBuckets(startMs, windowEnd, gran);
+  const { keys, labels, labelsPtBr, keyFor } = buildBuckets(startMs, windowEnd, gran);
 
   // ── purchases in window ────────────────────────────────────────────────────
   // Revenue ledger: every incoming Star (credit packs + paid media). `feature`
@@ -676,6 +685,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     period,
     clones: summaries,
     bucketLabels: labels,
+    bucketLabelsPtBr: labelsPtBr,
     series,
     recent,
     totals: {

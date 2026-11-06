@@ -1,3 +1,5 @@
+import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
+import { flirtCreatorCopy } from "@/lib/flirt-creator-locale";
 import CreatorContentIntake from "@/components/CreatorContentIntake";
 import { contentFolders } from "@/lib/creator-content-intake";
 import Link from "next/link";
@@ -14,7 +16,7 @@ import { creatorProfileAnswers, CREATOR_PROFILE_QUESTIONNAIRE } from "@/lib/crea
 import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { SkipToDashboard } from "@/components/FlirtOnboardingLinks";
-import { creatorApplicationState } from "@/lib/creator-application-state";
+import { creatorApplicationState, creatorApplicationStateLabel } from "@/lib/creator-application-state";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -39,32 +41,34 @@ import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, File
 
 export const dynamic = "force-dynamic";
 
-const statusCopy: Record<string,string> = {
-  questionnaire_saved: "Questionnaire saved.",
-  questionnaire_missing: "Complete the required questionnaire fields before continuing.",
-  questionnaire_conflict: "Your questionnaire changed in another window. Refresh before continuing.",
-  application_locked: "This application is locked and can no longer be changed.",
-  content_saved: "Content uploaded and verified.",
-  voice_saved: "Voice samples uploaded and verified.",
-  voice_skipped: "Voice setup skipped for now. You can add it later.",
-  consent_saved: "Consent saved.",
-  consent_skipped: "Consent skipped. No consent has been recorded.",
-  upload_empty: "Choose at least one file.",
-  upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Videos can be up to 512 MiB, images up to 75 MiB, and voice recordings up to 64 MiB each. File size is separate from video length.",
-  upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
-  upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
-  upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
-  upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower.",
-  upload_interrupted: "The connection was interrupted. Please retry your upload.",
-  upload_timeout: "The upload timed out. Check your connection and retry.",
-  upload_wrong_type: "Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.",
-  upload_error: "That upload did not finish. Review the verified-file count, then try the remaining files.",
-  consent_missing: "Enter your legal name and confirm consent.",
-  file_removal_pending: "Finish removing your pending file in Saved content, then submit again.",
-  not_ready: "Finish the required onboarding steps before submitting.",
-  error: "Something went wrong. Please try again.",
-};
+function onboardingStatusCopy(t: ReturnType<typeof flirtCreatorCopy>): Record<string, string> {
+  return {
+    questionnaire_saved: t("Questionnaire saved.", "Questionário salvo."),
+    questionnaire_missing: t("Complete the required questionnaire fields before continuing.", "Preencha os campos obrigatórios do questionário antes de continuar."),
+    questionnaire_conflict: t("Your questionnaire changed in another window. Refresh before continuing.", "Seu questionário foi alterado em outra janela. Atualize a página antes de continuar."),
+    application_locked: t("This application is locked and can no longer be changed.", "Este cadastro está bloqueado para alterações."),
+    content_saved: t("Content uploaded and verified.", "Conteúdo enviado e verificado."),
+    voice_saved: t("Voice samples uploaded and verified.", "Amostras de voz enviadas e verificadas."),
+    voice_skipped: t("Voice setup skipped for now. You can add it later.", "Etapa de voz pulada. Você pode adicionar amostras mais tarde."),
+    consent_saved: t("Consent saved.", "Consentimento salvo."),
+    consent_skipped: t("Consent skipped. No consent has been recorded.", "Etapa de consentimento pulada. Nenhum consentimento foi registrado."),
+    upload_empty: t("Choose at least one file.", "Escolha pelo menos um arquivo."),
+    upload_too_many: t("Upload up to 25 files at a time.", "Envie até 25 arquivos por vez."),
+    upload_too_large: t("Videos can be up to 512 MiB, images up to 75 MiB, and voice recordings up to 64 MiB each. File size is separate from video length.", "Cada vídeo pode ter até 512 MiB, cada imagem até 75 MiB e cada gravação de voz até 64 MiB. O limite de tamanho do arquivo é independente da duração do vídeo."),
+    upload_busy: t("Another upload is still being checked. Wait for it to finish, then try again.", "Ainda estamos verificando outro envio. Aguarde a conclusão e tente novamente."),
+    upload_quota: t("This account has reached its onboarding upload limit. Contact support before adding more files.", "Esta conta atingiu o limite de envios do cadastro. Fale com o suporte antes de adicionar mais arquivos."),
+    upload_video_too_long: t("This video is longer than 30 minutes. Choose a shorter video.", "Este vídeo tem mais de 30 minutos. Escolha um vídeo mais curto."),
+    upload_video_resolution: t("This video is above 4K resolution. Export it at 4K or lower.", "A resolução deste vídeo é superior a 4K. Exporte o vídeo em 4K ou em uma resolução menor."),
+    upload_interrupted: t("The connection was interrupted. Please retry your upload.", "A conexão foi interrompida. Tente enviar o arquivo novamente."),
+    upload_timeout: t("The upload timed out. Check your connection and retry.", "O tempo de envio expirou. Confira sua conexão e tente novamente."),
+    upload_wrong_type: t("Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.", "Use JPG, PNG, WebP ou GIF para imagens e MP4, MOV ou WebM para vídeos. Envie cada arquivo na categoria correspondente."),
+    upload_error: t("That upload did not finish. Review the verified-file count, then try the remaining files.", "O envio não foi concluído. Confira quantos arquivos foram verificados e tente enviar os que faltam."),
+    consent_missing: t("Enter your legal name and confirm consent.", "Digite seu nome civil e confirme o consentimento."),
+    file_removal_pending: t("Finish removing your pending file in Saved content, then submit again.", "Conclua a remoção do arquivo pendente em Conteúdo salvo e envie novamente."),
+    not_ready: t("Finish the required onboarding steps before submitting.", "Conclua as etapas obrigatórias antes de enviar o cadastro."),
+    error: t("Something went wrong. Please try again.", "Algo deu errado. Tente novamente."),
+  };
+}
 
 const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_video_too_long", "upload_video_resolution", "upload_interrupted", "upload_timeout", "upload_error", "consent_missing", "file_removal_pending", "not_ready", "error"]);
 const onboardingSteps = ["questionnaire", "content", "voice", "consent"] as const;
@@ -246,6 +250,9 @@ function ReadinessItem({ step, complete, title, detail, href, optional = false }
 
 export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string; step?: string; section?: string; review?: string; complete?: string }> }) {
   const jar = await cookies();
+  const locale = await getFlirtCreatorLocale();
+  const t = flirtCreatorCopy(locale);
+  const statusCopy = onboardingStatusCopy(t);
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
   const session = { accountId: creator.accountId };
@@ -308,18 +315,18 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
 
   if (optional) return (
-    <CreatorSetupLayout brand="flirt" logoSrc="/brand/flirt-wordmark-master.png" activeSection={activeSection === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
-      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
+    <CreatorSetupLayout brand="flirt" logoSrc="/brand/flirt-wordmark-master.png" activeSection={activeSection === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={creatorApplicationStateLabel(applicationState.label, locale)}>
+      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? t("Videos can be up to 512 MiB and images up to 75 MiB each.", "Cada vídeo pode ter até 512 MiB e cada imagem até 75 MiB.") : status === "upload_wrong_type" ? t("This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first.", "Não foi possível verificar este arquivo. Use imagens JPG, PNG, WebP ou GIF de até 25 MP, ou vídeos MP4, MOV ou WebM. Exporte fotos HEIC como JPG antes de enviar.") : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">{t("Open Saved content", "Abrir conteúdo salvo")}</Link></>}</div>}
       {completionView ? <section data-creator-setup-panel data-setup-complete>
         <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>
-        <h1 data-setup-heading>You’re all set.</h1>
-        <p data-complete-copy>Your onboarding has been submitted.</p>
+        <h1 data-setup-heading>{t("You’re all set.", "Tudo pronto!")}</h1>
+        <p data-complete-copy>{t("Your onboarding has been submitted.", "Seu cadastro foi enviado.")}</p>
         <div data-complete-summary>
-          <p>{savedContentCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{savedContentCount > 0 ? `${savedContentCount} files received` : contentFolders(answers).length ? "Folder link received, awaiting import" : "You can add content later"}</p>
-          <p>{answeredCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{answeredCount > 0 ? "Answers saved" : "You can add answers later"}</p>
+          <p>{savedContentCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{savedContentCount > 0 ? t(`${savedContentCount} files received`, savedContentCount === 1 ? "1 arquivo recebido" : `${savedContentCount.toLocaleString(locale)} arquivos recebidos`) : contentFolders(answers).length ? t("Folder link received, awaiting import", "Link da pasta recebido. Aguardando importação.") : t("You can add content later", "Você pode adicionar conteúdo depois")}</p>
+          <p>{answeredCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{answeredCount > 0 ? t("Answers saved", "Respostas salvas") : t("You can add answers later", "Você pode responder depois")}</p>
         </div>
-        <Link href="/creator" className={buttonVariants({ size: "lg", className: "min-h-14 w-full" })}>Go to dashboard <ChevronRight size={18} /></Link>
-        <Link href="/creator/onboarding?step=questionnaire" data-review-entry>Edit my information</Link>
+        <Link href="/creator" className={buttonVariants({ size: "lg", className: "min-h-14 w-full" })}>{t("Go to dashboard", "Ir para o painel")} <ChevronRight size={18} /></Link>
+        <Link href="/creator/onboarding?step=questionnaire" data-review-entry>{t("Edit my information", "Editar meus dados")}</Link>
       </section> : activeSection === "questionnaire" ? <section data-creator-setup-panel>
         <CreatorQuestionnaireWizard
           page={questionnairePage}
@@ -332,23 +339,23 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           optional={optional}
         />
       </section> : reviewView ? <section data-creator-setup-panel data-setup-review data-creator-setup-submit>
-        <h1 data-setup-heading id="creator-setup-submit">Ready to send?</h1>
+        <h1 data-setup-heading id="creator-setup-submit">{t("Ready to send?", "Pronta para enviar?")}</h1>
         <div data-review-summary>
-          <div data-review-row><div>Your content<p>{savedContentCount ? `${savedContentCount} files uploaded` : contentFolders(answers).length ? "Folder link received, awaiting import" : "No content added yet"}</p></div><Link href="/creator/onboarding?step=content">Edit</Link></div>
-          <div data-review-row><div>Your answers<p>{answeredCount ? "Saved" : "No answers added yet"}</p></div><Link href="/creator/onboarding?step=questionnaire">Review</Link></div>
+          <div data-review-row><div>{t("Your content", "Seu conteúdo")}<p>{savedContentCount ? t(`${savedContentCount} files uploaded`, savedContentCount === 1 ? "1 arquivo enviado" : `${savedContentCount.toLocaleString(locale)} arquivos enviados`) : contentFolders(answers).length ? t("Folder link received, awaiting import", "Link da pasta recebido. Aguardando importação.") : t("No content added yet", "Nenhum conteúdo adicionado")}</p></div><Link href="/creator/onboarding?step=content">{t("Edit", "Editar")}</Link></div>
+          <div data-review-row><div>{t("Your answers", "Suas respostas")}<p>{answeredCount ? t("Saved", "Salvas") : t("No answers added yet", "Nenhuma resposta adicionada")}</p></div><Link href="/creator/onboarding?step=questionnaire">{t("Review", "Revisar")}</Link></div>
         </div>
-          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted} completionHref="/creator">
+          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? t("Saving consent…", "Salvando consentimento…") : t("Submitting your saved information…", "Enviando seus dados salvos…")} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted} completionHref="/creator">
             <input type="hidden" name="action" value={submitted && !consent ? "consent" : "submit"} />
             {!consent ? <>
-              <label className="block max-w-md"><span className="mb-1.5 block text-sm font-medium text-ink">Legal name</span><Input name="legal_name" autoComplete="name" required={!optional || submitted} disabled={applicationLocked} /></label>
-              <label className="flex items-start gap-3 text-sm leading-6 text-ink"><input name="agreed" type="checkbox" required={!optional || submitted} disabled={applicationLocked} className="mt-1.5 size-4 shrink-0 accent-[var(--color-accent)]" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize FLIRT to use them to build and operate my AI creator profile under my agreement.</span></label>
-            </> : <p className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Consent signed by {consent.legal_name}.</p>}
+              <label className="block max-w-md"><span className="mb-1.5 block text-sm font-medium text-ink">{t("Legal name", "Nome civil completo")}</span><Input name="legal_name" autoComplete="name" required={!optional || submitted} disabled={applicationLocked} /></label>
+              <label className="flex items-start gap-3 text-sm leading-6 text-ink"><input name="agreed" type="checkbox" required={!optional || submitted} disabled={applicationLocked} className="mt-1.5 size-4 shrink-0 accent-[var(--color-accent)]" /><span>{t("I confirm the information and media I submit are mine or I have permission to provide them, and I authorize FLIRT to use them to build and operate my AI creator profile under my agreement.", "Confirmo que as informações e os arquivos que envio são meus ou que tenho permissão para fornecê-los. Autorizo a FLIRT a usá-los para criar e operar meu perfil de IA, conforme os termos do meu acordo.")}</span></label>
+            </> : <p className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> {t(`Consent signed by ${consent.legal_name}.`, `Consentimento assinado por ${consent.legal_name}.`)}</p>}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <span className="text-xs text-muted">{optional ? "You can add more later." : "Submit when your information and content are ready."}</span>
-              <Button type="submit" size="lg" disabled={(submitted && !!consent) || (!submitted && !readyToSubmit) || applicationLocked} className="min-h-14 w-full">{applicationLocked ? "Application locked" : submitted ? consent ? "Application submitted" : "Save consent" : "Submit onboarding"}<ChevronRight className="size-4" aria-hidden="true" /></Button>
+              <span className="text-xs text-muted">{optional ? t("You can add more later.", "Você pode adicionar mais informações depois.") : t("Submit when your information and content are ready.", "Envie quando seus dados e seu conteúdo estiverem prontos.")}</span>
+              <Button type="submit" size="lg" disabled={(submitted && !!consent) || (!submitted && !readyToSubmit) || applicationLocked} className="min-h-14 w-full">{applicationLocked ? t("Application locked", "Cadastro bloqueado") : submitted ? consent ? t("Application submitted", "Cadastro enviado") : t("Save consent", "Salvar consentimento") : t("Submit onboarding", "Enviar cadastro")}<ChevronRight className="size-4" aria-hidden="true" /></Button>
             </div>
           </CreatorOnboardingActionForm>
-          {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
+          {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">{t("Complete the required information before submitting.", "Preencha as informações obrigatórias antes de enviar.")}</p>}
       </section> : <section data-creator-setup-panel>
         <CreatorContentIntake locked={contentLocked} loginPath={loginPath}
           savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}

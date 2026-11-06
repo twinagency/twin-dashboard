@@ -1,3 +1,5 @@
+import { FlirtCreatorLanguageSwitch } from "@/components/FlirtCreatorLocale";
+import { flirtCreatorCopy, type FlirtCreatorLocale } from "@/lib/flirt-creator-locale";
 import type { ReactNode } from "react";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import TwinWordmark from "@/components/TwinWordmark";
@@ -17,6 +19,7 @@ export const creatorAuthPaths = (brand: CreatorAuthBrand) => {
 
 export default function CreatorAuthFrame({
   brand,
+  locale = "en",
   heroTitle,
   heroCopy,
   eyebrow,
@@ -27,6 +30,7 @@ export default function CreatorAuthFrame({
   agencyBrand,
 }: {
   brand: CreatorAuthBrand;
+  locale?: FlirtCreatorLocale;
   heroTitle: string;
   heroCopy?: string;
   eyebrow: string;
@@ -38,6 +42,7 @@ export default function CreatorAuthFrame({
   // carries that agency's name and artwork instead of Twin's.
   agencyBrand?: { name: string; slug: string; logo: string | null; dark?: boolean } | null;
 }) {
+  const t = flirtCreatorCopy(locale);
   // A dark-brand agency invite gets that agency's actual look (same shape as
   // its own /<slug> sign-in screen), not Twin's light two-panel layout with a
   // logo swapped in. Only reachable via brand === "twin" today.
@@ -51,6 +56,7 @@ export default function CreatorAuthFrame({
           {agencyBrand.logo
             ? <img src={agencyBrand.logo} alt={agencyBrand.name} className="mx-auto mb-12 h-auto w-full" />
             : <p className="mb-12 text-center text-3xl font-semibold text-white">{agencyBrand.name}</p>}
+          <div className="mb-4 flex justify-end"><FlirtCreatorLanguageSwitch /></div>
           <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-7 shadow-2xl sm:p-8">
             <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">{eyebrow}</p>
             <h1 className="mb-2 text-2xl font-semibold tracking-tight text-white">{title}</h1>
@@ -58,7 +64,7 @@ export default function CreatorAuthFrame({
             {children}
           </div>
           {footer ? <div className="mt-6 text-center text-sm text-white/60">{footer}</div> : null}
-          <p className="mt-8 text-center text-[10px] font-medium uppercase tracking-[0.25em] text-white/45">Creator workspace</p>
+          <p className="mt-8 text-center text-[10px] font-medium uppercase tracking-[0.25em] text-white/45">{t("Creator workspace", "Área da criadora")}</p>
         </div>
       </main>
     );
@@ -143,7 +149,7 @@ export default function CreatorAuthFrame({
             : isFlirtAgency(agencyBrand) ? <TwinWordmark inverse /> : <span className="font-heading text-3xl font-semibold tracking-[-0.03em] text-white">{agencyBrand.name}</span>)
           : <TwinWordmark inverse />}</div>
         <div className="relative z-10 max-w-2xl pb-10">
-          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">{agencyBrand ? `${agencyBrand.name} Creator` : "FLIRT Creator"}</p>
+          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">{agencyBrand ? `${agencyBrand.name} Creator` : t("FLIRT Creator", "Criadora FLIRT")}</p>
           <h1 className="font-heading text-5xl font-semibold leading-[1.02] tracking-[-0.045em] xl:text-6xl">{heroTitle}</h1>
           {heroCopy ? <p className="mt-6 max-w-xl text-base leading-relaxed text-white/68">{heroCopy}</p> : null}
         </div>
@@ -153,6 +159,7 @@ export default function CreatorAuthFrame({
         <div className="relative z-10 w-full max-w-md rounded-xl border border-white/80 bg-white/90 px-7 pb-7 pt-7 shadow-[0_28px_70px_rgb(6_23_47/0.12)] backdrop-blur-xl">
           {/* Light card: the agency's name in ink, since a white-on-dark logo would vanish here. */}
           <div className="mb-5 lg:hidden">{agencyBrand && !isFlirtAgency(agencyBrand) ? <span className="font-heading text-2xl font-semibold tracking-[-0.03em] text-ink">{agencyBrand.name}</span> : <TwinWordmark />}</div>
+          <div className="mb-4 flex justify-end"><FlirtCreatorLanguageSwitch /></div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{eyebrow}</p>
           <h2 className="font-heading text-3xl font-semibold tracking-[-0.035em] text-ink">{title}</h2>
           {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}

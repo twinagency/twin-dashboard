@@ -1,4 +1,7 @@
 "use client";
+
+import { creatorUploadCopy } from "@/lib/flirt-creator-upload-copy";
+import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
 import { useContext, useEffect, useState } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { Upload, ImageIcon, ImagePlus, Film, Check, RotateCcw, Plus, Link2, CircleHelp, ChevronRight } from "lucide-react";
@@ -22,8 +25,9 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   locked: boolean; loginPath: string; savedPhotos: number; savedVideos: number; initialFolders?: ContentFolder[];
 }) {
   const queue = useContentUploads();
+  const { t, locale } = useFlirtCreatorLocale();
   const router = useContext(AppRouterContext);
-  const [notice, setNotice] = useState("");
+  const [noFilesReceived, setNoFilesReceived] = useState(false);
   const [liveCounts, setLiveCounts] = useState<ContentCounts | null>(null);
   const total = liveCounts?.saved ?? (savedPhotos + savedVideos);
   useEffect(() => {
@@ -41,75 +45,75 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     window.addEventListener("creator-setup:navigate", navigate);
     return () => window.removeEventListener("creator-setup:navigate", navigate);
   }, [queue, router]);
-  if (!queue) return <p role="alert">The uploader could not start. Refresh this page to try again.</p>;
+  if (!queue) return <p role="alert">{t("The uploader could not start. Refresh this page to try again.", "Não foi possível iniciar o envio. Atualize a página para tentar novamente.")}</p>;
   const folder = queue.folder;
   const folders = folder.folders ?? initialFolders;
   const saved = queue.items.filter(item => item.state === "saved").length;
   const selected = queue.items.length > 0 || total > 0 || folders.length > 0;
   const attention = queue.items.some(item => item.state === "failed" || item.state === "reselect");
   const picker = (<label data-upload-content className={`${selected ? styles.addTile : buttonVariants({ size: "lg" })} ${styles.picker} ${locked ? "opacity-50" : "cursor-pointer"}`}>
-      {selected ? <Plus size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}{selected ? "Add more" : "Upload photos & videos"}
-      <input id="creator-content-files" type="file" accept="image/*,video/*" multiple disabled={locked} aria-label="Add photos and videos" className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNotice(files.length ? "" : "No new files were received from your phone. Your saved content is safe."); queue.add(files); event.target.value = ""; }} />
+      {selected ? <Plus size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}{selected ? t("Add more", "Adicionar mais") : t("Upload photos & videos", "Enviar fotos e vídeos")}
+      <input id="creator-content-files" type="file" accept="image/*,video/*" multiple disabled={locked} aria-label={t("Add photos and videos", "Adicionar fotos e vídeos")} className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNoFilesReceived(!files.length); queue.add(files); event.target.value = ""; }} />
     </label>);
   return <div className={styles.root} data-combined-content-intake>
     <header className={styles.heading}>
-      <h1 data-setup-heading>Follow these two simple steps to create your AI clone.</h1>
-      <p>Upload at least {CREATOR_CONTENT_TARGET} photos and videos combined.</p>
-      <p className={styles.hint}>Include everyday content, plus explicit content if applicable.</p>
+      <h1 data-setup-heading>{t("Follow these two simple steps to create your AI clone.", "Crie sua IA em duas etapas simples.")}</h1>
+      <p>{t(`Upload at least ${CREATOR_CONTENT_TARGET} photos and videos combined.`, `Envie pelo menos ${CREATOR_CONTENT_TARGET} arquivos entre fotos e vídeos.`)}</p>
+      <p className={styles.hint}>{t("Include everyday content, plus explicit content if applicable.", "Inclua conteúdo do dia a dia e, se for o caso, conteúdo explícito.")}</p>
     </header>
-    <section className={`${styles.contentCard} ${!selected ? styles.emptyCard : ""}`} aria-label="Your content">
+    <section className={`${styles.contentCard} ${!selected ? styles.emptyCard : ""}`} aria-label={t("Your content", "Seu conteúdo")}>
       {selected && <div className={styles.uploadStatus} role="status">
-        <h2>Your content</h2>
-        <span>{total} of {CREATOR_CONTENT_TARGET} uploaded</span>
-        <progress max={CREATOR_CONTENT_TARGET} value={Math.min(total, CREATOR_CONTENT_TARGET)} aria-label="Saved content toward 50 files" />
-        {queue.working && <p className={styles.hint}>{saved} of {queue.items.length} files saved in this selection</p>}
+        <h2>{t("Your content", "Seu conteúdo")}</h2>
+        <span>{t(`${total} of ${CREATOR_CONTENT_TARGET} uploaded`, `${total.toLocaleString(locale)} de ${CREATOR_CONTENT_TARGET} enviados`)}</span>
+        <progress max={CREATOR_CONTENT_TARGET} value={Math.min(total, CREATOR_CONTENT_TARGET)} aria-label={t("Saved content toward 50 files", "Progresso até a meta de 50 arquivos")} />
+        {queue.working && <p className={styles.hint}>{t(`${saved} of ${queue.items.length} files saved in this selection`, `${saved.toLocaleString(locale)} de ${queue.items.length.toLocaleString(locale)} arquivos desta seleção foram salvos`)}</p>}
       </div>}
       {!selected ? <>
         <ImagePlus className={styles.emptyIcon} size={52} strokeWidth={1.5} aria-hidden="true" />
         {picker}
-        <p className={styles.pickerHint}>Choose multiple files from your phone.</p>
-        <p className={styles.fileLimits}>Photos up to 75 MiB · Videos up to 512 MiB</p>
+        <p className={styles.pickerHint}>{t("Choose multiple files from your phone.", "Selecione vários arquivos no seu celular.")}</p>
+        <p className={styles.fileLimits}>{t("Photos up to 75 MiB · Videos up to 512 MiB", "Fotos de até 75 MiB · Vídeos de até 512 MiB")}</p>
       </> : <CreatorSavedContentPreview revision={`${savedPhotos + savedVideos}:${queue.revision}`} items={queue.items} total={savedPhotos + savedVideos} loginPath={loginPath} onCounts={setLiveCounts} onRemoved={queue.remove}>{picker}</CreatorSavedContentPreview>}
-      {folders.length > 0 && <p className={styles.hint}>Folder link received. Awaiting import.</p>}
+      {folders.length > 0 && <p className={styles.hint}>{t("Folder link received. Awaiting import.", "Link da pasta recebido. Aguardando importação.")}</p>}
     </section>
     {!selected && <div className={`${styles.uploadStatus} ${styles.emptyStatus}`} role="status">
-      <div className={styles.statusLine}><strong>0 of {CREATOR_CONTENT_TARGET} uploaded</strong><span>No content added yet</span></div>
-      <progress max={CREATOR_CONTENT_TARGET} value={0} aria-label="Saved content toward 50 files" />
+      <div className={styles.statusLine}><strong>{t(`0 of ${CREATOR_CONTENT_TARGET} uploaded`, `0 de ${CREATOR_CONTENT_TARGET} enviados`)}</strong><span>{t("No content added yet", "Nenhum conteúdo adicionado")}</span></div>
+      <progress max={CREATOR_CONTENT_TARGET} value={0} aria-label={t("Saved content toward 50 files", "Progresso até a meta de 50 arquivos")} />
     </div>}
-    {notice && <p role="status">{notice}</p>}
-    <details className={styles.folder}><summary><Link2 size={20} aria-hidden="true" /> Use a folder link<ChevronRight className={styles.folderChevron} size={18} aria-hidden="true" /></summary>
-      <label className="mt-3 block text-sm font-medium">Google Drive or Dropbox folder<Input type="url" value={folder.draft} disabled={locked} placeholder="https://drive.google.com/drive/folders/…" onChange={event => folder.setDraft(event.target.value)} onBlur={() => { void folder.save(); }} /></label>
-      <p className="mt-2 text-xs text-muted">Share a folder your agency can open. Your agency will import the files; a link does not count as saved content yet.</p>
-      {folder.status && <p role={folder.error ? "alert" : "status"} className="mt-3 text-sm">{folder.status}{folder.error && <button type="button" className="ml-2 min-h-11 underline" onClick={() => { void folder.save(); }}>Retry</button>}</p>}
-      {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{folder.provider} folder</a><span className="ml-2">Awaiting import</span></li>)}</ul>}
+    {noFilesReceived && <p role="status">{t("No new files were received from your phone. Your saved content is safe.", "Não recebemos novos arquivos do seu celular. Seu conteúdo salvo continua disponível.")}</p>}
+    <details className={styles.folder}><summary><Link2 size={20} aria-hidden="true" /> {t("Use a folder link", "Usar link de uma pasta")}<ChevronRight className={styles.folderChevron} size={18} aria-hidden="true" /></summary>
+      <label className="mt-3 block text-sm font-medium">{t("Google Drive or Dropbox folder", "Pasta do Google Drive ou Dropbox")}<Input type="url" value={folder.draft} disabled={locked} placeholder="https://drive.google.com/drive/folders/…" onChange={event => folder.setDraft(event.target.value)} onBlur={() => { void folder.save(); }} /></label>
+      <p className="mt-2 text-xs text-muted">{t("Share a folder your agency can open. Your agency will import the files; a link does not count as saved content yet.", "Compartilhe uma pasta que sua agência consiga abrir. A equipe vai importar os arquivos. O link só passa a contar como conteúdo salvo depois da importação.")}</p>
+      {folder.status && <p role={folder.error ? "alert" : "status"} className="mt-3 text-sm">{creatorUploadCopy(folder.status, locale, "Não foi possível salvar o link. Tente novamente.")}{folder.error && <button type="button" className="ml-2 min-h-11 underline" onClick={() => { void folder.save(); }}>{t("Retry", "Tentar novamente")}</button>}</p>}
+      {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{t(`${folder.provider} folder`, `Pasta do ${folder.provider}`)}</a><span className="ml-2">{t("Awaiting import", "Aguardando importação")}</span></li>)}</ul>}
     </details>
     <div className={styles.handoff} data-content-questionnaire-handoff>
-      <p>You can answer the questions while your files upload.</p>
-      {queue.working && <p className={styles.hint}>Keep this browser open. Your uploads continue while you answer.</p>}
-      {attention && <p className={styles.hint}>Some files need attention. Open Upload details below to retry.</p>}
-      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
+      <p>{t("You can answer the questions while your files upload.", "Você pode responder às perguntas enquanto os arquivos são enviados.")}</p>
+      {queue.working && <p className={styles.hint}>{t("Keep this browser open. Your uploads continue while you answer.", "Mantenha o navegador aberto. O envio continua enquanto você responde.")}</p>}
+      {attention && <p className={styles.hint}>{t("Some files need attention. Open Upload details below to retry.", "Alguns arquivos precisam de atenção. Abra Detalhes do envio abaixo para tentar novamente.")}</p>}
+      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>{t("Continue to questions →", "Continuar para o questionário →")}</Button>
     </div>
-    {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label="Upload queue"><summary>Upload details{attention ? ", action needed" : ""}</summary>
+    {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label={t("Upload queue", "Fila de envio")}><summary>{t("Upload details", "Detalhes do envio")}{attention ? t(", action needed", ", ação necessária") : ""}</summary>
       <ul className="max-h-96 space-y-3 overflow-y-auto">
         {queue.items.map(item => <li key={item.id} className="flex items-start gap-3 rounded-xl border border-border p-3"><Thumbnail item={item} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={item.name}>{item.name}</p>
-          <p className={`mt-1 text-sm ${item.state === "failed" || item.state === "reselect" ? "text-rose-700" : "text-muted"}`}>{item.state === "saved" ? "Saved" : item.error || (item.state === "saving" ? "Saving…" : item.state === "uploading" ? `Uploading ${item.percent}%` : "Waiting to upload")}</p>
-          {item.state === "uploading" && <progress value={item.percent} max={100} aria-label={`Uploading ${item.name}`} className="mt-2 h-2 w-full accent-accent" />}
-          {item.state === "failed" && item.file && <Button type="button" variant="outline" className="mt-2 min-h-11" onClick={() => queue.retry(item.id)}><RotateCcw size={14} /> Retry</Button>}
-          {item.state === "reselect" && <p className="mt-1 text-xs">Use Add more to reselect the original. Saved files will be checked and skipped.</p>}
-          {["failed", "reselect", "queued"].includes(item.state) && <button type="button" className="ml-3 min-h-11 text-sm underline" onClick={() => queue.remove(item.id)}>Remove from selection</button>}
-        </div>{item.state === "saved" && <Check className="size-5 shrink-0 text-emerald-700" aria-label="Saved" />}</li>)}
+          <p className={`mt-1 text-sm ${item.state === "failed" || item.state === "reselect" ? "text-rose-700" : "text-muted"}`}>{item.state === "saved" ? t("Saved", "Salvo") : item.error ? creatorUploadCopy(item.error, locale, "Não foi possível confirmar este envio. Confira o tipo e o tamanho do arquivo e tente novamente.") : (item.state === "saving" ? t("Saving…", "Salvando…") : item.state === "uploading" ? t(`Uploading ${item.percent}%`, `Enviando: ${item.percent}%`) : t("Waiting to upload", "Aguardando envio"))}</p>
+          {item.state === "uploading" && <progress value={item.percent} max={100} aria-label={t(`Uploading ${item.name}`, `Enviando ${item.name}`)} className="mt-2 h-2 w-full accent-accent" />}
+          {item.state === "failed" && item.file && <Button type="button" variant="outline" className="mt-2 min-h-11" onClick={() => queue.retry(item.id)}><RotateCcw size={14} /> {t("Retry", "Tentar novamente")}</Button>}
+          {item.state === "reselect" && <p className="mt-1 text-xs">{t("Use Add more to reselect the original. Saved files will be checked and skipped.", "Use Adicionar mais para selecionar o arquivo original. Os arquivos já salvos serão identificados e ignorados.")}</p>}
+          {["failed", "reselect", "queued"].includes(item.state) && <button type="button" className="ml-3 min-h-11 text-sm underline" onClick={() => queue.remove(item.id)}>{t("Remove from selection", "Remover da seleção")}</button>}
+        </div>{item.state === "saved" && <Check className="size-5 shrink-0 text-emerald-700" aria-label={t("Saved", "Salvo")} />}</li>)}
       </ul>
     </details>}
-    <details className={styles.help}><summary className="min-h-11 cursor-pointer py-3"><CircleHelp size={16} aria-hidden="true" /> Need help?</summary>
+    <details className={styles.help}><summary className="min-h-11 cursor-pointer py-3"><CircleHelp size={16} aria-hidden="true" /> {t("Need help?", "Precisa de ajuda?")}</summary>
       <ol className={styles.helpSteps}>
-        <li>Choose your photos and videos. You can select several at once.</li>
-        <li>Continue to the questions while your content uploads.</li>
-        <li>Keep this browser tab open until uploading finishes.</li>
+        <li>{t("Choose your photos and videos. You can select several at once.", "Escolha suas fotos e vídeos. Você pode selecionar vários arquivos de uma vez.")}</li>
+        <li>{t("Continue to the questions while your content uploads.", "Continue para o questionário enquanto seu conteúdo é enviado.")}</li>
+        <li>{t("Keep this browser tab open until uploading finishes.", "Mantenha esta aba aberta até o fim do envio.")}</li>
       </ol>
-      <p className="mb-3">Added the wrong file? Tap its picture, then Remove file.</p>
-      <p className="mb-2">Can’t find your photos? Try choosing from Files.</p>
-      <label className={`${buttonVariants({ variant: "outline" })} relative min-h-11 overflow-hidden`}>Choose from Files<input type="file" accept="application/octet-stream" multiple disabled={locked} aria-label="Choose photos and videos from Files" className="absolute inset-0 size-full opacity-0" onChange={event => { if (locked) return; queue.add(Array.from(event.target.files || [])); event.target.value = ""; }} /></label>
-      <details className={styles.formatHelp}><summary>File types and sizes</summary><p>Photos: JPG, PNG, WebP or GIF, up to 75 MiB. Videos: MP4, MOV or WebM, up to 512 MiB, 30 minutes and 4K. If an iPhone photo won’t upload, save a JPG copy and try again.</p></details>
+      <p className="mb-3">{t("Added the wrong file? Tap its picture, then Remove file.", "Adicionou o arquivo errado? Toque na miniatura e depois em Remover arquivo.")}</p>
+      <p className="mb-2">{t("Can’t find your photos? Try choosing from Files.", "Não encontra suas fotos? Tente selecionar pelo app Arquivos.")}</p>
+      <label className={`${buttonVariants({ variant: "outline" })} relative min-h-11 overflow-hidden`}>{t("Choose from Files", "Selecionar pelo app Arquivos")}<input type="file" accept="application/octet-stream" multiple disabled={locked} aria-label={t("Choose photos and videos from Files", "Selecionar fotos e vídeos pelo app Arquivos")} className="absolute inset-0 size-full opacity-0" onChange={event => { if (locked) return; queue.add(Array.from(event.target.files || [])); event.target.value = ""; }} /></label>
+      <details className={styles.formatHelp}><summary>{t("File types and sizes", "Tipos e tamanhos de arquivo")}</summary><p>{t("Photos: JPG, PNG, WebP or GIF, up to 75 MiB. Videos: MP4, MOV or WebM, up to 512 MiB, 30 minutes and 4K. If an iPhone photo won’t upload, save a JPG copy and try again.", "Fotos: JPG, PNG, WebP ou GIF, até 75 MiB. Vídeos: MP4, MOV ou WebM, até 512 MiB, 30 minutos e 4K. Se uma foto do iPhone não for enviada, salve uma cópia em JPG e tente novamente.")}</p></details>
     </details>
   </div>;
 }
