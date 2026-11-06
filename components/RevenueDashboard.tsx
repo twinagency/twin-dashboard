@@ -1,5 +1,10 @@
 "use client";
 
+import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
+import { useCreatorCurrency } from "@/components/useCreatorCurrency";
+import FlirtCreatorFxNote from "@/components/FlirtCreatorFxNote";
+import type { FlirtCreatorLocale } from "@/lib/flirt-creator-locale";
+
 import Link from "@/components/NavigationLink";
 import type { SharedOverviewRenderer } from "@/components/overview/SharedOverview";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -20,9 +25,8 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
 import { reportTzLabel } from "@/lib/report-time";
-import { fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { fmtDisplayMoney, fmtNum as formatNumber, STAR_USD, usdToDisplayMoney } from "@/lib/money";
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
-import { useCurrency } from "@/components/CurrencyProvider";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
 import CreatorAvatar from "@/components/CreatorAvatar";
 
@@ -200,15 +204,42 @@ function LedgerSortHead({
 
 const REVENUE_REFRESH_MS = 60 * 1000;
 
-function snapshotAgeLabel(ageSeconds: number) {
+function snapshotAgeLabel(ageSeconds: number, locale: FlirtCreatorLocale) {
+  if (locale === "pt-BR") {
+    if (ageSeconds <= 5) return "Atualizado agora";
+    if (ageSeconds < 60) return "Atualizado há " + ageSeconds + " s";
+    return "Atualizado há " + Math.floor(ageSeconds / 60) + " min";
+  }
   if (ageSeconds <= 5) return "Updated just now";
   if (ageSeconds < 60) return `Updated ${ageSeconds}s ago`;
   const minutes = Math.floor(ageSeconds / 60);
   return `Updated ${minutes}m ago`;
 }
 
+const operatingCopy: Record<string, string> = {
+  "All-time users": "Total de usuários",
+  "New users": "Novos usuários",
+  "Users who messaged": "Usuários que enviaram mensagens",
+  "Revenue / user who messaged": "Receita por usuário que enviou mensagem",
+  "Purchases": "Compras",
+  "Active users (24h)": "Usuários ativos (24 h)",
+  "Messages": "Mensagens",
+  "Buyers": "Compradores",
+  "Unique buyers": "Compradores únicos",
+  "Revenue / buyer": "Receita por comprador",
+  "Avg paid order": "Valor médio por pedido pago",
+  "Multi-order buyers": "Compradores recorrentes no período",
+  "Top revenue type": "Principal fonte de receita",
+  "messaged in last 24h": "enviaram mensagem nas últimas 24 h",
+  "paid this period": "pagaram neste período",
+  "2+ paid orders": "2 ou mais pedidos pagos",
+};
+
 export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, sharedOverview }: { cloneId?: string | null; dayDetailAvailable?: boolean; sharedOverview?: SharedOverviewRenderer } = {}) {
   const { isCreator, isAgency } = useDashboardAccess();
+  const { t, locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
+  const formatDate = (value: string) => locale === "pt-BR" ? new Date(value + "T00:00:00Z").toLocaleDateString(locale, { timeZone: "UTC" }) : value;
   const scoped = Boolean(cloneId);
   const [showDetailed, setShowDetailed] = useState(false);
   const [period, setPeriod] = useState<Period>("1M");
@@ -224,7 +255,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
   const [chartMode, setChartMode] = useState<"total" | "creator">("total");
   const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
-  const { currency, rate } = useCurrency();
+  const { currency, rate } = useCreatorCurrency();
   const [data, setData] = useState<FullData | null>(null);
   // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
   // fetchData used to setData(that object). `data` was then truthy with no
@@ -354,11 +385,11 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
     setTxSort({ key, direction: key === "amount" || key === "date" ? "desc" : "asc" });
   }
 
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  const money = (stars: number) => fmtDisplayMoney(usdToDisplayMoney(stars * STAR_USD, currency, rate), currency, locale);
   // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
   // beside "$4,102 AI contribution" and invites the wrong ratio. Was a bare "$" + toLocaleString.
-  const usd = (n: number) => fmtMoney(usdToMoneyRate(n, currency, rate), currency);
+  const usd = (n: number) => fmtDisplayMoney(usdToDisplayMoney(n, currency, rate), currency, locale);
   // Whole percent above 10, one decimal below it. Math.round alone flattened
   // every conversion rate the fleet has ever had into "1%": the real figure sat
   // between 0.62% and 0.68% across 1d/7d/30d on 2026-08-21, and all three
@@ -367,6 +398,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   // top revenue type share are big enough that a decimal there is just noise.
   const pct = (n: number) => {
     const v = n * 100;
+    if (locale === "pt-BR") return n.toLocaleString(locale, { style: "percent", minimumFractionDigits: v > 0 && v < 10 ? 1 : 0, maximumFractionDigits: v > 0 && v < 10 ? 1 : 0 });
     return v > 0 && v < 10 ? `${v.toFixed(1)}%` : `${Math.round(v)}%`;
   };
 
@@ -384,11 +416,16 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   // The headline is signed Star ledger revenue: positive payments less recorded
   // refunds/adjustments. It is neither profit nor a withdrawable wallet balance.
   // Only equals "lifetime" when the window is genuinely all-time.
+  const periodCopy: Record<Period, string> = {
+    ALL: "Tudo", "1Y": "1 ano", "6M": "6 meses", "3M": "3 meses",
+    "1M": "1 mês", "2W": "2 semanas", "1W": "1 semana", "1D": "1 dia",
+  };
+  const periodLabel = (key: Period) => locale === "pt-BR" ? periodCopy[key] : PERIODS.find(item => item.key === key)?.label ?? key;
   const revenueLabel = customRange
-    ? "Star revenue, custom range"
+    ? t("Star revenue, custom range", "Receita em Estrelas no período personalizado")
     : period === "ALL"
-      ? "Lifetime Star revenue"
-      : `Star revenue, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
+      ? t("Lifetime Star revenue", "Receita acumulada em Estrelas")
+      : t(`Star revenue, ${periodLabel(period)}`, `Receita em Estrelas · ${periodLabel(period)}`);
 
   const toggleHidden = (id: string) =>
     setHidden((prev) => {
@@ -413,13 +450,17 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   // The default chart is intentionally a single fleet line/bar. Creator
   // colours remain available as an explicit diagnostic view, but the first
   // read should answer one question clearly: how did total revenue move?
+  const chartSeries = useMemo<DashboardData["series"]>(() => {
+    if (locale !== "pt-BR" || !data?.bucketLabelsPtBr?.length) return data?.series ?? [];
+    return data.series.map((row, index) => ({ ...row, bucket: data.bucketLabelsPtBr?.[index] ?? row.bucket }));
+  }, [data, locale]);
   const totalChartSeries = useMemo(
     () =>
-      (data?.series ?? []).map((row) => ({
+      chartSeries.map((row) => ({
         ...row,
         __total: visibleClones.reduce((sum, creator) => sum + (Number(row[creator.id]) || 0), 0),
       })),
-    [data, visibleClones],
+    [chartSeries, visibleClones],
   );
 
   const summaryStats = focusStats ?? data?.totals ?? null;
@@ -429,47 +470,47 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   const primaryKpis = data && summaryStats
     ? [
         {
-          label: "Net revenue",
+          label: t("Net revenue", "Receita líquida"),
           value: money(displayStars),
-          meta: `⭐ ${fmtNum(displayStars)} after adjustments`,
-          hint: "Recorded Star payments in this window after refunds and adjustments. This is not profit, a payout, or the current wallet balance.",
+          meta: `⭐ ${fmtNum(displayStars)} ${t("after adjustments", "após ajustes")}`,
+          hint: t("Recorded Star payments in this window after refunds and adjustments. This is not profit, a payout, or the current wallet balance.", "Pagamentos em Estrelas registrados no período, após reembolsos e ajustes. Esse valor difere do lucro, dos repasses e do saldo atual da carteira."),
           primary: true,
         },
         {
-          label: cloneId ? "Buyers" : "Unique buyers",
+          label: cloneId ? t("Buyers", "Compradores") : t("Unique buyers", "Compradores únicos"),
           value: fmtNum(summaryStats.buyers),
           meta: "positive paid orders",
-          hint: "People with at least one positive paid order during the selected period.",
+          hint: t("People with at least one positive paid order during the selected period.", "Pessoas com pelo menos um pedido pago de valor positivo no período selecionado."),
         },
         {
-          label: "Messaged → buyer",
+          label: t("Messaged → buyer", "De mensagem a compra"),
           value: overviewConversion?.activeChatBuyerRate == null
             ? "-"
             : pct(overviewConversion.activeChatBuyerRate),
-          meta: overviewConversion ? `${fmtNum(overviewConversion.activeChatBuyers)} of ${fmtNum(overviewConversion.activeChatters)}` : "Selected period",
-          hint: "Of the people who sent a message during the selected dates, the share who also bought during those same dates. This does not prove the message caused the purchase.",
+          meta: overviewConversion ? `${fmtNum(overviewConversion.activeChatBuyers)} ${t("of", "de")} ${fmtNum(overviewConversion.activeChatters)}` : t("Selected period", "Período selecionado"),
+          hint: t("Of the people who sent a message during the selected dates, the share who also bought during those same dates. This does not prove the message caused the purchase.", "Proporção de pessoas que enviaram mensagem e também compraram no período selecionado. O indicador mede a ocorrência dos dois eventos no mesmo período."),
         },
         {
-          label: "Revenue / buyer",
+          label: t("Revenue / buyer", "Receita por comprador"),
           value: summaryRevenuePerBuyer === null ? "-" : money(summaryRevenuePerBuyer),
-          meta: "net revenue per buyer",
-          hint: "Adjusted Star revenue in the selected period divided by buyers in that same period.",
+          meta: t("net revenue per buyer", "receita líquida por comprador"),
+          hint: t("Adjusted Star revenue in the selected period divided by buyers in that same period.", "Receita em Estrelas após ajustes dividida pelo número de compradores no mesmo período."),
         },
         {
-          label: "Paid orders",
+          label: t("Paid orders", "Pedidos pagos"),
           value: fmtNum(summaryStats.sales),
-          meta: summaryAverageOrder === null ? "No paid orders" : `${money(summaryAverageOrder)} average`,
-          hint: "Positive Star payments in the selected period. Refunds and adjustments are not counted as orders.",
+          meta: summaryAverageOrder === null ? t("No paid orders", "Nenhum pedido pago") : t(`${money(summaryAverageOrder)} average`, `média de ${money(summaryAverageOrder)}`),
+          hint: t("Positive Star payments in the selected period. Refunds and adjustments are not counted as orders.", "Pagamentos de valor positivo em Estrelas no período selecionado. Reembolsos e ajustes ficam fora da contagem."),
         },
       ]
     : [];
   const creatorCount = data?.clones.length ?? 0;
   const chartScopeLabel = chartMode === "creator"
     ? visibleClones.length === creatorCount
-      ? "Creator breakdown"
+      ? t("Creator breakdown", "Por criadora")
       : `Creator breakdown (${visibleClones.length} of ${creatorCount})`
     : visibleClones.length === creatorCount
-      ? "All creators"
+      ? t("All creators", "Todas as criadoras")
       : `${visibleClones.length} of ${creatorCount} creators`;
   const txSortSummary = txSort.key === "date"
     ? txSort.direction === "desc" ? "Newest first" : "Oldest first"
@@ -480,22 +521,22 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
   const OverviewComponent = sharedOverview?.component;
   if (sharedOverview && OverviewComponent && !showDetailed) return <OverviewComponent {...sharedOverview}
     cloneId={cloneId} data={data} loading={loading} error={loadError}
-    period={period} range={customRange} currency={currency} money={money}
+    period={period} range={customRange} currency={currency === "BRL" ? "USD" : currency} money={money}
     onPeriod={value => { setCustomRange(null); setPeriod(value); }}
     onRange={setCustomRange} onRefresh={refreshNow} onDetails={() => setShowDetailed(true)} />;
 
   return (
     <div className="pb-6">
-      {sharedOverview && <button type="button" className="mb-4 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-ink" onClick={() => setShowDetailed(false)}>Back to overview</button>}
+      {sharedOverview && <button type="button" className="mb-4 rounded-lg border border-line bg-panel px-4 py-2 text-sm text-ink" onClick={() => setShowDetailed(false)}>{t("Back to overview", "Voltar ao resumo")}</button>}
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && !isAgency && (
         <div className="mb-3 flex items-start gap-3 rounded-md border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
           <span aria-hidden className="mt-0.5 text-base leading-none">⚠️</span>
           <div className="min-w-0 flex-1">
-            <div className="font-semibold">This window could not be loaded.</div>
+            <div className="font-semibold">{t("This window could not be loaded.", "Não foi possível carregar este período.")}</div>
             <div className="mt-0.5 text-[12px] text-[#7a2b1e]/90">
-              {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
+              {data ? t("Showing the last window that loaded.", "Exibindo o último período carregado.") : t("Try a shorter period. 1D and 1W are much cheaper to compute.", "Tente um período mais curto, como 1 dia ou 1 semana.")}
             </div>
             {!isCreator && <details className="mt-1.5 group">
               <summary className="cursor-pointer select-none text-[12px] font-medium text-[#7a2b1e]/80 underline decoration-[#7a2b1e]/30 underline-offset-2 hover:text-[#7a2b1e]">
@@ -511,17 +552,17 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       <div className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
         <div className="flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <div className="min-w-0">
-            <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>
+            <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">{t("Finance operations", "Dados financeiros")}</div>
             <h2 className="flex items-center gap-1.5 font-heading text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
-              Earnings overview
-              <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
+              {t("Earnings overview", "Resumo de ganhos")}
+              <Info text={isCreator ? t("Revenue, buyer activity and conversion performance for your creator account.", "Receita, atividade dos compradores e conversão na sua conta de criadora.") : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
             </h2>
           </div>
           <div className="flex items-center gap-2 text-[11px] text-muted">
             {data && (
               <span className="inline-flex items-center gap-1.5">
                 <span className={`h-1.5 w-1.5 rounded-full ${data.stale ? "bg-[#b7791f]" : "bg-good"}`} />
-                {data.stale ? "Refreshing latest data…" : snapshotAgeLabel(data.ageSeconds)}
+                {data.stale ? t("Refreshing latest data…", "Atualizando os dados…") : snapshotAgeLabel(data.ageSeconds, locale)}
               </span>
             )}
             <button
@@ -530,15 +571,15 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
               disabled={loading}
               className="h-7 rounded border border-line bg-panel px-2.5 text-[11px] font-semibold text-ink transition hover:bg-elev disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {loading ? "Refreshing…" : "Refresh"}
+              {loading ? t("Refreshing…", "Atualizando…") : t("Refresh", "Atualizar")}
             </button>
           </div>
         </div>
 
         {/* One compact command surface for time window, aggregation and mark. */}
         <div className="flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
-          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Window</span>
-          <div role="group" aria-label="Reporting window" className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
+          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">{t("Window", "Período")}</span>
+          <div role="group" aria-label={t("Reporting window", "Período do relatório")} className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -558,7 +599,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
               {p.live && (
                 <span className="h-1.5 w-1.5 rounded-full bg-good" />
               )}
-              {p.label}
+              {periodLabel(p.key)}
             </button>
           ))}
           <button
@@ -578,15 +619,15 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
               <rect x="3" y="4" width="18" height="18" rx="2" />
               <path d="M3 9h18M8 2v4M16 2v4" strokeLinecap="round" />
             </svg>
-            {customRange ? `${customRange.start} → ${customRange.end}` : "Custom"}
+            {customRange ? `${formatDate(customRange.start)} → ${formatDate(customRange.end)}` : t("Custom", "Personalizado")}
           </button>
         </div>
 
           {!scoped && !isCreator && (
             <>
               <span className="mx-0.5 h-5 w-px bg-line" />
-              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Series</span>
-              <div role="group" aria-label="Revenue series" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
+              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">{t("Series", "Série")}</span>
+              <div role="group" aria-label={t("Revenue series", "Série de receitas")} className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
                 <button
                   type="button"
                   onClick={() => setChartMode("total")}
@@ -601,19 +642,19 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                   aria-pressed={chartMode === "creator"}
                   className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "creator" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
                 >
-                  By creator
+                  {t("By creator", "Por criadora")}
                 </button>
               </div>
             </>
           )}
 
           <span className="mx-0.5 h-5 w-px bg-line" />
-          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Chart</span>
-          <div role="group" aria-label="Chart type" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
+          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">{t("Chart", "Gráfico")}</span>
+          <div role="group" aria-label={t("Chart type", "Tipo de gráfico")} className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
           <button
             type="button"
             onClick={() => setChartType("bar")}
-            aria-label="Bar chart"
+            aria-label={t("Bar chart", "Gráfico de barras")}
             aria-pressed={chartType === "bar"}
             className={
               "grid h-6 w-7 place-items-center rounded-[3px] transition " +
@@ -627,7 +668,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
           <button
             type="button"
             onClick={() => setChartType("line")}
-            aria-label="Line chart"
+            aria-label={t("Line chart", "Gráfico de linhas")}
             aria-pressed={chartType === "line"}
             className={
               "grid h-6 w-7 place-items-center rounded-[3px] transition " +
@@ -647,32 +688,32 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       <Dialog open={customOpen} onOpenChange={setCustomOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Custom date range</DialogTitle>
+            <DialogTitle>{t("Custom date range", "Período personalizado")}</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col gap-3 p-4 pt-0">
             <label className="flex flex-col gap-1 text-xs text-muted">
-              From
+              {t("From", "De")}
               <Input ref={draftStartRef} type="date" value={draftStart} onChange={(event) => setDraftStart(event.target.value)} max={draftEnd || undefined} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
-              To
+              {t("To", "Até")}
               <Input ref={draftEndRef} type="date" value={draftEnd} onChange={(event) => setDraftEnd(event.target.value)} min={draftStart || undefined} />
             </label>
             <div className="mt-1 flex justify-end gap-2">
               {customRange && (
                 <Button variant="ghost" size="sm" onClick={clearCustomRange}>
-                  Clear
+                  {t("Clear", "Limpar")}
                 </Button>
               )}
               <Button size="sm" onClick={applyCustomRange}>
-                Apply
+                {t("Apply", "Aplicar")}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <section aria-label="Earnings summary" className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
+      <section aria-label={t("Earnings summary", "Resumo de ganhos")} className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
         <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-5">
           {primaryKpis.length > 0 ? (
             primaryKpis.map((metric, index) => (
@@ -714,27 +755,27 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
         <Card size="sm" className="rounded-lg border border-line bg-panel shadow-none">
           <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-line pb-3">
             <div className="min-w-0">
-              <CardTitle className="text-sm font-semibold text-ink">Revenue performance</CardTitle>
+              <CardTitle className="text-sm font-semibold text-ink">{t("Revenue performance", "Evolução da receita")}</CardTitle>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
                 <span>{focusName ? <span className="creator-name">{focusName}</span> : chartScopeLabel} · {revenueLabel}</span>
-                <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
+                <Info text={t("Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance.", "Pagamentos em Estrelas registrados no período, após reembolsos e ajustes. Esse valor difere do lucro, dos repasses e do saldo atual da carteira.")} />
               </div>
             </div>
             <div className="shrink-0 text-right">
               {trendPct !== null && (
                 <div className="inline-flex items-center gap-1 rounded border border-line bg-elev px-2 py-1 text-[10px]">
                   <span className={`font-mono font-semibold tabular-nums ${trendPct > 0 ? "text-good" : trendPct < 0 ? "text-[#b4432f]" : "text-ink"}`}>
-                    {trendPct >= 0 ? "+" : ""}{trendPct}%
+                    {trendPct >= 0 ? "+" : ""}{trendPct.toLocaleString(locale)}%
                   </span>
-                  <span className="text-muted">latter vs earlier half</span>
-                  <Info text="Average Star revenue per chart interval in the latter half of this selected range compared with its earlier half. This is not a comparison with the previous period." />
+                  <span className="text-muted">{t("latter vs earlier half", "segunda metade em relação à primeira")}</span>
+                  <Info text={t("Average Star revenue per chart interval in the latter half of this selected range compared with its earlier half. This is not a comparison with the previous period.", "Receita média em Estrelas por intervalo do gráfico na segunda metade do período selecionado, comparada com a primeira metade desse mesmo período.")} />
                 </div>
               )}
               {scoped && data?.balance ? (
                 <div className="mt-1.5 flex justify-end">
                   <BalanceStat
-                    label="Total balance"
-                    hint="Every Star sitting in this bot's Telegram wallet right now, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance)."
+                    label={t("Total balance", "Saldo total")}
+                    hint={t("Every Star sitting in this bot's Telegram wallet right now, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance).", "Saldo atual de Estrelas na carteira do bot, descontadas as Estrelas já sacadas ou gastas. Informação consultada diretamente no Telegram.")}
                     value={data.balance.totalBalanceStars}
                     money={money}
                     accent="good"
@@ -742,7 +783,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                 </div>
               ) : (
                 <Link href={isCreator ? "/creator/info" : "/info"} className="mt-1.5 inline-block text-[10px] font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
-                  {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
+                  {scoped ? t("Balance unavailable right now", "Saldo indisponível no momento") : t("See Total balance per bot", "Ver saldo total por bot")}
                 </Link>
               )}
             </div>
@@ -754,22 +795,22 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
               aria-label={
                 data
                   ? `${chartScopeLabel}, ${revenueLabel}: ${money(displayStars)}${trendPct === null ? "" : `. Latter half ${trendPct >= 0 ? "up" : "down"} ${Math.abs(trendPct)} percent versus the earlier half.`}`
-                  : "Revenue performance chart loading"
+                  : t("Revenue performance chart loading", "Carregando gráfico de receita")
               }
             >
               {loading ? (
-                <div className="flex h-full items-center justify-center text-muted">Loading…</div>
+                <div className="flex h-full items-center justify-center text-muted">{t("Loading…", "Carregando…")}</div>
               ) : data && displayStars > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === "bar" ? (
-                    <BarChart data={chartMode === "total" ? totalChartSeries : data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                    <BarChart data={chartMode === "total" ? totalChartSeries : chartSeries} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                       <XAxis
                         dataKey="bucket"
                         axisLine={false}
                         tickLine={false}
                         tick={(props: { x: number; y: number; payload: { value: string }; index: number }) => {
-                          const isLive = !customRange && props.payload.value === data.series[data.series.length - 1]?.bucket;
+                          const isLive = !customRange && props.payload.value === chartSeries[chartSeries.length - 1]?.bucket;
                           return (
                             <g transform={`translate(${props.x},${props.y})`}>
                               <text
@@ -825,14 +866,14 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                       ))}
                     </BarChart>
                   ) : (
-                    <LineChart data={chartMode === "total" ? totalChartSeries : data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                    <LineChart data={chartMode === "total" ? totalChartSeries : chartSeries} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                       <XAxis
                         dataKey="bucket"
                         axisLine={false}
                         tickLine={false}
                         tick={(props: { x: number; y: number; payload: { value: string }; index: number }) => {
-                          const isLive = !customRange && props.payload.value === data.series[data.series.length - 1]?.bucket;
+                          const isLive = !customRange && props.payload.value === chartSeries[chartSeries.length - 1]?.bucket;
                           return (
                             <g transform={`translate(${props.x},${props.y})`}>
                               <text
@@ -1021,10 +1062,10 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
         <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
-              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Operating metrics</h3>
-              <p className="mt-0.5 text-[10px] text-muted">Audience, engagement and order quality for the active reporting scope.</p>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">{t("Operating metrics", "Indicadores da operação")}</h3>
+              <p className="mt-0.5 text-[10px] text-muted">{t("Audience, engagement and order quality for the active reporting scope.", "Público, engajamento e pedidos no período selecionado.")}</p>
             </div>
-            <span className="shrink-0 text-[10px] text-muted">{customRange ? "Custom range" : PERIODS.find((item) => item.key === period)?.label}</span>
+            <span className="shrink-0 text-[10px] text-muted">{customRange ? t("Custom range", "Período personalizado") : periodLabel(period)}</span>
           </div>
           <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3">
           {(() => {
@@ -1150,12 +1191,12 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                 {tiles
                   .filter((tile) => !["Purchases", "Buyers", "Unique buyers", "Revenue / buyer"].includes(tile.label))
                   .map((t) => (
-                  <div key={t.label} className="min-w-0 bg-panel px-3 py-2.5 last:col-span-2 sm:last:col-span-1 sm:px-3.5">
+                  <div key={locale === "pt-BR" ? operatingCopy[t.label] ?? t.label : t.label} className="min-w-0 bg-panel px-3 py-2.5 last:col-span-2 sm:last:col-span-1 sm:px-3.5">
                     <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
-                      <span className="min-w-0 break-words leading-tight">{t.label}</span>
+                      <span className="min-w-0 break-words leading-tight">{locale === "pt-BR" ? operatingCopy[t.label] ?? t.label : t.label}</span>
                       {t.hint && <Info text={t.hint} />}
                     </div>
-                    {t.scope && <div className="mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
+                    {t.scope && <div className="mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{locale === "pt-BR" ? operatingCopy[t.scope] ?? t.scope : t.scope}</div>}
                     <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums text-ink"}>{t.value}</div>
                   </div>
                 ))}
@@ -1173,10 +1214,10 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
         <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
             <div className="pb-2">
-              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Performance analysis</h3>
-              <p className="mt-0.5 text-[10px] text-muted">Move from customer conversion to chat behaviour and the full operating report.</p>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">{t("Performance analysis", "Análise de desempenho")}</h3>
+              <p className="mt-0.5 text-[10px] text-muted">{t("Move from customer conversion to chat behaviour and the full operating report.", "Explore a conversão, o comportamento nas conversas e o relatório completo.")}</p>
             </div>
-            <div role="tablist" aria-label="Earnings analysis" className="flex flex-wrap gap-0.5">
+            <div role="tablist" aria-label={t("Earnings analysis", "Análise de ganhos")} className="flex flex-wrap gap-0.5">
               <button
                 type="button"
                 role="tab"
@@ -1188,7 +1229,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                 }}
                 className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${!reportOpen && analysisView === "customers" ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
-                Paying customers
+                {t("Paying customers", "Clientes pagantes")}
               </button>
               <button
                 type="button"
@@ -1201,7 +1242,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                 }}
                 className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${!reportOpen && analysisView === "journey" ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
-                Chat journey
+                {t("Chat journey", "Etapas da conversa")}
               </button>
               <button
                 type="button"
@@ -1212,7 +1253,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                 onClick={() => setReportOpen(true)}
                 className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${reportOpen ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
               >
-                Full revenue report
+                {t("Full revenue report", "Relatório completo de receita")}
               </button>
             </div>
           </div>
@@ -1250,6 +1291,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
       {/* ── Recent ledger activity - same scope/window as everything above it.
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
+      {isCreator && <FlirtCreatorFxNote />}
       {!isCreator && data && (
         <Card size="sm" className="mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-line px-3 py-2.5 sm:px-4">
@@ -1384,7 +1426,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                         <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(t.stars)}</div>
                         <div className="text-[11px] text-muted">⭐ {fmtNum(t.stars)}</div>
                         <div className="mt-0.5 text-[10px] text-muted/80">
-                          {new Date(t.paidAt).toLocaleString("en-US", {
+                          {new Date(t.paidAt).toLocaleString(locale === "en" ? "en-US" : locale, {
                             month: "short",
                             day: "numeric",
                             hour: "numeric",
@@ -1443,7 +1485,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true, s
                           <span className="block text-[11px] text-muted">⭐ {fmtNum(t.stars)}</span>
                         </TableCell>
                         <TableCell className="py-1.5 pr-3 text-right text-[11px] text-muted">
-                          {new Date(t.paidAt).toLocaleString("en-US", {
+                          {new Date(t.paidAt).toLocaleString(locale === "en" ? "en-US" : locale, {
                             month: "short",
                             day: "numeric",
                             hour: "numeric",
@@ -1494,6 +1536,8 @@ function CreatorPerformanceRail({
   money: (stars: number) => string;
   pct: (value: number) => string;
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   const ranked = creators.filter((creator) => creator.revenueStars !== 0 || creator.sales > 0);
   const visible = ranked.slice(0, 6);
 
@@ -1556,6 +1600,8 @@ function BalanceStat({
   money: (stars: number) => string;
   accent?: "good";
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   return (
     <div>
       <div className="flex items-center gap-1.5 text-[11px] text-muted">
@@ -1570,10 +1616,11 @@ function BalanceStat({
 }
 
 function EmptyState() {
+  const { t } = useFlirtCreatorLocale();
   return (
     <div className="flex h-40 flex-col items-center justify-center text-center text-muted">
       <div className="text-2xl">📊</div>
-      <div className="mt-2 text-sm">No data in this period yet.</div>
+      <div className="mt-2 text-sm">{t("No data in this period yet.", "Ainda não há dados neste período.")}</div>
     </div>
   );
 }
@@ -1663,6 +1710,8 @@ function RevenueReport({
   cursorColor: string;
   onClose: () => void;
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
   // A quiet, predominantly navy scale keeps category comparison legible without
   // turning the operating report into a rainbow. Red stays reserved for the
@@ -2339,6 +2388,8 @@ function BuyerConversionPanel({
   conversion: AnalyticsData["buyerConversion"];
   pct: (n: number) => string;
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   const lifetimeRate = conversion.lifetimeBuyerRate === null ? "-" : pct(conversion.lifetimeBuyerRate);
   const activeChatRate = conversion.activeChatBuyerRate === null ? "-" : pct(conversion.activeChatBuyerRate);
   const buyerEngagementRate = conversion.activeBuyerEngagement7d === null ? "-" : pct(conversion.activeBuyerEngagement7d);
@@ -2440,6 +2491,8 @@ function ConversationFunnelPanel({
   f: AnalyticsData["conversationFunnel"];
   pct: (n: number) => string;
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   const rate = (a: number, b: number) => (b > 0 ? pct(a / b) : "-");
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
@@ -2567,6 +2620,8 @@ function FunnelRow({
   color: string;
   note?: string;
 }) {
+  const { locale } = useFlirtCreatorLocale();
+  const fmtNum = (n: number) => formatNumber(n, locale);
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between text-xs">

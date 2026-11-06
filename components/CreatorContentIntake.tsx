@@ -26,7 +26,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   const queue = useContentUploads();
   const { t, locale } = useFlirtCreatorLocale();
   const router = useContext(AppRouterContext);
-  const [notice, setNotice] = useState("");
+  const [noFilesReceived, setNoFilesReceived] = useState(false);
   const [liveCounts, setLiveCounts] = useState<ContentCounts | null>(null);
   const total = liveCounts?.saved ?? (savedPhotos + savedVideos);
   useEffect(() => {
@@ -52,7 +52,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   const attention = queue.items.some(item => item.state === "failed" || item.state === "reselect");
   const picker = (<label data-upload-content className={`${selected ? styles.addTile : buttonVariants({ size: "lg" })} ${styles.picker} ${locked ? "opacity-50" : "cursor-pointer"}`}>
       {selected ? <Plus size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}{selected ? t("Add more", "Adicionar mais") : t("Upload photos & videos", "Enviar fotos e vídeos")}
-      <input id="creator-content-files" type="file" accept="image/*,video/*" multiple disabled={locked} aria-label={t("Add photos and videos", "Adicionar fotos e vídeos")} className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNotice(files.length ? "" : t("No new files were received from your phone. Your saved content is safe.", "Não recebemos novos arquivos do seu celular. Seu conteúdo salvo continua disponível.")); queue.add(files); event.target.value = ""; }} />
+      <input id="creator-content-files" type="file" accept="image/*,video/*" multiple disabled={locked} aria-label={t("Add photos and videos", "Adicionar fotos e vídeos")} className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNoFilesReceived(!files.length); queue.add(files); event.target.value = ""; }} />
     </label>);
   return <div className={styles.root} data-combined-content-intake>
     <header className={styles.heading}>
@@ -79,7 +79,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
       <div className={styles.statusLine}><strong>{t(`0 of ${CREATOR_CONTENT_TARGET} uploaded`, `0 de ${CREATOR_CONTENT_TARGET} enviados`)}</strong><span>{t("No content added yet", "Nenhum conteúdo adicionado")}</span></div>
       <progress max={CREATOR_CONTENT_TARGET} value={0} aria-label={t("Saved content toward 50 files", "Progresso até a meta de 50 arquivos")} />
     </div>}
-    {notice && <p role="status">{t("No new files were received from your phone. Your saved content is safe.", "Não recebemos novos arquivos do seu celular. Seu conteúdo salvo continua disponível.")}</p>}
+    {noFilesReceived && <p role="status">{t("No new files were received from your phone. Your saved content is safe.", "Não recebemos novos arquivos do seu celular. Seu conteúdo salvo continua disponível.")}</p>}
     <details className={styles.folder}><summary><Link2 size={20} aria-hidden="true" /> {t("Use a folder link", "Usar link de uma pasta")}<ChevronRight className={styles.folderChevron} size={18} aria-hidden="true" /></summary>
       <label className="mt-3 block text-sm font-medium">{t("Google Drive or Dropbox folder", "Pasta do Google Drive ou Dropbox")}<Input type="url" value={folder.draft} disabled={locked} placeholder="https://drive.google.com/drive/folders/…" onChange={event => folder.setDraft(event.target.value)} onBlur={() => { void folder.save(); }} /></label>
       <p className="mt-2 text-xs text-muted">{t("Share a folder your agency can open. Your agency will import the files; a link does not count as saved content yet.", "Compartilhe uma pasta que sua agência consiga abrir. A equipe vai importar os arquivos. O link só passa a contar como conteúdo salvo depois da importação.")}</p>

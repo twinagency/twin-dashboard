@@ -1,3 +1,5 @@
+import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
+import { flirtCreatorCopy } from "@/lib/flirt-creator-locale";
 import Link from "next/link";
 import { creatorApplicationState } from "@/lib/creator-application-state";
 import CreatorIdentityEditor from "@/components/CreatorIdentityEditor";
@@ -10,9 +12,11 @@ import type { Clone } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export default async function CreatorEditPage() {
   const creator = await requireCreatorWorkspace();
-  if (creator.readOnly) return <Card className="p-8"><h1 className="text-xl font-semibold text-ink">Read-only creator demo</h1><p className="mt-2 text-sm text-muted">This preview reflects the creator’s live dashboard data, but identity changes are disabled.</p></Card>;
+  const locale = await getFlirtCreatorLocale();
+  const t = flirtCreatorCopy(locale);
+  if (creator.readOnly) return <Card className="p-8"><h1 className="text-xl font-semibold text-ink">{t("Read-only creator demo", "Demonstração da conta de criadora")}</h1><p className="mt-2 text-sm text-muted">{t("This preview reflects the creator’s live dashboard data, but identity changes are disabled.", "Esta demonstração mostra dados atualizados do painel. A edição do perfil está desativada.")}</p></Card>;
   const id = creator.cloneIds[0];
-  if (!id) return <Card className="space-y-4 p-5"><p>Identity editing becomes available when your AI creator profile is connected.</p><p className="text-sm text-muted">{(creator.applicationState || creatorApplicationState(null)).description}</p><Link href="/creator/onboarding" className="inline-flex min-h-11 items-center text-accent-2">Return to onboarding</Link></Card>;
+  if (!id) return <Card className="space-y-4 p-5"><p>{t("Identity editing becomes available when your AI creator profile is connected.", "Você poderá editar seu perfil assim que sua IA for conectada.")}</p><p className="text-sm text-muted">{(creator.applicationState || creatorApplicationState(null)).description}</p><Link href="/creator/onboarding" className="inline-flex min-h-11 items-center text-accent-2">{t("Return to onboarding", "Voltar à configuração")}</Link></Card>;
   const { data, error } = await serviceClient().from("clones").select(CREATOR_IDENTITY_COLUMNS.join(",")).eq("id", id).maybeSingle();
   if (error || !data) throw new Error("Your identity could not be loaded");
   const row = data as unknown as Partial<Clone> & { updated_at: string };

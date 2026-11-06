@@ -1,4 +1,6 @@
 "use client";
+
+import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Check, ImageIcon, Film, X, ChevronLeft, ChevronRight, Trash2, Play } from "lucide-react";
 import type { ContentUploadItem } from "./CreatorContentUploadProvider";
@@ -11,6 +13,7 @@ export type ContentCounts = { total: number; saved: number };
 type FilePage = { files: SavedFile[]; hasMore: boolean; total?: number; savedCount?: number };
 
 function Tile({ file, open }: { file: GalleryFile; open: () => void }) {
+  const { t } = useFlirtCreatorLocale();
   const button = useRef<HTMLButtonElement>(null);
   const [url, setUrl] = useState("");
   useEffect(() => {
@@ -32,7 +35,7 @@ function Tile({ file, open }: { file: GalleryFile; open: () => void }) {
   }, [file.id, file.previewAvailable, file.local?.file]);
   const state = file.local?.state;
   const label = state && state !== "saved" ? state === "uploading" ? `${file.local?.percent}%` : state === "failed" || state === "reselect" ? "Try again" : "Saving…" : file.status === "verified" ? "Saved" : "Needs attention";
-  return <button ref={button} type="button" className={styles.previewTile} aria-label={`View ${file.name}`} onClick={open}>
+  return <button ref={button} type="button" className={styles.previewTile} aria-label={t(`View ${file.name}`, `Ver ${file.name}`)} onClick={open}>
     {url ? file.mime.startsWith("image/") ? <img src={url} alt={file.name} referrerPolicy="no-referrer" onError={() => setUrl("")} /> : <video src={url} muted playsInline preload="metadata" aria-label={file.name} /> : <span className={styles.previewFallback}>{file.mime.startsWith("image/") ? <ImageIcon /> : <Film />}</span>}
     {file.mime.startsWith("video/") && <span className={styles.videoMark}><Play size={18} fill="currentColor" /></span>}
     <span className={styles.tileState}>{label === "Saved" && <Check size={12} />}{label}</span>
@@ -45,6 +48,7 @@ export default function CreatorSavedContentPreview({ revision, children, items =
 }) {
   const [files, setFiles] = useState<SavedFile[]>([]), [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(true), [error, setError] = useState(""), [expired, setExpired] = useState(false);
+  const { t } = useFlirtCreatorLocale();
   const [retry, setRetry] = useState(0), [open, setOpen] = useState(false), [selectedId, setSelectedId] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState(""), [previewError, setPreviewError] = useState("");
   const [confirm, setConfirm] = useState(false), [removing, setRemoving] = useState(false), [moreBusy, setMoreBusy] = useState(false);
@@ -129,7 +133,7 @@ export default function CreatorSavedContentPreview({ revision, children, items =
       } else {
         const response = await fetch(`/creator-auth/files/${selected.id}`, { method: "DELETE" });
         const body = await response.json();
-        if (!response.ok) throw new Error(body.error === "content_in_use" ? "This file has already been submitted. Ask your agency to remove it." : "This file couldn’t be removed. Please try again.");
+        if (!response.ok) throw new Error(body.error === "content_in_use" ? t("This file has already been submitted. Ask your agency to remove it.", "Este arquivo já foi enviado para análise. Peça à sua agência para removê-lo.") : "This file couldn’t be removed. Please try again.");
         generation.current++;
         onRemoved?.(selected.id);
         setFiles(current => current.filter(file => file.id !== selected.id));
@@ -141,29 +145,29 @@ export default function CreatorSavedContentPreview({ revision, children, items =
   }
   const uploading = selected?.local && ["uploading", "saving"].includes(selected.local.state);
   const canRemove = selected && !uploading && (selected.removalAvailable || (selected.local && ["queued", "failed", "reselect"].includes(selected.local.state)));
-  const alert = error && <p role="alert" className={styles.galleryError}>{error} {!removing && <button type="button" onClick={() => setRetry(value => value + 1)}>Retry</button>}{expired && <a href={`${loginPath}?next=${encodeURIComponent("/creator/onboarding?step=content")}`}>Sign in</a>}</p>;
+  const alert = error && <p role="alert" className={styles.galleryError}>{t(error, expired ? "Sua sessão expirou. Entre novamente para acessar seu conteúdo." : "Não foi possível concluir a ação. Tente novamente.")} {!removing && <button type="button" onClick={() => setRetry(value => value + 1)}>{t("Retry", "Tentar novamente")}</button>}{expired && <a href={`${loginPath}?next=${encodeURIComponent("/creator/onboarding?step=content")}`}>{t("Sign in", "Entrar")}</a>}</p>;
   return <>
-    {loading && !all.length && <p role="status" className={styles.hint}>Loading your content…</p>}
+    {loading && !all.length && <p role="status" className={styles.hint}>{t("Loading your content…", "Carregando seu conteúdo…")}</p>}
     {!open && alert}
-    <div className={styles.previewGrid} aria-label="Saved content previews">
+    <div className={styles.previewGrid} aria-label={t("Saved content previews", "Prévia do conteúdo salvo")}>
       {all.slice(0, 6).map(file => <Tile key={file.id} file={file} open={() => { setSelectedId(file.id); setOpen(true); }} />)}
     </div>
     {!!all.length && <button type="button" className={styles.viewAll} onClick={() => { setSelectedId(null); setOpen(true); }}>View all ({Math.max(fileCount, all.length)}) <ChevronRight size={16} /></button>}
     {children}
-    <dialog ref={dialog} className={styles.fileDialog} aria-label={selected ? "View file" : "All your content"} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) close(); }}>
+    <dialog ref={dialog} className={styles.fileDialog} aria-label={selected ? t("View file", "Ver arquivo") : t("All your content", "Todo o seu conteúdo")} onCancel={event => { event.preventDefault(); close(); }} onClick={event => { if (event.target === event.currentTarget) close(); }}>
       {open && <div className={styles.dialogBody}>
-        <header className={styles.dialogHeader}><div>{selected ? <button type="button" className={styles.backToFiles} disabled={removing} onClick={() => setSelectedId(null)}><ChevronLeft size={18} /> All content</button> : <h2>Your content</h2>}<p>{selected ? selected.name : `${Math.max(fileCount, all.length)} files · Tap to view or remove`}</p></div><button type="button" className={styles.closeDialog} aria-label="Close gallery" disabled={removing} onClick={close}><X /></button></header>
+        <header className={styles.dialogHeader}><div>{selected ? <button type="button" className={styles.backToFiles} disabled={removing} onClick={() => setSelectedId(null)}><ChevronLeft size={18} /> {t("All content", "Todo o conteúdo")}</button> : <h2>{t("Your content", "Seu conteúdo")}</h2>}<p>{selected ? selected.name : t(`${Math.max(fileCount, all.length)} files · Tap to view or remove`, `${Math.max(fileCount, all.length)} arquivos · Toque para ver ou remover`)}</p></div><button type="button" className={styles.closeDialog} aria-label="Close gallery" disabled={removing} onClick={close}><X /></button></header>
         {alert}
         {selected ? <>
           <div className={styles.largePreview}>
             {previewUrl ? selected.mime.startsWith("image/") ? <img src={previewUrl} alt={selected.name} referrerPolicy="no-referrer" onError={() => setPreviewError("This photo couldn’t open in your browser.")} /> : <video key={selected.id} controls playsInline preload="metadata" src={previewUrl} aria-label={selected.name} onError={() => setPreviewError("This video couldn’t play in your browser. Try another browser or upload an MP4 copy.")} /> : !previewError && <p role="status">Opening your file…</p>}
             {previewError && <p role="alert">{previewError}</p>}
           </div>
-          <nav className={styles.previewNav} aria-label="Browse content"><button type="button" disabled={index <= 0 || removing} onClick={() => setSelectedId(all[index - 1].id)}><ChevronLeft size={18} /> Previous</button><span>{index + 1} of {Math.max(fileCount, all.length)}</span><button type="button" disabled={removing || moreBusy || (index >= all.length - 1 && !hasMore)} onClick={() => { if (index < all.length - 1) setSelectedId(all[index + 1].id); else void loadMore(true); }}>Next <ChevronRight size={18} /></button></nav>
-          {confirm ? <div className={styles.removeConfirm}><p>Remove this file?</p><div><button type="button" disabled={removing} onClick={() => void removeSelected()}>{removing ? "Removing…" : "Yes, remove"}</button><button type="button" disabled={removing} onClick={() => setConfirm(false)}>Keep file</button></div></div> : <button type="button" className={styles.removeFile} disabled={!canRemove || removing} onClick={() => setConfirm(true)}><Trash2 size={16} /> Remove file</button>}
-          {uploading && <p className={styles.hint}>This file is uploading. You can remove it once it’s saved.</p>}
-          {!canRemove && !uploading && <p className={styles.hint}>This file has already been submitted. Ask your agency to remove it.</p>}
-        </> : <><div className={styles.allFilesGrid} aria-label="All uploaded files">{all.map(file => <Tile key={file.id} file={file} open={() => setSelectedId(file.id)} />)}</div>{!all.length && <p className={styles.hint}>No files yet. Close this window to add photos and videos.</p>}{hasMore && <button type="button" className={styles.viewAll} disabled={moreBusy} onClick={() => void loadMore()}>{moreBusy ? "Loading…" : "Load more"}</button>}</>}
+          <nav className={styles.previewNav} aria-label={t("Browse content", "Navegar pelo conteúdo")}><button type="button" disabled={index <= 0 || removing} onClick={() => setSelectedId(all[index - 1].id)}><ChevronLeft size={18} /> {t("Previous", "Anterior")}</button><span>{index + 1} {t("of", "de")} {Math.max(fileCount, all.length)}</span><button type="button" disabled={removing || moreBusy || (index >= all.length - 1 && !hasMore)} onClick={() => { if (index < all.length - 1) setSelectedId(all[index + 1].id); else void loadMore(true); }}>{t("Next", "Próximo")} <ChevronRight size={18} /></button></nav>
+          {confirm ? <div className={styles.removeConfirm}><p>{t("Remove this file?", "Remover este arquivo?")}</p><div><button type="button" disabled={removing} onClick={() => void removeSelected()}>{removing ? t("Removing…", "Removendo…") : t("Yes, remove", "Sim, remover")}</button><button type="button" disabled={removing} onClick={() => setConfirm(false)}>{t("Keep file", "Manter arquivo")}</button></div></div> : <button type="button" className={styles.removeFile} disabled={!canRemove || removing} onClick={() => setConfirm(true)}><Trash2 size={16} /> {t("Remove file", "Remover arquivo")}</button>}
+          {uploading && <p className={styles.hint}>{t("This file is uploading. You can remove it once it’s saved.", "O envio está em andamento. Você poderá remover o arquivo depois que ele for salvo.")}</p>}
+          {!canRemove && !uploading && <p className={styles.hint}>{t("This file has already been submitted. Ask your agency to remove it.", "Este arquivo já foi enviado para análise. Peça à sua agência para removê-lo.")}</p>}
+        </> : <><div className={styles.allFilesGrid} aria-label={t("All uploaded files", "Todos os arquivos enviados")}>{all.map(file => <Tile key={file.id} file={file} open={() => setSelectedId(file.id)} />)}</div>{!all.length && <p className={styles.hint}>{t("No files yet. Close this window to add photos and videos.", "Ainda não há arquivos. Feche esta janela para adicionar fotos e vídeos.")}</p>}{hasMore && <button type="button" className={styles.viewAll} disabled={moreBusy} onClick={() => void loadMore()}>{moreBusy ? t("Loading…", "Carregando…") : t("Load more", "Carregar mais")}</button>}</>}
       </div>}
     </dialog>
   </>;

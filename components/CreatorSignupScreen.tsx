@@ -19,10 +19,10 @@ import { TETHER_CREATOR_SIGNUP_ACTION, TETHER_CREATOR_SIGNUP_STATUS } from "@/li
 
 function signupErrors(t: ReturnType<typeof flirtCreatorCopy>): Record<string, string> {
   return {
-  invalid: t("Check your name, email and password. Passwords must be at least 8 characters.", "Confira seu nome, e-mail e senha. A senha deve ter pelo menos 8 caracteres."),
-  agency_code: t("That agency code is invalid, expired or no longer available.", "Esse código da agência é inválido, expirou ou não está mais disponível."),
-  exists: t("An account already exists for that email. Try signing in instead.", "Já existe uma conta com esse e-mail. Tente entrar."),
-  failed: t("We couldn't create your account. Please try again.", "Não foi possível criar sua conta. Tente novamente."),
+    invalid: t("Check your name, email and password. Passwords must be at least 8 characters.", "Confira seu nome, e-mail e senha. A senha deve ter pelo menos 8 caracteres."),
+    agency_code: t("That agency code is invalid, expired or no longer available.", "Esse código da agência é inválido, expirou ou não está mais disponível."),
+    exists: t("An account already exists for that email. Try signing in instead.", "Já existe uma conta com esse e-mail. Tente entrar."),
+    failed: t("We couldn't create your account. Please try again.", "Não foi possível criar sua conta. Tente novamente."),
   };
 }
 
@@ -51,11 +51,11 @@ export default async function CreatorSignupScreen({ searchParams, brand, initial
       brand={brand}
       locale={locale}
       agencyBrand={invited ? { name: invited.name, slug: invited.slug, logo: invited.logo, dark: invited.dark } : null}
-      heroTitle={tether ? "Your creator workspace starts here." : link ? "Your LYNQ creator workspace starts here." : invited ? `Your ${invited.name} creator workspace starts here.` : t("Build your FLIRT AI from one creator account.", "Crie sua IA na FLIRT com uma única conta de criadora.")}
-      heroCopy={tether ? "Complete onboarding once, then access your Tether earnings, content and profile." : link ? "Complete onboarding once, then access your LYNQ earnings, content and profile." : invited ? `Complete onboarding once, then access your ${invited.name} earnings, content and profile.` : t("Start onboarding, upload your creator media and keep everything connected to your live FLIRT profile.", "Comece a configuração, envie seu conteúdo e vincule tudo ao seu perfil na FLIRT.")}
+      heroTitle={tether ? "Your creator workspace starts here." : link ? "Your LYNQ creator workspace starts here." : invited ? t(`Your ${invited.name} creator workspace starts here.`, `Seu estúdio na ${invited.name} começa aqui.`) : t("Build your FLIRT AI from one creator account.", "Crie sua IA na FLIRT com uma única conta de criadora.")}
+      heroCopy={tether ? "Complete onboarding once, then access your Tether earnings, content and profile." : link ? "Complete onboarding once, then access your LYNQ earnings, content and profile." : invited ? t(`Complete onboarding once, then access your ${invited.name} earnings, content and profile.`, `Conclua o cadastro para acessar seus ganhos, conteúdo e perfil na ${invited.name}.`) : t("Start onboarding, upload your creator media and keep everything connected to your live FLIRT profile.", "Comece a configuração, envie seu conteúdo e vincule tudo ao seu perfil na FLIRT.")}
       eyebrow={t("Creator workspace", "Área da criadora")}
-      title={tether ? "Join Tether" : link ? "Join LYNQ" : invited ? `Join ${invited.name}` : t("Create account", "Criar conta")}
-      description={tether ? "Create your account and your application will be connected directly to Tether for review." : link ? "Create your account and your application will be connected directly to LYNQ for review." : invited ? `Create your account and your application will be connected directly to ${invited.name} for review.` : t("Agency code is optional. Leave it blank if you're joining FLIRT directly.", "O código da agência é opcional. Deixe em branco se estiver se cadastrando diretamente na FLIRT.")}
+      title={tether ? "Join Tether" : link ? "Join LYNQ" : invited ? t(`Join ${invited.name}`, `Cadastre-se na ${invited.name}`) : t("Create account", "Criar conta")}
+      description={tether ? "Create your account and your application will be connected directly to Tether for review." : link ? "Create your account and your application will be connected directly to LYNQ for review." : invited ? t(`Create your account and your application will be connected directly to ${invited.name} for review.`, `Crie sua conta. Seu cadastro será encaminhado à ${invited.name} para análise.`) : t("Agency code is optional. Leave it blank if you're joining FLIRT directly.", "O código da agência é opcional. Deixe em branco se estiver se cadastrando diretamente na FLIRT.")}
       footer={<span>{t("Already have an account?", "Já tem uma conta?")} <Link href={paths.login} className={authLinkClass}>{t("Sign in", "Entrar")}</Link></span>}
     >
       {invitationBlocked ? <div className="space-y-4"><p role="alert" className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm">{creatorInvitationMessage(invitationStatus, locale)}</p><form action="/creator/signup" method="get" className="grid gap-4"><label>{t("Invitation code", "Código do convite")}<Input name="code" defaultValue={initialAgencyCode} required autoCapitalize="characters" autoComplete="off" className={darkForm ? tetherAuthInputClass : undefined} /></label><Button type="submit">{t("Check invitation", "Verificar convite")}</Button></form></div> : directAgencySignup && status === signupStatus ? (

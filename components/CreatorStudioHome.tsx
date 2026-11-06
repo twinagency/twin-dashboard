@@ -9,7 +9,7 @@ import { ArrowRight, Check, CheckCircle2, CircleHelp, Clock3, Images, MessageCir
 import { useCreatorCurrency } from "./useCreatorCurrency";
 import FlirtCreatorFxNote from "./FlirtCreatorFxNote";
 import { StudioAvatar } from "./CreatorStudioShell";
-import { fmtDisplayMoney, fmtNum, STAR_USD } from "@/lib/money";
+import { fmtDisplayMoney, fmtNum } from "@/lib/money";
 import { creatorStudioStatusLabel, readStudioPerformance, STUDIO_PERIODS, type CreatorStudioBrand, type CreatorStudioStatus, type StudioPerformance, type StudioPeriod } from "@/lib/creator-studio-model";
 import styles from "./CreatorStudio.module.css";
 
@@ -70,7 +70,7 @@ export function StudioPerformanceOverview({ cloneId }: { cloneId: string }) {
   const [loading, setLoading] = useState(true);
   const [retry, setRetry] = useState(0);
   const { t, locale } = useFlirtCreatorLocale();
-  const { currency, rate } = useCreatorCurrency();
+  const { currency, rate, usdPerStar } = useCreatorCurrency();
   const periodLabel = (item: (typeof STUDIO_PERIODS)[number]) => t(item.label, item.label.replace(" days", " dias"));
   const gradientId = `studio-earnings-${useId().replace(/:/g, "")}`;
   useEffect(() => {
@@ -95,8 +95,8 @@ export function StudioPerformanceOverview({ cloneId }: { cloneId: string }) {
     window.addEventListener("focus", onFocus);
     return () => { controller.abort(); window.clearInterval(timer); window.removeEventListener("focus", onFocus); };
   }, [cloneId, period, retry]);
-  const amount = (stars: number) => stars * STAR_USD * rate;
-  const chart = data?.series.map(row => ({ bucket: row.bucket, earnings: amount(row.stars) })) || [];
+  const amount = (stars: number) => stars * usdPerStar * rate;
+  const chart = data?.series.map(row => ({ bucket: locale === "pt-BR" ? row.bucketPtBr ?? row.bucket : row.bucket, earnings: amount(row.stars) })) || [];
   const metricValue = (value: number | undefined, money = false) => value == null ? loading ? "…" : t("Unavailable", "Indisponível") : money ? fmtDisplayMoney(amount(value), currency, locale) : fmtNum(value, locale);
   return <section className={styles.performance} aria-label={t("Performance overview", "Resumo de desempenho")} aria-busy={loading}>
     <div className={styles.sectionHeading}><h2>{t("Performance overview", "Resumo de desempenho")}</h2><div className={styles.periods} role="group" aria-label={t("Reporting period", "Período do relatório")}>{STUDIO_PERIODS.map(item => <button key={item.key} aria-pressed={period === item.key} onClick={() => setPeriod(item.key)}>{periodLabel(item)}</button>)}</div></div>
