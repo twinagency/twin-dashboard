@@ -79,11 +79,11 @@ Synthetic revenue and fans, deterministic by `?seed=`, in exactly the shape of t
 
 ## Verification
 
-`npx tsc --noEmit` for typecheck. Run it once when done, not after every file edit.
+`npx tsc --noEmit` type-checks the product code (`app/`, `components/`, `lib/` and the two root files), the same program Next builds. `npm run typecheck` checks everything: that program plus `tsconfig.scripts.json`, `tsconfig.preview.json` and `tsconfig.tests.json`. The old single program for all 1,400 files needs about 1.8 GB of heap; each of the four now fits in a 1,200 MB heap, but the product program is close to that limit (it aborts at 1,100 MB). Run it once when done, not after every file edit. It needs `next-env.d.ts` (written by `next dev` or `next build`, ignored by git).
 
 `npm test` chains the `test:*` scripts in `package.json` — read them there, because the list has grown twice without this file noticing. Unlike a typecheck these have caught real bugs. **Do not quote a check count from this file; run the command.** Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
 
-There is **no `typecheck` script here** — `build` is `next build`. To typecheck: `../bot/node_modules/.bin/tsc --noEmit`.
+To typecheck everything use `npm run typecheck`. Engine UI checks: `npm run test:engine-contracts`, `npm run test:engine-ui`, and `npm run test:engine-browser` (needs Chromium and a `base.css`, see `tests/browser/build-engine-journey.mjs`).
 
 `npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.
 
