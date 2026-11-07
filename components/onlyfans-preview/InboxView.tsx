@@ -6,7 +6,9 @@
 // capability, ownership and delivery gates decide which commands can be used.
 // Compact rendering changes presentation only; stale reads remain visible.
 
-import { EngineStatus, type EngineActionHandler } from "./EngineStatus";
+import { EngineStatus, type EngineActionHandler, type EnginePageLoader } from "./EngineStatus";
+import { engineControlLabel, engineControlPendingLabel, isEngineControlAction, orderControls } from "@/lib/onlyfans/engine-controls";
+import { parseEngineStatus } from "@/lib/onlyfans/engine-status";
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
@@ -434,7 +436,7 @@ function Composer({
         <p className="text-xs text-muted">Replying as {account.binding.creatorName} · @{account.binding.handle}. Draft kept in this tab for up to 8 hours, until reload or sign-out.</p>
         {takeoverAvailable ? <button type="button" data-of-composer-takeover onClick={onTakeover}
           disabled={takeoverDisabled} className="of-control-button of-primary">
-          <UserRound size={16} aria-hidden="true" />{pending && pendingAction === "request_takeover" ? "Requesting takeover…" : "Take over to reply"}
+          <UserRound size={16} aria-hidden="true" />{pending && pendingAction === "request_takeover" ? engineControlPendingLabel("request_takeover") : engineControlLabel("request_takeover", true)}
         </button> : null}
         {!simulated && account.capabilities.sendManualMessage === "available" ? <ManualMediaAttachments key={draftId} accountId={account.accountId} draftId={draftId} draft={draft} disabled={!canEdit} /> : null}
         {!simulated && account.capabilities.sendManualMessage === "available" ? <details className="of-paid-content" open={catalogItemId ? true : undefined}><summary><ImagePlus size={15} aria-hidden="true" />{catalogItemId ? "Paid content selected" : "Attach paid content"}</summary><div className="space-y-1">
@@ -523,7 +525,9 @@ function ActionColumn({
   pending,
   pendingAction,
   onRetry,
+  engineAware = false,
 }: {
+  engineAware?: boolean;
   actionSet: ActionSet;
   viewer: PreviewViewer;
   result: CommandResult | null;
@@ -611,16 +615,16 @@ function ActionColumn({
       ) : null}
 
       <div className="of-reply-actions" data-of-actions>
-        {actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action)).map(entry => {
+        {orderControls(actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action))).map(entry => {
           const resolution = entry.action === "resolve_delivery_evidence";
           const needsDecision = resolution && (decision === null || !/^[1-9][0-9]{0,15}$/.test(providerMessageId));
           const primary = resolution || ["request_takeover", "release_takeover", "resume_automation"].includes(entry.action);
-          const label = entry.action === "pause_automation" ? "Pause AI" : entry.action === "resume_automation" ? "Resume AI" : entry.action === "release_takeover" ? "Hand back to AI" : entry.label;
+          const label = isEngineControlAction(entry.action) ? engineControlLabel(entry.action, engineAware) : entry.label;
           const Icon = entry.action === "request_takeover" ? UserRound : entry.action === "pause_automation" ? Pause : Sparkles;
           return <div key={entry.action}><button type="button" data-of-action={entry.action} disabled={needsDecision || pending}
             title={needsDecision ? "Choose what the evidence shows first." : undefined}
             onClick={() => resolution ? incident && decision && onResolve(incident.attemptId, decision, providerMessageId) : onCommand(entry.action, NO_PAYLOAD)}
-            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending && pendingAction === entry.action ? entry.action === "request_takeover" ? "Requesting takeover…" : entry.action === "release_takeover" ? "Handing back…" : "Saving…" : label}</button>
+            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending && pendingAction === entry.action ? isEngineControlAction(entry.action) ? engineControlPendingLabel(entry.action) : "Saving…" : label}</button>
             {needsDecision ? <p className="of-filter-note">Choose what the evidence shows before resolving.</p> : null}</div>;
         })}
         {actionSet.available.every(entry => ["send_manual_message", "mark_no_contact"].includes(entry.action)) ? <p className="of-filter-note">No reply changes are available right now.</p> : null}
@@ -767,6 +771,7 @@ export default function InboxView({
   handover,
   handoverHistory,
   onEngineAction,
+  onEngineLoadMore,
   aiOnly = false,
   onAiFilterChange = () => {},
   inboxSearch = EMPTY_INBOX_SEARCH,
@@ -778,6 +783,7 @@ export default function InboxView({
   handover?: ReactNode;
   handoverHistory?: Handover | null;
   onEngineAction?: EngineActionHandler;
+  onEngineLoadMore?: EnginePageLoader;
   /**
    * False on a live surface: the sample-data badge and the developer controls
    * describe fixture data and must not appear over real reads.
@@ -993,6 +999,7 @@ export default function InboxView({
               {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn
+                engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
                 actionSet={actionSet}
                 viewer={viewer}
                 result={commandResult}
@@ -1012,7 +1019,8 @@ export default function InboxView({
               />
               </section>
 
-              <EngineStatus key={detail.conversationId} value={detail.engineStatus} accountId={detail.accountId} conversationId={detail.conversationId} onAction={onEngineAction} />
+              <EngineStatus key={detail.conversationId} value={detail.engineStatus} accountId={detail.accountId} conversationId={detail.conversationId} onAction={onEngineAction} onLoadMore={onEngineLoadMore}
+                onTakeover={canSubmitCommand(viewer, actionSet, "request_takeover") ? () => onCommand("request_takeover", NO_PAYLOAD) : undefined} takeoverPending={commandPending} />
               <FanContext detail={detail} />
               <FanMetrics detail={detail} />
               {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}

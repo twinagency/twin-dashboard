@@ -93,7 +93,8 @@ import InboxView from "./InboxView";
 import AllFansControl from "./AllFansControl";
 import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
-import type { EngineActionHandler } from "./EngineStatus";
+import type { EngineActionHandler, EnginePageLoader } from "./EngineStatus";
+import { submitEngineOperatorCommand } from "@/lib/onlyfans/engine-operator-client";
 import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
@@ -551,23 +552,19 @@ export default function OnlyFansWorkspace({
       commit(applyConversation(ref.current, handoverAccount, handoverConversation, pending.generation, pending.seq, result).state);
     });
   }, [handoverAccount, handoverConversation, source, ref, commit]);
-  const handleEngineAction: EngineActionHandler = async (requestId, action, expectedRevision, note) => {
+  const handleEngineAction: EngineActionHandler = async (requestId, action, expectedRevision, note, environment) => {
     if (!handoverAccount || !handoverConversation) return { ok: false, outcome: "refused", error: "Conversation unavailable." };
-    try {
-      const response = await fetch(`/api/onlyfans-controls/accounts/${encodeURIComponent(handoverAccount)}/conversations/${encodeURIComponent(handoverConversation)}/requests/${encodeURIComponent(requestId)}`, {
-        method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, expectedRevision, ...(["complete", "decline"].includes(action) ? { note } : {}) }),
-      });
-      const data = await response.json() as Record<string, unknown>;
-      if (data.schemaVersion === "of-engine-operator.v1" && data.ok === true && data.outcome === "recorded") {
-        refreshHandover(); return { ok: true };
-      }
-      if (data.schemaVersion === "of-engine-operator.v1" && data.ok === false && data.outcome === "refused" && typeof data.error === "string") {
-        refreshHandover(); return { ok: false, outcome: "refused", error: data.error };
-      }
-    } catch { /* A failed connection does not prove the action failed. */ }
+    const result = await submitEngineOperatorCommand({ accountId: handoverAccount, conversationId: handoverConversation, requestId, action, expectedRevision, note, environment });
     refreshHandover();
-    return { ok: false, outcome: "unconfirmed", error: "The outcome is unconfirmed. Refresh the request before taking another action." };
+    return result;
+  };
+  /** Later pages of this conversation's requests, from the dashboard route that reads the backend with the opaque cursor. */
+  const handleEngineLoadMore: EnginePageLoader = async (cursor) => {
+    if (!handoverAccount || !handoverConversation) throw new Error("Conversation unavailable.");
+    const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(handoverAccount)}/conversations/${encodeURIComponent(handoverConversation)}/engine-status?limit=20&cursor=${encodeURIComponent(cursor)}`, {
+      credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) });
+    if (!response.ok) throw new Error("Requests could not be loaded.");
+    return response.json();
   };
   useEffect(() => {
     if (sourceMode !== "server" || view !== "inbox" || !handoverConversation) return;
@@ -847,6 +844,7 @@ export default function OnlyFansWorkspace({
         setAiOnly(enabled);
         if (remembers) rememberFilters(draftPrincipal, requestedScope.creatorId, { search: searchRef.current, aiOnly: enabled });
       }}
+      onEngineLoadMore={sourceMode === "server" ? handleEngineLoadMore : undefined}
       onEngineAction={sourceMode === "server" && actionViewer.kind === "operator" && (actionViewer.canManage || actionViewer.canChat === true) ? handleEngineAction : undefined}
       handoverHistory={sourceMode === "server" ? handover : null}
       handover={sourceMode === "server" ? <HandoverPanel value={handoverCurrent} loading={handoverLoading} onRefresh={refreshHandover} /> : undefined}
