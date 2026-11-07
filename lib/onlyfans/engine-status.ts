@@ -6,6 +6,9 @@ export type EngineRequestView = {
   nextStep: string;
   actionOutcome: string | null;
   actionType: "reply" | "offer" | null;
+  revision?: number;
+  partsCompleted?: number;
+  partsTotal?: number;
 };
 export type EngineStatusView =
   | { schemaVersion: "of-engine.v1"; state: "unavailable" }
@@ -33,10 +36,17 @@ export function parseEngineStatus(value: unknown, accountId: string, conversatio
         typeof item.owner !== "string" || !item.owner || item.owner.length > 128 ||
         typeof item.nextStep !== "string" || !item.nextStep || item.nextStep.length > 128 ||
         !(item.actionOutcome === null || typeof item.actionOutcome === "string" && actionOutcomes.has(item.actionOutcome)) ||
-        !(item.actionType === undefined || item.actionType === null || item.actionType === "reply" || item.actionType === "offer")) return null;
+        !(item.actionType === undefined || item.actionType === null || item.actionType === "reply" || item.actionType === "offer") ||
+        !(item.revision === undefined || Number.isInteger(item.revision) && Number(item.revision) >= 0 && Number(item.revision) < 2 ** 31 - 1) ||
+        !((item.partsCompleted === undefined && item.partsTotal === undefined) ||
+          (Number.isInteger(item.partsCompleted) && Number.isInteger(item.partsTotal) &&
+           Number(item.partsCompleted) >= 0 && Number(item.partsTotal) <= 4 && Number(item.partsCompleted) <= Number(item.partsTotal)))) return null;
     requests.push({ requestId: item.requestId, sourceMessageId: item.sourceMessageId, status: item.status,
       owner: item.owner, nextStep: item.nextStep, actionOutcome: item.actionOutcome,
-      actionType: item.actionType === "reply" || item.actionType === "offer" ? item.actionType : null });
+      actionType: item.actionType === "reply" || item.actionType === "offer" ? item.actionType : null,
+      ...(typeof item.revision === "number" ? { revision: item.revision } : {}),
+      ...(typeof item.partsCompleted === "number" && typeof item.partsTotal === "number" ?
+        { partsCompleted: item.partsCompleted, partsTotal: item.partsTotal } : {}) });
   }
   return { schemaVersion: "of-engine.v1", state: "current", accountId, conversationId,
     environment: "simulation", mode: value.mode as "active" | "paused" | "human",
@@ -44,8 +54,10 @@ export function parseEngineStatus(value: unknown, accountId: string, conversatio
 }
 
 export function engineRequestLabel(request: EngineRequestView): string {
+  if (request.nextStep === "no_contact") return "Contact stopped at the fan’s request";
   if (request.actionOutcome === "unknown") return "Delivery outcome needs review";
   if (request.nextStep === "review_delivery_dependency") return "Reply held while an earlier delivery needs review";
+  if (request.nextStep === "review_changed_conversation") return "Reply needs review after the conversation changed";
   if (request.nextStep === "review_access_revocation") return "Access revoked; review required";
   if (request.nextStep === "review_refund_or_chargeback") return "Refund or chargeback needs review";
   if (request.status === "waiting_provider" && request.nextStep === "verify_access") return "Purchase recorded; access is not yet confirmed";
@@ -54,12 +66,14 @@ export function engineRequestLabel(request: EngineRequestView): string {
   if (request.actionOutcome === "not_accepted") return "Send was not accepted; review the existing request";
   if (request.status === "handover_pending") return "Waiting for a team member to accept";
   if (request.status === "handover_accepted") return "Team member accepted responsibility";
+  if (request.actionOutcome === "cancelled" || request.actionOutcome === "refused") return "Reply needs review";
+  if (request.status === "open" && request.partsTotal && request.partsTotal > 1 && request.partsCompleted)
+    return `${request.partsCompleted} of ${request.partsTotal} reply parts sent; remaining parts pending`;
   if (request.status === "completed" && request.actionType === "offer") return "Purchase and access confirmed";
   if (request.status === "completed" && request.actionType === "reply") return "Reply completed";
   if (request.status === "completed") return "Request completed";
   if (request.status === "waiting_fan") return "Waiting for the fan";
   if (request.status === "cancelled") return "Request cancelled";
   if (request.status === "declined") return "Request declined";
-  if (request.actionOutcome === "cancelled" || request.actionOutcome === "refused") return "Reply needs review";
   return "Request in progress";
 }

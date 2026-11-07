@@ -5,7 +5,7 @@ import http from "node:http";
 import path from "node:path";
 import { chromium } from "playwright";
 
-const root = path.resolve(import.meta.dirname, ".."), dist = path.join(root, "preview/onlyfans-ui/dist");
+const root = path.resolve(import.meta.dirname, ".."), dist = process.env.ONLYFANS_UI_OUTPUT ? path.resolve(process.env.ONLYFANS_UI_OUTPUT) : path.join(root, "preview/onlyfans-ui/dist");
 const shots = process.env.ONLYFANS_UI_ARTIFACT_DIR || path.join(root, "test-results/onlyfans-ui");
 await fs.mkdir(shots, { recursive: true });
 let checks = 0;

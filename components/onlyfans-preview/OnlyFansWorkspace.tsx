@@ -93,6 +93,7 @@ import InboxView from "./InboxView";
 import AllFansControl from "./AllFansControl";
 import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
+import type { EngineActionHandler } from "./EngineStatus";
 import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
@@ -550,6 +551,24 @@ export default function OnlyFansWorkspace({
       commit(applyConversation(ref.current, handoverAccount, handoverConversation, pending.generation, pending.seq, result).state);
     });
   }, [handoverAccount, handoverConversation, source, ref, commit]);
+  const handleEngineAction: EngineActionHandler = async (requestId, action, expectedRevision, note) => {
+    if (!handoverAccount || !handoverConversation) return { ok: false, outcome: "refused", error: "Conversation unavailable." };
+    try {
+      const response = await fetch(`/api/onlyfans-controls/accounts/${encodeURIComponent(handoverAccount)}/conversations/${encodeURIComponent(handoverConversation)}/requests/${encodeURIComponent(requestId)}`, {
+        method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, expectedRevision, ...(["complete", "decline"].includes(action) ? { note } : {}) }),
+      });
+      const data = await response.json() as Record<string, unknown>;
+      if (data.schemaVersion === "of-engine-operator.v1" && data.ok === true && data.outcome === "recorded") {
+        refreshHandover(); return { ok: true };
+      }
+      if (data.schemaVersion === "of-engine-operator.v1" && data.ok === false && data.outcome === "refused" && typeof data.error === "string") {
+        refreshHandover(); return { ok: false, outcome: "refused", error: data.error };
+      }
+    } catch { /* A failed connection does not prove the action failed. */ }
+    refreshHandover();
+    return { ok: false, outcome: "unconfirmed", error: "The outcome is unconfirmed. Refresh the request before taking another action." };
+  };
   useEffect(() => {
     if (sourceMode !== "server" || view !== "inbox" || !handoverConversation) return;
     const timer = setInterval(() => { if (document.visibilityState === "visible" && !commandBusy.current) refreshHandover(); }, 15000);
@@ -828,6 +847,7 @@ export default function OnlyFansWorkspace({
         setAiOnly(enabled);
         if (remembers) rememberFilters(draftPrincipal, requestedScope.creatorId, { search: searchRef.current, aiOnly: enabled });
       }}
+      onEngineAction={sourceMode === "server" && actionViewer.kind === "operator" && (actionViewer.canManage || actionViewer.canChat === true) ? handleEngineAction : undefined}
       handoverHistory={sourceMode === "server" ? handover : null}
       handover={sourceMode === "server" ? <HandoverPanel value={handoverCurrent} loading={handoverLoading} onRefresh={refreshHandover} /> : undefined}
       onCommand={handleCommand}

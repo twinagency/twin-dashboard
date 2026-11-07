@@ -16,6 +16,9 @@ test("engine status is scoped, versioned and preserves uncertainty", () => {
   assert.equal(parseEngineStatus({ ...view, schemaVersion: "of-engine.v2" }, "of-a", "of-a:42"), null);
   assert.equal(parseEngineStatus({ ...view, requests: [{ ...request, actionOutcome: "delivered" }] }, "of-a", "of-a:42"), null);
   assert.equal(parseEngineStatus({ ...view, requests: [{ ...request, actionType: "unknown" }] }, "of-a", "of-a:42"), null);
+  assert.equal(parseEngineStatus({ ...view, requests: [{ ...request, partsCompleted: 3, partsTotal: 2 }] }, "of-a", "of-a:42"), null);
+  assert.equal(parseEngineStatus({ ...view, requests: [{ ...request, revision: -1 }] }, "of-a", "of-a:42"), null);
+  assert.equal(parseEngineStatus({ ...view, requests: [{ ...request, revision: 2 }] }, "of-a", "of-a:42").requests[0].revision, 2);
   assert.equal(parseEngineStatus({ schemaVersion: "of-engine.v1", state: "unavailable" }, "of-a", "of-a:42").state, "unavailable");
 });
 
@@ -31,4 +34,10 @@ test("offer, purchase and access are not conflated", () => {
   assert.equal(engineRequestLabel({ ...request, status: "waiting_provider", nextStep: "verify_access", actionOutcome: "accepted", actionType: "offer" }), "Purchase recorded; access is not yet confirmed");
   assert.equal(engineRequestLabel({ ...request, status: "completed", actionOutcome: "accepted", actionType: "offer" }), "Purchase and access confirmed");
   assert.equal(engineRequestLabel({ ...request, status: "open", nextStep: "review_access_revocation", actionOutcome: "accepted", actionType: "offer" }), "Access revoked; review required");
+});
+
+
+test("ordered reply parts remain one outstanding request", () => {
+  assert.equal(engineRequestLabel({ ...request, status: "open", nextStep: "send_next_part", actionOutcome: "ready", partsCompleted: 1, partsTotal: 3 }), "1 of 3 reply parts sent; remaining parts pending");
+  assert.equal(engineRequestLabel({ ...request, status: "open", nextStep: "review_changed_conversation", actionOutcome: "cancelled", partsCompleted: 1, partsTotal: 3 }), "Reply needs review after the conversation changed");
 });

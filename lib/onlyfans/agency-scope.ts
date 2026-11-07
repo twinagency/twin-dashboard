@@ -50,7 +50,7 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
   if (/%(?:2f|5c)/i.test(path)) return false;
   try { path = decodeURIComponent(path); } catch { return false; }
   if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:overview|accounts|inbox|content|sales|settings|campaigns|operations|launch(?:\/(?:automation|memory))?))?\/?$/.test(path)) return true;
-  if (canChat && ((method === "POST" && /^\/api\/onlyfans-controls\/accounts\/[A-Za-z0-9._:-]{1,64}\/conversations\/[A-Za-z0-9._:-]{1,64}$/.test(path)) || (method === "PATCH" && /^\/api\/onlyfans-launch\/memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans\/[1-9][0-9]{0,17}$/.test(path)))) return true;
+  if (canChat && ((method === "POST" && /^\/api\/onlyfans-controls\/accounts\/[A-Za-z0-9._:-]{1,64}\/conversations\/[A-Za-z0-9._:-]{1,64}(?:\/requests\/[0-9a-f-]{36})?$/.test(path)) || (method === "PATCH" && /^\/api\/onlyfans-launch\/memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans\/[1-9][0-9]{0,17}$/.test(path)))) return true;
   const api = /^\/api\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}\/(?:conversations(?:\/[A-Za-z0-9._:-]{1,64}(?:\/handover)?)?|workspace\/(?:content|sales|settings)|operations))?\/?$/.test(path);
   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
   // Launch routes have a section before /accounts. Whitelist delivered routes
@@ -65,5 +65,9 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
 
 /** Chatter transport may reach only conversation controls and versioned fan corrections. Each endpoint checks the action again. */
 export function chatBackendPath(path: string, method: string): boolean {
-  return method === "POST" && (/^\/onlyfans\/control\/v1\/accounts\/[A-Za-z0-9._:-]{1,64}\/conversations\/[A-Za-z0-9._:-]{1,64}$/.test(path) || /^\/onlyfans\/configuration\/v1\/accounts\/[A-Za-z0-9._:-]{1,64}\/history-memory\/fans\/[1-9][0-9]{0,17}\/corrections$/.test(path));
+  // URL.pathname retains encoded colons. Decode once, but never allow an
+  // encoded path separator to alter the scoped endpoint hierarchy.
+  if (/%(?:2f|5c)/i.test(path)) return false;
+  try { path = decodeURIComponent(path); } catch { return false; }
+  return method === "POST" && (/^\/onlyfans\/control\/v1\/accounts\/[A-Za-z0-9._:-]{1,64}\/conversations\/[A-Za-z0-9._:-]{1,64}(?:\/requests\/[0-9a-f-]{36})?$/.test(path) || /^\/onlyfans\/configuration\/v1\/accounts\/[A-Za-z0-9._:-]{1,64}\/history-memory\/fans\/[1-9][0-9]{0,17}\/corrections$/.test(path));
 }
