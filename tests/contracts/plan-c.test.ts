@@ -68,6 +68,17 @@ test("a lost reply is unconfirmed, and retrying reuses the same key so the backe
   assert.notEqual(mock.posts().at(-1)?.body?.commandKey, keys[0]);
 });
 
+test("a 503 after an operator command is unconfirmed, not a proven refusal", async () => {
+  const backend = createPlanCBackend({ baseUrl: "http://backend.invalid", token: MOCK_TOKEN,
+    fetchImpl: async () => new Response(null, { status: 503 }) });
+  const result = await backend.conversation(MOCK_ACCOUNT, {
+    conversationId: `${MOCK_ACCOUNT}:1`, action: "stop", expectedRevision: 1,
+    commandKey: newCommandKey(), actor: OPERATOR_ACTOR,
+  });
+  assert.equal(result.ok, false);
+  if (!result.ok) { assert.equal(result.outcome, "unconfirmed"); assert.equal(result.reload, true); }
+});
+
 test("a garbled acknowledgement is unconfirmed, never success", async () => {
   const { mock, client } = setup({ drafts: [seedDraft()] });
   mock.faults.garbageAck = true;

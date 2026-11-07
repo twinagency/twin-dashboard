@@ -18,7 +18,7 @@ export type PlanCReconcileCommand = { id: string; commandKey: string; actor: str
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 /** Statuses that prove the backend did not apply the command. Everything else (5xx, timeouts, odd bodies) is unconfirmed. */
-const REFUSED = new Set([400, 401, 403, 404, 405, 409, 410, 413, 422, 503]);
+const REFUSED = new Set([400, 401, 403, 404, 405, 409, 410, 413, 422]);
 
 export function createPlanCBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
