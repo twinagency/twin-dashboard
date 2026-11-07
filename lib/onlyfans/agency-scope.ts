@@ -51,6 +51,8 @@ export function agencyOnlyFansRequest(path: string, method: string, serverAction
   try { path = decodeURIComponent(path); } catch { return false; }
   if (["GET", "HEAD"].includes(method) && /^\/onlyfans(?:\/(?:overview|accounts|inbox|content|sales|settings|campaigns|operations|launch(?:\/(?:automation|memory))?))?\/?$/.test(path)) return true;
   if (canChat && ((method === "POST" && /^\/api\/onlyfans-controls\/accounts\/[A-Za-z0-9._:-]{1,64}\/conversations\/[A-Za-z0-9._:-]{1,64}(?:\/requests\/[0-9a-f-]{36})?$/.test(path)) || (method === "PATCH" && /^\/api\/onlyfans-launch\/memory\/accounts\/[A-Za-z0-9._:-]{1,64}\/fans\/[1-9][0-9]{0,17}$/.test(path)))) return true;
+  // Plan C approvals are the internal operator's alone: no agency grant, manager or chat, may reach them even through the broad purpose-route rule below.
+  if (/^\/api\/onlyfans-controls\/accounts\/[^/]+\/plan-c(?:\/|$)/.test(path) || /^\/onlyfans\/plan-c\/?$/.test(path)) return false;
   const api = /^\/api\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}\/(?:conversations(?:\/[A-Za-z0-9._:-]{1,64}(?:\/(?:handover|engine-status))?)?|engine\/(?:unresolved|catalogue)|workspace\/(?:content|sales|settings)|operations))?\/?$/.test(path);
   const purpose = /^\/api\/onlyfans-(?:controls|configuration|content|campaigns)\/accounts\/[A-Za-z0-9._:-]{1,64}(?:\/.*)?$/.test(path);
   // Launch routes have a section before /accounts. Whitelist delivered routes

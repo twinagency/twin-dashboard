@@ -9,6 +9,8 @@
     "lint": "next lint",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p tsconfig.preview.json --noEmit && tsc -p tsconfig.tests.json --noEmit",
     "test:engine-contracts": "node --import tsx --test tests/contracts/facade.test.mjs tests/contracts/engine-status.test.mjs tests/contracts/engine-operator.test.ts tests/contracts/engine-environment.test.ts tests/contracts/engine-backend.test.ts tests/contracts/engine-catalogue.test.ts",
+    "test:plan-c-contracts": "node --import tsx --test tests/contracts/plan-c.test.ts",
+    "test:plan-c-ui": "node --import tsx --test tests/components/plan-c-ui.test.tsx",
     "test:engine-ui": "node --import tsx --test tests/components/engine-ui.test.tsx",
     "test:engine-browser": "node tests/browser/build-engine-journey.mjs && node tests/browser/check-engine-journey.mjs",
     "test:history": "tsx scripts/check-chat-history-window.ts && tsx scripts/check-live-telegram.ts",
