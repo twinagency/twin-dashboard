@@ -1,0 +1,21 @@
+{
+  "expected": {
+    "accountId": "of-synthetic-a",
+    "conversationId": "of-synthetic-a:42",
+    "action": "manual_message",
+    "expectedRevision": 7,
+    "commandKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "ack": {
+    "schemaVersion": "of-controls.v1",
+    "ok": true,
+    "applied": true,
+    "commandKey": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "accountId": "of-synthetic-a",
+    "conversationId": "of-synthetic-a:42",
+    "action": "manual_message",
+    "recordedRevision": 7,
+    "intentId": "12345678-1234-1234-1234-123456789abc",
+    "outcome": "queued"
+  }
+}
