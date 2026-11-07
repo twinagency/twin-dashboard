@@ -128,9 +128,17 @@ export function createPlanCMock(options: MockOptions = {}) {
       const item = state.unresolved.find(u => u.id === m![1]);
       if (!item) return respond(call, 404, { ok: false });
       if (!strictKeys(body, ["commandKey", "actor", "evidenceRef"]) || typeof body.evidenceRef !== "string" || !body.evidenceRef.startsWith("operator:") || body.evidenceRef.length < 12) return respond(call, 400, { ok: false });
-      state.unresolved = state.unresolved.filter(u => u.id !== item.id);
+      if (!["unknown_send", "unlinked_transaction", "unreconciled_access"].includes(item.kind)) return respond(call, 409, { ok: false });
+      const retained = item.kind === "unknown_send" || (item.kind === "unreconciled_access" && item.nextStep === "review_unlinked_financial_evidence");
+      if (retained) {
+        state.unresolved = state.unresolved.map(u => u.id === item.id
+          ? { ...u, nextStep: item.kind === "unknown_send" ? "awaiting_provider_proof" : u.nextStep,
+              summary: `${u.summary} Evidence was recorded; the issue remains.` } : u);
+      } else state.unresolved = state.unresolved.filter(u => u.id !== item.id);
       state.commits.push({ action: "reconcile", actor: body.actor as string, target: item.id });
-      return finish({ ok: true, accountId: MOCK_ACCOUNT, id: item.id, action: "reconcile", commandKey: body.commandKey, replayed: false });
+      return finish({ ok: true, accountId: MOCK_ACCOUNT, id: item.id, action: "reconcile", commandKey: body.commandKey,
+        outcome: item.kind === "unknown_send" ? "evidence_recorded_hold_retained" : retained ? "evidence_recorded_finance_unlinked" : "dismissed",
+        resolved: !retained, replayed: false });
     }
     return respond(call, 404, { ok: false });
   };

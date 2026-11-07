@@ -115,11 +115,14 @@ function UnresolvedRow({ item, accountId, canAct, onReconcile }: { item: PlanCUn
   onReconcile: (item: PlanCUnresolvedItem, evidence: string) => Promise<PlanCCommandResult> }) {
   const [evidence, setEvidence] = useState(""), [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
   const problem = validateEvidenceRef(evidence);
+  const canRecordEvidence = ["unknown_send", "unlinked_transaction", "unreconciled_access"].includes(item.kind);
   const inflight = useRef(false);
   const submit = async () => {
     if (busy || problem || inflight.current) return;
     inflight.current = true; setBusy(true); setMessage(null);
-    try { const result = await onReconcile(item, evidence); setMessage(result.ok ? "Reconciled. Reloading." : result.error); if (result.ok) setEvidence(""); }
+    try { const result = await onReconcile(item, evidence); setMessage(result.ok
+      ? item.kind === "unknown_send" ? "Evidence recorded. The send remains unresolved until provider proof is applied." : "Review recorded. Reloading."
+      : result.error); if (result.ok) setEvidence(""); }
     catch { setMessage("The outcome is unconfirmed. Reload before acting again."); }
     finally { inflight.current = false; setBusy(false); }
   };
@@ -128,11 +131,12 @@ function UnresolvedRow({ item, accountId, canAct, onReconcile }: { item: PlanCUn
     {item.summary ? <p className="whitespace-pre-wrap break-words">{item.summary}</p> : null}
     <p className="text-muted" data-plan-c-owner>Owner: {item.owner}. Next step: {item.nextStep.replace(/_/g, " ")}.</p>
     {item.createdAt ? <p className="text-xs text-muted">Since {new Date(item.createdAt).toLocaleString()}</p> : null}
-    <div className="mt-2 space-y-1">
+    {canRecordEvidence ? <div className="mt-2 space-y-1">
       <label className="block text-xs">Evidence reference (what you checked)<input aria-label="Evidence reference" className="mt-1 w-full rounded border border-line px-2 py-1 text-base" maxLength={108} value={evidence} onChange={event => setEvidence(event.target.value)} /></label>
-      <button type="button" data-plan-c-reconcile className="of-control-button of-secondary" disabled={busy || !canAct || !!problem} onClick={() => void submit()}>Mark reconciled</button>
+      <button type="button" data-plan-c-reconcile className="of-control-button of-secondary" disabled={busy || !canAct || !!problem} onClick={() => void submit()}>Record evidence</button>
+      {item.kind === "unknown_send" ? <p className="text-xs text-muted">Recording a note does not resolve the send or release its hold.</p> : null}
       {evidence && problem ? <p className="text-xs text-muted">{problem}</p> : null}
-    </div>
+    </div> : <p className="mt-2 text-xs text-muted">Review this item using its next step.</p>}
     {message ? <p role="status" className="mt-1 text-xs">{message}</p> : null}
   </li>;
 }
@@ -162,8 +166,9 @@ export default function PlanCConsole({ accountId, canAct, client: injected, fetc
   /** After any command the lists are re-read. A conflict says so and shows the current draft; it never retries on its own. */
   const settle = async (result: PlanCCommandResult, label: string) => {
     setNotice(result.ok ? null : result.reload ? result.error : null);
-    setConfirmation(result.ok ? `${label}${result.replayed ? " (this exact command had already been recorded)" : ""}. Lists reloaded.` : null);
+    setConfirmation(null);
     await reload();
+    setConfirmation(result.ok ? `${label}${result.replayed ? " (this exact command had already been recorded)" : ""}. Lists reloaded.` : null);
     return result;
   };
   const conversations = useMemo<PlanCConversation[]>(() => {
@@ -213,7 +218,7 @@ export default function PlanCConsole({ accountId, canAct, client: injected, fetc
       {unresolved.kind === "loading" ? <p role="status" className="text-sm text-muted">Loading unresolved work…</p> : null}
       {unresolved.kind === "error" ? <p role="status" className="text-sm text-muted" data-plan-c-unresolved-error>{unresolved.error} <button type="button" className="underline" onClick={() => void reload()}>Retry</button></p> : null}
       {unresolved.kind === "ready" ? unresolved.value.length ? <ul className="mt-2 space-y-2">{unresolved.value.map(item =>
-        <UnresolvedRow key={item.id} item={item} accountId={accountId} canAct={canAct} onReconcile={async (row, evidence) => settle(await client.reconcile(row, evidence), `Reconciled ${row.id}`)} />)}</ul>
+        <UnresolvedRow key={item.id} item={item} accountId={accountId} canAct={canAct} onReconcile={async (row, evidence) => settle(await client.reconcile(row, evidence), row.kind === "unknown_send" ? "Evidence recorded; this send remains unresolved" : "Evidence review recorded")} />)}</ul>
         : <p className="mt-2 text-sm" data-plan-c-no-unresolved>Nothing is unresolved.</p> : null}
     </section>
   </section>;

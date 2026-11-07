@@ -82,6 +82,27 @@ test("approving one draft sends exactly one command for that version and leaves 
   assert.equal(within(draftEl(1), "[data-plan-c-approve]")?.hasAttribute("disabled"), false);
 });
 
+test("confirmation waits until the refreshed lists arrive", async () => {
+  const mock = createPlanCMock({ drafts: [seedDraft()] }), proxy = createPlanCProxy(mock);
+  const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
+  let blockReads = false, release!: () => void;
+  const barrier = new Promise<void>(resolve => { release = resolve; });
+  const delayed = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (blockReads && (init?.method ?? "GET") === "GET") await barrier;
+    return proxy.fetch(input, init);
+  }) as typeof fetch;
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct fetchImpl={delayed} />);
+  blockReads = true;
+  try {
+    await click(within(draftEl(), "[data-plan-c-approve]"));
+    assert.equal(mock.state.drafts[0].status, "approved");
+    assert.equal(q("[data-plan-c-confirmation]"), null, "do not claim the lists reloaded while reads are pending");
+  } finally { release(); }
+  await settle();
+  assert.match(q("[data-plan-c-confirmation]")?.textContent ?? "", /Lists reloaded/);
+  assert.equal(draftEl().getAttribute("data-plan-c-status"), "approved");
+});
+
 test("a double click on Approve sends one command", async () => {
   const { mock } = await mount({ drafts: [seedDraft()] });
   const button = within(draftEl(), "[data-plan-c-approve]")!;
@@ -188,7 +209,28 @@ test("unresolved work shows owner and next step, and reconcile needs an evidence
   await click(within(row, "[data-plan-c-reconcile]"));
   assert.equal(mock.posts().length, 1);
   assert.equal(mock.posts()[0].body?.evidenceRef, "operator:fansapi:provider message 55501 shows no delivery");
-  assert.equal(all("[data-plan-c-unresolved]").length, 0); assert.ok(q("[data-plan-c-no-unresolved]"));
+  assert.equal(all("[data-plan-c-unresolved]").length, 1, "an audit note never clears the unknown send");
+  assert.match(text(), /Evidence recorded; this send remains unresolved/);
+  assert.match(text(), /the issue remains/);
+});
+
+test("an unlock review note does not invent financial settlement", async () => {
+  await mount({ unresolved: [{ ...unresolved, id: "unlock-1", kind: "unreconciled_access", nextStep: "review_unlinked_financial_evidence",
+                                summary: "Provider reported an unlock. Settlement is not linked." }] });
+  const row = q("[data-plan-c-unresolved]")!;
+  await type(within(row, 'input[aria-label="Evidence reference"]'), "checked the provider unlock observation");
+  await click(within(row, "[data-plan-c-reconcile]"));
+  assert.equal(all("[data-plan-c-unresolved]").length, 1);
+  assert.match(text(), /Settlement is not linked/);
+  assert.match(text(), /Evidence review recorded/);
+});
+
+test("human-held and handed-over work does not offer an unsupported reconciliation action", async () => {
+  await mount({ unresolved: [{ ...unresolved, id: "human-1", kind: "human_hold", owner: "human", nextStep: "awaiting_handback" },
+                            { ...unresolved, id: "handover-1", kind: "handover_request", owner: "human", nextStep: "accept_handover" }] });
+  assert.equal(all("[data-plan-c-unresolved]").length, 2);
+  assert.equal(all("[data-plan-c-reconcile]").length, 0);
+  assert.match(text(), /Review this item using its next step/);
 });
 
 test("an unconfirmed outcome is shown as unconfirmed; if it did commit, the reload shows it approved and there is nothing to retry", async () => {
