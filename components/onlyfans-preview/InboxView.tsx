@@ -6,6 +6,7 @@
 // capability, ownership and delivery gates decide which commands can be used.
 // Compact rendering changes presentation only; stale reads remain visible.
 
+import { EngineStatus } from "./EngineStatus";
 import { FormEvent, useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, Check, ImagePlus, MessageCircle, Pause, Search, Send, Sparkles, UserRound } from "lucide-react";
 import styles from "./InboxView.module.css";
@@ -1009,6 +1010,7 @@ export default function InboxView({
               />
               </section>
 
+              <EngineStatus value={detail.engineStatus} accountId={detail.accountId} conversationId={detail.conversationId} />
               <FanContext detail={detail} />
               <FanMetrics detail={detail} />
               {!showPreviewChrome ? <FanMemory key={`${activeAccount.accountId}:${detail.summary.fan.fanId}`} accountId={activeAccount.accountId} fanId={detail.summary.fan.fanId} canCorrect={viewer.canManage || viewer.canChat === true} /> : null}

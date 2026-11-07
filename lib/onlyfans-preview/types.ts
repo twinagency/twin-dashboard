@@ -190,6 +190,8 @@ export type OwnedMediaItem = {
 };
 
 export type ConversationDetail = {
+  /** Independently versioned and validated before display. */
+  engineStatus?: unknown;
   /** Validated before rendering; optional during the compatible API rollout. */
   financials?: unknown;
   schemaVersion: OnlyFansPreviewSchemaVersion;
