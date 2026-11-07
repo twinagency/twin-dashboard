@@ -5,7 +5,8 @@ import type { OfAccount } from "@/lib/onlyfans-preview/types";
 import { OPERATION_REASONS, formatModelUsd, type OperationsSnapshot } from "@/lib/onlyfans/operations";
 import { workspaceHref } from "@/lib/onlyfans-preview/scope";
 import { GROUP_NEXT, groupReasons, operationRows } from "@/lib/onlyfans/section8";
-export default function OperationsView({ data, account, accounts, creatorId }: { data: OperationsSnapshot; account: OfAccount; accounts: OfAccount[]; creatorId: string | null }) {
+import EngineUnresolvedPanel from "./EngineUnresolved";
+export default function OperationsView({ data, account, accounts, creatorId, canAct = false }: { data: OperationsSnapshot; account: OfAccount; accounts: OfAccount[]; creatorId: string | null; canAct?: boolean }) {
   const description = "Check your connection, message activity and anything that needs attention.";
   const metrics = [
     ["Waiting work", data.work.waiting], ["Blocked work", data.work.blocked],
@@ -34,6 +35,7 @@ export default function OperationsView({ data, account, accounts, creatorId }: {
         <Link className="text-xs font-semibold text-accent" href={workspaceHref(row.path, { creatorId, accountId: account.accountId })}>{row.action} →</Link>
       </div>)}
     </Card>
+    <Card className="mt-5 p-4" data-of-engine-unresolved><EngineUnresolvedPanel key={account.accountId} accountId={account.accountId} canAct={canAct} /></Card>
     <Card className="mt-5 p-4">
       <h2 className="font-semibold">Current holds</h2>
       {data.reasons.length ? <div className="mt-2" data-of-hold-groups>{groupReasons(data.reasons).map(group => <section key={group.key} className="of-ops-row" data-of-hold-group={group.key}>

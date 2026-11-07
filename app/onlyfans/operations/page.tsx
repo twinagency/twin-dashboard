@@ -23,5 +23,5 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   const result = await ctx.backend.getOperations(account.accountId);
   if (!result.ok) return unavailable(result.error);
   const data = result.data;
-  return <OperationsView data={data} account={account} accounts={accounts.data} creatorId={creatorId} />;
+  return <OperationsView data={data} account={account} accounts={accounts.data} creatorId={creatorId} canAct={ctx.canChat} />;
 }
