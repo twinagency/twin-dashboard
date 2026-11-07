@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "of-engine.v1",
+  "state": "current",
+  "accountId": "of-a",
+  "conversationId": "of-a:42",
+  "environment": "live",
+  "mode": "active",
+  "salesMode": "open",
+  "truncated": false,
+  "nextCursor": null,
+  "requests": [
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556664",
+      "sourceMessageId": "9003",
+      "status": "completed",
+      "owner": "engine",
+      "nextStep": "none",
+      "revision": 2,
+      "actionOutcome": "accepted",
+      "actionType": "reply",
+      "partsCompleted": 1,
+      "partsTotal": 1
+    },
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556665",
+      "sourceMessageId": "9004",
+      "status": "declined",
+      "owner": "staff-1",
+      "nextStep": "none",
+      "revision": 5,
+      "actionOutcome": null,
+      "actionType": null,
+      "partsCompleted": 0,
+      "partsTotal": 0
+    }
+  ]
+}

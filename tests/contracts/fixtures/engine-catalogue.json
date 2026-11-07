@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "of-engine-catalogue.v1",
+  "ok": true,
+  "accountId": "of-a",
+  "nextCursor": null,
+  "items": [
+    {
+      "itemId": "11",
+      "label": "Beach set",
+      "mediaCount": 6,
+      "tags": [
+        "beach",
+        "bikini"
+      ],
+      "proposedPriceCents": 1500,
+      "approvedPriceCents": null,
+      "status": "proposed",
+      "revision": 0,
+      "fingerprint": "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8"
+    },
+    {
+      "itemId": "12",
+      "label": "Gym video",
+      "mediaCount": 1,
+      "tags": [
+        "gym"
+      ],
+      "proposedPriceCents": 2500,
+      "approvedPriceCents": 2500,
+      "status": "approved",
+      "revision": 2,
+      "fingerprint": "6b51d431df5d7f141cbececcf79edf3dd861c3b4069f0b11661a3eefacbba918"
+    },
+    {
+      "itemId": "13",
+      "label": "Old bundle",
+      "mediaCount": 12,
+      "tags": [],
+      "proposedPriceCents": null,
+      "approvedPriceCents": null,
+      "status": "retired",
+      "revision": 3,
+      "fingerprint": "3fdba35f04dc8c462986c992bcf875546257113072a909c162f7e470e581e278"
+    }
+  ]
+}

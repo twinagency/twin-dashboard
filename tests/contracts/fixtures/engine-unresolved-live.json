@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "of-engine.v1",
+  "state": "current",
+  "scope": "account",
+  "accountId": "of-a",
+  "environment": "live",
+  "nextCursor": "WzAsICIyMDI2LTExLTA3VDA2OjAwOjAwKzAwOjAwIiwgIjBhMWIyYzNkLTExMTEtNDIyMi04MzMzLTQ0NDQ1NTU1NjY2MiJd",
+  "items": [
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556661",
+      "sourceMessageId": "9000",
+      "status": "waiting_provider",
+      "owner": "engine",
+      "nextStep": "reconcile_existing_action",
+      "revision": 3,
+      "actionOutcome": "unknown",
+      "actionType": "reply",
+      "partsCompleted": 1,
+      "partsTotal": 1,
+      "conversationId": "of-a:42",
+      "fanLabel": "fan_42",
+      "attemptId": "5e1f0c2a-1111-4222-8333-444455557771",
+      "supportedActions": [
+        "mark_reconciled"
+      ]
+    },
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556662",
+      "sourceMessageId": "9001",
+      "status": "waiting_provider",
+      "owner": "engine",
+      "nextStep": "verify_access",
+      "revision": 4,
+      "actionOutcome": "accepted",
+      "actionType": "offer",
+      "partsCompleted": 1,
+      "partsTotal": 1,
+      "conversationId": "of-a:77",
+      "fanLabel": "fan_77",
+      "attemptId": null,
+      "supportedActions": []
+    },
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556664",
+      "sourceMessageId": "9003",
+      "status": "open",
+      "owner": "engine",
+      "nextStep": "review_delivery_dependency",
+      "revision": 2,
+      "actionOutcome": "ready",
+      "actionType": "reply",
+      "partsCompleted": 1,
+      "partsTotal": 1,
+      "conversationId": "of-a:90",
+      "fanLabel": null,
+      "attemptId": "5e1f0c2a-1111-4222-8333-444455557772"
+    }
+  ]
+}

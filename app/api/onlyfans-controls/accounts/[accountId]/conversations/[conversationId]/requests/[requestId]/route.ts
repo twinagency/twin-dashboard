@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
-import { configuredEngineOperatorBackend, ENGINE_OPERATOR_SCHEMA, isEngineOperatorAction } from "@/lib/onlyfans/engine-operator";
+import { configuredEngineOperatorBackend, ENGINE_OPERATOR_SCHEMA, engineActionNeedsNote, isEngineEnvironment, isEngineOperatorAction } from "@/lib/onlyfans/engine-operator";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -25,15 +25,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     body = await readCommandJson(request) as Record<string, unknown>;
     if (!body || typeof body !== "object" || Array.isArray(body) || !isEngineOperatorAction(body.action) ||
         !Number.isInteger(body.expectedRevision) || Number(body.expectedRevision) < 0 || Number(body.expectedRevision) >= 2 ** 31 - 1) throw new Error();
-    const resolution = body.action === "complete" || body.action === "decline";
-    if (Object.keys(body).sort().join(",") !== (resolution ? "action,expectedRevision,note" : "action,expectedRevision") ||
+    const resolution = engineActionNeedsNote(body.action);
+    const allowed = new Set(["action", "expectedRevision", "environment", ...(resolution ? ["note"] : [])]);
+    if (Object.keys(body).some(key => !allowed.has(key)) || (resolution && !Object.hasOwn(body, "note")) ||
+        (body.environment !== undefined && !isEngineEnvironment(body.environment)) ||
         (resolution && (typeof body.note !== "string" || !body.note.trim() || body.note !== body.note.trim() || body.note.length > 108 || /[\u0000-\u001f]/.test(body.note)))) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request action is invalid."); }
   const backend = configuredEngineOperatorBackend(ctx.fetch);
   if (!backend || !isEngineOperatorAction(body.action)) return refuse(503, "Request actions are not configured.");
   const action = body.action, expectedRevision = body.expectedRevision as number, note = typeof body.note === "string" ? body.note : undefined;
-  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null])).digest("hex");
-  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: ctx.actor, commandKey, note });
+  // A label for the audit string only. The backend decides whether this binding is simulated or real and refuses a mismatch.
+  const environment = isEngineEnvironment(body.environment) ? body.environment : "simulation";
+  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
+  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: ctx.actor, commandKey, note, environment });
   return result.ok ? answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: true, outcome: "recorded" }) :
     answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: false, outcome: result.outcome, error: result.error }, result.status ?? 502);
 }

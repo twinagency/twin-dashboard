@@ -1,13 +1,23 @@
 import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
+import { isEngineEnvironment, type EngineEnvironment } from "./engine-status";
 
 export const ENGINE_OPERATOR_SCHEMA = "of-engine-operator.v1";
 export const ENGINE_OPERATOR_HEADER = "X-OnlyFans-Engine-Operator-Version";
-export type EngineOperatorAction = "request_handover" | "accept_handover" | "complete" | "decline";
+/** `mark_reconciled` is not served by the backend yet (NEEDS-BACKEND.md). The dashboard only offers it for a row that declares support. */
+export type EngineOperatorAction = "request_handover" | "accept_handover" | "complete" | "decline" | "mark_reconciled";
+export const ENGINE_OPERATOR_ACTIONS: readonly EngineOperatorAction[] = ["request_handover", "accept_handover", "complete", "decline", "mark_reconciled"];
 export const isEngineOperatorAction = (value: unknown): value is EngineOperatorAction =>
-  typeof value === "string" && ["request_handover", "accept_handover", "complete", "decline"].includes(value);
+  typeof value === "string" && (ENGINE_OPERATOR_ACTIONS as readonly string[]).includes(value);
+/** Actions that end or close a request and so must carry what the person checked. */
+export const engineActionNeedsNote = (action: EngineOperatorAction) => action === "complete" || action === "decline" || action === "mark_reconciled";
+/** The audit string stored with a resolution. Synthetic only in the simulation; a real operator string everywhere else. */
+export function engineOperatorEvidenceRef(environment: EngineEnvironment, note: string): string {
+  return environment === "simulation" ? `synthetic:operator:${note}` : `operator:${environment}:${note}`;
+}
+export { isEngineEnvironment };
 export type EngineOperatorResult = { ok: true } | { ok: false; outcome: "refused" | "unconfirmed"; error: string };
 type Submission = { accountId: string; conversationId: string; requestId: string; action: EngineOperatorAction;
-  expectedRevision: number; commandKey: string; actor: string; note?: string };
+  expectedRevision: number; commandKey: string; actor: string; note?: string; environment?: EngineEnvironment };
 
 /** A missing or malformed acknowledgement is uncertain, never a failed write. */
 export function createEngineOperatorBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
@@ -21,16 +31,16 @@ export function createEngineOperatorBackend(options: { baseUrl: string; token: s
         body: JSON.stringify({ action: command.action, expectedRevision: command.expectedRevision,
           commandKey: command.commandKey, actor: command.actor,
           ...(command.action === "request_handover" ? { target: command.actor } : {}),
-          ...(["complete", "decline"].includes(command.action) ? { evidenceRef: `synthetic:operator:${command.note}` } : {}) }),
+          ...(engineActionNeedsNote(command.action) ? { evidenceRef: engineOperatorEvidenceRef(command.environment ?? "simulation", command.note ?? "") } : {}) }),
       });
       if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) return { ok: false, status: response.status,
         outcome: "refused", error: response.status === 409 ? "The request changed or is held. Refresh and review it before trying again." : "The request action was not accepted." };
       if (response.ok) {
         const ack = await response.json() as Record<string, unknown>;
-        const expectedStatus = { request_handover: "handover_pending", accept_handover: "handover_accepted", complete: "completed", decline: "declined" }[command.action];
+        const expectedStatus = { request_handover: "handover_pending", accept_handover: "handover_accepted", complete: "completed", decline: "declined", mark_reconciled: null }[command.action];
         if (ack && ack.schemaVersion === ENGINE_OPERATOR_SCHEMA && ack.ok === true && ack.accountId === command.accountId &&
             ack.conversationId === command.conversationId && ack.requestId === command.requestId && ack.action === command.action &&
-            ack.commandKey === command.commandKey && ack.status === expectedStatus && ack.recordedRevision === command.expectedRevision + 1 &&
+            ack.commandKey === command.commandKey && (expectedStatus === null ? typeof ack.status === "string" : ack.status === expectedStatus) && ack.recordedRevision === command.expectedRevision + 1 &&
             typeof ack.owner === "string" && typeof ack.nextStep === "string" && typeof ack.replayed === "boolean") return { ok: true };
       }
     } catch { /* The backend may have committed before the connection failed. */ }

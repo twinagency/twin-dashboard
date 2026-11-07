@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "of-engine.v1",
+  "state": "current",
+  "accountId": "of-a",
+  "conversationId": "of-a:42",
+  "environment": "simulation",
+  "mode": "active",
+  "salesMode": "open",
+  "truncated": true,
+  "nextCursor": "WzEsICIyMDI2LTExLTA3VDA3OjAwOjAwKzAwOjAwIiwgIjBhMWIyYzNkLTExMTEtNDIyMi04MzMzLTQ0NDQ1NTU1NjY2MyJd",
+  "requests": [
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556661",
+      "sourceMessageId": "9000",
+      "status": "waiting_provider",
+      "owner": "engine",
+      "nextStep": "reconcile_existing_action",
+      "revision": 3,
+      "actionOutcome": "unknown",
+      "actionType": "reply",
+      "partsCompleted": 1,
+      "partsTotal": 1
+    },
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556662",
+      "sourceMessageId": "9001",
+      "status": "waiting_provider",
+      "owner": "engine",
+      "nextStep": "verify_access",
+      "revision": 4,
+      "actionOutcome": "accepted",
+      "actionType": "offer",
+      "partsCompleted": 1,
+      "partsTotal": 1
+    },
+    {
+      "requestId": "0a1b2c3d-1111-4222-8333-444455556663",
+      "sourceMessageId": "9002",
+      "status": "completed",
+      "owner": "engine",
+      "nextStep": "none",
+      "revision": 6,
+      "actionOutcome": "accepted",
+      "actionType": "offer",
+      "partsCompleted": 1,
+      "partsTotal": 1
+    }
+  ]
+}
