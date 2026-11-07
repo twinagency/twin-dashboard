@@ -10,5 +10,5 @@ await build({ absWorkingDir: root, entryPoints: ["tests/browser/engine-journey.t
   define: { "process.env.NODE_ENV": '"development"' }, plugins: [{ name: "synthetic-next", setup(b) {
     b.onResolve({ filter: /^next\/(navigation|link)$|^@\/app\/actions\/clone-scope$/ }, () => ({ path: path.join(root, "preview/onlyfans-ui/next-shim.tsx") }));
   }}] });
-await copyFile("/evidence/browser-preview-offline/base.css", path.join(out, "base.css"));
+await copyFile(process.env.ENGINE_BROWSER_BASE_CSS || "/evidence/browser-preview-offline/base.css", path.join(out, "base.css"));
 await writeFile(path.join(out, "index.html"), '<!doctype html><html lang="en"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/base.css"><link rel="stylesheet" href="/app.css"></head><body><div id="root"></div><script type="module" src="/app.js"></script></body></html>');

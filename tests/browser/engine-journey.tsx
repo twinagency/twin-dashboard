@@ -8,7 +8,8 @@ import type { EngineStatusView } from "../../lib/onlyfans/engine-status";
 import type { ConversationDetail } from "../../lib/onlyfans-preview/types";
 
 async function main() {
-  const [envelope, sequence] = await Promise.all([fetch("/journey.json").then(r => r.json()), fetch("/sequence.json").then(r => r.json())]);
+  const [envelope, sequence, live, livePage2] = await Promise.all([fetch("/journey.json").then(r => r.json()), fetch("/sequence.json").then(r => r.json()),
+    fetch("/live.json").then(r => r.json()), fetch("/live-page2.json").then(r => r.json())]);
   window.fetch = async () => Response.json({ error: "No external calls in the browser fixture." }, { status: 503 });
   const detail = envelope.conversation as ConversationDetail;
   function App() {
@@ -22,13 +23,17 @@ async function main() {
       return { ok: true };
     };
     const account = { ...accounts[0], accountId: detail.accountId };
-    return <main><button type="button" data-load-sequence onClick={() => setValue(sequence)}>Load ordered-request fixture</button><InboxView accountsState={{ status: "ready", data: [account] }} activeAccount={account} activeAccountId={detail.accountId}
+    // Real-shaped backend pages, rescoped to the open conversation. A later page is served only for the first page's cursor.
+    const scoped = (page: object) => ({ ...page, accountId: detail.accountId, conversationId: detail.conversationId });
+    const onLoadMore = async (cursor: string) => { (window as unknown as { cursors: string[] }).cursors.push(cursor); await new Promise(resolve => setTimeout(resolve, 100)); return scoped(livePage2); };
+    return <main><button type="button" data-load-sequence onClick={() => setValue(sequence)}>Load ordered-request fixture</button>
+      <button type="button" data-load-live onClick={() => setValue(scoped(live) as EngineStatusView)}>Load live fixture</button><InboxView accountsState={{ status: "ready", data: [account] }} activeAccount={account} activeAccountId={detail.accountId}
       onSelectAccount={() => {}} conversations={{ status: "ready", data: { items: [detail.summary], nextCursor: null } }}
       selectedConversationId={detail.conversationId} onSelectConversation={() => {}} detailState={{ status: "ready", data: { ...detail, engineStatus: value } }}
-      viewer={operatorViewer()} onCommand={() => {}} onEngineAction={onAction} commandResult={null} nextCursor={null} loadingMore={false}
+      viewer={operatorViewer()} onCommand={() => {}} onEngineAction={onAction} onEngineLoadMore={onLoadMore} commandResult={null} nextCursor={null} loadingMore={false}
       onLoadMore={() => {}} showPreviewChrome={true} /></main>;
   }
-  (window as unknown as { actions: unknown[] }).actions = [];
+  (window as unknown as { actions: unknown[]; cursors: string[] }).actions = []; (window as unknown as { cursors: string[] }).cursors = [];
   createRoot(document.getElementById("root")!).render(<App />);
 }
 void main();

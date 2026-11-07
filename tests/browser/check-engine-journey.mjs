@@ -9,7 +9,9 @@ await fs.mkdir(shots, { recursive: true });
 const files = { "/": [path.join(dist,"index.html"), "text/html"], "/app.js": [path.join(dist,"app.js"), "text/javascript"],
   "/app.css": [path.join(dist,"app.css"), "text/css"], "/base.css": [path.join(dist,"base.css"), "text/css"],
   "/journey.json": [process.env.ENGINE_JOURNEY_ARTIFACT || "/evidence/synthetic-journey-final.json", "application/json"],
-  "/sequence.json": [process.env.ENGINE_SEQUENCE_ARTIFACT || "/evidence/sequence-projection-final.json", "application/json"] };
+  "/sequence.json": [process.env.ENGINE_SEQUENCE_ARTIFACT || "/evidence/sequence-projection-final.json", "application/json"],
+  "/live.json": [path.join(import.meta.dirname, "../contracts/fixtures/engine-status-live.json"), "application/json"],
+  "/live-page2.json": [path.join(import.meta.dirname, "../contracts/fixtures/engine-status-live-page2.json"), "application/json"] };
 const server = http.createServer(async (req,res) => {
   try { const item = files[new URL(req.url,"http://localhost").pathname]; if (!item) throw new Error("not found");
     res.writeHead(200,{ "Content-Type": item[1], "Cache-Control":"no-store" }); res.end(await fs.readFile(item[0]));
@@ -51,6 +53,19 @@ try {
     check(calls.length===3 && calls[2].note==="Checked the synthetic request","Operator actions and note captured by fixture handler");
     if(width < 1024) { await page.locator("[data-of-mobile-panel=chat]").click(); }
     check(await page.locator("span.whitespace-pre-wrap").filter({hasText:"Two plus two is four."}).isVisible(),"Actual simulated receipt is visible in the inbox");
+    // A real-shaped live page: environment badge, unresolved first, purchase evidence, Load more.
+    await page.locator("[data-load-live]").click();
+    if (width < 1024) await page.locator("[data-of-mobile-panel=controls]").click();
+    check(await section.locator("[data-engine-environment=live]").isVisible(),"Live environment is badged");
+    check(await section.getByText(/Simulation/).count()===0,"A live status is never labelled Simulation");
+    check(await section.getByText("Actions here affect a real creator account.").isVisible(),"Real accounts are called out");
+    check(await section.locator("[data-engine-purchase=purchased]").isVisible() && await section.locator("[data-engine-purchase=unlocked]").isVisible(),"Purchase and unlock evidence shown on requests");
+    check((await section.locator("[data-engine-purchases-link]").first().getAttribute("href")).includes("screen=purchases"),"Requests link to the purchases screen");
+    check(await section.locator("[data-engine-request]").count()===3,"First page has three requests");
+    await section.locator("[data-engine-load-more]").click();
+    await section.locator("[data-engine-request]").nth(4).waitFor();
+    check(await section.locator("[data-engine-request]").count()===5 && await section.locator("[data-engine-load-more]").count()===0,"Load more appends the last page and removes the control");
+    check((await page.evaluate(()=>window.cursors)).length===1,"Exactly one page was requested");
     check(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth + 1),"No page overflow");
     await page.screenshot({path:path.join(shots,`engine-journey-${width}.png`),fullPage:true});
   }
