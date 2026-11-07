@@ -13,6 +13,7 @@ export type RawPart = { part_index: number; action: "reply" | "offer"; body: str
 export type RawDraft = { requestId: string; generation: number; draftVersion: number; draftHash: string; status: "awaiting" | "approved" | "rejected" | "invalidated";
   action: "reply" | "offer"; fanId: string; expiresAt: string; parts: RawPart[]; conversation: { revision: number; messages: Array<{ direction: string; text: string; at: string }> };
   evidence: string | null; approvedBy: string | null; approvedAt: string | null; rejectReason?: string };
+export type RawReceipt = { intentId: string; fanId: string; messageId: string; acceptedAt: string; action: "reply" | "offer"; projected: boolean };
 export type RawUnresolved = { id: string; kind: string; owner: string; nextStep: string; summary: string; conversationId: string | null; revision: number | null; createdAt: string };
 export type Call = { method: string; path: string; headers: Headers; body: Record<string, unknown> | null; status: number };
 
@@ -35,10 +36,10 @@ export function seedOffer(overrides: Partial<RawDraft> = {}): RawDraft {
     { part_index: 1, action: "offer", body: "Plan C test set, 3 items", price_cents: 600, currency: "USD", media_ids: ["m1", "m2", "m3"], preview_ids: ["p1"], catalog_item_id: "set-1" }], ...overrides });
 }
 
-export type MockOptions = { token?: string; drafts?: RawDraft[]; unresolved?: RawUnresolved[]; conversations?: Record<string, { revision: number; owner: string }> };
+export type MockOptions = { token?: string; drafts?: RawDraft[]; receipts?: RawReceipt[]; unresolved?: RawUnresolved[]; conversations?: Record<string, { revision: number; owner: string }> };
 export function createPlanCMock(options: MockOptions = {}) {
   const token = options.token ?? MOCK_TOKEN;
-  const state = { drafts: options.drafts ?? [] as RawDraft[], unresolved: options.unresolved ?? [] as RawUnresolved[],
+  const state = { drafts: options.drafts ?? [] as RawDraft[], receipts: options.receipts ?? [] as RawReceipt[], unresolved: options.unresolved ?? [] as RawUnresolved[],
     conversations: options.conversations ?? {} as Record<string, { revision: number; owner: string }>,
     applied: new Map<string, { fingerprint: string; ack: Record<string, unknown> }>(), calls: [] as Call[], commits: [] as Array<{ action: string; actor: string; target: string }> };
   /** Test hooks. `dropReplyAfterCommit` applies the command and then breaks the connection, the case the dashboard must call unconfirmed. */
@@ -66,7 +67,7 @@ export function createPlanCMock(options: MockOptions = {}) {
     if (!match || match[1] !== MOCK_ACCOUNT) return respond(call, 404, { ok: false });
     const rest = match[2];
     if (method === "GET") {
-      if (rest === "drafts") return respond(call, 200, { schemaVersion: MOCK_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts: state.drafts.filter(live) });
+      if (rest === "drafts") return respond(call, 200, { schemaVersion: MOCK_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts: state.drafts.filter(live), receipts: state.receipts });
       if (rest === "unresolved") return respond(call, 200, { schemaVersion: MOCK_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: state.unresolved });
       return respond(call, 404, { ok: false });
     }

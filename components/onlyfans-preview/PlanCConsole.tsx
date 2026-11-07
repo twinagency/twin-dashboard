@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPlanCClient, type PlanCClient } from "@/lib/onlyfans/plan-c-client";
 import { canApprove, isExpired, minutesLeft, validateEditedParts, validateEvidenceRef, validateRejectReason,
-  type PlanCCommandResult, type PlanCConversation, type PlanCConversationAction, type PlanCDraft, type PlanCUnresolvedItem } from "@/lib/onlyfans/plan-c";
+  type PlanCCommandResult, type PlanCConversation, type PlanCConversationAction, type PlanCDraft, type PlanCReceipt, type PlanCUnresolvedItem } from "@/lib/onlyfans/plan-c";
 
 const usd = (cents: number | null, currency: string | null) => cents === null ? "no price" : `${currency ?? "USD"} ${(cents / 100).toFixed(2)}`;
 const place = (conversationId: string, accountId: string) => `Fan ${conversationId.startsWith(`${accountId}:`) ? conversationId.slice(accountId.length + 1) : conversationId}`;
@@ -149,7 +149,7 @@ type Load<T> = { kind: "loading" } | { kind: "error"; error: string } | { kind: 
  */
 export default function PlanCConsole({ accountId, canAct, client: injected, fetchImpl }: { accountId: string; canAct: boolean; client?: PlanCClient; fetchImpl?: typeof fetch }) {
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, fetchImpl }), [injected, accountId, fetchImpl]);
-  const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
+  const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [held, setHeld] = useState<Record<string, number>>({}), [now, setNow] = useState(() => Date.now());
   const generation = useRef(0);
   const reload = useCallback(async () => {
@@ -158,6 +158,8 @@ export default function PlanCConsole({ accountId, canAct, client: injected, fetc
     if (mine !== generation.current) return;
     setNow(Date.now());
     setDrafts(d.ok ? { kind: "ready", value: d.data.drafts } : { kind: "error", error: d.error });
+    setReceipts(d.ok && d.data.receipts !== null ? { kind: "ready", value: d.data.receipts } :
+      { kind: "error", error: d.ok ? "Receipt history is unavailable from this backend." : d.error });
     setUnresolved(u.ok ? { kind: "ready", value: u.data.items } : { kind: "error", error: u.error });
   }, [client]);
   useEffect(() => { void reload(); return () => { generation.current++; }; }, [reload]);
@@ -207,6 +209,17 @@ export default function PlanCConsole({ accountId, canAct, client: injected, fetc
           onApprove={async item => settle(await client.approveDraft(item), `Approved version ${item.draftVersion} for ${item.conversationId}`)} onReject={async (item, reason) => settle(await client.rejectDraft(item, reason), `Rejected version ${item.draftVersion} for ${item.conversationId}`)}
           onEdit={async (item, parts) => settle(await client.editDraft(item, parts), `Edit saved for ${item.conversationId}; the new version needs a fresh approval`)} />)}</ul>
         : <p className="mt-2 text-sm" data-plan-c-no-drafts>No drafts are waiting for approval.</p> : null}
+    </section>
+
+    <section aria-label="Provider receipts"><h2 className="font-semibold">Provider receipts</h2>
+      <p className="text-xs text-muted">Accepted by the provider; this does not confirm a read, purchase or settlement.</p>
+      {receipts.kind === "loading" ? <p role="status" className="text-sm text-muted">Loading receipts…</p> : null}
+      {receipts.kind === "error" ? <p role="status" className="text-sm text-muted" data-plan-c-receipts-error>{receipts.error}</p> : null}
+      {receipts.kind === "ready" ? receipts.value.length ? <ul className="mt-2 space-y-2">{receipts.value.map(receipt =>
+        <li key={receipt.intentId} data-plan-c-receipt={receipt.intentId} className="rounded-lg border border-line p-3 text-sm">
+          <p>Fan {receipt.fanId} · {receipt.action === "offer" ? "Paid card" : "Reply"} · Provider message {receipt.messageId}</p>
+          <p className="text-muted">Accepted {new Date(receipt.acceptedAt).toLocaleString()}. {receipt.projected ? "Recorded in the conversation." : "Conversation record pending."}</p>
+        </li>)}</ul> : <p className="mt-2 text-sm" data-plan-c-no-receipts>No provider receipts are recorded.</p> : null}
     </section>
 
     <section aria-label="Conversation controls"><h2 className="font-semibold">Conversation controls</h2>

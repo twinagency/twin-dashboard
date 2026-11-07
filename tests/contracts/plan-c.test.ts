@@ -245,6 +245,19 @@ test("drafts keep the exact ordered parts, offer terms, context and expiry; a ha
   assert.deepEqual(parsePlanCDraft(many, MOCK_ACCOUNT)?.messages.map(m => m.text), Array.from({ length: 10 }, (_, i) => `m${i + 20}`), "last 10 messages");
 });
 
+test("receipt list accepts only bounded provider acceptances and distinguishes unavailable history", () => {
+  const receipt = { intentId: "00000000-0000-4000-8000-000000000001", fanId: "101", messageId: "7001",
+                    acceptedAt: "2026-11-07T10:00:00Z", action: "reply", projected: true };
+  const base = { schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts: [] };
+  assert.equal(parsePlanCDrafts(base, MOCK_ACCOUNT)?.receipts, null);
+  assert.deepEqual(parsePlanCDrafts({ ...base, receipts: [receipt] }, MOCK_ACCOUNT)?.receipts, [receipt]);
+  for (const bad of [{ ...receipt, messageId: "0" }, { ...receipt, fanId: "other" },
+                     { ...receipt, action: "purchase" }, { ...receipt, projected: "true" },
+                     { ...receipt, acceptedAt: "invalid" }])
+    assert.equal(parsePlanCDrafts({ ...base, receipts: [bad] }, MOCK_ACCOUNT), null);
+  assert.equal(parsePlanCDrafts({ ...base, receipts: [receipt, receipt] }, MOCK_ACCOUNT), null);
+});
+
 test("unresolved items carry owner and next step and are refused when out of scope", () => {
   const ok = parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: [unresolvedRow()] }, MOCK_ACCOUNT);
   assert.equal(ok?.items[0].owner, "engine"); assert.equal(ok?.items[0].nextStep, "reconcile_with_provider");

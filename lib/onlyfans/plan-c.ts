@@ -57,7 +57,10 @@ export type PlanCDraft = {
   approvedBy: string | null;
   approvedAt: string | null;
 };
-export type PlanCDraftList = { accountId: string; drafts: PlanCDraft[] };
+export type PlanCReceipt = { intentId: string; fanId: string; messageId: string; acceptedAt: string;
+  action: "reply" | "offer"; projected: boolean };
+/** null means the connected backend did not provide receipt history. */
+export type PlanCDraftList = { accountId: string; drafts: PlanCDraft[]; receipts: PlanCReceipt[] | null };
 
 function strings(value: unknown, maxItems: number, maxLength = 64): string[] | null {
   if (value === undefined || value === null) return [];
@@ -153,7 +156,22 @@ export function parsePlanCDrafts(value: unknown, accountId: string): PlanCDraftL
   const drafts: PlanCDraft[] = [];
   for (const raw of value.drafts) { const draft = parsePlanCDraft(raw, accountId); if (!draft) return null; drafts.push(draft); }
   if (new Set(drafts.map(draft => `${draft.requestId}:${draft.generation}`)).size !== drafts.length) return null;
-  return { accountId, drafts };
+  let receipts: PlanCReceipt[] | null = null;
+  if (value.receipts !== undefined && value.receipts !== null) {
+    if (!Array.isArray(value.receipts) || value.receipts.length > 50) return null;
+    receipts = [];
+    for (const raw of value.receipts) {
+      if (!record(raw) || typeof raw.intentId !== "string" || !UUID.test(raw.intentId) ||
+          typeof raw.fanId !== "string" || !/^[1-9][0-9]{0,18}$/.test(raw.fanId) ||
+          typeof raw.messageId !== "string" || !/^[1-9][0-9]{0,18}$/.test(raw.messageId) ||
+          !isoDate(raw.acceptedAt) || (raw.action !== "reply" && raw.action !== "offer") ||
+          typeof raw.projected !== "boolean") return null;
+      receipts.push({ intentId: raw.intentId, fanId: raw.fanId, messageId: raw.messageId,
+                      acceptedAt: raw.acceptedAt, action: raw.action, projected: raw.projected });
+    }
+    if (new Set(receipts.map(receipt => receipt.intentId)).size !== receipts.length) return null;
+  }
+  return { accountId, drafts, receipts };
 }
 
 // ── Unresolved work ───────────────────────────────────────────────────────────

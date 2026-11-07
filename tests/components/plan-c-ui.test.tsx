@@ -58,6 +58,15 @@ test("a draft shows the exact ordered text, action, media count, price, version,
   assert.equal(all("[data-plan-c-message]").length, 2); assert.match(text(), /hi are you there/);
 });
 
+test("provider acceptance is displayed without implying a read or purchase", async () => {
+  await mount({ receipts: [{ intentId: "00000000-0000-4000-8000-000000000001", fanId: "101", messageId: "7001",
+                            acceptedAt: "2026-11-07T10:00:00Z", action: "reply", projected: true }] });
+  const receipt = q("[data-plan-c-receipt]");
+  assert.ok(receipt); assert.match(receipt.textContent ?? "", /Fan 101.*Reply.*Provider message 7001/);
+  assert.match(text(), /does not confirm a read, purchase or settlement/);
+  assert.match(receipt.textContent ?? "", /Recorded in the conversation/);
+});
+
 test("opening the page and waiting sends nothing: zero commands, and no approve-all control exists", async () => {
   const { mock, proxy } = await mount({ drafts: [seedDraft(), seedDraft({ fanId: "900000000002" })], unresolved: [unresolved] });
   await settle(); await settle();
