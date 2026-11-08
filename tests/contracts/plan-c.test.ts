@@ -356,7 +356,7 @@ test("the proxy routes exist, take the token only on the server, and gate every 
     assert.ok(!/process\.env|ONLYFANS_|fetch\(/.test(source), `${file} does no I/O of its own`);
   }
   const guard = read("lib/onlyfans/plan-c-guard.ts");
-  assert.match(guard, /requireOnlyFansRead\(\{ agency: false, write \}\)/);
+  assert.match(guard, /requireOnlyFansRead\(\{ agency: false, write, pilotIdentity: true \}\)/);
   assert.match(guard, /planCOperatorOnly\(ctx\)/);
   assert.match(guard, /trustedFormOrigin\(request\)/);
   assert.match(guard, /readCommandJson\(request, PLAN_C_MAX_BODY_BYTES\)/);

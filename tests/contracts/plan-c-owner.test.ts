@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner";
+import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 
 const token1 = `owner_${"1".repeat(64)}`;
 const token2 = `owner_${"2".repeat(64)}`;
