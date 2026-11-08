@@ -16,12 +16,12 @@ const version = (value: unknown): value is number => typeof value === "number" &
 const revision = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 0 && value < 2 ** 31 - 1;
 
 /** Who may use the Plan C surface: the verified internal operator session, nobody else. Agency, view-as and chat-only grants are refused. */
-export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agency: boolean; viewAs: boolean; agencyGrant?: unknown }; actor: string | null; canManage: boolean }):
+export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agency: boolean; viewAs: boolean; agencyGrant?: unknown }; actor: string | null; pilotActor?: string | null; canManage: boolean }):
   { ok: true; actor: string } | { ok: false; status: 401 | 403; error: string } {
   if (!ctx.auth.operatorSession) return { ok: false, status: 401, error: "Sign in as the operator to use Plan C approvals." };
-  if (ctx.auth.agency || ctx.auth.agencyGrant || ctx.auth.viewAs || !ctx.canManage || !ctx.actor || !/^op-session:[0-9a-f]{64}$/.test(ctx.actor))
+  if (ctx.auth.agency || ctx.auth.agencyGrant || ctx.auth.viewAs || !ctx.canManage || !ctx.pilotActor || !/^op-session:[0-9a-f]{64}$/.test(ctx.pilotActor))
     return { ok: false, status: 403, error: "Plan C approvals are available to the operator only." };
-  return { ok: true, actor: ctx.actor };
+  return { ok: true, actor: ctx.pilotActor };
 }
 
 export const planCReadDrafts = async (backend: PlanCBackend, accountId: string): Promise<PlanCHttp> => {

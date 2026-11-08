@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function PlanCPage({ searchParams }: { searchParams: Promise<{ account?: string | string[] }> }) {
   const description = "Review each drafted reply or offer exactly as it would be sent. Nothing is sent until you approve it.";
   const unavailable = (message: string) => <div className="dashboard-page"><CreatorPlatformHeading title="Plan C approvals" description={description} /><CreatorPlatformEmpty title="Plan C approvals are unavailable." description={message} /></div>;
-  const ctx = await requireOnlyFansRead({ agency: false });
+  const ctx = await requireOnlyFansRead({ agency: false, pilotIdentity: true });
   if (ctx instanceof NextResponse) return unavailable("Your session cannot open this page. Sign in as the operator.");
   if (!planCOperatorOnly(ctx).ok) return unavailable("Plan C approvals are available to the operator only.");
   if (!ctx.backend) return unavailable("The OnlyFans backend is not configured.");

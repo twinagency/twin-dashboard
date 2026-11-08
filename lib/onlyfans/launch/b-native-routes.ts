@@ -1,5 +1,8 @@
 /** Native launch BFF: strict allowlists, same-origin manager commands, derived identities. */
 import { createHash } from "node:crypto";
+import { cookies } from "next/headers";
+import { SESSION_COOKIE } from "@/lib/session";
+import { planCOwnerActor } from "../plan-c-owner";
 import { NextRequest } from "next/server";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
@@ -148,7 +151,9 @@ export async function memoryFan(
       : text(body.value, 600) && !!body.value.trim())
   )
     return invalid();
-  const actor = g.ctx.actor!;
+  const named = g.ctx.auth.operatorSession && !g.ctx.auth.agency && !g.ctx.auth.viewAs
+    ? await planCOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
+  const actor = named ?? g.ctx.actor!;
   const r = await call(g.accountId, `${base}/corrections`, "POST", {
     ...body,
     actor,

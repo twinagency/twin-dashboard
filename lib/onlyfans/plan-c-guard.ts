@@ -18,7 +18,7 @@ export type PlanCRequestContext = { actor: string; accountId: string; backend: P
  */
 export async function planCGate(request: NextRequest, rawAccountId: string, write: boolean): Promise<PlanCRequestContext | NextResponse> {
   // `agency: false` keeps every agency identity out; planCOperatorOnly then insists on the internal operator session.
-  const ctx = await requireOnlyFansRead({ agency: false, write });
+  const ctx = await requireOnlyFansRead({ agency: false, write, pilotIdentity: true });
   if (ctx instanceof NextResponse) return ctx;
   const operator = planCOperatorOnly(ctx);
   if (!operator.ok) return refuse(operator.status, operator.error);

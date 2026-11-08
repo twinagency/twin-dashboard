@@ -8,6 +8,7 @@ import { agencyGrant, agencyScopedFetch } from "./agency-scope";
 import { configuredBackendPurpose } from "./backend-transport";
 import type { AgencyIdentity } from "@/lib/agency-identity";
 import { isAuthed } from "@/lib/auth";
+import { planCOwnerActor } from "./plan-c-owner";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import { configuredOnlyFansBackend, type OnlyFansBackend } from "./backend";
@@ -16,7 +17,7 @@ import { authorizeRead, denialBody, type ReadAuth, type ReadDenial, type ReadRes
 /** Private, never cached: conversation data is per-operator and per-account. */
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Data-Mode": "live" } as const;
 
-export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: string | null; canManage: boolean; canChat: boolean };
+export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: string | null; pilotActor?: string | null; canManage: boolean; canChat: boolean };
 
 export function denialResponse(denial: ReadDenial): NextResponse {
   return NextResponse.json(denialBody(denial), { status: denial.status, headers: PRIVATE_HEADERS });
@@ -31,7 +32,7 @@ export function denialResponse(denial: ReadDenial): NextResponse {
  *     const ctx = await requireOnlyFansRead();
  *     if (ctx instanceof NextResponse) return ctx;
  */
-export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage" } = {}): Promise<ReadContext | NextResponse> {
+export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean } = {}): Promise<ReadContext | NextResponse> {
   let agency: (AgencyIdentity & { kind?: string }) | null = null;
   let viewAs: unknown = null;
   try {
@@ -70,7 +71,9 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
-  return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, canManage, canChat };
+  const pilotActor = options.pilotIdentity && auth.operatorSession && !auth.agency && !auth.viewAs
+    ? await planCOwnerActor(token) : null;
+  return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };
 }
 
 export function readResponse<T>(result: ReadResult<T>): NextResponse {

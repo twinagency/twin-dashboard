@@ -281,7 +281,7 @@ test("backend reads fail closed: auth failure, wrong schema, unreadable and unre
 
 // ── who may use it ────────────────────────────────────────────────────────────
 test("only the internal operator session may use Plan C: agency, view-as, chat-only and anonymous callers are refused", () => {
-  const operator = { auth: { operatorSession: true, agency: false, viewAs: false }, actor: OPERATOR_ACTOR, canManage: true };
+  const operator = { auth: { operatorSession: true, agency: false, viewAs: false }, actor: OPERATOR_ACTOR, pilotActor: OPERATOR_ACTOR, canManage: true };
   assert.deepEqual(planCOperatorOnly(operator), { ok: true, actor: OPERATOR_ACTOR });
   const refused = (patch: object) => { const r = planCOperatorOnly({ ...operator, ...patch }); assert.equal(r.ok, false); return r; };
   assert.equal((refused({ auth: { ...operator.auth, operatorSession: false } }) as { status: number }).status, 401);
@@ -289,8 +289,8 @@ test("only the internal operator session may use Plan C: agency, view-as, chat-o
   refused({ auth: { ...operator.auth, agencyGrant: { creatorIds: [], actor: "agency-user:x", canManage: true } } });
   refused({ auth: { ...operator.auth, viewAs: true } });
   refused({ canManage: false });
-  refused({ actor: null });
-  refused({ actor: "agency-user:11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222" });
+  refused({ pilotActor: null });
+  refused({ pilotActor: "agency-user:11111111-1111-1111-1111-111111111111:22222222-2222-2222-2222-222222222222" });
 });
 
 test("agency identities cannot reach the Plan C page or routes even with manage or chat access", () => {
