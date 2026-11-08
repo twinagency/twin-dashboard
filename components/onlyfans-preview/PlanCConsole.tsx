@@ -194,7 +194,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
     return result;
   };
 
-  return <section aria-label="Plan C approvals" data-plan-c-console className="space-y-4">
+  return <section aria-label={autonomous ? "Pilot monitoring" : "Plan C approvals"} data-plan-c-console className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="text-sm text-muted">{autonomous ? "Replies and cards use automatic pilot authorization and delivery checks. Unresolved sends remain held." : "Nothing is sent until you approve a specific draft. Each approval covers one version of one draft."} Handing a chat back never sends an old draft.</p>
       <button type="button" data-plan-c-reload className="of-control-button of-secondary" onClick={() => { setNotice(null); setConfirmation(null); void reload(); }}>Reload</button>

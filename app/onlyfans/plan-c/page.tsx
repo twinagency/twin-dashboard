@@ -24,7 +24,7 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   const [access, scope] = await Promise.all([backend.drafts(accountId, operator.actor), backend.scope(accountId, operator.actor)]);
   if (!access.ok || !scope.ok) return unavailable("This pilot account is not available to this session.");
   return <div className="dashboard-page">
-    <CreatorPlatformHeading title="Plan C approvals" description={description} />
+    <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>
     <PlanCConsole accountId={accountId} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
   </div>;
