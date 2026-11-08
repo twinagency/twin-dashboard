@@ -25,9 +25,9 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   const root = (accountId: string) => options.baseUrl.replace(/\/+$/, "") + `/onlyfans/control/v2/accounts/${encodeURIComponent(accountId)}/`;
   const headers = { Authorization: `Bearer ${options.token}`, [PLAN_C_HEADER]: PLAN_C_SCHEMA };
 
-  async function read<T>(url: string, parse: (value: unknown) => T | null, what: string): Promise<PlanCReadResult<T>> {
+  async function read<T>(url: string, parse: (value: unknown) => T | null, what: string, actor?: string): Promise<PlanCReadResult<T>> {
     try {
-      const response = await call(url, { method: "GET", headers });
+      const response = await call(url, { method: "GET", headers: { ...headers, ...(actor ? { "X-Plan-C-Actor": actor } : {}) } });
       if (response.status === 404) { await response.body?.cancel(); return { ok: false, status: 404, error: `${what} is not available.` }; }
       if (response.ok) { const data = parse(await response.json()); return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` }; }
       await response.body?.cancel();
@@ -61,10 +61,10 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   }
 
   return {
-    drafts: (accountId: string): Promise<PlanCReadResult<PlanCDraftList>> =>
-      read(root(accountId) + "drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval"),
-    unresolved: (accountId: string): Promise<PlanCReadResult<PlanCUnresolvedList>> =>
-      read(root(accountId) + "unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work"),
+    drafts: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCDraftList>> =>
+      read(root(accountId) + "drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval", actor),
+    unresolved: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCUnresolvedList>> =>
+      read(root(accountId) + "unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work", actor),
     draft: (accountId: string, command: PlanCDraftCommand) => write(
       root(accountId) + `drafts/${encodeURIComponent(command.requestId)}/${command.generation}/${command.action}`,
       { expectedVersion: command.expectedVersion, commandKey: command.commandKey, actor: command.actor,

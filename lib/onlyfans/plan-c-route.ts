@@ -24,12 +24,12 @@ export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agenc
   return { ok: true, actor: ctx.pilotActor };
 }
 
-export const planCReadDrafts = async (backend: PlanCBackend, accountId: string): Promise<PlanCHttp> => {
-  const result = await backend.drafts(accountId);
+export const planCReadDrafts = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
+  const result = await backend.drafts(accountId, actor);
   return result.ok ? { status: 200, body: { schemaVersion: PLAN_C_SCHEMA, ok: true, ...result.data } } : { status: result.status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, error: result.error } };
 };
-export const planCReadUnresolved = async (backend: PlanCBackend, accountId: string): Promise<PlanCHttp> => {
-  const result = await backend.unresolved(accountId);
+export const planCReadUnresolved = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
+  const result = await backend.unresolved(accountId, actor);
   return result.ok ? { status: 200, body: { schemaVersion: PLAN_C_SCHEMA, ok: true, ...result.data } } : { status: result.status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, error: result.error } };
 };
 
