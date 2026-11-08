@@ -17,8 +17,11 @@ export function isCreatorDashboardPath(path: string | null | undefined): boolean
   return CREATOR_DASHBOARD_NAV.some(item => item.href === path) || path === "/creator/earnings" || path === "/creator/help";
 }
 export function creatorApiAllowed(path: string, method: string, serverAction: boolean): boolean {
-  if (serverAction || !["GET", "HEAD"].includes(method)) return false;
-  return ["/api/payouts", "/api/dashboard", "/api/dashboard/day-insight", "/api/media-sign", "/api/fx", "/api/avatar", "/api/business-account", "/api/business-connection"].includes(path);
+  if (serverAction) return false;
+  // The only creator write over the API: saving her own bank details. The handler re-checks ownership.
+  if (method === "POST") return path === "/api/payouts/bank";
+  if (!["GET", "HEAD"].includes(method)) return false;
+  return ["/api/payouts/bank", "/api/payouts", "/api/dashboard", "/api/dashboard/day-insight", "/api/media-sign", "/api/fx", "/api/avatar", "/api/business-account", "/api/business-connection"].includes(path);
 }
 export function assertCreatorQuery(params: URLSearchParams, cloneIds: readonly string[]): void {
   for (const key of ["clone", "cloneId", "clone_id"]) {
