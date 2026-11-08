@@ -6,6 +6,9 @@ const nextConfig = {
   // The bot and dashboard each have their own lockfile; pin the trace root to this app.
   outputFileTracingRoot: import.meta.dirname,
   experimental: {
+    // Bound build memory on Work Server; retain normal compilation and type checking.
+    webpackMemoryOptimizations: true,
+    cpus: 1,
     // Middleware clones the multipart body before the Server Action reads it.
     // Match the existing action limit so videos above Next's 10 MB default survive.
     middlewareClientMaxBodySize: "50mb",
