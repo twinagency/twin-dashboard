@@ -227,9 +227,9 @@ test("drafts keep the exact ordered parts, offer terms, context and expiry; a ha
   const raw = seedOffer(); raw.parts.reverse();
   const list = parsePlanCDrafts({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts: [raw] }, MOCK_ACCOUNT); assert.ok(list);
   const draft = list.drafts[0];
-  assert.deepEqual(draft.parts.map(p => [p.index, p.text]), [[0, "Got something for you."], [1, "Plan C test set, 3 items"]], "ordered by part index");
+  assert.deepEqual(draft.parts.map(p => [p.index, p.text]), [[0, "Got something for you."], [1, "Plan C fixture photo"]], "ordered by part index");
   assert.equal(draft.action, "offer"); assert.equal(draft.draftVersion, 1); assert.equal(draft.expiresAt, raw.expiresAt);
-  assert.deepEqual(draft.offer, { productId: "set-1", mediaCount: 3, mediaIds: ["m1", "m2", "m3"], priceCents: 600, currency: "USD" });
+  assert.deepEqual(draft.offer, { productId: "fixture-photo-1", mediaCount: 1, mediaIds: ["m1"], priceCents: 300, currency: "USD" });
   assert.equal(draft.conversationId, `${MOCK_ACCOUNT}:900000000001`); assert.equal(draft.conversationRevision, 7); assert.equal(draft.messages.length, 2);
   const bad = (mutate: (d: Record<string, unknown>) => void) => { const d = JSON.parse(JSON.stringify(seedDraft())); mutate(d); return parsePlanCDrafts({ schemaVersion: PLAN_C_SCHEMA, ok: true, drafts: [seedDraft(), d] }, MOCK_ACCOUNT); };
   assert.equal(bad(d => { d.draftHash = "short"; }), null);

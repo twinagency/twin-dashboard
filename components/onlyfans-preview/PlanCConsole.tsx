@@ -11,7 +11,7 @@ const kindLabel = (kind: string) => ({ unknown_send: "Unknown send", unlinked_tr
 const CONVERSATION_COPY: Record<PlanCConversationAction, { label: string; confirm: string; help: string }> = {
   stop: { label: "Stop", confirm: "Confirm stop", help: "Stops engine sending for this conversation." },
   takeover: { label: "Take over", confirm: "Confirm take over", help: "You write from now on. Pending drafts for this fan are invalidated." },
-  handback: { label: "Hand back to engine", confirm: "Confirm hand back", help: "The engine may plan a new draft. It never sends an old draft, and every new draft still needs your approval." } };
+  handback: { label: "Hand back to engine", confirm: "Confirm hand back", help: "The engine may plan a new draft under the current pilot checks. It never sends an old draft." } };
 
 /** Two clicks: the button, then an explicit confirmation. Nothing here runs by itself. */
 function ConversationControls({ conversation, canAct, onCommand }: { conversation: PlanCConversation; canAct: boolean;
@@ -41,7 +41,7 @@ function ConversationControls({ conversation, canAct, onCommand }: { conversatio
   </li>;
 }
 
-function DraftCard({ draft, accountId, now, canAct, onApprove, onReject, onEdit }: { draft: PlanCDraft; accountId: string; now: number; canAct: boolean;
+function DraftCard({ draft, accountId, now, canAct, autonomous, onApprove, onReject, onEdit }: { draft: PlanCDraft; accountId: string; now: number; canAct: boolean; autonomous: boolean;
   onApprove: (draft: PlanCDraft) => Promise<PlanCCommandResult>; onReject: (draft: PlanCDraft, reason: string) => Promise<PlanCCommandResult>;
   onEdit: (draft: PlanCDraft, parts: string[]) => Promise<PlanCCommandResult> }) {
   const [mode, setMode] = useState<"reject" | "edit" | null>(null), [reason, setReason] = useState(""), [texts, setTexts] = useState(() => draft.parts.map(part => part.text));
@@ -61,12 +61,12 @@ function DraftCard({ draft, accountId, now, canAct, onApprove, onReject, onEdit 
       <strong>{place(draft.conversationId, accountId)} <span className="font-normal text-muted">({draft.conversationId})</span></strong>
       <span className="flex gap-1 text-[11px] font-semibold">
         <span className="rounded-full bg-elev px-2 py-0.5" data-plan-c-action-badge>{draft.action}</span>
-        <span className="rounded-full bg-elev px-2 py-0.5" data-plan-c-status-badge>{draft.status === "awaiting" ? "awaiting approval" : draft.status}</span>
+        <span className="rounded-full bg-elev px-2 py-0.5" data-plan-c-status-badge>{draft.status === "awaiting" ? (autonomous ? "awaiting policy checks" : "awaiting approval") : draft.status}</span>
         {expired ? <span className="rounded-full bg-elev px-2 py-0.5" data-plan-c-expired>expired</span> : null}
       </span>
     </div>
     <p className="text-xs text-muted" data-plan-c-meta>Version {draft.draftVersion} · generation {draft.generation} · hash {draft.draftHash.slice(0, 12)} · {expired ? "expired" : `expires in ${Math.max(left, 0)} min`} ({new Date(draft.expiresAt).toLocaleString()})</p>
-    {draft.approvedBy ? <p className="text-xs text-muted" data-plan-c-approved-by>Approved by {draft.approvedBy}{draft.approvedAt ? ` at ${new Date(draft.approvedAt).toLocaleString()}` : ""}. Waiting for delivery checks.</p> : null}
+    {draft.approvedBy ? <p className="text-xs text-muted" data-plan-c-approved-by>{autonomous ? "Automatically authorized" : `Approved by ${draft.approvedBy}`}{draft.approvedAt ? ` at ${new Date(draft.approvedAt).toLocaleString()}` : ""}. Waiting for delivery checks.</p> : null}
 
     <p className="mt-2 text-xs font-semibold">Exact text, in send order</p>
     <ol className="mt-1 space-y-1" data-plan-c-parts>
@@ -92,18 +92,18 @@ function DraftCard({ draft, accountId, now, canAct, onApprove, onReject, onEdit 
       {reason && rejectProblem ? <p className="text-xs text-muted">{rejectProblem}</p> : null}
     </div> : null}
     {mode === "edit" ? <div className="mt-2 space-y-2">
-      <p className="text-xs text-muted">Saving an edit cancels any earlier approval. The edited draft returns here as a new version and needs a fresh approval.</p>
+      <p className="text-xs text-muted">Saving an edit invalidates the earlier authorization. The new version must pass the current pilot checks.</p>
       {texts.map((value, index) => <label key={index} className="block text-xs">Part {index + 1} text{draft.parts[index].action === "offer" ? " (lead-in; the card line is rebuilt by the system)" : ""}
         <textarea aria-label={`Part ${index + 1} text`} className="mt-1 w-full rounded border border-line px-2 py-1 text-base" rows={3} maxLength={2000} value={value}
           onChange={event => setTexts(current => current.map((item, at) => at === index ? event.target.value : item))} /></label>)}
-      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), "Edit saved. Reloading the new version for approval.")}>Save edit</button>
+      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), autonomous ? "Edit saved. Reloading for policy checks." : "Edit saved. Reloading the new version for approval.")}>Save edit</button>
         <button type="button" className="of-control-button of-secondary" disabled={busy} onClick={() => { setMode(null); setTexts(draft.parts.map(part => part.text)); }}>Cancel</button></div>
       {editProblem && texts.some((value, index) => value !== draft.parts[index].text) ? <p className="text-xs text-muted">{editProblem}</p> : null}
     </div> : null}
 
     {mode === null ? <div className="mt-2 flex flex-wrap gap-2">
-      <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || !canApprove(draft, now)}
-        onClick={() => void run(() => onApprove(draft), `Approved version ${draft.draftVersion}. Delivery checks run before anything is sent.`)}>{draft.status === "approved" ? "Already approved" : "Approve this version"}</button>
+      {!autonomous ? <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || !canApprove(draft, now)}
+        onClick={() => void run(() => onApprove(draft), `Approved version ${draft.draftVersion}. Delivery checks run before anything is sent.`)}>{draft.status === "approved" ? "Already approved" : "Approve this version"}</button> : null}
       <button type="button" data-plan-c-edit className="of-control-button of-secondary" disabled={busy || !canAct} onClick={() => setMode("edit")}>Edit</button>
       <button type="button" data-plan-c-reject className="of-control-button of-secondary" disabled={busy || !canAct} onClick={() => setMode("reject")}>Reject</button>
     </div> : null}
@@ -147,7 +147,8 @@ type Load<T> = { kind: "loading" } | { kind: "error"; error: string } | { kind: 
  * Plan C approvals. Reads and writes go through this dashboard's own routes; the backend token never reaches the browser.
  * There is no polling approve, no "approve all" and no automatic hand back: every command is one click on one item.
  */
-export default function PlanCConsole({ accountId, canAct, client: injected, fetchImpl }: { accountId: string; canAct: boolean; client?: PlanCClient; fetchImpl?: typeof fetch }) {
+export default function PlanCConsole({ accountId, canAct, authorizationMode = "supervised", client: injected, fetchImpl }: { accountId: string; canAct: boolean; authorizationMode?: "supervised" | "autonomous"; client?: PlanCClient; fetchImpl?: typeof fetch }) {
+  const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, fetchImpl }), [injected, accountId, fetchImpl]);
   const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [held, setHeld] = useState<Record<string, number>>({}), [now, setNow] = useState(() => Date.now());
@@ -195,20 +196,20 @@ export default function PlanCConsole({ accountId, canAct, client: injected, fetc
 
   return <section aria-label="Plan C approvals" data-plan-c-console className="space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="text-sm text-muted">Nothing is sent until you approve a specific draft. Each approval covers one version of one draft. Handing a chat back never sends an old draft.</p>
+      <p className="text-sm text-muted">{autonomous ? "Replies and cards use automatic pilot authorization and delivery checks. Unresolved sends remain held." : "Nothing is sent until you approve a specific draft. Each approval covers one version of one draft."} Handing a chat back never sends an old draft.</p>
       <button type="button" data-plan-c-reload className="of-control-button of-secondary" onClick={() => { setNotice(null); setConfirmation(null); void reload(); }}>Reload</button>
     </div>
     {confirmation ? <p role="status" className="rounded-lg border border-line p-2 text-sm" data-plan-c-confirmation>{confirmation}</p> : null}
     {notice ? <p role="alert" className="rounded-lg border border-line p-2 text-sm" data-plan-c-notice>{notice}</p> : null}
 
-    <section aria-label="Drafts awaiting approval"><h2 className="font-semibold">Drafts awaiting approval</h2>
+    <section aria-label={autonomous ? "Pilot drafts" : "Drafts awaiting approval"}><h2 className="font-semibold">{autonomous ? "Pilot drafts" : "Drafts awaiting approval"}</h2>
       {drafts.kind === "loading" ? <p role="status" className="text-sm text-muted">Loading drafts…</p> : null}
       {drafts.kind === "error" ? <p role="status" className="text-sm text-muted" data-plan-c-drafts-error>{drafts.error} <button type="button" className="underline" onClick={() => void reload()}>Retry</button></p> : null}
       {drafts.kind === "ready" ? drafts.value.length ? <ul className="mt-2 space-y-2">{drafts.value.map(draft =>
-        <DraftCard key={`${draft.requestId}:${draft.generation}:${draft.draftVersion}:${draft.status}`} draft={draft} accountId={accountId} now={now} canAct={canAct}
+        <DraftCard key={`${draft.requestId}:${draft.generation}:${draft.draftVersion}:${draft.status}`} draft={draft} accountId={accountId} now={now} canAct={canAct} autonomous={autonomous}
           onApprove={async item => settle(await client.approveDraft(item), `Approved version ${item.draftVersion} for ${item.conversationId}`)} onReject={async (item, reason) => settle(await client.rejectDraft(item, reason), `Rejected version ${item.draftVersion} for ${item.conversationId}`)}
-          onEdit={async (item, parts) => settle(await client.editDraft(item, parts), `Edit saved for ${item.conversationId}; the new version needs a fresh approval`)} />)}</ul>
-        : <p className="mt-2 text-sm" data-plan-c-no-drafts>No drafts are waiting for approval.</p> : null}
+          onEdit={async (item, parts) => settle(await client.editDraft(item, parts), `Edit saved for ${item.conversationId}; the new version needs fresh policy checks`)} />)}</ul>
+        : <p className="mt-2 text-sm" data-plan-c-no-drafts>{autonomous ? "No pilot drafts are pending." : "No drafts are waiting for approval."}</p> : null}
     </section>
 
     <section aria-label="Provider receipts"><h2 className="font-semibold">Provider receipts</h2>

@@ -33,7 +33,7 @@ export function seedDraft(overrides: Partial<RawDraft> & { fanId?: string } = {}
 export function seedOffer(overrides: Partial<RawDraft> = {}): RawDraft {
   return seedDraft({ action: "offer", parts: [
     { part_index: 0, action: "reply", body: "Got something for you.", price_cents: null, currency: null, media_ids: [], preview_ids: [], catalog_item_id: null },
-    { part_index: 1, action: "offer", body: "Plan C test set, 3 items", price_cents: 600, currency: "USD", media_ids: ["m1", "m2", "m3"], preview_ids: ["p1"], catalog_item_id: "set-1" }], ...overrides });
+    { part_index: 1, action: "offer", body: "Plan C fixture photo", price_cents: 300, currency: "USD", media_ids: ["m1"], preview_ids: [], catalog_item_id: "fixture-photo-1" }], ...overrides });
 }
 
 export type MockOptions = { token?: string; drafts?: RawDraft[]; receipts?: RawReceipt[]; unresolved?: RawUnresolved[]; conversations?: Record<string, { revision: number; owner: string }> };

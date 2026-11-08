@@ -34,10 +34,10 @@ async function render(element: React.ReactElement) {
   await act(async () => { root.render(element); });
   await settle();
 }
-async function mount(options: Parameters<typeof createPlanCMock>[0] = {}, props: { canAct?: boolean } = {}) {
+async function mount(options: Parameters<typeof createPlanCMock>[0] = {}, props: { canAct?: boolean; authorizationMode?: "supervised" | "autonomous" } = {}) {
   const mock = createPlanCMock(options), proxy = createPlanCProxy(mock);
   const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
-  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct={props.canAct ?? true} fetchImpl={proxy.fetch} />);
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct={props.canAct ?? true} authorizationMode={props.authorizationMode} fetchImpl={proxy.fetch} />);
   return { mock, proxy };
 }
 const draftEl = (index = 0) => all("[data-plan-c-draft]")[index];
@@ -48,10 +48,10 @@ test("a draft shows the exact ordered text, action, media count, price, version,
   const offer = seedOffer({ evidence: "One earlier send to this fan has no provider answer." });
   await mount({ drafts: [offer] });
   const card = draftEl();
-  assert.deepEqual(all("[data-plan-c-part-text]").map(el => el.textContent), ["Got something for you.", "Plan C test set, 3 items"]);
+  assert.deepEqual(all("[data-plan-c-part-text]").map(el => el.textContent), ["Got something for you.", "Plan C fixture photo"]);
   assert.match(text(), /Part 1 of 2/); assert.match(text(), /Part 2 of 2/);
   assert.equal(within(card, "[data-plan-c-action-badge]")?.textContent, "offer");
-  assert.match(within(card, "[data-plan-c-offer]")?.textContent ?? "", /3 media/); assert.match(within(card, "[data-plan-c-offer]")?.textContent ?? "", /USD 6\.00/);
+  assert.match(within(card, "[data-plan-c-offer]")?.textContent ?? "", /1 media/); assert.match(within(card, "[data-plan-c-offer]")?.textContent ?? "", /USD 3\.00/);
   assert.match(within(card, "[data-plan-c-meta]")?.textContent ?? "", /Version 1/); assert.match(within(card, "[data-plan-c-meta]")?.textContent ?? "", /expires in (44|45) min/);
   assert.match(within(card, "[data-plan-c-meta]")?.textContent ?? "", new RegExp(offer.draftHash.slice(0, 12)));
   assert.match(within(card, "[data-plan-c-evidence]")?.textContent ?? "", /no provider answer/);
@@ -292,4 +292,14 @@ test("a conversation whose revision the backend did not report cannot be changed
   await mount({ drafts: [draft] });
   assert.match(text(), /did not report this conversation's revision/);
   assert.equal(all("[data-plan-c-conversation-action]").length, 0);
+});
+
+
+test("autonomous mode shows policy authorization and no per-message approve button", async () => {
+  const { mock, proxy } = await mount({ drafts: [seedDraft()] }, { authorizationMode: "autonomous" });
+  assert.equal(all("[data-plan-c-approve]").length, 0);
+  assert.match(text(), /automatic pilot authorization/i);
+  assert.match(text(), /awaiting policy checks/i);
+  assert.equal(mock.posts().length, 0);
+  assert.equal(proxy.posts().length, 0);
 });

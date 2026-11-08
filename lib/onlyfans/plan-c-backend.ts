@@ -61,6 +61,12 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   }
 
   return {
+    scope: (accountId: string, actor: string): Promise<PlanCReadResult<{ authorizationMode: "supervised" | "autonomous" }>> =>
+      read(root(accountId) + "pilot-scope", value => {
+        if (!record(value) || value.ok !== true || value.accountId !== accountId || !record(value.config)) return null;
+        const mode = value.config.authorization_mode;
+        return mode === "supervised" || mode === "autonomous" ? { authorizationMode: mode } : null;
+      }, "Pilot configuration", actor),
     drafts: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCDraftList>> =>
       read(root(accountId) + "drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval", actor),
     unresolved: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCUnresolvedList>> =>
