@@ -8,6 +8,8 @@ import { ArrowLeft, ArrowRight, Check, Eye, LoaderCircle, X } from "lucide-react
 import { COMPACT_QUESTIONNAIRE_PAGES } from "@/lib/creator-questionnaire-compact";
 import { CREATOR_PROFILE_SECTIONS, CREATOR_PROFILE_QUESTIONNAIRE } from "@/lib/creator-questionnaire-profile";
 import { CREATOR_QUESTIONNAIRE_REQUIRED_IDS, questionnairePageQuestions, type CreatorQuestionnairePage } from "@/lib/creator-questionnaire-draft";
+import { FLIRT_QUESTIONNAIRE_PAGES, FLIRT_QUESTIONNAIRE_STEPS, flirtFieldComplete } from "@/lib/flirt-questionnaire";
+import FlirtQuestionnaireField from "./FlirtQuestionnaireFields";
 import CreatorProfileField from "./CreatorProfileFields";
 import styles from "./CreatorProfileQuestionnaire.module.css";
 
@@ -17,11 +19,10 @@ export type CreatorProfileQuestionnaireProps = {
   initialRevision: string;
   locked?: boolean;
   optional?: boolean;
+  prefilled?: string[];
 };
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
 type Destination = number | "content" | "dashboard" | "hub" | "finish" | "review";
-
-const pages = COMPACT_QUESTIONNAIRE_PAGES;
 
 const portugueseCopy: Record<string, string> = {
   "Your answers changed in another window. Copy any unsaved edits, then refresh before continuing.": "Suas respostas foram alteradas em outra janela. Copie as alterações que ainda não foram salvas e atualize a página antes de continuar.",
@@ -65,7 +66,9 @@ const previewLabels: Record<string, string> = {
   sexual_orientation: "Orientation", dom_sub: "Preferences", turn_ons_including_kinks: "Turn-ons, including kinks", turn_offs: "Turn-offs", boundaries: "Boundaries",
 };
 
-export default function CreatorProfileQuestionnaire({ page: initialPage, initialAnswers, initialRevision, locked = false, optional = false }: CreatorProfileQuestionnaireProps) {
+export default function CreatorProfileQuestionnaire({ page: initialPage, initialAnswers, initialRevision, locked = false, optional = false, prefilled = [] }: CreatorProfileQuestionnaireProps) {
+  const flirt = initialPage.slug.startsWith("flirt-v3-");
+  const pages = flirt ? FLIRT_QUESTIONNAIRE_PAGES : COMPACT_QUESTIONNAIRE_PAGES;
   const appRouter = useContext(AppRouterContext);
   const { t, locale } = useFlirtCreatorLocale();
   const navigateTo = (href: string) => { if (appRouter && href.startsWith("/creator/onboarding")) appRouter.push(href); else window.location.assign(href); };
@@ -90,10 +93,11 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
   const dialogRef = useRef<HTMLDialogElement>(null);
   const previewButtonRef = useRef<HTMLButtonElement>(null);
   const page = pages[currentIndex];
+  const flirtStep = flirt ? FLIRT_QUESTIONNAIRE_STEPS[currentIndex] : undefined;
   const localized = (copy: string) => t(copy, portugueseCopy[copy] ?? copy);
   const questions = questionnairePageQuestions(page);
   const completed = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => answers[question.id]?.trim() || reviewed.includes(question.id)).length;
-  const progress = Math.round(completed / CREATOR_PROFILE_QUESTIONNAIRE.length * 100);
+  const progress = flirt ? Math.round((currentIndex + 1) / pages.length * 100) : Math.round(completed / CREATOR_PROFILE_QUESTIONNAIRE.length * 100);
 
   // Serialize saves across pages. A click on Continue joins an in-flight save;
   // edits made during that request are saved in a second revision-checked pass.
@@ -158,6 +162,19 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
   const goTo = async (target: Destination) => {
     if (navigationRef.current) return;
     if (!locked && (target === "finish" || typeof target === "number" && target > currentIndex) && !formRef.current?.reportValidity()) return;
+    if (!locked && flirtStep && (target === "finish" || typeof target === "number" && target > currentIndex)) {
+      const missing = flirtStep.fields.find(field => !flirtFieldComplete(field, answersRef.current[field.id]));
+      if (missing) {
+        setError(t(`Complete this question: ${missing.label[0]}`, `Responda a esta pergunta: ${missing.label[1]}`));
+        const field = formRef.current?.querySelector(`[data-profile-question="${missing.id}"]`);
+        field?.scrollIntoView({ block: "center" });
+        field?.querySelector<HTMLElement>("input:not(:disabled), textarea:not(:disabled), button:not(:disabled), select:not(:disabled)")?.focus({ preventScroll: true });
+        return;
+      }
+      for (const id of prefilled) {
+        if (flirtStep.fields.some(field => field.id === id) && answersRef.current[id] === initialAnswers[id]) change(id, initialAnswers[id]);
+      }
+    }
     navigationRef.current = true;
     setNavigating(true);
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -185,7 +202,13 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
         const response = await fetch("/creator-auth/onboarding", { method: "POST", body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }) });
         const destination = new URL(response.url, window.location.origin);
         if (!response.ok || destination.origin !== window.location.origin || destination.pathname !== "/creator/onboarding" || destination.searchParams.get("status") !== "questionnaire_saved") {
-          setError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
+          if (flirt && destination.searchParams.get("status") === "questionnaire_missing") {
+            const index = pages.findIndex(item => item.slug === destination.searchParams.get("section"));
+            if (index >= 0) setCurrentIndex(index);
+            setError(t("Complete every question before finishing.", "Responda a todas as perguntas antes de concluir."));
+          } else {
+            setError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
+          }
           return;
         }
       }
@@ -234,24 +257,25 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
 
   return <div className={styles.root} data-profile-flow>
     <form ref={formRef} onSubmit={event => event.preventDefault()} data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
-      <div className={styles.topLine}>
+      {flirt && <p className={styles.flirtStepLabel}>{t(`Step ${currentIndex + 1} of ${pages.length}`, `Etapa ${currentIndex + 1} de ${pages.length}`)}</p>}
+      {!flirt && <div className={styles.topLine}>
         <span className={styles.milestone} role="status">{milestone && <><Check size={14} aria-hidden="true" />{t("Introduction saved", "Apresentação salva")}</>}</span>
 
-      </div>
-      <div className={styles.progress} role="progressbar" aria-label={t("Questionnaire progress", "Progresso do questionário")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={t(`${progress}% answered or reviewed`, `${progress.toLocaleString(locale)}% respondido ou revisado`)}><span style={{ width: `${progress}%` }} /></div>
+      </div>}
+      <div className={styles.progress} role="progressbar" aria-label={t("Questionnaire progress", "Progresso do questionário")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={flirt ? t(`Step ${currentIndex + 1} of ${pages.length}`, `Etapa ${currentIndex + 1} de ${pages.length}`) : t(`${progress}% answered or reviewed`, `${progress.toLocaleString(locale)}% respondido ou revisado`)}><span style={{ width: `${progress}%` }} /></div>
       <div className={styles.page} key={page.slug}>
-        <header className={styles.pageHeading}><h1 ref={headingRef} tabIndex={-1}>{page.title === "Your preferences and boundaries" ? t("Preferences & boundaries", "Preferências e limites") : localized(page.title)}</h1>{page.slug === "quick-v2-account" && <p>{t("Account details stay separate from your public profile.", "Os dados da sua conta ficam separados do seu perfil público.")}</p>}</header>
-        <div className={styles.fields}>{questions.map(question => <CreatorProfileField key={question.id} question={question} value={answers[question.id] || ""} onChange={value => change(question.id, value)} disabled={locked || navigating || conflictRef.current} required={!optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number])} />)}</div>
+        <header className={styles.pageHeading}><h1 ref={headingRef} tabIndex={-1}>{flirtStep ? t(...flirtStep.title) : page.title === "Your preferences and boundaries" ? t("Preferences & boundaries", "Preferências e limites") : localized(page.title)}</h1>{flirtStep && <p>{t(...flirtStep.description)}</p>}{page.slug === "quick-v2-account" && <p>{t("Account details stay separate from your public profile.", "Os dados da sua conta ficam separados do seu perfil público.")}</p>}</header>
+        <div className={styles.fields}>{flirtStep ? flirtStep.fields.map(field => <FlirtQuestionnaireField key={field.id} field={field} value={answers[field.id] || ""} change={value => change(field.id, value)} disabled={locked || navigating || conflictRef.current} />) : questions.map(question => <CreatorProfileField key={question.id} question={question} value={answers[question.id] || ""} onChange={value => change(question.id, value)} disabled={locked || navigating || conflictRef.current} required={!optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number])} />)}</div>
       </div>
       {error && <div role="alert" className={styles.error}><p>{localized(error)}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>{t("Try saving again", "Tentar salvar novamente")}</button>}</div>}
       <div className={styles.footer} data-questionnaire-navigation>
-        <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />{t("Preview profile", "Prévia do perfil")}</button>
+        {!flirt && <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />{t("Preview profile", "Prévia do perfil")}</button>
           {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>{t("Skip questions", "Pular perguntas")}</button>}
-        </div>
+        </div>}
         <div className={styles.navigation}>
           <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={19} aria-hidden="true" /><span className={styles.srOnly}>{t("Back", "Voltar")}</span></button>
         <span className={styles.saveStatus} data-save-state={saveState} role="status" aria-live="polite">{saveState === "saving" ? <LoaderCircle size={14} className={styles.spinner} aria-hidden="true" /> : saveState === "saved" || locked ? <Check size={14} aria-hidden="true" /> : null}{saveCopy}</span>
-          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? t("Saving…", "Salvando…") : currentIndex < pages.length - 1 ? t("Continue", "Continuar") : t("Review and finish", "Revisar e concluir")}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
+          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? t("Saving…", "Salvando…") : currentIndex < pages.length - 1 ? t("Continue", "Continuar") : flirt && !locked ? t("Finish questionnaire", "Concluir questionário") : t("Review and finish", "Revisar e concluir")}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
         </div>
       </div>
     </form>

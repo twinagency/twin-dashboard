@@ -1,3 +1,5 @@
+import { parseDateOfBirth } from "@/lib/flirt-clone-build";
+import { FLIRT_QUESTIONNAIRE_PAGES } from "@/lib/flirt-questionnaire";
 import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
 import { flirtCreatorCopy } from "@/lib/flirt-creator-locale";
 import CreatorContentIntake from "@/components/CreatorContentIntake";
@@ -283,6 +285,21 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   if (!account) redirect("/creator-auth/logout");
   const answers = (application?.answers || {}) as Record<string,string>;
   const questionnaireAnswers = creatorProfileAnswers(answers);
+  const flirtPage = FLIRT_QUESTIONNAIRE_PAGES.find(page => page.slug === section) ?? FLIRT_QUESTIONNAIRE_PAGES[0];
+  const flirtFallbacks = { preferred_name: account.display_name || "", email_address: account.email || "" };
+  const flirtPrefilled = Object.keys(flirtFallbacks).filter(id => !Object.prototype.hasOwnProperty.call(answers, id));
+  const flirtAnswers = Object.fromEntries(FLIRT_QUESTIONNAIRE_PAGES.flatMap(page =>
+    questionnairePageQuestions(page).map(({ id }) => [id, answers[id] ?? questionnaireAnswers[id] ?? flirtFallbacks[id as keyof typeof flirtFallbacks] ?? ""]),
+  ));
+  const savedBirthday = parseDateOfBirth(flirtAnswers.date_of_birth);
+  if (savedBirthday && savedBirthday !== flirtAnswers.date_of_birth) {
+    flirtAnswers.date_of_birth = savedBirthday;
+    flirtPrefilled.push("date_of_birth");
+  }
+  if (flirtAnswers.boundaries && !["Yes", "No"].includes(flirtAnswers.boundaries) && !flirtAnswers.boundaries.startsWith("Yes:")) {
+    flirtAnswers.boundaries = /^(none|no|nenhum)[.!]?$/i.test(flirtAnswers.boundaries) ? "No" : `Yes: ${flirtAnswers.boundaries}`;
+    flirtPrefilled.push("boundaries");
+  }
   const applicationState = creatorApplicationState(application?.status, application?.submitted_at);
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const hasApplicationState = !!application && application.status !== "draft";
@@ -301,7 +318,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     consent: !!consent,
   } satisfies Record<OnboardingStep, boolean>;
   const steps = visibleSteps.filter((item) => complete[item]).length;
-  const readyToSubmit = optional || visibleSteps.every((item) => complete[item]);
+  const readyToSubmit = optional ? submitted || complete.questionnaire : visibleSteps.every((item) => complete[item]);
   const saved =
     (activeStep === "questionnaire" && status === "questionnaire_saved" && complete.questionnaire) ||
     (activeStep === "content" && status === "content_saved" && complete.content) ||
@@ -329,11 +346,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         <Link href="/creator/onboarding?step=questionnaire" data-review-entry>{t("Edit my information", "Editar meus dados")}</Link>
       </section> : activeSection === "questionnaire" ? <section data-creator-setup-panel>
         <CreatorQuestionnaireWizard
-          page={questionnairePage}
-          initialAnswers={Object.fromEntries(CREATOR_PROFILE_QUESTIONNAIRE.map((question) => {
-            const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
-            return [question.id, questionnaireAnswers[question.id] ?? fallback];
-          }))}
+          page={flirtPage}
+          initialAnswers={flirtAnswers}
+          prefilled={flirtPrefilled}
           initialRevision={application?.updated_at || ""}
           locked={applicationLocked}
           optional={optional}

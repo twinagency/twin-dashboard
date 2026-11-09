@@ -87,3 +87,9 @@ textarea.input { min-height: 72px; }
 
 .progress > span { background: var(--brand-accent, var(--color-accent)); }
 .saveStatus[data-save-state="saved"] svg { color: var(--brand-accent, inherit); }
+
+.flirtRow { display: grid; gap: 10px; padding: 12px 14px; margin-top: 8px; border: 1px solid var(--color-line, #e8e1e5); border-radius: 14px; }
+.flirtRow .followUp { margin: 0; }
+.flirtAdd { width: fit-content; min-height: 40px; margin-top: 4px; background: transparent; border: 0; padding: 0 4px; color: var(--color-accent, #902c53); font: inherit; font-size: 14px; font-weight: 600; }
+.flirtStepLabel { margin: 0 0 7px; color: var(--color-muted, #746b72); font-size: 13px; font-weight: 600; }
+.flirtGroupTitle { margin: 0 0 -12px; padding-top: 12px; border-top: 1px solid var(--color-line, #e8e1e5); font-size: 17px; font-weight: 650; }

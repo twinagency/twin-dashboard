@@ -1,7 +1,7 @@
 "use client";
 import CreatorProfileQuestionnaire, { type CreatorProfileQuestionnaireProps } from "./CreatorProfileQuestionnaire";
 export default function CreatorQuestionnaireWizard(props: CreatorProfileQuestionnaireProps) {
-  return props.page.slug.startsWith("quick-v2-") ? <CreatorProfileQuestionnaire {...props} /> : <LegacyCreatorQuestionnaireWizard {...props} />;
+  return /^(quick-v2-|flirt-v3-)/.test(props.page.slug) ? <CreatorProfileQuestionnaire {...props} /> : <LegacyCreatorQuestionnaireWizard {...props} />;
 }
 
 

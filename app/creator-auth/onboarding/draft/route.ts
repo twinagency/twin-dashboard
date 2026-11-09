@@ -3,7 +3,8 @@ import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { supabaseAdmin } from "@/lib/supabase";
-import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
+import { FLIRT_QUESTIONNAIRE_PAGES } from "@/lib/flirt-questionnaire";
+import { creatorOnboardingEditable, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { COMPACT_QUESTIONNAIRE_ALIASES, previousCompactSavePage } from "@/lib/creator-questionnaire-compact";
 import {
   creatorQuestionnairePage,
@@ -28,8 +29,9 @@ export async function POST(req: NextRequest) {
     if (contentLength > 100_000) return reply({ error: "Questionnaire section is too large" }, 413);
     const body = await req.json() as { section?: unknown; answers?: unknown; revision?: unknown };
     if (typeof body.section !== "string" || typeof body.revision !== "string") return reply({ error: "Invalid autosave request" }, 400);
+    const flirtPage = flirtOnboardingOptional() ? FLIRT_QUESTIONNAIRE_PAGES.find(page => page.slug === body.section) : undefined;
     const previousPage = previousCompactSavePage(body.section);
-    const page = previousPage || creatorQuestionnairePage(body.section, true);
+    const page = flirtPage || previousPage || creatorQuestionnairePage(body.section, true);
     if (!previousPage && page.slug !== (COMPACT_QUESTIONNAIRE_ALIASES[body.section] || body.section)) return reply({ error: "Invalid questionnaire section" }, 400);
     const patch = parseQuestionnairePagePatch(page, body.answers);
     if (!Object.keys(patch).length) return reply({ error: "No questionnaire answers supplied" }, 400);

@@ -12,6 +12,7 @@
 //     pastes the real BotFather token and presses go live in Twin's dashboard.
 //   - clone a voice. That needs its own explicit voice consent.
 //   - put her phone number or email into prompts or into the clone row.
+import { FLIRT_QUESTIONNAIRE_STEPS, flirtRows } from "./flirt-questionnaire";
 import { CREATOR_QUESTIONNAIRE } from "./creator-questionnaire";
 
 export const FLIRT_CLONE_PIPELINE_FLAG = "FLIRT_CLONE_PIPELINE_ENABLED";
@@ -58,8 +59,21 @@ export type ClonePacket = {
 };
 
 // Contact details and identity documents never go into a prompt or the clone row.
-const NEVER_COPY = new Set(["phone_number", "email_address", "full_name", "date_of_birth", "social_links"]);
-const LABELS = new Map(CREATOR_QUESTIONNAIRE.map((q) => [q.id, q.label]));
+const NEVER_COPY = new Set(["phone_number", "email_address", "full_name", "date_of_birth", "social_links", "flirt_social_profiles", "explicit_chat_allowed"]);
+const LABELS = new Map([
+  ...CREATOR_QUESTIONNAIRE.map((q) => [q.id, q.label] as const),
+  ...FLIRT_QUESTIONNAIRE_STEPS.flatMap(step => step.fields.map(field => [field.id, field.label[0]] as const)),
+]);
+const REPLACED_FIELDS: Record<string, string[]> = {
+  flirt_pets: ["pets"],
+  flirt_languages: ["languages"],
+  flirt_marks: ["appearance_profile", "tattoos_piercings", "tattoos", "piercings"],
+  flirt_relationship_status: ["relationship_status"],
+  flirt_siblings: ["family_profile", "siblings_family"],
+  flirt_children: ["family_profile", "kids"],
+  from_grew_up: ["home_background"],
+  currently_live: ["home_background"],
+};
 const REPLY_IDS = ["reply_today", "reply_missed", "reply_secret", "reply_favorite", "reply_meet", "reply_goodnight"];
 const STYLE_IDS = ["texting_style", "top_emojis", "uses_slang"];
 const QUIRK_IDS = ["catch_phrases", "humour_style", "overall_tone", "ai_traits", "pet_peeves", "flirt_response"];
@@ -72,7 +86,14 @@ function text(value: unknown): string {
   return typeof value === "object" ? JSON.stringify(value) : String(value);
 }
 const NO_ANSWER = /^(n\/?a|none|nothing|-|\.)?$/i;
-const answered = (value: string) => !NO_ANSWER.test(value.trim());
+const answered = (value: string) => value !== "Keep private" && !NO_ANSWER.test(value.trim());
+
+function profileAnswer(id: string, value: string): string {
+  if (id === "boundaries") return value === "No" ? "" : value.replace(/^Yes:\s*/, "");
+  const rows = flirtRows(value);
+  if (!rows.length) return value;
+  return rows.map(row => row.filter(Boolean).join(", ")).join("\n");
+}
 
 function label(id: string): string {
   return LABELS.get(id) ?? id.replace(/_/g, " ");
@@ -115,7 +136,11 @@ export function buildClonePacket(input: BuildInput): ClonePacket {
   }
   const raw = input.application.answers && typeof input.application.answers === "object" && !Array.isArray(input.application.answers)
     ? input.application.answers as Record<string, unknown> : {};
-  const answers = new Map(Object.entries(raw).map(([k, v]) => [k, text(v)] as const).filter(([, v]) => v));
+  const replaced = new Set(Object.entries(REPLACED_FIELDS).flatMap(([id, old]) => id in raw ? old : []));
+  const answers = new Map(Object.entries(raw)
+    .filter(([id]) => !replaced.has(id))
+    .map(([id, value]) => [id, profileAnswer(id, text(value))] as const)
+    .filter(([, value]) => value && value !== "Keep private"));
   if (!answers.size) throw new CloneBuildRefusal("no_answers", "The questionnaire is empty, there is nothing to build a persona from.");
 
   // 3. Age gate. A missing or unreadable birthday blocks the build, never defaults.
@@ -136,6 +161,7 @@ export function buildClonePacket(input: BuildInput): ClonePacket {
   put("stage_name", "stage_name"); put("real_name", "full_name"); put("height", "height");
   put("ethnicity", "ethnicity"); put("current_city", "currently_live");
   const limits = LIMIT_IDS.map((id) => answers.get(id)).filter((v): v is string => !!v && answered(v));
+  if (raw.explicit_chat_allowed === "No") limits.unshift("Keep chat free of explicit sexual language or descriptions.");
   if (limits.length) facts.hard_limits_extra = limits.join("\n");
   else warnings.push("She gave no boundaries or topics to avoid. Ask her before going live.");
 
@@ -149,7 +175,7 @@ export function buildClonePacket(input: BuildInput): ClonePacket {
   if (quirks) fields.quirks = quirks;
   const used = new Set([...REPLY_IDS, ...STYLE_IDS, ...QUIRK_IDS, ...LIMIT_IDS, ...NEVER_COPY, "stage_name", "preferred_name", "height", "ethnicity", "currently_live"]);
   const rest = [...answers.keys()].filter((id) => !used.has(id));
-  const lifeIds = rest.filter((id) => /^(fav_|games|reading|sports|party|drink|travel|countries|hidden|random|pets|from_|siblings|kids|introvert|star_sign|languages|events)/.test(id));
+  const lifeIds = rest.filter((id) => /^(flirt_(hobbies|favourites|pets|siblings|children|languages|marks)|fav_|games|reading|sports|party|drink|travel|countries|hidden|random|pets|from_|siblings|kids|introvert|star_sign|languages|events)/.test(id));
   const life = lines(lifeIds);
   if (life) fields.life_tastes = life;
   const notes = lines(rest.filter((id) => !lifeIds.includes(id)));
