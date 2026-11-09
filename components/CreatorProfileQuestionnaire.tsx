@@ -8,7 +8,7 @@ import { ArrowLeft, ArrowRight, Check, Eye, LoaderCircle, X } from "lucide-react
 import { COMPACT_QUESTIONNAIRE_PAGES } from "@/lib/creator-questionnaire-compact";
 import { CREATOR_PROFILE_SECTIONS, CREATOR_PROFILE_QUESTIONNAIRE } from "@/lib/creator-questionnaire-profile";
 import { CREATOR_QUESTIONNAIRE_REQUIRED_IDS, questionnairePageQuestions, type CreatorQuestionnairePage } from "@/lib/creator-questionnaire-draft";
-import { FLIRT_QUESTIONNAIRE_PAGES, FLIRT_QUESTIONNAIRE_STEPS, flirtFieldComplete } from "@/lib/flirt-questionnaire";
+import { FLIRT_QUESTIONNAIRE_PAGES, FLIRT_QUESTIONNAIRE_STEPS } from "@/lib/flirt-questionnaire";
 import FlirtQuestionnaireField from "./FlirtQuestionnaireFields";
 import CreatorProfileField from "./CreatorProfileFields";
 import styles from "./CreatorProfileQuestionnaire.module.css";
@@ -163,16 +163,8 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
     if (navigationRef.current) return;
     if (!locked && (target === "finish" || typeof target === "number" && target > currentIndex) && !formRef.current?.reportValidity()) return;
     if (!locked && flirtStep && (target === "finish" || typeof target === "number" && target > currentIndex)) {
-      const missing = flirtStep.fields.find(field => !flirtFieldComplete(field, answersRef.current[field.id]));
-      if (missing) {
-        setError(t(`Complete this question: ${missing.label[0]}`, `Responda a esta pergunta: ${missing.label[1]}`));
-        const field = formRef.current?.querySelector(`[data-profile-question="${missing.id}"]`);
-        field?.scrollIntoView({ block: "center" });
-        field?.querySelector<HTMLElement>("input:not(:disabled), textarea:not(:disabled), button:not(:disabled), select:not(:disabled)")?.focus({ preventScroll: true });
-        return;
-      }
       for (const id of prefilled) {
-        if (flirtStep.fields.some(field => field.id === id) && answersRef.current[id] === initialAnswers[id]) change(id, initialAnswers[id]);
+        if (initialAnswers[id] && flirtStep.fields.some(field => field.id === id) && answersRef.current[id] === initialAnswers[id]) change(id, initialAnswers[id]);
       }
     }
     navigationRef.current = true;
@@ -202,17 +194,11 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
         const response = await fetch("/creator-auth/onboarding", { method: "POST", body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }) });
         const destination = new URL(response.url, window.location.origin);
         if (!response.ok || destination.origin !== window.location.origin || destination.pathname !== "/creator/onboarding" || destination.searchParams.get("status") !== "questionnaire_saved") {
-          if (flirt && destination.searchParams.get("status") === "questionnaire_missing") {
-            const index = pages.findIndex(item => item.slug === destination.searchParams.get("section"));
-            if (index >= 0) setCurrentIndex(index);
-            setError(t("Complete every question before finishing.", "Responda a todas as perguntas antes de concluir."));
-          } else {
-            setError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
-          }
+          setError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
           return;
         }
       }
-      navigateTo(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : target === "finish" || target === "review" ? "/creator/onboarding?step=content&review=1#creator-setup-submit" : "/creator/onboarding?step=content");
+      navigateTo(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : target === "review" || target === "finish" && !flirt ? "/creator/onboarding?step=content&review=1#creator-setup-submit" : "/creator/onboarding?step=content");
     } catch {
       setError("We could not finish that step. Your answers are still here. Please try again.");
     } finally {
@@ -269,13 +255,13 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
       </div>
       {error && <div role="alert" className={styles.error}><p>{localized(error)}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>{t("Try saving again", "Tentar salvar novamente")}</button>}</div>}
       <div className={styles.footer} data-questionnaire-navigation>
-        {!flirt && <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />{t("Preview profile", "Prévia do perfil")}</button>
-          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>{t("Skip questions", "Pular perguntas")}</button>}
+        {(!flirt || !locked) && <div className={styles.footerLinks}>{!flirt && <button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />{t("Preview profile", "Prévia do perfil")}</button>}
+          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo(flirt ? "content" : "review")}>{t("Skip questions", "Pular perguntas")}</button>}
         </div>}
         <div className={styles.navigation}>
           <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={19} aria-hidden="true" /><span className={styles.srOnly}>{t("Back", "Voltar")}</span></button>
         <span className={styles.saveStatus} data-save-state={saveState} role="status" aria-live="polite">{saveState === "saving" ? <LoaderCircle size={14} className={styles.spinner} aria-hidden="true" /> : saveState === "saved" || locked ? <Check size={14} aria-hidden="true" /> : null}{saveCopy}</span>
-          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? t("Saving…", "Salvando…") : currentIndex < pages.length - 1 ? t("Continue", "Continuar") : flirt && !locked ? t("Finish questionnaire", "Concluir questionário") : t("Review and finish", "Revisar e concluir")}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
+          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? (flirt ? "content" : "review") : "finish")}>{navigating ? t("Saving…", "Salvando…") : currentIndex < pages.length - 1 ? t("Continue", "Continuar") : flirt ? t("Continue to content", "Continuar para o conteúdo") : t("Review and finish", "Revisar e concluir")}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
         </div>
       </div>
     </form>

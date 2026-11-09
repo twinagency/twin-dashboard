@@ -46,7 +46,8 @@ async function main() {
   for (const [index, page] of FLIRT_QUESTIONNAIRE_PAGES.entries()) {
     const html = renderToStaticMarkup(<Wizard page={page} initialAnswers={{}} initialRevision="" optional />);
     assert.match(html, new RegExp(`Step ${index + 1} of 4`));
-    assert.doesNotMatch(html, /Skip questions/);
+    assert.match(html, /Skip questions/);
+    assert.doesNotMatch(html, /\srequired(?:=|\s|>)|minimum completed/);
   }
   assert.match(strictHtml, /\srequired(?:=|\s|>)/, "Default questionnaire validation must remain unchanged");
 
@@ -125,33 +126,11 @@ async function main() {
     assert.equal(location(denied).pathname, "/creator/login");
     assert.equal(writes.length, 0, "No session means no mutations");
 
-    const missing = await post("questionnaire", { revision: "" });
-    assert.equal(location(missing).searchParams.get("status"), "questionnaire_missing");
-    assert.equal(location(missing).searchParams.get("section"), "flirt-v3-account");
-    assert.deepEqual(application?.answers, {});
-    assert.equal(progress, null);
-    assert.equal(application?.status, "draft");
-
-    const completeAnswers = {
-      date_of_birth: "1998-12-29", email_address: "test@example.com", phone_number: "+61411111111",
-      flirt_social_profiles: "No public profiles", preferred_name: "Offline fixture", flirt_nickname: "No",
-      from_grew_up: "Keep private", currently_live: "Keep private", flirt_languages: '[["English",""]]',
-      flirt_relationship_status: "Keep private", flirt_siblings: "No", flirt_children: "No", flirt_pets: "No", flirt_marks: "No",
-      flirt_hobbies: '[["Gym","Pilates"],["Gaming","Stardew Valley"]]',
-      flirt_favourites: '[["Food","Pasta"],["Alcoholic drink","I don’t drink"]]',
-      sexual_orientation: "Keep private", turn_ons_including_kinks: "None", turn_offs: "None", explicit_chat_allowed: "No", boundaries: "No",
-    };
-    if (!application) throw new Error("Expected a draft");
-    application = { ...application, answers: { ...completeAnswers, flirt_hobbies: '[["Gym","Pilates"]]' } };
-    const partial = await post("questionnaire", { revision: application!.updated_at });
-    assert.equal(location(partial).searchParams.get("section"), "flirt-v3-interests");
-    assert.equal(progress, null);
-
-    application = { ...application, answers: completeAnswers };
-    const questionnaire = await post("questionnaire", { revision: application!.updated_at });
-    assert.equal(location(questionnaire).searchParams.get("status"), "questionnaire_saved");
+    const questionnaire = await post("questionnaire", { revision: "" });
     assert.equal(location(questionnaire).searchParams.get("step"), "content");
-    assert.equal((progress as Row | null)?.questionnaire_completed, true);
+    assert.deepEqual(application?.answers, {});
+    assert.equal(progress?.questionnaire_completed, true);
+    assert.equal(application?.status, "draft");
 
     const conflict = await post("questionnaire", { revision: "stale-revision" });
     assert.equal(location(conflict).searchParams.get("status"), "questionnaire_conflict");
@@ -164,10 +143,10 @@ async function main() {
     const submitted = await post("submit", { creator_account_id: "foreign-account" });
     assert.equal(location(submitted).pathname, "/creator");
     assert.equal(application?.status, "submitted");
-    assert.deepEqual(application?.answers, completeAnswers);
+    assert.deepEqual(application?.answers, {});
     assert.equal(consents.length, 0);
-    assert.equal((progress as Row | null)?.content_completed, undefined, "No fabricated uploaded-content completion");
-    assert.equal((progress as Row | null)?.voice_completed, undefined, "Hidden voice must neither block submission nor invent voice completion");
+    assert.equal(progress?.content_completed, undefined, "No fabricated uploaded-content completion");
+    assert.equal(progress?.voice_completed, undefined, "Hidden voice must neither block submission nor invent voice completion");
     const insertsBefore = applicationInserts;
     await post("submit");
     assert.equal(applicationInserts, insertsBefore, "Repeated submission must be idempotent");
@@ -182,14 +161,15 @@ async function main() {
     application = null as Row | null;
     progress = null as Row | null;
     const skipAll = await post("submit");
-    assert.equal(location(skipAll).searchParams.get("status"), "questionnaire_missing");
-    assert.equal(application, null, "A blank submission must not create an application");
-    assert.equal(progress, null, "A blank submission must not create progress");
+    assert.equal(location(skipAll).pathname, "/creator");
+    assert.equal(application?.status, "submitted");
+    assert.deepEqual(application?.answers, {});
+    assert.equal(progress, null, "Skip all must not pretend any individual step was completed");
     assert.equal(consents.length, 0);
 
     application = { id: accountId, creator_account_id: accountId, status: "draft", answers: { full_name: "Previously saved" }, updated_at: "2026-01-01T00:00:00.000Z" };
     await post("submit");
-    assert.deepEqual(application.answers, { full_name: "Previously saved" }, "Partial answers must survive rejected submission");
+    assert.deepEqual(application.answers, { full_name: "Previously saved" }, "Partial answers must survive submission");
 
     Object.assign(process.env, { FLIRT_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" });
     application = { id: accountId, creator_account_id: accountId, status: "draft", answers: {}, updated_at: "2026-01-01T00:00:00.000Z" };
@@ -197,7 +177,7 @@ async function main() {
     assert.equal(location(strict).searchParams.get("status"), "not_ready", "Other runtimes must retain required checks, regardless of browser flags");
     assert.equal(application.status, "draft");
 
-    console.log("FLIRT ONBOARDING PASSED: four-step validation, required questionnaire, retained draft answers, scoped writes and unchanged shared defaults.");
+    console.log("FLIRT OPTIONAL ONBOARDING PASSED: all 17 blank pages, empty and partial submissions, skip-all, no invented consent/content/clone, scoped writes, login protection, conflict/lock checks and unchanged strict defaults.");
   } finally {
     globalThis.fetch = oldFetch;
   }

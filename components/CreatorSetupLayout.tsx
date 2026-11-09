@@ -54,8 +54,10 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
         </details>
       </div>
       {(activeSection === "content" || activeSection === "questionnaire") && <nav className={styles.steps} aria-label={t("Creator setup sections", "Etapas da configuração")}>
-        <a href="/creator/onboarding?step=content" data-creator-setup-tab="content" aria-current={activeSection === "content" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=content", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">1</span>{t("Content", "Conteúdo")}</a>
-        <a href="/creator/onboarding?step=questionnaire" data-creator-setup-tab="questionnaire" aria-current={activeSection === "questionnaire" ? "step" : undefined} onClick={event => navigate(event, "/creator/onboarding?step=questionnaire", false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">2</span>{t("Questionnaire", "Questionário")}</a>
+        {(brand === "flirt" ? ["questionnaire", "content"] : ["content", "questionnaire"]).map((section, index) => {
+          const href = `/creator/onboarding?step=${section}`;
+          return <a key={section} href={href} data-creator-setup-tab={section} aria-current={activeSection === section ? "step" : undefined} onClick={event => navigate(event, href, false, router?.push)}><span className={styles.stepNumber} aria-hidden="true">{index + 1}</span>{section === "questionnaire" ? t("Questionnaire", "Questionário") : t("Content", "Conteúdo")}</a>;
+        })}
       </nav>}
     </header>
     <main className={styles.main}>

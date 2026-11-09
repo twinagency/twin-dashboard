@@ -62,10 +62,8 @@ export default function FlirtQuestionnaireField({ field, value, change, disabled
     </>;
   } else if (field.options && field.multiple) {
     const options = field.options;
-    const completed = rows.filter(([key, detail]) => options.some(option => option[0] === key && (!option[2] || detail?.trim()))).length;
     const changeDetail = (key: string, next: string) => change(JSON.stringify(rows.map(([choice, detail]) => [choice, choice === key ? next : detail])));
     control = <>
-      {field.multiple > 1 && <p className={styles.help} aria-live="polite">{t(`${completed} of ${field.multiple} minimum completed`, `${completed} de ${field.multiple} respostas mínimas concluídas`)}</p>}
       <div className={styles.choices}>{options.map(([key, translated]) => {
         const selected = rows.some(([choice]) => choice === key);
         return pill(t(key, translated), selected, () => change(JSON.stringify(selected ? rows.filter(([choice]) => choice !== key) : [...rows, [key, ""]])));

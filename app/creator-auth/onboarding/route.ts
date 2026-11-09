@@ -1,4 +1,3 @@
-import { firstIncompleteFlirtStep } from "@/lib/flirt-questionnaire";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -76,8 +75,6 @@ export async function POST(req: NextRequest) {
     if (!existing?.id || !revision) return back(req, "questionnaire_missing", "questionnaire");
     if (existing.updated_at !== revision) return back(req, "questionnaire_conflict", "questionnaire");
     const answers = (existing.answers || {}) as Record<string, string>;
-    const missingFlirtStep = optional ? firstIncompleteFlirtStep(answers) : undefined;
-    if (missingFlirtStep) return back(req, "questionnaire_missing", "questionnaire", missingFlirtStep.slug);
     const missing = questionnaireRequiredMissing(answers);
     if (!optional && missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
 
@@ -157,7 +154,6 @@ export async function POST(req: NextRequest) {
     const questionnaireComplete = !!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0;
     const contentComplete = creatorContentCompleted(files || [], !!progress?.content_completed);
     const voiceComplete = !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
-    if (optional && !progress?.questionnaire_completed) return back(req, "questionnaire_missing", "questionnaire");
     if (!optional && (!questionnaireComplete || !contentComplete || !voiceComplete || !consent)) {
       return back(req, "not_ready", "consent");
     }
@@ -165,7 +161,14 @@ export async function POST(req: NextRequest) {
     // Intake submission grants workspace access only. It does not approve the
     // creator, create a clone, connect Telegram, grant consent or start a bot.
     const submittedAt = nextQuestionnaireRevision(existing?.updated_at);
-    if (!existing) return back(req, "not_ready", "consent");
+    if (!existing) {
+      if (!optional) return back(req, "not_ready", "consent");
+      const { error } = await supabaseAdmin.from("creator_applications")
+        .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "submitted", submitted_at: now, updated_at: submittedAt });
+      if (error?.code === "23505") return back(req, "questionnaire_conflict", "consent");
+      if (error) return back(req, submissionErrorStatus(error), "consent");
+      return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
+    }
     const { data: submittedApplication, error } = await supabaseAdmin
       .from("creator_applications")
       .update({ status: "submitted", submitted_at: now, updated_at: submittedAt })

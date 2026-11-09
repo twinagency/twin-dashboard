@@ -8,7 +8,7 @@ type Field = {
   input?: "text" | "date" | "email" | "tel" | "textarea";
   options?: Option[];
   private?: boolean;
-  multiple?: number;
+  multiple?: boolean;
   rows?: "social" | "pets" | "marks";
   help?: Copy;
   heading?: Copy;
@@ -64,7 +64,7 @@ export const FLIRT_QUESTIONNAIRE_STEPS: { slug: string; title: Copy; description
       { id: "flirt_nickname", label: ["Do you have a nickname you use online?", "Você usa algum apelido online?"], options: [["Yes", "Sim", ["What’s your nickname?", "Qual é seu apelido?"]], yesNo[1]] },
       { id: "from_grew_up", label: ["Where did you grow up?", "Onde você cresceu?"], private: true },
       { id: "currently_live", label: ["Where are you based now?", "Onde você mora atualmente?"], private: true, help: ["City, region or country is enough.", "Basta informar a cidade, região ou país."] },
-      { id: "flirt_languages", label: ["What languages do you text in?", "Em quais idiomas você costuma escrever?"], multiple: 1, options: [["English", "Inglês"], ["Portuguese", "Português"], ["Spanish", "Espanhol"], ["French", "Francês"], ["German", "Alemão"], ["Italian", "Italiano"], ["Other", "Outro", ["Which language?", "Qual idioma?"]]] },
+      { id: "flirt_languages", label: ["What languages do you text in?", "Em quais idiomas você costuma escrever?"], multiple: true, options: [["English", "Inglês"], ["Portuguese", "Português"], ["Spanish", "Espanhol"], ["French", "Francês"], ["German", "Alemão"], ["Italian", "Italiano"], ["Other", "Outro", ["Which language?", "Qual idioma?"]]] },
       { id: "flirt_relationship_status", label: ["What’s your relationship status?", "Qual é seu estado civil ou relacionamento?"], options: [["Single", "Solteira"], ["In a relationship", "Em um relacionamento"], ["Married", "Casada"], ["Other", "Outro", ["How do you describe it?", "Como você descreve?"]], privateOption] },
       { id: "flirt_siblings", heading: ["Family & pets", "Família e animais"], label: ["Do you have siblings?", "Você tem irmãos?"], options: [["Yes", "Sim", ["How many brothers and sisters are you happy to mention?", "Quantos irmãos e irmãs você quer mencionar?"]], yesNo[1], privateOption] },
       { id: "flirt_children", label: ["Do you have children?", "Você tem filhos?"], options: [["Yes", "Sim", ["How many children are you happy to mention?", "Quantos filhos você quer mencionar?"]], yesNo[1], privateOption] },
@@ -75,10 +75,10 @@ export const FLIRT_QUESTIONNAIRE_STEPS: { slug: string; title: Copy; description
   {
     slug: "flirt-v3-interests",
     title: ["Hobbies & favourites", "Passatempos e favoritos"],
-    description: ["Choose at least two in each group.", "Escolha pelo menos dois em cada grupo."],
+    description: ["Choose any hobbies and favourites you’d like to share.", "Escolha os passatempos e favoritos que quiser compartilhar."],
     fields: [
-      { id: "flirt_hobbies", label: ["What are your hobbies?", "Quais são seus passatempos?"], multiple: 2, options: hobbies },
-      { id: "flirt_favourites", label: ["What are your favourites?", "Quais são seus favoritos?"], multiple: 2, options: favourites },
+      { id: "flirt_hobbies", label: ["What are your hobbies?", "Quais são seus passatempos?"], multiple: true, options: hobbies },
+      { id: "flirt_favourites", label: ["What are your favourites?", "Quais são seus favoritos?"], multiple: true, options: favourites },
     ],
   },
   {
@@ -114,41 +114,4 @@ export function flirtRows(value: string) {
     if (Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.every(item => typeof item === "string"))) return rows as string[][];
   } catch { /* Empty and legacy scalar answers do not contain rows. */ }
   return [];
-}
-
-function isHttpUrl(value: string) {
-  try {
-    const url = new URL(value);
-    return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password;
-  } catch {
-    return false;
-  }
-}
-
-export function flirtFieldComplete(field: Field, value = "") {
-  if (!value.trim()) return false;
-  if (field.rows) {
-    if (field.rows === "social" && value === "No public profiles") return true;
-    if (field.rows !== "social" && ["No", "Keep private"].includes(value)) return true;
-    const rows = flirtRows(value);
-    return rows.length > 0 && rows.every(row => row.length === FLIRT_ROW_FIELDS[field.rows!].length
-      && row.every(item => item.trim())
-      && (field.rows !== "social" || isHttpUrl(row[1]))
-      && (field.rows !== "pets" || ["Male", "Female", "Unsure"].includes(row[2]))
-      && (field.rows !== "marks" || ["Tattoo", "Piercing"].includes(row[0])));
-  }
-  if (field.multiple) {
-    const rows = flirtRows(value);
-    return new Set(rows.map(([choice]) => choice)).size === rows.length && rows.length >= field.multiple
-      && rows.every(([choice, detail]) => field.options?.some(option => option[0] === choice && (!option[2] || detail?.trim())));
-  }
-  if (field.options) return field.options.some(([choice, , followUp]) =>
-    followUp ? value.startsWith(choice + ":") && Boolean(value.slice(choice.length + 1).trim()) : value === choice);
-  if (field.input === "date") return /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value));
-  if (field.input === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  return true;
-}
-
-export function firstIncompleteFlirtStep(answers: Record<string, string>) {
-  return FLIRT_QUESTIONNAIRE_STEPS.find(step => step.fields.some(field => !flirtFieldComplete(field, answers[field.id])));
 }

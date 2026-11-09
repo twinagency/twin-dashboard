@@ -35,7 +35,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
       const href = (event as CustomEvent<{ href: string }>).detail?.href;
       if (!href || !queue?.folderPending) return;
       event.preventDefault();
-      // Load the questionnaire only after its shared application revision is saved.
+      // Save the folder link before leaving this step.
       void queue.folder.save().then(saved => {
         if (!saved) return;
         if (router && href.startsWith("/creator/onboarding")) router.push(href);
@@ -88,10 +88,9 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
       {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{t(`${folder.provider} folder`, `Pasta do ${folder.provider}`)}</a><span className="ml-2">{t("Awaiting import", "Aguardando importação")}</span></li>)}</ul>}
     </details>
     <div className={styles.handoff} data-content-questionnaire-handoff>
-      <p>{t("You can answer the questions while your files upload.", "Você pode responder às perguntas enquanto os arquivos são enviados.")}</p>
-      {queue.working && <p className={styles.hint}>{t("Keep this browser open. Your uploads continue while you answer.", "Mantenha o navegador aberto. O envio continua enquanto você responde.")}</p>}
+      {queue.working && <p className={styles.hint}>{t("Keep this browser open until your uploads finish.", "Mantenha o navegador aberto até o fim dos envios.")}</p>}
       {attention && <p className={styles.hint}>{t("Some files need attention. Open Upload details below to retry.", "Alguns arquivos precisam de atenção. Abra Detalhes do envio abaixo para tentar novamente.")}</p>}
-      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>{t("Continue to questions →", "Continuar para o questionário →")}</Button>
+      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=content&review=1#creator-setup-submit", router?.push)}>{t("Review and finish →", "Revisar e concluir →")}</Button>
     </div>
     {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label={t("Upload queue", "Fila de envio")}><summary>{t("Upload details", "Detalhes do envio")}{attention ? t(", action needed", ", ação necessária") : ""}</summary>
       <ul className="max-h-96 space-y-3 overflow-y-auto">
@@ -107,7 +106,6 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     <details className={styles.help}><summary className="min-h-11 cursor-pointer py-3"><CircleHelp size={16} aria-hidden="true" /> {t("Need help?", "Precisa de ajuda?")}</summary>
       <ol className={styles.helpSteps}>
         <li>{t("Choose your photos and videos. You can select several at once.", "Escolha suas fotos e vídeos. Você pode selecionar vários arquivos de uma vez.")}</li>
-        <li>{t("Continue to the questions while your content uploads.", "Continue para o questionário enquanto seu conteúdo é enviado.")}</li>
         <li>{t("Keep this browser tab open until uploading finishes.", "Mantenha esta aba aberta até o fim do envio.")}</li>
       </ol>
       <p className="mb-3">{t("Added the wrong file? Tap its picture, then Remove file.", "Adicionou o arquivo errado? Toque na miniatura e depois em Remover arquivo.")}</p>
