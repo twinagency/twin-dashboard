@@ -1,5 +1,5 @@
 import { parseDateOfBirth } from "@/lib/flirt-clone-build";
-import { FLIRT_QUESTIONNAIRE_PAGES } from "@/lib/flirt-questionnaire";
+import { FLIRT_QUESTIONNAIRE_PAGES, firstIncompleteFlirtStep } from "@/lib/flirt-questionnaire";
 import { getFlirtCreatorLocale } from "@/lib/flirt-creator-locale-server";
 import { flirtCreatorCopy } from "@/lib/flirt-creator-locale";
 import CreatorContentIntake from "@/components/CreatorContentIntake";
@@ -285,7 +285,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   if (!account) redirect("/creator-auth/logout");
   const answers = (application?.answers || {}) as Record<string,string>;
   const questionnaireAnswers = creatorProfileAnswers(answers);
-  const flirtPage = FLIRT_QUESTIONNAIRE_PAGES.find(page => page.slug === section) ?? FLIRT_QUESTIONNAIRE_PAGES[0];
   const flirtFallbacks = { preferred_name: account.display_name || "", email_address: account.email || "" };
   const flirtPrefilled = Object.keys(flirtFallbacks).filter(id => !Object.prototype.hasOwnProperty.call(answers, id));
   const flirtAnswers = Object.fromEntries(FLIRT_QUESTIONNAIRE_PAGES.flatMap(page =>
@@ -300,6 +299,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     flirtAnswers.boundaries = /^(none|no|nenhum)[.!]?$/i.test(flirtAnswers.boundaries) ? "No" : `Yes: ${flirtAnswers.boundaries}`;
     flirtPrefilled.push("boundaries");
   }
+  const nextFlirtStep = firstIncompleteFlirtStep(flirtAnswers);
+  const flirtPage = FLIRT_QUESTIONNAIRE_PAGES.find(page => page.slug === (section ?? nextFlirtStep?.slug))
+    ?? FLIRT_QUESTIONNAIRE_PAGES[0];
   const applicationState = creatorApplicationState(application?.status, application?.submitted_at);
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const hasApplicationState = !!application && application.status !== "draft";
@@ -326,7 +328,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
 
   const savedContentCount = (files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice").length;
-  const activeSection = step === "questionnaire" || (!step && (section || status?.startsWith("questionnaire_"))) ? "questionnaire" : "content";
+  const startQuestionnaire = !step && !status && !review && !completedView && !submitted && !complete.questionnaire;
+  const activeSection = step === "questionnaire" || (!step && (section || status?.startsWith("questionnaire_"))) || startQuestionnaire
+    ? "questionnaire" : "content";
   const reviewView = review === "1" || step === "consent" || status === "consent_missing" || status === "consent_saved" || status === "not_ready";
   const completionView = submitted && completedView === "1";
   const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
