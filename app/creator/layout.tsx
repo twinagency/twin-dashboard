@@ -9,6 +9,7 @@ import { withDashboardAccess } from "@/lib/dashboard-access";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isZaneDemo } from "@/lib/creator-demo-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
+import { canManageCreatorLogin } from "@/lib/creator-account-settings";
 import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 export const dynamic = "force-dynamic";
 export default async function CreatorLayout({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       clones={clones}
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
+      showAccountSettings={!!studioBrand && canManageCreatorLogin(creator)}
       onboardingEditable={flirtOnboardingOptional() && !creator.readOnly}
       onboardingFinished={creator.onboarded}
       allTimeStars={Math.round(allTimeStars * creatorShare(creator))}

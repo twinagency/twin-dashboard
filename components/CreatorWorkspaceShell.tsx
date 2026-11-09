@@ -29,6 +29,7 @@ export default function CreatorWorkspaceShell({
   clones,
   activeCloneId,
   connected,
+  showAccountSettings = false,
   onboardingEditable = false,
   onboardingFinished = true,
   allTimeStars,
@@ -42,6 +43,7 @@ export default function CreatorWorkspaceShell({
   clones: CreatorClone[];
   activeCloneId: string | null;
   connected: boolean;
+  showAccountSettings?: boolean;
   onboardingEditable?: boolean;
   /** False while the creator has skipped onboarding without submitting. */
   onboardingFinished?: boolean;
@@ -51,7 +53,7 @@ export default function CreatorWorkspaceShell({
   if (studioBrand && studioStatus) return (
     <DashboardAccessProvider agencyName={agencyName} audience="creator">
       <CurrencyProvider><BlurProvider>
-        <CreatorStudioShell brand={studioBrand} creatorName={creatorName} photoUrl={clones.find(clone => clone.id === activeCloneId)?.photoUrl} status={studioStatus} contentHref={contentHref}>{children}</CreatorStudioShell>
+        <CreatorStudioShell brand={studioBrand} creatorName={creatorName} photoUrl={clones.find(clone => clone.id === activeCloneId)?.photoUrl} status={studioStatus} contentHref={contentHref} showAccountSettings={showAccountSettings}>{children}</CreatorStudioShell>
       </BlurProvider></CurrencyProvider>
     </DashboardAccessProvider>
   );
