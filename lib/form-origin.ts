@@ -18,3 +18,10 @@ export function trustedFormOrigin(request: { url: string; headers: Headers }): b
   } catch { return false; }
 }
 
+/** Only the public creator registration form may navigate from the Telegram app. */
+export function trustedMiniAppCreatorSignup(request: { url: string; headers: Headers }): boolean {
+  return process.env.DASHBOARD_PUBLIC_ORIGIN === "https://dashboard.flirtaiagency.com"
+    && new URL(request.url).pathname === "/creator-auth/signup"
+    && request.headers.get("origin") === "https://t-social.me"
+    && request.headers.get("content-type")?.split(";")[0] === "application/x-www-form-urlencoded";
+}

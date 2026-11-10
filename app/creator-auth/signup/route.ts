@@ -1,7 +1,7 @@
 import { AGENCY_REFRESH_COOKIE } from "@/lib/agency-session";
 import { exactCaseInsensitiveEmailPattern } from "@/lib/creator-email";
 import { lookupCreatorInvitation } from "@/lib/creator-invite-agency";
-import { trustedFormOrigin } from "@/lib/form-origin";
+import { trustedFormOrigin, trustedMiniAppCreatorSignup } from "@/lib/form-origin";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
@@ -31,11 +31,7 @@ async function sha256(value: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
-  // The public Telegram Mini App can navigate to the FLIRT signup endpoint.
-  // Keep the exception local to this form and use the dashboard's normal first-party session.
-  const miniAppSignup = process.env.DASHBOARD_PUBLIC_ORIGIN === "https://dashboard.flirtaiagency.com"
-    && req.headers.get("origin") === "https://t-social.me"
-    && req.headers.get("content-type")?.split(";")[0] === "application/x-www-form-urlencoded";
+  const miniAppSignup = trustedMiniAppCreatorSignup(req);
   if ((!trustedFormOrigin(req) && !miniAppSignup) || req.headers.has("next-action")) {
     return new NextResponse("Forbidden", { status: 403 });
   }

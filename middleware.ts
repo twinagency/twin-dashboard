@@ -9,7 +9,7 @@ import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./depl
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
-import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
+import { dashboardOrigin, trustedFormOrigin, trustedMiniAppCreatorSignup } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
@@ -115,7 +115,9 @@ async function routeMiddleware(req: NextRequest) {
     return privateResponse(withPathname(req));
   }
   if (pathname === "/creator-auth/locale" || isCreatorAuthPath(pathname)) {
-    if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
+    if (req.method !== "POST" || req.headers.has("next-action") || (!trustedFormOrigin(req) && !trustedMiniAppCreatorSignup(req))) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
     return privateResponse(withPathname(req));
   }
   if (isCreatorPublicPath(pathname)) {
