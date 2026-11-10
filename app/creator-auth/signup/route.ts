@@ -31,9 +31,17 @@ async function sha256(value: string): Promise<string> {
 }
 
 export async function POST(req: Request) {
-  if (!trustedFormOrigin(req) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+  // The public Telegram Mini App can navigate to the FLIRT signup endpoint.
+  // Keep the exception local to this form and use the dashboard's normal first-party session.
+  const miniAppSignup = process.env.DASHBOARD_PUBLIC_ORIGIN === "https://dashboard.flirtaiagency.com"
+    && req.headers.get("origin") === "https://t-social.me"
+    && req.headers.get("content-type")?.split(";")[0] === "application/x-www-form-urlencoded";
+  if ((!trustedFormOrigin(req) && !miniAppSignup) || req.headers.has("next-action")) {
+    return new NextResponse("Forbidden", { status: 403 });
+  }
   const requestId = randomUUID();
   const form = await req.formData();
+  if (miniAppSignup && form.get("portal") !== "twin") return new NextResponse("Forbidden", { status: 403 });
   const displayName = String(form.get("display_name") || "").trim();
   const email = String(form.get("email") || "").trim().toLowerCase();
   const password = String(form.get("password") || "");
