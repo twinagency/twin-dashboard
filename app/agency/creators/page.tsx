@@ -56,6 +56,8 @@ export default async function AgencyCreatorsPage({ searchParams }: { searchParam
 
   const latestApplication = new Map<string, Application>();
   for (const row of applications) if (!latestApplication.has(row.creator_account_id)) latestApplication.set(row.creator_account_id, row);
+  const accountDate = (creator: Creator) => Date.parse(latestApplication.get(creator.id)?.submitted_at ?? creator.created_at);
+  creators.sort((first, second) => accountDate(second) - accountDate(first));
   const progressByCreator = new Map(progressRows.map((row) => [row.creator_account_id, row]));
   const linkByCreator = new Map(links.map((row) => [row.creator_account_id, row]));
   const counts = new Map<string, { total: number; verified: number }>();
@@ -69,7 +71,7 @@ export default async function AgencyCreatorsPage({ searchParams }: { searchParam
 
   return (
     <div className="dashboard-page text-ink">
-      <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-2">{access.name}</p><h1 className="mt-1 text-2xl font-semibold">Accounts</h1><p className="mt-1 text-sm text-muted">New creators appear here as soon as they sign up. Review their profile, questionnaire and onboarding progress before bot setup.</p></div>
+      <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-2">{access.name}</p><h1 className="mt-1 text-2xl font-semibold">Accounts</h1><p className="mt-1 text-sm text-muted">Newest submissions and signups appear first. Review each creator’s profile, questionnaire and onboarding progress before bot setup.</p></div>
       {linkResult && <p role="status" className="mb-4 rounded-xl border border-line bg-panel p-3 text-sm">{
         linkResult === "linked" ? "Bot link saved. Application approval is unchanged."
         : linkResult === "unchanged" ? "No bot selected. The existing link has been kept."
