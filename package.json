@@ -11,6 +11,7 @@
     "test:engine-contracts": "node --import tsx --test tests/contracts/facade.test.mjs tests/contracts/engine-status.test.mjs tests/contracts/engine-operator.test.ts tests/contracts/engine-environment.test.ts tests/contracts/engine-backend.test.ts tests/contracts/engine-catalogue.test.ts",
     "test:commercial-category-http": "node --import tsx scripts/check-commercial-category-http.ts",
     "test:plan-c-contracts": "node --import tsx --test tests/contracts/plan-c.test.ts",
+    "test:preparation-ui": "node --import tsx --test tests/components/preparation-failure.test.tsx",
     "test:plan-c-ui": "node --import tsx --test tests/components/plan-c-ui.test.tsx",
     "test:engine-ui": "node --import tsx --test tests/components/engine-ui.test.tsx",
     "test:engine-browser": "node tests/browser/build-engine-journey.mjs && node tests/browser/check-engine-journey.mjs",

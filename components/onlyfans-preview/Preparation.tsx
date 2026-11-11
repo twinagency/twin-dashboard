@@ -1,8 +1,28 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {parsePreparationState,validPreparationCommand,type PreparationCommand,type PreparationState} from "@/lib/onlyfans/preparation";
+const outcomeLabel:Record<string,string>={transient:"Provider unavailable, retrying",identity_failed:"Provider identity not verified",credential_missing:"Credential missing",
+ budget_exhausted:"Read ceiling spent",schema:"Provider response not understood",held:"Held"};
+const stamp=(v:string|null)=>v?v.replace("T"," ").replace(/(:\d\d)?(\.\d+)?Z?$/,"")+" UTC":null;
+const words=(v:string)=>v.replaceAll("_"," ");
 const inputClass="block w-full rounded-lg border border-line bg-transparent px-3 py-2 text-sm disabled:opacity-50";
 const buttonClass="rounded-lg border border-line px-3 py-2 text-sm font-semibold disabled:opacity-50";
+/** Pure status view: a failed attempt is shown with its cause, retry time and required action. */
+export function PreparationStatus({state}:{state:Extract<PreparationState,{configured:true}>}){
+ const config=state.config;
+ return <div className="my-3 text-sm" data-preparation-status>
+  <p>Preparation {state.status}. {state.connected?"Provider identity verified.":state.failure?"Provider identity not verified: "+words(state.failure.cause)+".":state.lastAttempt?"Provider identity not yet verified.":"No worker attempt recorded yet."}</p>
+  {state.failure?<div data-preparation-failure>
+   <p>Last attempt{state.lastAttempt?.at?" "+stamp(state.lastAttempt.at):""}: {outcomeLabel[state.failure.outcome]??"Failed"} ({words(state.failure.cause)}){state.lastAttempt?" · attempt "+state.lastAttempt.attempts:""}.</p>
+   <p>{state.failure.exhausted?"Retries exhausted. The worker has stopped trying.":state.failure.retryNotBefore?"Next retry after "+stamp(state.failure.retryNotBefore)+".":"Not retried automatically."}</p>
+   <p>Required action: {state.failure.operatorAction}</p>
+  </div>:null}
+  <p>{state.vault?("Vault "+state.vault.status+" · "+state.vault.selected+" selected · "+state.vault.pagesRead+" pages recorded"):"Vault sync awaiting preparation worker."}</p>
+  {state.vault?.error?<p>Sync held: {state.vault.error.replaceAll("_"," ")}. Review the status and budget before resuming.</p>:null}
+  <p>{state.providerRequestsUsed} / {config!.limits.provider_requests} requests reserved · {state.providerCreditsReserved} / {config!.limits.provider_credit_budget} credits reserved.</p>
+  <p>Reserved credits are a spending ceiling estimate, not a provider charge reconciliation.</p>
+ </div>;
+}
 export default function Preparation({accountId,readOnly=false}:{accountId:string;readOnly?:boolean}){
  const [state,setState]=useState<PreparationState|null>(null),[notice,setNotice]=useState(""),[busy,setBusy]=useState(false);
  const [provider,setProvider]=useState(""),[creator,setCreator]=useState(""),[requests,setRequests]=useState(""),[credits,setCredits]=useState(""),[per,setPer]=useState(""),[reference,setReference]=useState("");
@@ -47,13 +67,7 @@ export default function Preparation({accountId,readOnly=false}:{accountId:string
   <summary className="cursor-pointer font-semibold">Creator preparation · FansAPI</summary>
   <p className="mt-2 text-sm">Connect and prepare the latest 1,000 unique photos and videos combined. This preparation keeps automatic replies and sales disabled.</p>
   <p className="mt-2 text-sm">Vault metadata only. Conversation history, ownership coverage, AI descriptions and sales approval remain pending.</p>
-  {configured?<div className="my-3 text-sm" data-preparation-status>
-   <p>Preparation {state.status}. {state.connected?"Provider identity verified.":"Provider connection awaiting verification."}</p>
-   <p>{state.vault?("Vault "+state.vault.status+" · "+state.vault.selected+" selected · "+state.vault.pagesRead+" pages recorded"):"Vault sync awaiting preparation worker."}</p>
-   {state.vault?.error?<p>Sync held: {state.vault.error.replaceAll("_"," ")}. Review the status and budget before resuming.</p>:null}
-   <p>{state.providerRequestsUsed} / {config!.limits.provider_requests} requests reserved · {state.providerCreditsReserved} / {config!.limits.provider_credit_budget} credits reserved.</p>
-   <p>Reserved credits are a spending ceiling estimate, not a provider charge reconciliation.</p>
-  </div>:null}
+  {configured?<PreparationStatus state={state}/>:null}
   {unavailable?<p className="my-3 text-sm">Preparation is unavailable for this account. It requires a disabled account and the explicitly selected FansAPI connector.</p>:null}
   <form className="mt-3 grid gap-3 sm:grid-cols-2" onSubmit={event=>{
    event.preventDefault();if(held||unavailable)return;

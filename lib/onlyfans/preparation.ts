@@ -5,7 +5,12 @@ export type PreparationConfig={contract_version:"preparation.v1";provider_accoun
 export type PreparationState={configured:false;canPrepare:boolean}|{configured:true;revision:number;status:"configured"|"stopped";
  fingerprint:string;config:PreparationConfig;providerRequestsUsed:number;providerCreditsReserved:number;
  automaticRepliesEnabled:false;salesEnabled:false;historyCoverage:"pending";ownershipCoverage:"pending";connected?:boolean;
- vault?:null|{jobId:string;status:string;pagesRead:number;itemsSeen:number;error:string|null;selected:number};replayed?:boolean};
+ vault?:null|{jobId:string;status:string;pagesRead:number;itemsSeen:number;error:string|null;selected:number;retryAttempts?:number;retryNotBefore?:string|null};
+ lastAttempt?:PreparationAttempt|null;failure?:PreparationFailure|null;replayed?:boolean};
+export type PreparationOutcome="complete"|"partial"|"transient"|"identity_failed"|"credential_missing"|"budget_exhausted"|"schema"|"held";
+/** Sanitized, fixed-vocabulary result of the worker's latest account attempt. */
+export type PreparationAttempt={at:string|null;outcome:PreparationOutcome;cause:string;retryNotBefore:string|null;attempts:number;exhausted:boolean;operatorAction:string};
+export type PreparationFailure={outcome:Exclude<PreparationOutcome,"complete"|"partial">;cause:string;retryNotBefore:string|null;exhausted:boolean;operatorAction:string};
 export type PreparationCommand={action:"configure";expectedRevision:number;requestId:string;reason:string;config:PreparationConfig}|
  {action:"stop";expectedRevision:number;requestId:string;reason:string};
 const obj=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==="object"&&!Array.isArray(v);
@@ -26,6 +31,11 @@ export function validPreparationCommand(v:unknown):v is PreparationCommand{
  typeof v.reason!=="string"||!v.reason.trim()||v.reason.length>512)return false;
  return v.action==="stop"||validPreparationConfig(v.config);
 }
+const OUTCOMES=["complete","partial","transient","identity_failed","credential_missing","budget_exhausted","schema","held"];
+const when=(v:unknown)=>v===null||(typeof v==="string"&&v.length<=40&&/^\d{4}-\d{2}-\d{2}T[0-9:.]+Z?$/.test(v)&&!Number.isNaN(Date.parse(v)));
+const validAttempt=(v:unknown,failure:boolean)=>obj(v)&&exact(v,failure?["outcome","cause","retryNotBefore","exhausted","operatorAction"]:["at","outcome","cause","retryNotBefore","attempts","exhausted","operatorAction"])&&
+ OUTCOMES.includes(String(v.outcome))&&(!failure||(v.outcome!=="complete"&&v.outcome!=="partial"))&&typeof v.cause==="string"&&/^[a-z][a-z0-9_]{0,63}$/.test(v.cause)&&
+ (failure||when(v.at))&&when(v.retryNotBefore)&&(failure||integer(v.attempts,0,1000))&&typeof v.exhausted==="boolean"&&typeof v.operatorAction==="string"&&v.operatorAction.length<=240;
 export function parsePreparationState(v:unknown):PreparationState|null{
  if(!obj(v)||typeof v.configured!=="boolean")return null;
  if(!v.configured)return exact(v,["configured","canPrepare"])&&typeof v.canPrepare==="boolean"?v as PreparationState:null;
@@ -36,6 +46,9 @@ export function parsePreparationState(v:unknown):PreparationState|null{
  if(v.vault!==undefined&&v.vault!==null&&(!obj(v.vault)||typeof v.vault.jobId!=="string"||
  !["pending","running","complete","failed","superseded"].includes(String(v.vault.status))||
  !integer(v.vault.pagesRead,0,10000)||!integer(v.vault.itemsSeen,0,1000000)||!integer(v.vault.selected,0,1000)||
- !(v.vault.error===null||typeof v.vault.error==="string")))return null;
+ !(v.vault.error===null||typeof v.vault.error==="string")||
+ ("retryAttempts" in v.vault&&!integer(v.vault.retryAttempts,0,1000))||("retryNotBefore" in v.vault&&!when(v.vault.retryNotBefore))))return null;
+ if(v.lastAttempt!==undefined&&v.lastAttempt!==null&&!validAttempt(v.lastAttempt,false))return null;
+ if(v.failure!==undefined&&v.failure!==null&&!validAttempt(v.failure,true))return null;
  return v as PreparationState;
 }
