@@ -23,10 +23,10 @@ async function main(){
  await new Promise<void>(resolve=>identity.listen(0,"127.0.0.1",resolve));
  const port=(identity.address() as {port:number}).port;
  const fd=openSync("../evidence/commercial-next.log","w");
- const child=spawn(process.execPath,["node_modules/next/dist/bin/next","dev","--hostname","127.0.0.1","--port","3197"],{cwd:process.cwd(),env:{...process.env,NODE_OPTIONS:"--max-old-space-size=1536",NEXT_TELEMETRY_DISABLED:"1",DASHBOARD_PUBLIC_ORIGIN:base,SUPABASE_URL:"http://127.0.0.1:"+port,SUPABASE_SERVICE_KEY:"synthetic-service",ONLYFANS_API_BASE_URL:backend,ONLYFANS_API_TOKEN:"synthetic-read",ONLYFANS_CONTENT_TOKEN:"synthetic-content"},stdio:["ignore",fd,fd]});
+ const child=spawn(process.execPath,["node_modules/next/dist/bin/next","dev","--hostname","127.0.0.1","--port","3197"],{cwd:process.cwd(),env:{...process.env,NODE_OPTIONS:"--max-old-space-size=1536",NEXT_TELEMETRY_DISABLED:"1",DASHBOARD_PUBLIC_ORIGIN:base,SUPABASE_URL:"http://127.0.0.1:"+port,SUPABASE_SERVICE_KEY:"synthetic-service",ONLYFANS_API_BASE_URL:backend,ONLYFANS_API_TOKEN:"synthetic-read",ONLYFANS_CONTENT_TOKEN:"synthetic-content",ONLYFANS_CONFIGURATION_TOKEN:"synthetic-configuration"},stdio:["ignore",fd,fd]});
  try{
   for(let n=0;n<180;n++){try{const r=await fetch(base+"/api/onlyfans/accounts");if(r.status===401)break;}catch{}if(n===179)throw Error("Next did not start");await new Promise(r=>setTimeout(r,500));}
-  const setup=await(await fetch(backend+"/fixture")).json() as {account:string;folder:string;providerReads:number};
+  const setup=await(await fetch(backend+"/fixture")).json() as {account:string;folder:string;providerReads:number;providerAccount:string;providerCreator:string};
   const vault="/api/onlyfans-content/accounts/"+setup.account+"/vault";
   const get=(path:string,token="synthetic-manager",headers:Record<string,string>={})=>fetch(base+path,{redirect:"manual",headers:{Cookie:"twin_agency_access="+token,...headers}});
   const post=(path:string,body:unknown,token="synthetic-manager",headers:Record<string,string>={})=>fetch(base+path,{method:"POST",redirect:"manual",headers:{Cookie:"twin_agency_access="+token,Origin:base,"Content-Type":"application/json",...headers},body:JSON.stringify(body)});
@@ -59,6 +59,39 @@ async function main(){
   const final=await(await fetch(backend+"/fixture")).json();
   assert.deepEqual(final.products,[{price:1200,enabled:false,media:[11]},{price:1200,enabled:false,media:[12]}]);
   assert.equal(final.providerReads,setup.providerReads,"no provider calls for prices, reviews or drafts");
+  const preparationPath="/api/onlyfans-configuration/accounts/"+setup.account+"/preparation";
+  response=await get(preparationPath);assert.equal(response.status,200,await response.clone().text());
+  assert.deepEqual((await response.json()).preparation,{configured:false,canPrepare:true});
+  const preparationRequest={action:"configure",expectedRevision:0,requestId:randomUUID(),
+   reason:"Agency approved isolated preparation fixture",
+   config:{contract_version:"preparation.v1",provider_account:setup.providerAccount,creator_id:setup.providerCreator,
+    qualification:{mode:"fixture",reference:"actual Next/BFF and PG mocked-wire qualification"},
+    limits:{provider_requests:4,provider_credit_budget:8,provider_credits_per_request:2}}};
+  assert.equal((await post(preparationPath,preparationRequest,"synthetic-reader")).status,403);
+  assert.equal((await post(preparationPath,{...preparationRequest,actor:"spoof"})).status,400);
+  assigned=other;assert.equal((await post(preparationPath,preparationRequest)).status,404);assigned=creator;
+  response=await post(preparationPath,preparationRequest);assert.equal(response.status,200,await response.clone().text());
+  assert.equal((await response.json()).preparation.revision,1);
+  response=await post(preparationPath,preparationRequest);assert.equal(response.status,200,await response.clone().text());
+  assert.equal((await response.json()).preparation.replayed,true);
+  assert.equal((await(await fetch(backend+"/fixture")).json()).providerReads,setup.providerReads);
+  const prepared=await fetch(backend+"/fixture/prepare",{method:"POST"});assert.equal(prepared.status,200,await prepared.clone().text());
+  response=await get(preparationPath);const prep=(await response.json()).preparation;
+  assert.equal(prep.connected,true);assert.equal(prep.providerRequestsUsed,2);assert.equal(prep.providerCreditsReserved,4);
+  assert.equal(prep.automaticRepliesEnabled,false);assert.equal(prep.salesEnabled,false);assert.equal(prep.vault.status,"complete");
+  assert.equal((await(await fetch(backend+"/fixture")).json()).providerReads,setup.providerReads+2);
+  const stopped={action:"stop",expectedRevision:1,requestId:randomUUID(),reason:"Agency stopped preparation fixture"};
+  response=await post(preparationPath,stopped);assert.equal(response.status,200,await response.clone().text());
+  assert.equal((await response.json()).preparation.status,"stopped");
+  assert.equal((await(await fetch(backend+"/fixture/prepare",{method:"POST"})).json()).state,"stopped");
+  const prepEndpoint=backend+"/onlyfans/agency/v1/configuration/v1/accounts/"+setup.account+"/preparation";
+  const prepScope=JSON.stringify({creatorIds:[creator],actor:"agency-user:"+agency+":"+manager,canManage:true});
+  const prepBody=JSON.stringify({action:"stop",expectedRevision:2,commandKey:"d".repeat(64),actor:"op-session:"+"a".repeat(64),reason:"spoof must fail"});
+  const directPrep=(headers:Record<string,string>)=>fetch(prepEndpoint,{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer synthetic-configuration",...headers},body:prepBody});
+  assert.equal((await directPrep({"X-OnlyFans-Configuration-Version":"of-configuration.v3"})).status,403);
+  assert.equal((await directPrep({"X-OnlyFans-Agency-Scope":prepScope})).status,400);
+  assert.equal((await directPrep({"X-OnlyFans-Agency-Scope":prepScope,"X-OnlyFans-Configuration-Version":"wrong"})).status,400);
+  assert.equal((await directPrep({"X-OnlyFans-Agency-Scope":prepScope,"X-OnlyFans-Configuration-Version":"of-configuration.v3"})).status,409);
   active=false;assert.notEqual((await post(vault+"/category-drafts",current)).status,200,"revoked session cannot replay");active=true;
   // The actual backend ingress separately rejects a missing scope, contract and actor mismatch.
   const endpoint=backend+"/onlyfans/agency/v1/content/v1/accounts/"+setup.account+"/vault/category-drafts";
