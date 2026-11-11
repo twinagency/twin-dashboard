@@ -1,5 +1,5 @@
 import { createBackendTransport, configuredBackendPurpose } from "@/lib/onlyfans/backend-transport";
-import { CONNECTION_HEADER, CONNECTION_SCHEMA, parseConnection, parseConnectionAck, parseRegistrationAck,
+import { CONNECTION_HEADER, CONNECTION_SCHEMA, connectionCapture, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   parseEnrollment, type ConnectionEnrollmentRequest, type ConnectionRequest, type ConnectionRegistration, type ConnectionFailure } from "./contract";
 type Identity = { actor: string; commandKey: string };
 export function createConnectionBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
@@ -45,6 +45,16 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
         if (response.ok) { const data = parseConnection(await response.json(), accountId); if (data) return { ok: true as const, data }; }
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The recorded account connection could not be read." };
       } catch { return { ok: false as const, status: 503, error: "The recorded account connection could not be read." }; }
+    },
+    async captureFromCurl(accountId: string, curl: string, staticParamOverride?: string | null) {
+      const result = await post(base + "/" + encodeURIComponent(accountId) + "/capture-from-curl",
+        staticParamOverride ? { curl, staticParamOverride } : { curl });
+      if (!result.ok) return result;
+      const body = result.body as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown };
+      if (body?.ok === true && object(body.capture) && typeof body.xHash === "string" && Number.isSafeInteger(body.ownerId) && (body.ownerId as number) > 0
+        && connectionCapture(body.capture, body.ownerId as number))
+        return { ok: true as const, data: { capture: body.capture, xHash: body.xHash, ownerId: body.ownerId as number } };
+      return { ok: false as const, status: 502, outcome: "unconfirmed", error: "The pasted curl could not be converted to a capture." } as ConnectionFailure;
     },
     async command(accountId: string, command: ConnectionRequest & Identity) {
       const result = await post(base + "/" + encodeURIComponent(accountId), command);
