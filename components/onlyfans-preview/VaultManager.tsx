@@ -15,6 +15,7 @@ import type { FolderSummary } from "@/lib/onlyfans/vault-editing";
 import VaultOrganization from "./VaultOrganization";
 import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
+import CategoryDrafts from "./CategoryDrafts";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
 import VaultMediaPicker from "./VaultMediaPicker";
@@ -237,6 +238,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         </button>)}</div>
         {folders.length>6?<button type="button" className="of-text-link mt-2" aria-expanded={allFolders} onClick={()=>setAllFolders(value=>!value)}>{allFolders?"Show fewer folders":`Show all folders (${folders.length})`}</button>:null}
       </section>}
+      {!readOnly && folderId ? <CategoryDrafts key={accountId+":"+folderId+":"+[...selected.keys()].sort().join(",")} accountId={accountId} folderId={folderId} selectedIds={[...selected.keys()]} onCreated={()=>{router.refresh();}}/> : null}
       {!readOnly ? <details ref={offerForm} open={offerOpen} onToggle={event => setOfferOpen(event.currentTarget.open)} className="of-offer-composer rounded-xl border border-line p-4"><summary className="cursor-pointer text-sm font-semibold">Create an item for sale · {selected.size} selected</summary><p className="mt-2 text-xs text-muted">Bundle selected media with a description and price for a paid offer.</p><form className="mt-4 min-w-0" onSubmit={event => { event.preventDefault(); if (productValid) void execute({ kind: "create", body: { requestId: crypto.randomUUID(), product } }); }}>
         <fieldset disabled={busy || !!retry} className="min-w-0 space-y-3">
           <legend className="mb-2 text-sm font-semibold">Create catalogue item · {selected.size} selected</legend>

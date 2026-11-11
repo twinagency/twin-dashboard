@@ -1,3 +1,4 @@
+import { parseCategoryPrice, parseCategoryReview, parseCategoryDraftAck, type CategoryDraft } from "./commercial-categories";
 import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
 import { CONTENT_HEADER, CONTENT_SCHEMA, type ContentFailure } from "./content";
 import { parseVault, parseVaultSyncAck, parseVaultCreateAck, type VaultProduct } from "./vault";
@@ -17,6 +18,31 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
     return { ok: false, status: 502, outcome: "unconfirmed", error: "The vault command outcome is not confirmed. Refresh or retry the same request." } as ContentFailure;
   }
   return {
+    async categoryPrice(accountId:string,folderId:string) {
+      try {
+        const response=await call(base(accountId)+"/vault/category-price/"+folderId,{method:"GET",headers});
+        const data=response.ok?parseCategoryPrice(await response.json(),accountId,folderId):null;
+        return data?{ok:true as const,data}:{ok:false as const,status:response.status===404?404:503,error:"The category price could not be read."};
+      }catch{return {ok:false as const,status:503,error:"The category price could not be read."};}
+    },
+    async setCategoryPrice(accountId:string,folderId:string,command:{priceCents:number;expectedFingerprint:string}&Identity) {
+      const result=await post(base(accountId)+"/vault/category-price/"+folderId,command);
+      if(!result.ok)return result;
+      const ack=parseVaultEditAck(result.body,accountId,"folders/"+folderId,command.commandKey);
+      return ack?{ok:true as const,...ack}:{ok:false,status:502,outcome:"unconfirmed",error:"The category price outcome is unconfirmed. Retry the same request."} as ContentFailure;
+    },
+    async reviewCategory(accountId:string,folderId:string,ids:string[]) {
+      try{
+        const response=await call(base(accountId)+"/vault/category-review/"+folderId+"?mediaIds="+encodeURIComponent(ids.join(",")),{method:"GET",headers});
+        const data=response.ok?parseCategoryReview(await response.json(),accountId,ids):null;
+        return data?{ok:true as const,data}:{ok:false as const,status:response.status===404?404:409,error:"Refresh the selected category and assets before review."};
+      }catch{return {ok:false as const,status:503,error:"The category could not be reviewed."};}
+    },
+    async categoryDrafts(accountId:string,command:{category:CategoryDraft}&Identity) {
+      const result=await post(base(accountId)+"/vault/category-drafts",command);if(!result.ok)return result;
+      const items=parseCategoryDraftAck(result.body,accountId,command.commandKey,command.category);
+      return items?{ok:true as const,items}:{ok:false,status:502,outcome:"unconfirmed",error:"The draft outcome is unconfirmed. Retry the same request."} as ContentFailure;
+    },
     async preview(accountId:string,mediaId:string) {
       try {
         const response=await call(base(accountId)+"/vault/previews/"+mediaId,{method:"GET",headers});
