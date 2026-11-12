@@ -8,6 +8,7 @@ import { getAgencyOnboardingAccess } from "@/lib/agency-onboarding-access";
 import { getCreatorBotOptions, resolveCreatorBot } from "@/lib/agency-creator-links";
 import { creatorVoiceOnboardingEnabled } from "@/lib/flirt-onboarding";
 import { Card } from "@/components/ui/card";
+import { TOP_ONLYFANS_AGENCY_ID } from "@/deployment/flirt-live-twin.cjs";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Agency Accounts · FLIRT" };
@@ -32,6 +33,18 @@ export default async function AgencyCreatorsPage({ searchParams }: { searchParam
   if (assignmentRows === null) throw new Error("Creator account assignments are unavailable");
   const assignments = (assignmentRows ?? []) as Assignment[];
   const ids = assignments.map((row) => row.creator_account_id);
+
+  if (!ids.length && access.id === TOP_ONLYFANS_AGENCY_ID) {
+    const { clones } = await getCreatorBotOptions(access);
+    return <div className="dashboard-page space-y-4 text-ink">
+      <h1 className="text-2xl font-semibold">Accounts</h1>
+      {clones.map(clone => <Card key={clone.id} className="flex items-center justify-between gap-4 p-5">
+        <div><h2 className="font-semibold">{clone.name}</h2><p className="text-sm text-muted">Telegram</p></div>
+        <Link href={"/clones/" + clone.id} className="text-sm font-medium text-accent hover:underline">Open bot</Link>
+      </Card>)}
+      <Link href="/agency/creator-invites" className="inline-block text-sm font-medium text-accent">Invite creator</Link>
+    </div>;
+  }
 
   if (!ids.length) {
     return <div className="dashboard-page text-ink"><h1 className="text-2xl font-semibold">Accounts</h1><p className="mt-2 text-sm text-muted">No creator accounts are assigned to {access.name} yet.</p><Link href="/agency/creator-invites" className="mt-4 inline-block text-accent">Invite creator →</Link></div>;

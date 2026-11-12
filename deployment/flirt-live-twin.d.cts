@@ -1,6 +1,9 @@
 export const PROJECT: string;
 export const ID: string;
 export const CLONES: readonly string[];
+export const TOP_ONLYFANS_AGENCY_ID: string;
+export const JOHNNY_COCO_CLONE_ID: string;
+export function isScopedLiveAgency(access: unknown): boolean;
 export function enabled(env?: NodeJS.ProcessEnv): boolean;
 export function identity(): { id: string; name: string; cloneIds: string[]; dataSource: "twin-live" };
 export function isLiveAccess(access: unknown): boolean;
