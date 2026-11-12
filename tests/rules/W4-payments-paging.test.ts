@@ -8,10 +8,10 @@ import "../support/admin-route-env";
  *     a page boundary was counted twice by a client summing pages. Paging at any limit must sum like one page.
  * F3 (data loss): limit=1000 asked for 1001 rows to detect a next page; PostgREST max_rows=1000 capped it, so
  *     nextCursor was null while 500 more payments existed.
- * rwl round 1 (/tmp/pay-findings.md): (a) paging at every limit returns exactly dedupeStarRows(all rows), ids and sum,
- *     including a >50-row same-paid_at group; (b) an empty page only with nextCursor null; (c) = F3; (d) the dedupe rule
- *     stays in lib/star-dedupe.ts; (e) a row that cannot be a valid cursor fails closed; plus a same-paid_at group too
- *     big to read whole fails closed, and a short last page costs one read.
+ * rwl r1/r2 (/tmp/pay-findings.md): (a) every limit = dedupeStarRows(own clone's rows), ids and sum, incl. a >50-row
+ *     group, another clone's rows interleaved; (b) empty page only with nextCursor null; (c) = F3; (d) dedupe rule only
+ *     in lib/star-dedupe.ts; (e) bad cursor row fails closed; oversize group fails closed; short last page = one read;
+ *     >1000 fans on a page all named.
  * ASSUMPTIONS in the fake below: max_rows = 1000 (Supabase default; the live setting is unmeasured); `id` sorts
  * bytewise (C collation); only the filters, `or` keyset shape and order publicPayments sends are modelled, anything
  * else throws. No cut configured, so stars are gross; the route/auth layer is not exercised.
@@ -58,9 +58,19 @@ function serveStx(c: WireCall) {
   return json(sorted.slice(0, Math.min(Number(c.url.searchParams.get("limit") ?? MAX_ROWS), MAX_ROWS)));
 }
 
+/** users: one named fan per (clone, fan) in stx, filtered by the in.() lists, paged by offset/limit, max_rows capped. */
+const inList = (v: string | null) => v?.replace(/^in\.\(|\)$/g, "").split(",") ?? [];
+function serveUsers(c: WireCall) {
+  const p = c.url.searchParams, clones = inList(p.get("clone_id")), tgs = inList(p.get("telegram_id")), from = Number(p.get("offset") ?? 0);
+  const fans = [...new Map(stx.map((r) => [`${r.clone_id}:${r.telegram_id}`, { clone_id: r.clone_id, telegram_id: r.telegram_id, name: `fan-${r.telegram_id}`, username: null }])).values()]
+    .filter((f) => clones.includes(String(f.clone_id)) && tgs.includes(String(f.telegram_id)));
+  return json(fans.slice(from, from + Math.min(Number(p.get("limit") ?? MAX_ROWS), MAX_ROWS)));
+}
+
 const wire = useWire((w) => {
   w.on("GET /rest/v1/star_transactions", serveStx);
-  for (const t of ["users", "platform_cuts", "agency_creators", "agency_creator_cuts"]) w.on(`GET /rest/v1/${t}`, () => json([]));
+  w.on("GET /rest/v1/users", serveUsers);
+  for (const t of ["platform_cuts", "agency_creators", "agency_creator_cuts"]) w.on(`GET /rest/v1/${t}`, () => json([]));
 });
 
 const NOW = Date.parse("2026-11-12T12:00:00.000Z");
@@ -98,41 +108,10 @@ const T = "2026-11-10T10:00:00.000Z";
 const DUPES = [pay("dup-a1", T), pay("dup-a2", T)];
 const MIXED = [pay("new", "2026-11-10T11:00:00.000Z", 7, 30), pay("dup-b1", T), pay("dup-b2", T, 9, 50), pay("dup-b3", T), pay("old", "2026-11-09T00:00:00.000Z", 8, 20)];
 
-test("control: limit=2 over two duplicate rows returns one 100-Star payment and no next page", async () => {
-  stx = DUPES;
-  const p = await publicPayments(CLONE, query(2));
-  assert.equal(p.payments.length, 1);
-  assert.equal(p.totals.stars, 100);
-  assert.equal(p.nextCursor, null);
-});
-
-test("F2: paging one row at a time sums the same as one page (a duplicate is never counted twice)", async () => {
-  stx = DUPES;
-  const { sum, rows } = await pageAll(1);
-  assert.equal(sum, 100, `paged sum ${sum} vs single-page 100; rows ${JSON.stringify(rows)}`);
-});
-
-test("F2: every page size returns the same rows as one page when duplicates straddle boundaries", async () => {
-  stx = MIXED;
-  const one = await pageAll(100);
-  assert.equal(one.sum, 200, "harness: one page collapses the triple to one 100");
-  for (let limit = 1; limit <= MIXED.length; limit++) {
-    const paged = await pageAll(limit);
-    assert.deepEqual(paged.rows, one.rows, `limit=${limit}`);
-  }
-});
-
 // 1500 distinct payments one minute apart inside the window, newest first.
 const MANY = Array.from({ length: 1500 }, (_, i) =>
   pay(`p-${String(i).padStart(5, "0")}`, new Date(Date.parse("2026-11-10T00:00:00.000Z") - i * 60_000).toISOString(), 1000 + i));
 const distinct = (rows: { id: string }[]) => new Set(rows.map((r) => r.id)).size;
-
-test("control: paging limit=500 over 1500 rows (max_rows 1000) returns every payment", async () => {
-  stx = MANY;
-  const { rows } = await pageAll(500);
-  assert.equal(rows.length, 1500);
-  assert.equal(distinct(rows), 1500);
-});
 
 test("F3: paging limit=1000 (the max) over 1500 rows (max_rows 1000) returns every payment", async () => {
   stx = MANY;
@@ -155,11 +134,15 @@ const BIG = [
   { ...pay("g-r1", T, 5, -40), invoice_payload: "refund" }, { ...pay("g-r2", T, 5, -40), invoice_payload: "refund" },
   pay("g-15-x", T, 999, 5), pay("old", "2026-11-09T00:00:00.000Z", 8, 20),
 ];
+// The same rows under a second clone, ids interleaved with ours inside each paid_at group, plus one older than all of
+// ours: never returned, never a reason for another page (MAJOR-2, r2).
+const OTHER = "00000000-0000-4000-8000-000000000002";
+const elsewhere = (rows: Row[]) => [...rows, { ...pay("o-last", "2026-11-08T00:00:00.000Z"), clone_id: OTHER }].map((r) => ({ ...r, id: `${r.id}-o`, clone_id: OTHER }));
 const dbOrder = (rows: Row[]) => [...rows].sort((a, b) => cmp("paid_at", b.paid_at, String(a.paid_at)) || cmp("id", b.id, String(a.id)));
 
 test("(a) every limit returns exactly dedupeStarRows(all rows), ids and sum, incl. a >50-row same-paid_at group", async () => {
-  for (const set of [MIXED, BIG]) {
-    stx = set;
+  for (const set of [DUPES, MIXED, BIG]) {
+    stx = [...set, ...elsewhere(set)];
     const want = dedupeStarRows(dbOrder(set) as never[]) as unknown as Row[];
     const wantSum = want.reduce((a, r) => a + Number(r.amount_stars), 0);
     for (let limit = 1; limit <= set.length + 1; limit++) {
@@ -203,4 +186,12 @@ test("(d) the duplicate rule lives in lib/star-dedupe.ts only: the payments read
   assert.match(read, /dedupeStarRows\(/);
   assert.doesNotMatch(v2, /starDedupeKey|businessKey/);
   assert.doesNotMatch(dedupe, /export function (starDedupeKey|businessKey|isAdjustmentRow)/);
+});
+
+test("MAJOR-1 (r2): a page with more than 1000 distinct fans names every one", async () => {
+  // 900 newer payments, then a 300-row paid_at group the 1000-row page ends inside: 1200 rows, 1200 fans.
+  stx = Array.from({ length: 1200 }, (_, i) => pay(`f-${String(i).padStart(4, "0")}`, new Date(Date.parse(T) + Math.max(0, 900 - i) * 60_000).toISOString(), 3000 + i));
+  const p = await publicPayments(CLONE, query(1000));
+  assert.equal(p.count, 1200);
+  assert.equal(p.payments.filter((x) => x.fan?.name !== `fan-${x.telegramId}`).length, 0, "payments without their fan's name");
 });

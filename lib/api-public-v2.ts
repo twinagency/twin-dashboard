@@ -21,7 +21,7 @@
 // clone. So a sum of /payments equals /revenue for the same window.
 
 import { supabaseAdmin } from "./supabase";
-import { selectAllRows } from "./select-all";
+import { PAGE, selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { STAR_USD } from "./money";
@@ -61,6 +61,7 @@ export type PublicPayment = {
 export type PublicPayments = {
   payments: PublicPayment[];
   count: number;
+  /** requested limit; a page may exceed it by the rest of its last paid_at group */
   limitApplied: number;
   nextCursor: string | null;
   window: { since: string; until: string };
@@ -83,7 +84,7 @@ type RawPayment = {
 // business key), so with whole groups on every page, dedupeStarRows over one
 // page is dedupeStarRows over the window, and pages sum to /revenue (W4 F2).
 // A group bigger than this is refused rather than split.
-const GROUP_ROWS = 1000;
+const GROUP_ROWS = PAGE;
 /** Keyset: strictly after (t, i) in paid_at desc, id desc order. */
 const after = (c: PaymentCursor) => `paid_at.lt.${c.t},and(paid_at.eq.${c.t},id.lt.${c.i})`;
 
@@ -130,15 +131,18 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   // reason they are collapsed in the revenue number, so the two agree.
   const rows = dedupeStarRows(page);
 
-  // Who paid: one lookup for the page, filtered by the clone(s) on it.
+  // Who paid, filtered by the clone(s) on the page. A page can hold ~2000 fans
+  // (limit plus its last group), so 200 ids per read keeps the URL short,
+  // selectAllRows pages past max_rows, and a short read fails the page.
   const tgIds = [...new Set(rows.map((r) => r.telegram_id).filter((v): v is number => typeof v === "number"))];
   const cloneIds = [...new Set(rows.map((r) => r.clone_id).filter((v): v is string => !!v))];
   const names = new Map<string, { name: string | null; username: string | null }>();
-  if (tgIds.length && cloneIds.length) {
-    const u = await supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds).limit(1000);
-    for (const f of (u.data ?? []) as { clone_id: string; telegram_id: number; name: string | null; username: string | null }[]) {
-      names.set(`${f.clone_id}:${f.telegram_id}`, { name: f.name, username: f.username });
-    }
+  for (let i = 0; i < tgIds.length && cloneIds.length; i += 200) {
+    const u = await selectAllRows<{ clone_id: string; telegram_id: number; name: string | null; username: string | null }>(
+      supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds.slice(i, i + 200)).order("clone_id").order("telegram_id"),
+      { label: "public payments fans" });
+    if (u.truncated) throw new Error("payments: fan name lookup incomplete");
+    for (const f of u.rows) names.set(`${f.clone_id}:${f.telegram_id}`, { name: f.name, username: f.username });
   }
   const cuts = await resolveCloneCuts(cloneIds);
 
