@@ -36,7 +36,7 @@ async function main(){
  const nextArgs=process.env.NEXT_MODE!=="start"?["dev","--hostname","127.0.0.1","--port","3198"]:["start","--hostname","127.0.0.1","--port","3198"];
  const child=spawn(process.execPath,["node_modules/next/dist/bin/next",...nextArgs],{cwd:process.cwd(),env:{...process.env,NODE_OPTIONS:"--max-old-space-size=1536",NEXT_TELEMETRY_DISABLED:"1",DASHBOARD_PUBLIC_ORIGIN:base,SUPABASE_URL:"http://127.0.0.1:"+port,SUPABASE_SERVICE_KEY:"synthetic-service",ONLYFANS_API_BASE_URL:backend,ONLYFANS_API_TOKEN:"synthetic-read",ONLYFANS_CONTENT_TOKEN:"synthetic-content",ONLYFANS_CONFIGURATION_TOKEN:"synthetic-configuration"},stdio:["ignore",fd,fd]});
  try{
-  for(let n=0;n<240;n++){try{const r=await fetch(base+"/api/onlyfans/accounts");if(r.status===401)break;}catch{}if(n===239)throw Error("Next did not start");await new Promise(r=>setTimeout(r,500));}
+  for(let n=0;n<240;n++){try{const r=await fetch(base+"/twin",{redirect:"manual"});if(r.status===200)break;}catch{}if(n===239)throw Error("Next did not start");await new Promise(r=>setTimeout(r,500));}
   const setup=await(await fetch(backend+"/fixture")).json() as Json;
   const account=setup.account as string;
   for(const leaf of ["vault/category-price/"+setup.folder,"vault/category-review/"+setup.folder,"vault/category-drafts"])await warm("/api/onlyfans-content/accounts/"+account+"/"+leaf);
@@ -68,7 +68,7 @@ async function main(){
   assert.equal((await fetch(backend+"/fixture/prepare",{method:"POST"})).status,200);
   // ---- history coverage: read-only, honest when no history import is configured
   const coveragePath=cfg+"/history-coverage";
-  assert.notEqual((await fetch(base+coveragePath)).status,200,"coverage needs an agency session");
+  assert.notEqual((await fetch(base+coveragePath,{redirect:"manual"})).status,200,"coverage needs an agency session");
   let body=await ok(await get(coveragePath));
   assert.deepEqual(body.coverage,{configured:false},"unconfigured history is reported as not configured, never complete");
   assert.equal((await get(coveragePath,"synthetic-reader")).status,200,"read-only actor may read coverage");
@@ -81,7 +81,7 @@ async function main(){
   assert.equal(body.commercial.state,"preparation");assert.equal(body.commercial.eligible,true);
   const revision=body.commercial.revision as number;
   assigned=other;assert.equal((await get(commercialPath)).status,404,"cross-agency commercial read");assigned=creator;
-  assert.notEqual((await fetch(base+commercialPath)).status,200);
+  assert.notEqual((await fetch(base+commercialPath,{redirect:"manual"})).status,200);
   // ---- promote
   const promotion=await(await fetch(backend+"/fixture/promotion-body")).json() as Json;
   const promote={action:"promote",expectedRevision:revision,requestId:randomUUID(),reason:"Agency approved commercial scope fixture",config:promotion};

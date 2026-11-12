@@ -43,7 +43,7 @@ async function main(){
  let browser:Awaited<ReturnType<typeof chromium.connectOverCDP>>|undefined;
  let page:Page|undefined;
  try{
-  for(let n=0;n<120;n++){try{if((await fetch(base+"/api/onlyfans/accounts")).status===401)break;}catch{}
+  for(let n=0;n<120;n++){try{if((await fetch(base+"/twin",{redirect:"manual"})).status===200)break;}catch{}
    if(n===119)throw Error("production Next did not start");await new Promise(r=>setTimeout(r,500));}
   browser=await chromium.connectOverCDP(process.env.BROWSER_CDP_URL!);
   const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:1000}});
@@ -135,7 +135,10 @@ async function main(){
   result=await(await fetch(backend+"/fixture/unlock",{method:"POST"})).json() as Json;assert.equal(result.access,1);
   result=await say("Thanks, how is your day?");assert.equal(result.posts.length,4);assert.equal(result.posts.filter((p:Json)=>p.mediaFiles?.length).length,1);
   const anonymous=await browser.newContext({ignoreHTTPSErrors:true}),anon=await anonymous.newPage();
-  assert.equal((await anon.goto(base+lifecycle))?.status(),401);await anonymous.close();
+  const denied=await anonymous.request.get(base+lifecycle,{maxRedirects:0});
+  assert.ok([401,403,307].includes(denied.status()),"anonymous API access must be refused");
+  if(denied.status()===307)assert.ok(denied.headers().location.startsWith(base+"/twin"),"only the trusted sign-in redirect is allowed");
+  await anonymous.close();
   validSession=false;assert.notEqual((await request(lifecycle)).status,200);
   assert.equal((await(await fetch(backend+"/fixture/state")).json()).access,1);
   const evidence={status:"passed",journey:"browser/BFF/backend/Postgres/autonomous worker",identity:"synthetic revocable named-owner service",
