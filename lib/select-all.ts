@@ -27,7 +27,7 @@ type Rangeable = {
 
 // Supabase's own server cap. Paging in larger strides than the server will
 // return just wastes a round trip, so the stride matches it.
-const PAGE = 1000;
+export const PAGE = 1000;
 
 // Ceiling per call, not per page. 1.22M chat rows at ~200 bytes is ~250MB of JS
 // objects, which is a dead Node process, so a fleet-wide read has to stop

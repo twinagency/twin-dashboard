@@ -94,7 +94,9 @@ export const MAX_PAYMENT_LIMIT = 1000;
 /** How far back a single request may reach. Wider windows belong to /revenue. */
 export const MAX_PAYMENT_WINDOW_DAYS = 90;
 
-export type PaymentCursor = { t: string; i: string };
+/** `t` is the paid_at the previous page ended on; pages hold whole paid_at groups, so the next page is
+ *  everything strictly older. `i` is only on cursors minted before 2026-11-12 and is ignored. */
+export type PaymentCursor = { t: string; i?: string };
 
 export type PaymentQuery = {
   since: string;
@@ -114,17 +116,20 @@ export function encodeCursor(c: PaymentCursor): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url");
 }
 
+/** paid_at goes into a PostgREST filter: validated whether a caller sent it or we mint it from a row. */
+export function cursorAt(t: unknown): PaymentCursor | null {
+  return typeof t === "string" && ISO_RE.test(t) ? { t } : null;
+}
+
 export function decodeCursor(raw: string): PaymentCursor | null {
   try {
     const v = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as unknown;
     if (typeof v !== "object" || v === null) return null;
     const { t, i } = v as Record<string, unknown>;
-    // The cursor is spliced into a PostgREST filter string, so both halves are
-    // re-validated against a strict shape rather than trusted because we
-    // minted them: a caller can hand us any string they like.
-    if (typeof t !== "string" || typeof i !== "string") return null;
-    if (!ISO_RE.test(t) || !ID_RE.test(i)) return null;
-    return { t, i };
+    // Old cursors carry a row id: accepted (unused) so in-flight clients don't 400; malformed = forged (H3).
+    if (i !== undefined && (typeof i !== "string" || !ID_RE.test(i))) return null;
+    const c = cursorAt(t);
+    return c && typeof i === "string" ? { ...c, i } : c;
   } catch {
     return null;
   }

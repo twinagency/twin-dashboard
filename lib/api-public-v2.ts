@@ -21,14 +21,14 @@
 // clone. So a sum of /payments equals /revenue for the same window.
 
 import { supabaseAdmin } from "./supabase";
-import { selectAllRows } from "./select-all";
+import { PAGE, selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { STAR_USD } from "./money";
 import { resolveCloneCuts } from "./revenue-projection";
 import { applyCut, applyStackedCut } from "./platform-cut";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
-import { encodeCursor, type PaymentQuery } from "./api-public-query";
+import { cursorAt, encodeCursor, type PaymentQuery } from "./api-public-query";
 
 type Cuts = { platformPct: number; agencyCreatorPct: number };
 type Mode = "clone" | "fleet";
@@ -61,6 +61,7 @@ export type PublicPayment = {
 export type PublicPayments = {
   payments: PublicPayment[];
   count: number;
+  /** requested limit; a page may exceed it by the rest of its last paid_at group */
   limitApplied: number;
   nextCursor: string | null;
   window: { since: string; until: string };
@@ -79,14 +80,15 @@ type RawPayment = {
   invoice_payload: string | null;
 };
 
-async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
-  let query = supabaseAdmin
-    .from("star_transactions")
-    .select(PAYMENT_COLUMNS)
-    .gte("paid_at", q.since)
-    .lte("paid_at", q.until)
-    // one extra row tells us whether another page exists
-    .limit(q.limit + 1);
+// A page never splits a paid_at group. Duplicates share paid_at (it is in the
+// business key), so with whole groups on every page, dedupeStarRows over one
+// page is dedupeStarRows over the window, and pages sum to /revenue (W4 F2).
+// A group bigger than this is refused rather than split.
+const GROUP_ROWS = PAGE;
+
+/** star_transactions in this key's scope, window and filters; every read below starts here. */
+function scopedPayments(cloneId: string | null, q: PaymentQuery, limit: number) {
+  let query = supabaseAdmin.from("star_transactions").select(PAYMENT_COLUMNS).limit(limit).gte("paid_at", q.since).lte("paid_at", q.until);
   // The tenancy boundary for the per-clone read. The fleet read passes null and
   // is reached only from a route that proved tenant.scope === "fleet".
   if (cloneId !== null) query = query.eq("clone_id", cloneId);
@@ -94,34 +96,52 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   if (q.kind) query = query.eq("kind", q.kind);
   if (q.minStars > 0) query = query.gte("amount_stars", q.minStars);
   else if (!q.includeRefunds) query = query.gt("amount_stars", 0);
-  if (q.cursor) {
-    // Keyset pagination: strictly older than the last row handed out. Both
-    // halves were re-validated against a strict shape in decodeCursor.
-    query = query.or(`paid_at.lt.${q.cursor.t},and(paid_at.eq.${q.cursor.t},id.lt.${q.cursor.i})`);
-  }
-  // Fetch one extra row to know whether another page exists.
-  const { data, error } = await query
-    .order("paid_at", { ascending: false })
-    .order("id", { ascending: false });
+  return query.order("paid_at", { ascending: false }).order("id", { ascending: false });
+}
+async function rowsOf(query: PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<RawPayment[]> {
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
+  return (data ?? []) as RawPayment[];
+}
 
-  const raw = (data ?? []) as unknown as RawPayment[];
-  const hasMore = raw.length > q.limit;
-  const page = hasMore ? raw.slice(0, q.limit) : raw;
+async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
+  // Read `limit` rows, not limit+1: asking for one extra to spot a next page broke at the
+  // max, where PostgREST max_rows (1000) silently drops the extra row (W4 F3).
+  // Keyset pagination on paid_at alone: the previous page ended on a whole
+  // group, so this one is everything strictly older. No id reaches a filter
+  // from a cursor (a TON id can hold `+` and `/`), and every read is plain eq/lt.
+  const head = scopedPayments(cloneId, q, q.limit);
+  const page = await rowsOf(q.cursor ? head.lt("paid_at", q.cursor.t) : head);
+  let hasMore = false;
+  // A short page is the end of the window (max_rows >= 1000 >= limit, as
+  // selectAllRows assumes). A full one reads the rest of its last paid_at
+  // group, then one row past it to know whether another page exists.
+  if (page.length === q.limit) {
+    const t = page[page.length - 1].paid_at;
+    const rest = await rowsOf(scopedPayments(cloneId, q, GROUP_ROWS).eq("paid_at", t).lt("id", String(page[page.length - 1].id)));
+    if (rest.length >= GROUP_ROWS) throw new Error(`payments: ${GROUP_ROWS}+ rows share paid_at ${t}, refusing to split them across pages`);
+    page.push(...rest);
+    hasMore = (await rowsOf(scopedPayments(cloneId, q, 1).lt("paid_at", t))).length > 0;
+  }
   const last = page[page.length - 1];
+  const cursor = hasMore ? cursorAt(last.paid_at) : null;
+  if (hasMore && !cursor) throw new Error(`payments: paid_at ${String(last.paid_at)} cannot be a page cursor`);
   // Duplicate payments from the 2026-09 bot bug are collapsed here for the same
   // reason they are collapsed in the revenue number, so the two agree.
-  const rows = dedupeStarRows(page.map((r) => ({ ...r, telegram_id: r.telegram_id, clone_id: r.clone_id })));
+  const rows = dedupeStarRows(page);
 
-  // Who paid: one lookup for the page, filtered by the clone(s) on it.
+  // Who paid, filtered by the clone(s) on the page. A page can hold ~2000 fans
+  // (limit plus its last group), so 200 ids per read keeps the URL short,
+  // selectAllRows pages past max_rows, and a short read fails the page.
   const tgIds = [...new Set(rows.map((r) => r.telegram_id).filter((v): v is number => typeof v === "number"))];
   const cloneIds = [...new Set(rows.map((r) => r.clone_id).filter((v): v is string => !!v))];
   const names = new Map<string, { name: string | null; username: string | null }>();
-  if (tgIds.length && cloneIds.length) {
-    const u = await supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds).limit(1000);
-    for (const f of (u.data ?? []) as { clone_id: string; telegram_id: number; name: string | null; username: string | null }[]) {
-      names.set(`${f.clone_id}:${f.telegram_id}`, { name: f.name, username: f.username });
-    }
+  for (let i = 0; i < tgIds.length && cloneIds.length; i += 200) {
+    const u = await selectAllRows<{ clone_id: string; telegram_id: number; name: string | null; username: string | null }>(
+      supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds.slice(i, i + 200)).order("clone_id").order("telegram_id"),
+      { label: "public payments fans" });
+    if (u.truncated) throw new Error("payments: fan name lookup incomplete");
+    for (const f of u.rows) names.set(`${f.clone_id}:${f.telegram_id}`, { name: f.name, username: f.username });
   }
   const cuts = await resolveCloneCuts(cloneIds);
 
@@ -151,7 +171,7 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
     payments,
     count: payments.length,
     limitApplied: q.limit,
-    nextCursor: hasMore && last ? encodeCursor({ t: last.paid_at, i: String(last.id) }) : null,
+    nextCursor: cursor ? encodeCursor(cursor) : null,
     window: { since: q.since, until: q.until },
     totals: { stars: totalStars, usd: usd(totalStars), sales: paid.length, buyers: buyers.size },
   };
