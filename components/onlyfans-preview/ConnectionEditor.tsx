@@ -24,6 +24,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const [owner, setOwner] = useState(""), [xHash, setXHash] = useState(""), [proxy, setProxy] = useState("");
   const [modelEnabled, setModelEnabled] = useState(false), [modelId, setModelId] = useState(""), [apiKey, setApiKey] = useState("");
   const [hours, setHours] = useState("6"), [captureReady, setCaptureReady] = useState(false);
+  const [curlText, setCurlText] = useState(""), [curlBusy, setCurlBusy] = useState(false);
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
   const [hasRetry, setHasRetry] = useState(false);
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
@@ -84,6 +85,30 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       capture.current = parsed; setCaptureReady(true); if (!owner) setOwner(capturedOwner);
       setNotice("Capture selected. Credentials will be saved only when you submit this form.");
     } catch { if (active.current && generation === captureGeneration.current) { setNotice("The capture does not match this owner or the supported Fastt session format."); if (fileInput.current) fileInput.current.value = ""; } }
+  }
+  async function applyCurl() {
+    const text = curlText.trim();
+    if (!text || curlBusy) return;
+    const generation = ++captureGeneration.current;
+    capture.current = null; setCaptureReady(false); setCurlBusy(true);
+    setNotice("Reading the pasted curl… deriving signing rules.");
+    try {
+      const response = await fetch(`${endpoint}/capture-from-curl`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ curl: text }) });
+      if (!active.current || generation !== captureGeneration.current) return;
+      if ([401, 403].includes(response.status)) {
+        sessionDenied.current = true; clearSecrets(); dropRetry(); setData(null); setOwner(""); setModelId(""); setDenied(true);
+        setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return;
+      }
+      const payload = response.ok ? await response.json() as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown } : null;
+      const ownerId = payload && Number.isSafeInteger(payload.ownerId) ? payload.ownerId as number : null;
+      if (!payload || payload.ok !== true || !ownerId || typeof payload.xHash !== "string" || !object(payload.capture) || !connectionCapture(payload.capture, ownerId)) {
+        setNotice("That curl could not be used. Copy a fresh curl from the Fastt Login Capture extension (or a signed /api2/v2/* request from DevTools) and paste it again."); return;
+      }
+      capture.current = payload.capture; setCaptureReady(true); setXHash(payload.xHash); setOwner(String(ownerId)); setCurlText("");
+      setNotice("Curl applied: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
+    } catch { if (active.current && generation === captureGeneration.current) setNotice("The curl could not be converted. Check the connection and try again."); }
+    finally { if (active.current) setCurlBusy(false); }
   }
   async function send(command: ConnectionRequest) {
     if (submitting.current || !validConnectionRequest(command)) return;
@@ -160,7 +185,17 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           <fieldset disabled={busy || hasRetry} className="min-w-0 space-y-3">
             <legend className="mb-2 text-sm font-semibold">1. Save account credentials</legend>
             <label className="block text-xs">OnlyFans owner ID<input data-of-connection-owner className={inputClass} inputMode="numeric" value={owner} disabled={data.ownerId !== null} onChange={event => setOwner(event.target.value)} required /></label>
-            <label className="block text-xs">Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>
+            <div className="rounded-lg border border-line p-2">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <a data-of-connection-extension className={`${buttonClass} inline-block no-underline`} href="/downloads/fastt-login-capture.zip" download>⬇ Install Fastt Login Capture extension</a>
+                <span className="text-xs text-muted">Unzip → open <code>chrome://extensions</code> → Developer mode → Load unpacked → sign in to OnlyFans → Copy curl → paste below.</span>
+              </div>
+              <label className="block text-xs">Paste curl (direct) — from the Fastt Login Capture extension, or a signed <code>/api2/v2/*</code> request from DevTools
+                <textarea data-of-connection-curl className={`${inputClass} h-24 font-mono text-xs`} value={curlText} placeholder="curl 'https://onlyfans.com/api2/v2/…' -H 'user-id: …' -H 'x-bc: …' -H 'sign: …' -b '…'" onChange={event => setCurlText(event.target.value)} /></label>
+              <button type="button" data-of-connection-curl-apply className={`${buttonClass} mt-2`} disabled={busy || curlBusy || !curlText.trim()} onClick={() => void applyCurl()}>{curlBusy ? "Reading curl…" : "Use pasted curl"}</button>
+              <span className="mt-1 block text-xs text-muted">Fills the owner, capture and X-Hash below from the pasted request. Then Save credentials.</span>
+            </div>
+            <label className="block text-xs">Or upload a Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>
             <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} onChange={event => setXHash(event.target.value)} required /></label>
             <label className="block text-xs">Fixed proxy (residential, same country as the creator)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" placeholder="user:pass@host:port" value={proxy} onChange={event => setProxy(event.target.value)} />
               <span className="mt-1 block text-xs text-muted" data-of-connection-proxy-preview title={PROXY_RULE}>{proxyEntry.ok ? `Will be saved as: ${proxyEntry.masked}` : proxyEntry.message}</span></label>
