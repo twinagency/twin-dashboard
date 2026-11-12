@@ -220,9 +220,11 @@ async function resolveCloneIdLoose(idOrName: string): Promise<string | null> {
   if (byId.data) return byId.data.id;
   const bySlug = await supabaseAdmin.from("clones").select("id").eq("slug", idOrName).maybeSingle();
   if (bySlug.data) return bySlug.data.id;
-  const byName = await supabaseAdmin.from("clones").select("id").ilike("name", idOrName).limit(1).maybeSingle();
-  if (byName.data) return byName.data.id;
-  return null;
+  // Exact case-insensitive name, as lib/api-read.ts resolveClone: escape LIKE
+  // wildcards, never match `*` (PostgREST's `%`), two hits is no hit.
+  if (idOrName.includes("*")) return null;
+  const byName = await supabaseAdmin.from("clones").select("id").ilike("name", idOrName.replace(/[\\%_]/g, "\\$&")).limit(2);
+  return byName.data?.length === 1 ? byName.data[0].id : null;
 }
 
 // Mirror of heatLevel() in components/clone/useCloneConfig.ts, kept minimal:

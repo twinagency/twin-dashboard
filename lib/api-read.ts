@@ -214,15 +214,31 @@ export async function runQuery(spec: QuerySpec): Promise<QueryResult | QueryErro
 
 // Clone lookup by UUID, slug, or name — same three-step shape as the assistant's
 // resolveCloneIdLoose, so "cat-chase" works everywhere it works in the UI.
-export async function resolveClone(idOrSlug: string): Promise<{ id: string; slug: string; name: string } | null> {
+// Write routes resolve their target here, so the name step is an EXACT
+// case-insensitive match: LIKE wildcards are escaped, `*` (PostgREST's alias
+// for `%`, no escape exists) never matches by name, and two hits is no hit.
+// A read error throws (withAdmin answers 500): null means "no such clone" and
+// an outage must not read as a 404. The id step only runs on uuid-shaped input
+// because clones.id is uuid and any other string errors (22P02).
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+type CloneRef = { id: string; slug: string; name: string };
+function cloneLookupFailed(error: { message: string }): Error {
+  return new Error(`clone lookup failed: ${error.message}`);
+}
+export async function resolveClone(idOrSlug: string): Promise<CloneRef | null> {
   const cols = "id,slug,name";
-  const byId = await supabaseAdmin.from("clones").select(cols).eq("id", idOrSlug).maybeSingle();
-  if (byId.data) return byId.data as { id: string; slug: string; name: string };
+  if (UUID.test(idOrSlug)) {
+    const byId = await supabaseAdmin.from("clones").select(cols).eq("id", idOrSlug).maybeSingle();
+    if (byId.error) throw cloneLookupFailed(byId.error);
+    if (byId.data) return byId.data as CloneRef;
+  }
   const bySlug = await supabaseAdmin.from("clones").select(cols).eq("slug", idOrSlug).maybeSingle();
-  if (bySlug.data) return bySlug.data as { id: string; slug: string; name: string };
-  const byName = await supabaseAdmin.from("clones").select(cols).ilike("name", idOrSlug).limit(1).maybeSingle();
-  if (byName.data) return byName.data as { id: string; slug: string; name: string };
-  return null;
+  if (bySlug.error) throw cloneLookupFailed(bySlug.error);
+  if (bySlug.data) return bySlug.data as CloneRef;
+  if (idOrSlug.includes("*")) return null;
+  const byName = await supabaseAdmin.from("clones").select(cols).ilike("name", idOrSlug.replace(/[\\%_]/g, "\\$&")).limit(2);
+  if (byName.error) throw cloneLookupFailed(byName.error);
+  return byName.data?.length === 1 ? (byName.data[0] as CloneRef) : null;
 }
 
 // ── the revenue window ───────────────────────────────────────────────────────
