@@ -5,6 +5,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { after, beforeEach } from "node:test";
+import { _resetDeniedLog } from "../../lib/api-public-route";
 
 export type WireCall = { method: string; url: URL; table: string; body?: unknown };
 
@@ -44,16 +45,19 @@ export function ilikeRegex(pattern: string): RegExp {
 export const settle = (ms = 25) => new Promise<void>((r) => setTimeout(r, ms));
 
 type Route = (call: WireCall) => Response;
+/** Registers a reply for "<METHOD> <path>"; a later `on` for the same route replaces it. */
+export type WireRoutes = { on(route: string, reply: Route): void };
 /**
  * installWire for a whole test file, routed by "<METHOD> <path>" (e.g. "GET /rest/v1/api_keys"). Before each test the
- * routes and the call log are cleared and `serve` registers them again; `calls(route)` lists what reached one route.
+ * routes, the call log and the public API's denied-log window are cleared and `serve` registers the routes again;
+ * `calls(route)` lists what reached one route.
  */
-export function useWire(serve: (w: { on(route: string, reply: Route): void }) => void) {
+export function useWire(serve: (w: WireRoutes) => void) {
   const routes = new Map<string, Route>();
   const seen: WireCall[] = [];
   const route = (c: WireCall) => `${c.method} ${c.url.pathname}`;
   const w = installWire((c) => { seen.push(c); return routes.get(route(c))?.(c); });
-  beforeEach(() => { routes.clear(); seen.length = 0; serve({ on: (r, h) => void routes.set(r, h) }); });
+  beforeEach(() => { routes.clear(); seen.length = 0; _resetDeniedLog(); serve({ on: (r, h) => void routes.set(r, h) }); });
   after(async () => { await settle(); w.restore(); });
   return { calls: (r: string) => seen.filter((c) => route(c) === r) };
 }
@@ -68,7 +72,7 @@ export function modelKeyRow(key: string, scope: "clone" | "fleet", id = `key-${s
 }
 
 /** api_keys lookup by key_hash, the last_used_at PATCH, and the system_logs insert. */
-export function serveModelKeys(w: Parameters<Parameters<typeof useWire>[0]>[0], rows: readonly Record<string, unknown>[]): void {
+export function serveModelKeys(w: WireRoutes, rows: readonly Record<string, unknown>[]): void {
   w.on("GET /rest/v1/api_keys", (c) => json(rows.filter((r) => c.url.searchParams.get("key_hash") === `eq.${r.key_hash}`)));
   w.on("PATCH /rest/v1/api_keys", () => new Response(null, { status: 204 }));
   w.on("POST /rest/v1/system_logs", () => new Response(null, { status: 201 }));

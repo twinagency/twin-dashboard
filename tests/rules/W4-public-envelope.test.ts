@@ -8,7 +8,7 @@ import "../support/admin-route-env";
 //     PATCH to api_keys and a system_logs insert; each wrong-key (401) request sends a system_logs insert.
 // Real withModelKey + supabase-js against the in-memory PostgREST fake at fetch (tests/support/postgrest-wire.ts); any
 // request the fake does not model throws.
-// F11 fix: one system_logs row per (status, path) per 60s; the next window's row carries `suppressed`.
+// F11 fix: one system_logs row per refusal status per 60s; the next window's row carries `suppressed`.
 // Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/W4-public-envelope.test.ts
 import assert from "node:assert/strict";
 import { mock, test } from "node:test";
@@ -76,7 +76,7 @@ test("control: with one key, requests 1-120 are served and 121-130 are 429", asy
   assert.deepEqual(statuses.slice(120), Array(10).fill(429));
 });
 
-test("F11: ten over-limit requests write no last_used_at and at most one system_logs row", async () => {
+test("F11: ten over-limit requests write no last_used_at and exactly one system_logs row", async () => {
   for (let i = 0; i < 120; i++) await bearerCall(ok, KEY);
   await settle();
   const before = counts();
@@ -85,10 +85,10 @@ test("F11: ten over-limit requests write no last_used_at and at most one system_
   const after = counts();
   const cost = `${after.patch - before.patch} last_used_at PATCHes, ${after.logs - before.logs} system_logs inserts for 10 refused requests`;
   assert.equal(after.patch - before.patch, 0, cost);
-  assert.ok(after.logs - before.logs <= 1, cost);
+  assert.equal(after.logs - before.logs, 1, cost);
 });
 
-test("F11: fifty wrong keys cost at most one system_logs insert", async () => {
+test("F11: fifty wrong keys cost exactly one system_logs insert", async () => {
   const before = counts();
   for (let i = 0; i < 50; i++) {
     const status = (await bearerCall(ok, newModelKey())).status;
@@ -96,11 +96,20 @@ test("F11: fifty wrong keys cost at most one system_logs insert", async () => {
   }
   await settle();
   const logs = counts().logs - before.logs;
-  assert.ok(logs <= 1, `${logs} system_logs inserts for 50 wrong keys`);
+  assert.equal(logs, 1, `${logs} system_logs inserts for 50 wrong keys`);
+});
+
+const loggedDetails = () => wire.calls("POST /rest/v1/system_logs").map((c) => (c.body as { detail: Record<string, unknown> }).detail);
+
+test("F11: a second status gets its own row in the same minute; another path does not", async () => {
+  await bearerCall(ok, newModelKey(), "", "/api/v1/a");
+  await bearerCall(ok, newModelKey(), "", "/api/v1/b");
+  for (let i = 0; i < 121; i++) await bearerCall(ok, KEY);
+  await settle();
+  assert.deepEqual(loggedDetails().map((d) => [d.status, d.path]), [[401, "/api/v1/a"], [429, "/api/v1/x"]]);
 });
 
 test("F11: denials suppressed in one window are counted on the next window's system_logs row", async () => {
-  const logs = () => wire.calls("POST /rest/v1/system_logs").map((c) => (c.body as { detail: Record<string, unknown> }).detail);
   mock.timers.enable({ apis: ["Date"], now: Date.parse("2030-01-01T00:00:00Z") });
   try {
     for (let i = 0; i < 3; i++) await bearerCall(ok, newModelKey(), "", "/api/v1/coalesce");
@@ -108,5 +117,5 @@ test("F11: denials suppressed in one window are counted on the next window's sys
     await bearerCall(ok, newModelKey(), "", "/api/v1/coalesce");
   } finally { mock.timers.reset(); }
   await settle();
-  assert.deepEqual(logs().map((d) => [d.path, d.status, d.suppressed]), [["/api/v1/coalesce", 401, 0], ["/api/v1/coalesce", 401, 2]]);
+  assert.deepEqual(loggedDetails().map((d) => [d.path, d.status, d.suppressed]), [["/api/v1/coalesce", 401, 0], ["/api/v1/coalesce", 401, 2]]);
 });

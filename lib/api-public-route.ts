@@ -13,23 +13,25 @@ import { supabaseAdmin } from "./supabase";
 
 export const PUBLIC_API_VERSION = "v1";
 
-// One system_logs row per (status, path) per minute, not per refused request: a
-// wrong-key loop wrote one row per request. The row opening a window carries
-// how many denials the previous window suppressed. Paths come from the fixed
-// /api/v1/* routes, so the map stays tiny; the cap is a backstop.
+// One system_logs row per refusal status (401/429/503) per minute, not per
+// request: a wrong-key loop wrote one row per request. Keyed on status alone
+// because the path is attacker-chosen; the path of the row opening a window is
+// kept in its message and detail. ACCEPTED LIMITS, for readers of system_logs:
+// a row is a lower bound. A burst followed by silence logs only its first row;
+// its count arrives as `suppressed` on the next window's row. The count is per
+// process and lost on restart. A failed insert still opens the window on
+// purpose, so a database outage is not hit once per refused request.
 const DENIED_WINDOW_MS = 60_000;
-const DENIED_MAX_KEYS = 100;
-const denied = new Map<string, { until: number; suppressed: number }>();
+const denied = new Map<number, { until: number; suppressed: number }>();
 
-function logDenied(status: number, error: string, path: string, now = Date.now()): void {
-  const key = `${status} ${path}`;
-  const cur = denied.get(key);
+function logDenied(status: number, error: string, path: string): void {
+  const now = Date.now();
+  const cur = denied.get(status);
   if (cur && now < cur.until) {
     cur.suppressed += 1;
     return;
   }
-  if (!cur && denied.size >= DENIED_MAX_KEYS) denied.clear();
-  denied.set(key, { until: now + DENIED_WINDOW_MS, suppressed: 0 });
+  denied.set(status, { until: now + DENIED_WINDOW_MS, suppressed: 0 });
   void supabaseAdmin
     .from("system_logs")
     .insert({
@@ -44,9 +46,14 @@ function logDenied(status: number, error: string, path: string, now = Date.now()
     );
 }
 
+// Test seam, like _resetRateLimits in api-tenant.ts.
+export function _resetDeniedLog(): void {
+  denied.clear();
+}
+
 // Every reply, error or not, is stamped and uncacheable: a shared cache must
 // not replay a 401/429 for another caller, any more than a 200. A payload's
-// own generatedAt (the /stats snapshot time) wins over the stamp.
+// own top-level generatedAt (/payments sets one) wins over the stamp.
 function stamped(body: Record<string, unknown>, status: number, headers: Record<string, string> = {}): NextResponse {
   return NextResponse.json(
     { generatedAt: new Date().toISOString(), ...body },
