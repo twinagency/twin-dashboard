@@ -395,3 +395,6 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - DEFERRED → next fix "cut-helper-dedupe": lib/api-public-v2.ts:33-41 netStars + lib/api-public.ts:327-335 pass gross on missing cut (null clone_id); after fix-pay merges.
 - 2026-11-12 22:4xZ owner: F0 TEST HARNESS (scripts/check.sh fast|live|full, FIX-MODE.md:36-51) is next priority, ahead of queue; starts on one slot when the current in-flight merge lands. After F0 merges: gate = `check.sh fast` GREEN; every fix promotes its regression test; every restart runs `check.sh live`; Ship line reports measured fast wall time.
 - fix-memc f57dfa4b (implementer done; also strips cost on creator platforms route, accepted: same field, same rule) → rwl r1 running.
+- 2026-11-12 #369 merged 22d44ae1 (W4 F5 cut ratio fail closed; full rwl: R1 2 major+codex P1+da P1 closed d0b44dff, Sonnet APPROVE, codex final NONE). Root ff'd to 22d44ae1.
+- #370 (revenue window) opened, update-branch → 76cd6fec, premerge running. Deferred minor: date picker >1100d.
+- F0 check.sh started (fix-f0) on slot 1; slot 2 = memc rwl fixer (default-deny redesign). Pay rwl r1: 3 major (lookahead miss, empty page, split dedupe rule) → snap-to-paid_at-group design, fixer queued for next free slot (/tmp/pay-findings.md).
