@@ -275,3 +275,65 @@ test("a login still open after the wall-clock deadline stops polling and is canc
     await settle(2100); assert.equal(pollCount(calls), 0);
   } finally { Date.now = realNow; }
 });
+
+test("login methods: Browser login is recommended and preselected; picking one shows only its panel", async () => {
+  await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "waiting_login", liveViewUrl: LIVE } } });
+  const panel = (m: string) => q(`[data-of-connection-method-panel=${m}]`)!;
+  assert.equal(q("[data-of-connection-method=browser]")?.getAttribute("data-selected"), "true");
+  assert.match(q("[data-of-connection-method=browser]")?.textContent ?? "", /Recommended/);
+  assert.deepEqual(["browser", "extension", "file"].map(m => panel(m).hidden), [false, true, true]);
+  await click(q("[data-of-connection-method=extension] input"));
+  assert.deepEqual(["browser", "extension", "file"].map(m => panel(m).hidden), [true, false, true]);
+  assert.ok(panel("extension").querySelector("[data-of-connection-extension]") && panel("extension").querySelector("[data-of-connection-curl]"));
+  await click(q("[data-of-connection-method=file] input"));
+  assert.ok(panel("file").querySelector("[data-of-connection-capture]"));
+});
+
+test("live view opens in an overlay, minimise hides it, Show browser brings it back, methods lock while running", async () => {
+  await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "waiting_login", liveViewUrl: LIVE } } });
+  await click(q("[data-of-connection-browserbase]"));
+  assert.ok(q("[data-of-connection-browserbase-overlay] [data-of-connection-browserbase-frame]"), "frame inside overlay");
+  assert.equal(q<HTMLInputElement>("[data-of-connection-method=extension] input")?.disabled, true);
+  const minimise = [...document.querySelectorAll("[data-of-connection-browserbase-overlay] button")].find(b => b.textContent === "Minimise")!;
+  await click(minimise);
+  assert.equal(q("[data-of-connection-browserbase-overlay]"), null);
+  await click(q("[data-of-connection-browserbase-show]"));
+  assert.ok(q("[data-of-connection-browserbase-overlay]"));
+  await click(q("[data-of-connection-browserbase-cancel]"));
+  assert.equal(q("[data-of-connection-browserbase-overlay]"), null);
+});
+
+test("a fresh start (starting, no live view yet) can be cancelled from the session bar, and the cancel really posts and stops polling", async () => {
+  const calls = await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "starting", liveViewUrl: null } },
+    polls: Array(5).fill({ body: { ok: true, jobId: JOB, state: "starting", liveViewUrl: null } }) });
+  await click(q("[data-of-connection-browserbase]"));
+  assert.equal(q("[data-of-connection-browserbase-overlay]"), null, "no overlay without a live view");
+  const cancel = q("[data-of-connection-browserbase-bar] [data-of-connection-browserbase-cancel]");
+  assert.ok(cancel, "Cancel reachable while starting");
+  await click(cancel);
+  assert.deepEqual(calls.filter(c => c.path.endsWith("/cancel")).map(c => [c.method, c.path]), [["POST", `/api/onlyfans-connections/accounts/${ACCOUNT}/browserbase-login/${JOB}/cancel`]]);
+  const polls = calls.filter(c => c.method === "GET" && c.path.includes("/browserbase-login/")).length;
+  await settle(2200);
+  assert.equal(calls.filter(c => c.method === "GET" && c.path.includes("/browserbase-login/")).length, polls, "polling stopped");
+});
+
+test("methods lock during the start request; after Minimise the session bar still offers Show browser and Cancel", async () => {
+  await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "waiting_login", liveViewUrl: LIVE } } });
+  await click(q("[data-of-connection-method=extension] input"));
+  await click(q("[data-of-connection-method=browser] input"));
+  await click(q("[data-of-connection-browserbase]"));
+  assert.equal(q<HTMLInputElement>("[data-of-connection-method=extension] input")?.disabled, true);
+  const minimise = [...document.querySelectorAll("[data-of-connection-browserbase-overlay] button")].find(b => b.textContent === "Minimise")!;
+  await click(minimise);
+  assert.ok(q("[data-of-connection-browserbase-bar] [data-of-connection-browserbase-show]"));
+  assert.ok(q("[data-of-connection-browserbase-bar] [data-of-connection-browserbase-cancel]"));
+});
+
+test("dialog: focus moves in on open, Escape minimises", async () => {
+  await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "waiting_login", liveViewUrl: LIVE } } });
+  await click(q("[data-of-connection-browserbase]"));
+  const dialog = q("[data-of-connection-browserbase-overlay]")!;
+  assert.ok(dialog.contains(document.activeElement), "focus inside dialog");
+  await act(async () => { dialog.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
+  assert.equal(q("[data-of-connection-browserbase-overlay]"), null);
+});
