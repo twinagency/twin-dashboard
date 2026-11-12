@@ -354,3 +354,4 @@ RED by pick group (file count; a file can hold several findings):
 - 2026-11-12 test harness (W2c route harness, tests only) → #358 → merged 8681b237. premerge PASS.
 - 2026-11-12 PR-2 W2c N1 part 2/3 (server capture handle, captureRef on save) → #359 → merged 0801deb2. rules 12/12; 6 plants red; rwl full r1 + delta + codex final NONE (measured).
 - 2026-11-12 live-1 @0801deb2: N1 probes 400/410/400/400 PASS, F1 owner guard PASS (fake upstream). Evidence ~/Projects/twinagency/.local-dev/evidence/fix/live-1-0801deb2/
+- 2026-11-12 PR-3a W2c N1 part 3a (editor holds captureId, saves captureRef; no delete-on-ack; 410 keeps proxy/key) → #360 → merged 0a2675d4. 300 LOC; rules+editor 8/8, P3 plant red; premerge PASS; rwl full r1 + delta APPROVED + codex final 1 P3 fixed (measured). Live check pending with PR-3b.
