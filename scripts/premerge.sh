@@ -15,9 +15,8 @@ run() { local name=$1; shift; if clean "$@" >"$LOG/$name.log" 2>&1; then pass "$
 
 git rev-parse --verify -q "$BASE" >/dev/null || { echo "FAIL  base $BASE not found (git fetch, or set PREMERGE_BASE)"; exit 1; }
 echo "premerge $(git branch --show-current) @ $(git rev-parse --short HEAD) vs $BASE ($(git merge-base "$BASE" HEAD | cut -c1-8))"
-changed=$(git diff --name-only "$BASE"...HEAD)
+[ -z "$(git status --porcelain)" ] || { echo "FAIL  dirty tree: commit first (tests are picked from BASE...HEAD)"; exit 1; }
 present=$(git diff --name-only --diff-filter=ACMR "$BASE"...HEAD)
-touches() { grep -qE "$1" <<<"$changed"; }
 
 # typecheck: all four programs
 [ -f next-env.d.ts ] || echo "WARN  next-env.d.ts missing (written by next dev/build); typecheck will fail"
@@ -38,9 +37,10 @@ for f in $tests; do
   run "test:${f//\//_}" node "${flags[@]}" "$f"
 done
 [ -z "$tests" ] && echo "n/a   changed tests (none under tests/)"
-if touches '^(app|components|lib|scripts)/|^middleware\.ts$|^package\.json$'; then run test:offline npm run test:offline; else echo "n/a   test:offline (no app/components/lib/scripts/middleware/package.json change)"; fi
-if touches '^app/api/admin/|^lib/api-'; then run test:api npm run test:api; else echo "n/a   test:api (admin API untouched)"; fi
-if touches '^app/api/v1/|^lib/api-public'; then run test:public npm run test:public; else echo "n/a   test:public (public API untouched)"; fi
+# always: area gating by path silently skipped suites that shared code reaches
+run test:offline npm run test:offline
+run test:api npm run test:api
+run test:public npm run test:public
 
 # promoted rules
 shopt -s nullglob
@@ -53,8 +53,10 @@ krs=(tests/known-red/*.test.*)
 for kr in ${krs[@]+"${krs[@]}"}; do
   n=$(basename "$kr" | cut -d. -f1); flags=(--import tsx --test)
   grep -q 'mock\.module' "$kr" && flags+=(--experimental-test-module-mocks)
-  if ! clean node "${flags[@]}" --test-name-pattern='(^|: )control:' "$kr" >"$LOG/kr-$n-control.log" 2>&1; then
+  if ! clean node "${flags[@]}" --test-reporter=tap --test-name-pattern='(^|: )control:' "$kr" >"$LOG/kr-$n-control.log" 2>&1; then
     bad "known-red $n harness broken: control failed (log $LOG/kr-$n-control.log)"
+  elif ! grep -qE '^ *ok [0-9]+ - (.*: )?control:' "$LOG/kr-$n-control.log"; then
+    bad "known-red $n has no control: test (log $LOG/kr-$n-control.log)"
   elif clean node "${flags[@]}" --test-skip-pattern='(^|: )control:' "$kr" >"$LOG/kr-$n.log" 2>&1; then
     bad "known-red $n now GREEN: promote it to tests/rules"
   elif grep -q ERR_ASSERTION "$LOG/kr-$n.log"; then
