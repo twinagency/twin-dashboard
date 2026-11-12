@@ -1,7 +1,7 @@
 // Rule (W2c N1, step 1 of 3, additive): the capture routes also hold the OnlyFans capture server-side under `captureId`, and a save may
 // send `payload.captureRef` instead of capture + xHash. The ref resolves only for the same account and operator session, for 15 minutes,
 // newest 64 kept; the stored capture/xHash are swapped in before validation and before the commandKey is hashed, `captureRef` never
-// goes upstream, and the handle is deleted only once the backend acks the save. Saves without a ref are unchanged.
+// goes upstream, and the handle is deleted only once the backend acks the save. Only action "save" takes a ref. Saves without a ref are unchanged.
 // Drives the REAL routes (capture-from-curl, browserbase-login/[jobId], accounts/[accountId]) through tests/helpers/W2c-delta-route-harness.ts
 // (lib/onlyfans/route.ts, next/headers, server-only, supabase-service mocked; real connectionCommandContext over a fake wire).
 // No extra module mocks. Expiry uses node:test mock.timers on Date only. Synthetic values only (tests/helpers/W2-F1-N2-owner-guard-fixtures.ts).
@@ -37,7 +37,7 @@ async function expired(r: Response) { assert.equal(r.status, 410); const b = awa
 async function otherSession() { const old = state.session; const { signSession } = await import("../../lib/session");
   while (state.session === old) { await new Promise(r => setTimeout(r, 2)); state.session = await signSession(); } return old; }
 
-if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 10 })) {
+if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 11 })) {
   beforeEach(async () => { reset(); await ready(); });
 
   test("control: a save without captureRef is forwarded exactly as before, and the strict contract still refuses a missing capture", async () => {
@@ -119,10 +119,19 @@ if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 10 })) {
     } finally { mock.timers.reset(); }
   });
 
-  test("an ownerId that is not the captured owner is refused with capture_owner_mismatch", async () => {
+  test("an ownerId that is not the captured owner fails validation (400) and keeps the handle", async () => {
     backend(); const m = await mint(); calls.length = 0;
     const r = await call(ACCOUNT, { accountId: A }, { body: { action: "save", expectedRevision: 3, payload: { ...payload({ captureRef: m.ref }), ownerId: OWNER + 1 } } });
-    assert.equal(r.status, 409); assert.equal((await r.json() as Reply).code, "capture_owner_mismatch"); assert.equal(saves().length, 0);
+    assert.equal(r.status, 400); assert.equal(saves().length, 0);
+    assert.equal((await save({ captureRef: m.ref })).status, 200);
+  });
+
+  test("captureRef is refused (400) on the session action and when it is not a string", async () => {
+    backend(); const m = await mint(); calls.length = 0;
+    const session = { ownerId: OWNER, captureRef: m.ref, expiresAt: "2030-01-01T00:00:00Z" };
+    assert.equal((await call(ACCOUNT, { accountId: A }, { body: { action: "session", expectedRevision: 3, payload: session } })).status, 400);
+    for (const captureRef of [123, null, { id: m.ref }]) assert.equal((await save({ captureRef })).status, 400);
+    assert.equal(saves().length, 0);
     assert.equal((await save({ captureRef: m.ref })).status, 200);
   });
 
