@@ -17,6 +17,7 @@ import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
 import CategoryDrafts from "./CategoryDrafts";
 import Preparation from "./Preparation";
+import CommercialScope from "./CommercialScope";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration } from "@/lib/onlyfans/vault";
 import VaultMediaPicker from "./VaultMediaPicker";
@@ -199,6 +200,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
     {notice ? <p role="status" className="of-notice" data-of-vault-notice>{notice}</p> : null}
     {!data && !denied ? <button type="button" className={buttonClass} data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}>Refresh vault</button> : null}
     <Preparation key={accountId} accountId={accountId} readOnly={readOnly}/>
+    <CommercialScope accountId={accountId} readOnly={readOnly}/>
     {data && !denied ? <>
       <div ref={libraryTop} className="scroll-mt-24" />
       <div className="of-library-layout">

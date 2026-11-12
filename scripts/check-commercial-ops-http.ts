@@ -5,9 +5,11 @@
 import assert from "node:assert/strict";
 import {createServer,get as httpGet} from "node:http";
 import {spawn} from "node:child_process";
-import {openSync,closeSync} from "node:fs";
+import {openSync,closeSync,readFileSync,writeFileSync,existsSync} from "node:fs";
+import {createServer as httpsServer} from "node:https";
+import {request as httpRequest} from "node:http";
 import {randomUUID} from "node:crypto";
-const backend=process.env.COMMERCIAL_TEST_BACKEND??"http://127.0.0.1:18787",base="http://127.0.0.1:3198";
+const backend=process.env.COMMERCIAL_TEST_BACKEND??"http://127.0.0.1:18787",base=process.env.COMMERCIAL_TEST_ORIGIN??"http://127.0.0.1:3198";
 const agency="bc670215-110b-4ea0-8f5c-af3dfe21d253",manager="44444444-4444-4444-8444-444444444444",reader="55555555-5555-4555-8555-555555555555",creator="11111111-1111-4111-8111-111111111111",other="22222222-2222-4222-8222-222222222222";
 type Json=Record<string,any>;
 /** next dev compiles each route on first request (minutes on one CPU): warm every route this check uses with a long timeout. */
@@ -29,6 +31,8 @@ async function main(){
  await new Promise<void>(resolve=>identity.listen(0,"127.0.0.1",resolve));
  const port=(identity.address() as {port:number}).port;
  const fd=openSync(process.env.NEXT_LOG??"/tmp/commercial-ops-next.log","w");
+ const proxy=process.env.COMMERCIAL_TLS_KEY?httpsServer({key:readFileSync(process.env.COMMERCIAL_TLS_KEY),cert:readFileSync(process.env.COMMERCIAL_TLS_CERT!)},(req,res)=>{const upstream=httpRequest({hostname:"127.0.0.1",port:3198,path:req.url,method:req.method,headers:req.headers},r=>{res.writeHead(r.statusCode!,r.headers);r.pipe(res);});upstream.on("error",()=>{res.writeHead(502);res.end();});req.pipe(upstream);}):null;
+ if(proxy)await new Promise<void>(resolve=>proxy.listen(3199,"0.0.0.0",resolve));
  const nextArgs=process.env.NEXT_MODE!=="start"?["dev","--hostname","127.0.0.1","--port","3198"]:["start","--hostname","127.0.0.1","--port","3198"];
  const child=spawn(process.execPath,["node_modules/next/dist/bin/next",...nextArgs],{cwd:process.cwd(),env:{...process.env,NODE_OPTIONS:"--max-old-space-size=1536",NEXT_TELEMETRY_DISABLED:"1",DASHBOARD_PUBLIC_ORIGIN:base,SUPABASE_URL:"http://127.0.0.1:"+port,SUPABASE_SERVICE_KEY:"synthetic-service",ONLYFANS_API_BASE_URL:backend,ONLYFANS_API_TOKEN:"synthetic-read",ONLYFANS_CONTENT_TOKEN:"synthetic-content",ONLYFANS_CONFIGURATION_TOKEN:"synthetic-configuration"},stdio:["ignore",fd,fd]});
  try{
@@ -142,7 +146,16 @@ async function main(){
   const withdrawn=await ok(await post(termsPath,{action:"withdraw",expectedRevision:termsAck.terms.revision,requestId:randomUUID()}));
   assert.equal(withdrawn.terms.status,"withdrawn");
 
+  if(process.env.COMMERCIAL_BROWSER_READY){
+    writeFileSync(process.env.COMMERCIAL_BROWSER_READY,JSON.stringify({account,creator,itemId:productId,base}));
+    const done=process.env.COMMERCIAL_BROWSER_DONE!;
+    for(let n=0;!existsSync(done);n++){
+      if(n>=360)throw Error("browser qualification did not complete");
+      await new Promise(resolve=>setTimeout(resolve,1000));
+    }
+    assert.equal(JSON.parse(readFileSync(done,"utf8")).status,"passed","browser qualification failed");
+  }
   console.log(JSON.stringify({result:"passed",boundary:"actual Next BFF -> actual ASGI middleware -> PostgreSQL",identity:"synthetic auth service",provider:"synthetic preparation wire only",terms:final.terms.length,commands:final.commands.length}));
- }finally{child.kill("SIGTERM");await new Promise<void>(r=>{if(child.exitCode!==null)r();else child.once("exit",()=>r());});closeSync(fd);identity.close();}
+ }finally{child.kill("SIGTERM");await new Promise<void>(r=>{if(child.exitCode!==null)r();else child.once("exit",()=>r());});closeSync(fd);identity.close();proxy?.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

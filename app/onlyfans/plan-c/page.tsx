@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import PilotLifecycle from "@/components/onlyfans-preview/PilotLifecycle";
 import PlanCConsole from "@/components/onlyfans-preview/PlanCConsole";
 import { CreatorPlatformEmpty, CreatorPlatformHeading } from "@/components/onlyfans-preview/CreatorPlatformPage";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
@@ -26,6 +27,7 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>
+    <PilotLifecycle accountId={accountId}/>
     <PlanCConsole accountId={accountId} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
   </div>;
 }

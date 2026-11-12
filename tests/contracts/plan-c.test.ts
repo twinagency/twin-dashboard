@@ -390,3 +390,31 @@ test("uncertain-send cases retain linked work and cause without inventing a rele
  assert.equal(value.items[0].ageSeconds,123);
  assert.equal(parsePlanCUnresolved({schemaVersion:PLAN_C_SCHEMA,items:[{...item,ageSeconds:-1}]},MOCK_ACCOUNT),null);
 });
+
+test("pilot lifecycle retains the reviewed config and treats ambiguous writes as unconfirmed", async () => {
+ const {lifecycle}=await import("../../lib/onlyfans/plan-c-lifecycle-backend");
+ const oldBase=process.env.ONLYFANS_API_BASE_URL,oldToken=process.env.ONLYFANS_CONTROL_TOKEN,oldFetch=globalThis.fetch;
+ process.env.ONLYFANS_API_BASE_URL="http://127.0.0.1:8787";process.env.ONLYFANS_CONTROL_TOKEN="offline-lifecycle";
+ const config={authorization_mode:"supervised",fans:[101],creator_profile:{name:"Reviewed"},limits:{send_units:5}};
+ let posted:Record<string,unknown>|null=null;
+ globalThis.fetch=async (_url,init)=>{
+  if(init?.method==="POST"){posted=JSON.parse(String(init.body));return Response.json({schemaVersion:PLAN_C_SCHEMA,accountId:MOCK_ACCOUNT,revision:3,status:"configured",fingerprint:"a".repeat(64)});}
+  return Response.json({schemaVersion:PLAN_C_SCHEMA,ok:true,accountId:MOCK_ACCOUNT,revision:2,status:"configured",config});
+ };
+ try{
+  const command={action:"autonomous" as const,expectedRevision:2,commandKey:"b".repeat(64),reason:"Reviewed autonomous replies"};
+  const result=await lifecycle(MOCK_ACCOUNT,OPERATOR_ACTOR,command);
+  assert.equal(result.status,200);assert.equal(result.body.ok,true);
+  assert.deepEqual(posted,{expectedRevision:2,commandKey:command.commandKey,actor:OPERATOR_ACTOR,reason:command.reason,config:{...config,authorization_mode:"autonomous"}});
+  globalThis.fetch=async (_url,init)=>{
+   if(init?.method==="POST")throw Error("connection lost after possible commit");
+   return Response.json({schemaVersion:PLAN_C_SCHEMA,ok:true,accountId:MOCK_ACCOUNT,revision:2,status:"configured",config});
+  };
+  const unknown=await lifecycle(MOCK_ACCOUNT,OPERATOR_ACTOR,command);
+  assert.equal(unknown.status,502);assert.equal(unknown.body.outcome,"unconfirmed");
+ }finally{
+  globalThis.fetch=oldFetch;
+  if(oldBase===undefined)delete process.env.ONLYFANS_API_BASE_URL;else process.env.ONLYFANS_API_BASE_URL=oldBase;
+  if(oldToken===undefined)delete process.env.ONLYFANS_CONTROL_TOKEN;else process.env.ONLYFANS_CONTROL_TOKEN=oldToken;
+ }
+});
