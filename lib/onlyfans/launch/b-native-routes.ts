@@ -8,7 +8,6 @@ import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
 import { bGate, bAnswer, bRefuse } from "./b-route";
 import { internalOperator } from "../reads";
-import { withoutModelCost } from "../../onlyfans-connections/recent-history";
 import {
   configuredNativeConfigurationBackend,
   type NativeResult,
@@ -80,14 +79,14 @@ export async function memoryFans(request: NextRequest, account: string) {
   if (!r.ok) return fail(r);
   if (!p.ok) return fail(p);
   const page = parseMemoryFanPage(r.data),
-    progress = parseRecoveryProgress(p.data.progress, g.accountId);
+    progress = parseRecoveryProgress(p.data.progress, g.accountId, null, internalOperator(g.ctx.auth));
   return page && progress
     ? bAnswer({
         ok: true,
         accountId: g.accountId,
         memoryVersion: "of-history-memory.v1",
         ...page,
-        progress: internalOperator(g.ctx.auth) ? progress : withoutModelCost(progress),
+        progress,
       })
     : unavailable();
 }
@@ -119,7 +118,7 @@ export async function memoryFan(
     if (!p.ok) return fail(p);
     const memory = parseNativeMemory(r.data.memory),
       progress = parseMemoryProgress(p.data.memory),
-      recovery = parseRecoveryProgress(p.data.recovery, g.accountId, fan);
+      recovery = parseRecoveryProgress(p.data.recovery, g.accountId, fan, internalOperator(g.ctx.auth));
     return memory && progress && recovery
       ? bAnswer({
           ok: true,
@@ -127,7 +126,7 @@ export async function memoryFan(
           fanId: fan,
           memory,
           progress,
-          recovery: internalOperator(g.ctx.auth) ? recovery : withoutModelCost(recovery),
+          recovery,
         })
       : unavailable();
   }
@@ -154,7 +153,7 @@ export async function memoryFan(
       : text(body.value, 600) && !!body.value.trim())
   )
     return invalid();
-  const named = g.ctx.auth.operatorSession && !g.ctx.auth.agency && !g.ctx.auth.viewAs
+  const named = internalOperator(g.ctx.auth)
     ? await planCOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
   const actor = named ?? g.ctx.actor!;
   const r = await call(g.accountId, `${base}/corrections`, "POST", {

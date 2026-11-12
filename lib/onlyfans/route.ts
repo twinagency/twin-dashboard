@@ -12,7 +12,7 @@ import { planCOwnerActor } from "./plan-c-owner";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import { configuredOnlyFansBackend, type OnlyFansBackend } from "./backend";
-import { authorizeRead, denialBody, type ReadAuth, type ReadDenial, type ReadResult } from "./reads";
+import { authorizeRead, denialBody, internalOperator, type ReadAuth, type ReadDenial, type ReadResult } from "./reads";
 
 /** Private, never cached: conversation data is per-operator and per-account. */
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Data-Mode": "live" } as const;
@@ -71,7 +71,7 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
-  const pilotActor = options.pilotIdentity && auth.operatorSession && !auth.agency && !auth.viewAs
+  const pilotActor = options.pilotIdentity && internalOperator(auth)
     ? await planCOwnerActor(token) : null;
   return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };
 }

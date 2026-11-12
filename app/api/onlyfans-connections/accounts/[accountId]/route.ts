@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
+import { internalOperator } from "@/lib/onlyfans/reads";
 import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend";
 import { CONNECTION_SCHEMA, object, validConnectionRequest } from "@/lib/onlyfans-connections/contract";
 import { connectionAnswer, connectionRefusal, connectionCommandContext } from "@/lib/onlyfans-connections/route";
@@ -21,7 +22,7 @@ export async function GET(_request: NextRequest, context: Context) {
   const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
   const accountId = requestId((await context.params).accountId); if (!accountId) return connectionRefusal(400, "That account reference is invalid.");
   const backend = configuredConnectionBackend(); if (!backend) return connectionRefusal(503, "Account connection management is not configured.");
-  const result = await backend.get(accountId);
+  const result = await backend.get(accountId, internalOperator(ctx.auth));
   return result.ok ? connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, connection: result.data }) : connectionRefusal(result.status, result.error);
 }
 export async function POST(request: NextRequest, context: Context) {

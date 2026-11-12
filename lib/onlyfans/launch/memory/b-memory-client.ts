@@ -28,12 +28,12 @@ function shaped<T>(reply: BReply<unknown>, parse: (v: unknown) => T | null): BRe
 }
 export function parseMemoryPageEnvelope(v: unknown, accountId: string): MemoryCoveragePage | null {
   if (!object(v) || v.schemaVersion !== B_CONTRACT_SCHEMA || v.ok !== true || v.accountId !== accountId) return null;
-  const page = parseMemoryFanPage(v), progress = parseRecoveryProgress(v.progress, accountId);
+  const page = parseMemoryFanPage(v), progress = parseRecoveryProgress(v.progress, accountId, null, true);
   return page && progress && new Set(page.fans.map(f => f.fanId)).size === page.fans.length ? { ...page, progress } : null;
 }
 export function parseMemoryEnvelope(v: unknown, accountId: string, fanId: string): FanMemoryView | null {
   if (!object(v) || v.schemaVersion !== B_CONTRACT_SCHEMA || v.ok !== true || v.accountId !== accountId || v.fanId !== fanId) return null;
-  const memory = parseNativeMemory(v.memory), progress = parseMemoryProgress(v.progress), recovery = parseRecoveryProgress(v.recovery, accountId, fanId);
+  const memory = parseNativeMemory(v.memory), progress = parseMemoryProgress(v.progress), recovery = parseRecoveryProgress(v.recovery, accountId, fanId, true);
   return memory && progress && recovery ? { fanId, memory, progress, recovery } : null;
 }
 export async function readCoverage(accountId: string, signal?: AbortSignal, cursor?: string): Promise<BReply<MemoryCoveragePage>> {

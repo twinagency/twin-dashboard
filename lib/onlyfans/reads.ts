@@ -94,9 +94,6 @@ export type ConversationReadBody = {
  * conversations. Neither is widened here, and a caller with no verified session
  * is refused before the backend is consulted at all.
  */
-/** The internal operator: a verified dashboard session with no agency identity and no view-as. Fails closed. */
-export const internalOperator = (auth: ReadAuth) => auth.operatorSession && !auth.agency && !auth.viewAs && !auth.agencyGrant;
-
 export function authorizeRead(auth: ReadAuth): ReadDenial | null {
   if (!auth.operatorSession && !auth.agencyGrant) {
     return {
@@ -127,6 +124,9 @@ export function authorizeRead(auth: ReadAuth): ReadDenial | null {
   }
   return null;
 }
+
+/** The internal operator: a verified dashboard session with no agency identity and no view-as. Fails closed. */
+export const internalOperator = (auth: ReadAuth) => auth.operatorSession && !auth.agency && !auth.viewAs && !auth.agencyGrant;
 
 function unavailable(reason: string): ReadDenial {
   return { ok: false, status: 503, state: "unavailable", code: "backend_unavailable", error: reason };

@@ -107,13 +107,14 @@ export function parseConnectionRunner(value: unknown): ConnectionRunner | null {
     || !(value.restarts === null || integer(value.restarts, 0, 999_999_999))) return null;
   return value as ConnectionRunner;
 }
-export function parseConnection(value: unknown, accountId: string): Connection | null {
+/** cost: our model cost in recentHistory, true only for the operator's route and the operator's own browser parse. */
+export function parseConnection(value: unknown, accountId: string, cost = false): Connection | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "connection"]) || value.schemaVersion !== CONNECTION_SCHEMA || value.ok !== true || !object(value.connection)) return null;
   const c = value.connection;
   const base = ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"];
   // Optional keys are accepted only as known, valid shapes; runner and aiLive travel together, and aiLive can never contradict the runner.
   const optional = ["sync", "runner", "aiLive", "throttleSeconds", "recentHistory"].filter(key => key in c);
-  const recentHistory = "recentHistory" in c ? parseRecentHistory(c.recentHistory) : undefined;
+  const recentHistory = "recentHistory" in c ? parseRecentHistory(c.recentHistory, cost) : undefined;
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
     ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||

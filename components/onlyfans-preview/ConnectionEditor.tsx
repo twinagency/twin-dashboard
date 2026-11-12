@@ -108,7 +108,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         sessionDenied.current = true; clearSecrets(); dropRetry(); setOwner(""); setModelId(""); setData(null); setDenied(true);
         setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return false;
       }
-      const next = response.ok ? parseConnection(await response.json(), accountId) : null;
+      const next = response.ok ? parseConnection(await response.json(), accountId, true) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
       setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); }
