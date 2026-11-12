@@ -1,8 +1,9 @@
 import "../support/admin-route-env";
 /**
  * Rule (W4 lib-api-public-v2-plus6 F5; docs/review/W4/lib-api-public-v2-plus6.md): cut disclosure on
- * /api/v1/revenue. Promoted from tests/known-red/W4-lib-api-public-v2-plus6-revenue-cut-ratio.test.ts, which drove
- * the real publicRevenue over a faked PostgREST wire and MEASURED: getAnalytics puts the key's one clone in clones[]
+ * /api/v1/revenue. Promoted from the known-red test of the same name on corpus commit 27414b8a (with its
+ * tests/support/admin-wire.ts; neither is on this base), which drove the real publicRevenue over a faked PostgREST
+ * wire and MEASURED: getAnalytics puts the key's one clone in clones[]
  * with revenueStars 0 for a window without sales, and byTier comes from the lifetime `revenue_fan_tiers` RPC whatever
  * the window. This rule drives lib/revenue-projection.ts scaleAnalyticsData directly with that measured shape.
  * scaleAnalyticsData scales every breakdown by the window's net/gross ratio; a window with zero gross fell back to
@@ -12,6 +13,8 @@ import "../support/admin-route-env";
  * byTier = one lifetime whale tier of 4000 Stars.
  * Control: the 1M window (with the sale) shows byTier = 4000 x 0.8. Red: the 1D window (no sale) must show the same,
  * and never more than gross x the clone multiplier. A clone with no cut entry must never pass gross off as net.
+ * rwl round 1: window-independent fields take one constant multiplier (fleet byTier identical across windows), and
+ * the window blend is clamped to the multipliers in scope (signed refunds cannot lift it above gross).
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/W4-revenue-cut-ratio.test.ts
  */
 import assert from "node:assert/strict";
@@ -24,13 +27,15 @@ const OTHER_ID = "00000000-0000-4000-8000-000000000002";
 const LIFETIME_WHALE_STARS = 4000;
 const MULT = 0.8;
 
+const WHALE_TIER: AnalyticsData["byTier"][number] = { key: "whale", label: "Whale", users: 2, stars: LIFETIME_WHALE_STARS, share: 1 };
+
 function analytics(clones: { id: string; revenueStars: number }[]): AnalyticsData {
   const revenue = clones.reduce((a, c) => a + c.revenueStars, 0);
   return {
     totals: { revenueStars: revenue, sales: revenue ? 1 : 0 },
     clones: clones.map((c) => ({ ...c, name: c.id, color: "#111", sales: c.revenueStars ? 1 : 0 })),
     byKind: [], byFeature: [], byDay: [], byHour: [], byDow: [], byFlow: [], whaleFans: [], topWeeklySpenders: [],
-    byTier: [{ key: "whale", label: "Whale", fans: 2, stars: LIFETIME_WHALE_STARS }],
+    byTier: [WHALE_TIER],
     weeklySpenderSummary: { buyers: 0, stars: 0, purchases: 0, avgStars: 0 },
     funnel: { avgStarsPerBuyer: 0, medianStarsPerBuyer: 0 },
     paywallFunnel: { paidMessageStars: 0 },
@@ -68,17 +73,31 @@ test("F5: zero gross uses the stacked creator multiplier, and the lowest multipl
   assert.equal(whale(out), LIFETIME_WHALE_STARS * 0.5);
   const agencyOnly = scaleAnalyticsData(analytics([{ id: CLONE_ID, revenueStars: 0 }]), stacked, "agency");
   assert.equal(whale(agencyOnly), LIFETIME_WHALE_STARS * MULT, "agency mode, zero gross: platform cut only");
+  // A sale and its refund net to zero gross: the window's day with the sale still shows net.
+  const netted = { ...analytics([{ id: CLONE_ID, revenueStars: 0 }]), byDay: [{ label: "d1", stars: 1000 }, { label: "d2", stars: -1000 }] };
+  assert.equal(scaleAnalyticsData(netted as AnalyticsData, PLATFORM_20, "creator").byDay[0].stars, 1000 * MULT);
 });
 
-test("F5: a clone with no cut entry is never shown gross", () => {
+test("F5: a clone with no cut entry is refused, never shown gross", () => {
   for (const revenueStars of [1000, 0]) {
-    let out: AnalyticsData | undefined;
-    try { out = scaleAnalyticsData(analytics([{ id: CLONE_ID, revenueStars }]), cuts([]), "creator"); } catch { /* refused: fail closed */ }
-    if (out) {
-      assert.ok(out.totals.revenueStars < revenueStars || revenueStars === 0, `revenue ${out.totals.revenueStars} passed gross through`);
-      assert.ok(whale(out) < LIFETIME_WHALE_STARS, `byTier ${whale(out)} passed gross through (window gross ${revenueStars})`);
-    }
+    assert.throws(() => scaleAnalyticsData(analytics([{ id: CLONE_ID, revenueStars }]), cuts([]), "creator"), /No cut resolved/);
   }
+});
+
+test("F5: a fleet's window-independent fields are identical across windows (0% and 20% clones)", () => {
+  const fleet = cuts([[CLONE_ID, { platformPct: 0, agencyCreatorPct: 0 }], [OTHER_ID, { platformPct: 20, agencyCreatorPct: 0 }]]);
+  const sale = scaleAnalyticsData(analytics([{ id: CLONE_ID, revenueStars: 1000 }, { id: OTHER_ID, revenueStars: 0 }]), fleet, "agency");
+  const none = scaleAnalyticsData(analytics([{ id: CLONE_ID, revenueStars: 0 }, { id: OTHER_ID, revenueStars: 0 }]), fleet, "agency");
+  assert.equal(sale.totals.revenueStars, 1000, "harness: the sale is on the 0% clone");
+  assert.equal(whale(sale), whale(none), "byTier moved with the window: the two divide out the 20% cut");
+  assert.equal(whale(none), LIFETIME_WHALE_STARS * MULT);
+});
+
+test("F5: a refund-heavy window cannot scale a window field above gross", () => {
+  const fleet = cuts([[CLONE_ID, { platformPct: 0, agencyCreatorPct: 0 }], [OTHER_ID, { platformPct: 50, agencyCreatorPct: 0 }]]);
+  const a = { ...analytics([{ id: CLONE_ID, revenueStars: 1010 }, { id: OTHER_ID, revenueStars: -1000 }]), byDay: [{ label: "d", stars: 10 }] };
+  const out = scaleAnalyticsData(a as AnalyticsData, fleet, "agency");
+  assert.ok(out.byDay[0].stars <= 10, `byDay ${out.byDay[0].stars} > gross 10 (blend ${out.byDay[0].stars / 10})`);
 });
 
 test("control: admin and agency semantics unchanged (input stays gross, agency mode takes the platform cut only)", () => {

@@ -105,8 +105,10 @@ export function scaleDashboardData(data: DashboardData, cuts: Map<string, CloneC
  * are NOT broken down per clone by the data layer — getAnalytics() rolls
  * them up in one pass across whichever clones are in scope. Those are
  * scaled by a single BLENDED ratio (net revenue / gross revenue across the
- * clones actually in `clones[]`), which is exact when every clone in scope
- * shares one cut and an honest approximation otherwise. This is a known,
+ * clones actually in `clones[]`, clamped to their multipliers), which is exact
+ * when every clone in scope shares one cut and an honest approximation
+ * otherwise. Window-independent fields (byTier, whaleFans, funnel per-buyer
+ * stars, weekly spenders) take the LOWEST multiplier in scope instead. This is a known,
  * documented limitation, not a silent gross leak: every scaled figure here
  * is still <= its gross counterpart.
  */
@@ -119,13 +121,19 @@ export function scaleAnalyticsData(data: AnalyticsData, cuts: Map<string, CloneC
     netRevenue += scaled;
     return { ...c, revenueStars: scaled };
   });
-  // Zero gross (a window without sales) must still scale: byTier is lifetime,
-  // so a ratio of 1 here would show it gross in one window and net in another,
-  // and the two divide out the exact cut. Use the clones' own multiplier, the
-  // lowest one when several are in scope (clones[] empty: the resolved cuts).
+  // Fail closed (W4 F5). Every multiplier in scope (clones[] empty: the resolved cuts).
   const ids = data.clones.length ? data.clones.map((c) => c.id) : [...cuts.keys()];
-  const blendRatio = grossRevenue > 0 ? netRevenue / grossRevenue : ids.length ? Math.min(...ids.map((id) => net(1, cuts.get(id), mode))) : 0;
+  const mults = ids.map((id) => net(1, cuts.get(id), mode));
+  const lo = mults.length ? Math.min(...mults) : 0;
+  const hi = mults.length ? Math.max(...mults) : 0;
+  // Window fields: the window's blend, clamped to [lo, hi] so signed refunds
+  // cannot push it above gross. Zero gross: lo, never 1.
+  const blendRatio = grossRevenue > 0 ? Math.min(hi, Math.max(lo, netRevenue / grossRevenue)) : lo;
   const scaleStars = (v: number) => v * blendRatio;
+  // Fields that do not depend on the window (lifetime byTier/whaleFans/funnel,
+  // rolling 7-day spenders) take ONE constant multiplier: a per-window blend on
+  // them lets two windows divide out the exact cut.
+  const scaleFixed = (v: number) => v * lo;
 
   return {
     ...data,
@@ -136,19 +144,19 @@ export function scaleAnalyticsData(data: AnalyticsData, cuts: Map<string, CloneC
     byDay: data.byDay.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
     byHour: data.byHour.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
     byDow: data.byDow.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
-    byTier: data.byTier.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byTier: data.byTier.map((r) => ({ ...r, stars: scaleFixed(r.stars) })),
     byFlow: data.byFlow.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
-    whaleFans: data.whaleFans.map((f) => ({ ...f, stars: scaleStars(f.stars) })),
-    topWeeklySpenders: data.topWeeklySpenders.map((f) => ({ ...f, stars: scaleStars(f.stars) })),
+    whaleFans: data.whaleFans.map((f) => ({ ...f, stars: scaleFixed(f.stars) })),
+    topWeeklySpenders: data.topWeeklySpenders.map((f) => ({ ...f, stars: scaleFixed(f.stars) })),
     weeklySpenderSummary: {
       ...data.weeklySpenderSummary,
-      stars: scaleStars(data.weeklySpenderSummary.stars),
-      avgStars: scaleStars(data.weeklySpenderSummary.avgStars),
+      stars: scaleFixed(data.weeklySpenderSummary.stars),
+      avgStars: scaleFixed(data.weeklySpenderSummary.avgStars),
     },
     funnel: {
       ...data.funnel,
-      avgStarsPerBuyer: scaleStars(data.funnel.avgStarsPerBuyer),
-      medianStarsPerBuyer: scaleStars(data.funnel.medianStarsPerBuyer),
+      avgStarsPerBuyer: scaleFixed(data.funnel.avgStarsPerBuyer),
+      medianStarsPerBuyer: scaleFixed(data.funnel.medianStarsPerBuyer),
     },
     paywallFunnel: {
       ...data.paywallFunnel,
