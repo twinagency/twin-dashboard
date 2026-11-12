@@ -23,7 +23,7 @@ type Edit = { field: MemoryField; value: string; reason: string; error: string }
 type PendingCorrection = { accountId: string; fanId: string; correction: MemoryCorrection };
 
 /** Native account-scoped memory. Archive recovery and stored-message processing remain separate. */
-export default function BMemoryPanel({ canManage = false, canRecover = canManage, initialAccountId, selectedAccountId, selectedFanId, part = "all" }: { canManage?: boolean; canRecover?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string; part?: "all" | "facts" | "diagnostics" }) {
+export default function BMemoryPanel({ canManage = false, canRecover = canManage, operator = false, initialAccountId, selectedAccountId, selectedFanId, part = "all" }: { canManage?: boolean; canRecover?: boolean; operator?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string; part?: "all" | "facts" | "diagnostics" }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading), [accountId, setAccountId] = useState("");
@@ -155,7 +155,7 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
         {fan.state === "ok" ? <div className="grid min-w-0 gap-4">
           {part === "all" ? <h3 className="break-words font-semibold">{selectedName?.displayName || selectedName?.username || `Fan ${fanId}`}</h3> : null}
           {showFacts ? <MemoryStateView state={memoryState(fan.data.progress, fan.data.recovery, fan.data.memory)} /> : null}
-          {showDiag ? <MemoryDiagnostics progress={fan.data.progress} recovery={fan.data.recovery} /> : null}
+          {showDiag ? <MemoryDiagnostics progress={fan.data.progress} recovery={fan.data.recovery} operator={operator} /> : null}
           {showDiag && !selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill(fanId)}>Resume this fan's recovery</button> : null}
           {showFacts ? <FanFacts memory={fan.data.memory} manage={manage} busy={busy} edit={edit} setEdit={setEdit} onSave={save} /> : null}
           {showFacts ? <div className="grid min-w-0 gap-2"><h4 className="text-sm font-semibold">Source excerpts</h4>
@@ -193,9 +193,9 @@ function MemoryProgressView({ progress: p }: { progress: MemoryProgress }) {
     <dt className={dtCls}>Provider-history total</dt><dd className={ddCls}>Unknown</dd></dl></div>;
 }
 /** Every archive, recovery, discovery and stored-message counter. The inbox sidebar keeps these inside a collapsed disclosure. */
-export function MemoryDiagnostics({ progress, recovery }: { progress: MemoryProgress; recovery: RecoveryProgress }) {
+export function MemoryDiagnostics({ progress, recovery, operator = false }: { progress: MemoryProgress; recovery: RecoveryProgress; operator?: boolean }) {
   const recent = recovery.recentHistory;
-  return <div className="grid min-w-0 gap-3" data-b-diagnostics>{recent ? <RecentHistoryStatus value={recent} /> : null}<MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
+  return <div className="grid min-w-0 gap-3" data-b-diagnostics>{recent ? <RecentHistoryStatus value={recent} operator={operator} /> : null}<MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
 }
 
 export type MemoryStateKey = "not_processed" | "partial" | "no_facts" | "current";

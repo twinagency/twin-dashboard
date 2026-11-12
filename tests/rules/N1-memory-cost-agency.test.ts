@@ -13,11 +13,13 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { call, ensureModuleMocks, ready, reset, state, upstream } from "../helpers/W2c-delta-route-harness";
 import { CONNECTION, connectionResponse, COST, RECENT } from "./core-recent-fixtures";
-import type { RecentHistory } from "../../lib/onlyfans-connections/recent-history";
+import { parseRecentHistory, type RecentHistory } from "../../lib/onlyfans-connections/recent-history";
 import { parseConnection } from "../../lib/onlyfans-connections/contract";
 import { configuredConnectionBackend } from "../../lib/onlyfans-connections/backend";
 import { parseMemoryEnvelope, parseMemoryPageEnvelope } from "../../lib/onlyfans/launch/memory/b-memory-client";
 import RecentHistoryStatus from "../../components/onlyfans-preview/RecentHistoryStatus";
+import ConnectionSyncStatus from "../../components/onlyfans-preview/ConnectionSyncStatus";
+import { MemoryDiagnostics } from "../../components/onlyfans-launch/memory/BMemoryPanel";
 Object.assign(globalThis, { React }); // tsx compiles the component with the classic JSX runtime
 
 const ACCOUNT = "of-a", FAN = "9007199254740993", AT = "2026-10-23T00:00:00Z", V = "a".repeat(64);
@@ -59,7 +61,31 @@ test("RecentHistoryStatus renders no US$ line without accounting, and still rend
   assert.ok(html(RAW).includes(`US$${COST.providerReportedUsd}`));
 });
 
-if (ensureModuleMocks(import.meta.url, { controls: 3, rest: 3 })) {
+test("r2: under cost=true a PRESENT malformed cost refuses the block; ABSENT still parses; default parse stays lenient", () => {
+  for (const bad of [{ ...COST, providerReportedUsd: "NaN" }, { ...COST, tokenEstimateUsd: undefined }, "x", null, []]) {
+    assert.equal(parseRecentHistory({ ...BASE, memoryModelAccounting: bad }, true), null, `malformed cost accepted: ${JSON.stringify(bad)}`);
+    assert.deepEqual(parseRecentHistory({ ...BASE, memoryModelAccounting: bad }), BASE);
+  }
+  assert.deepEqual(parseRecentHistory(BASE, true), BASE, "an agency reply re-parsed by the browser must still show");
+  assert.deepEqual(parseRecentHistory(RAW, true), RAW);
+});
+
+test("r2: operator surfaces say the cost is unavailable when absent; agency and creator surfaces never do", () => {
+  const html = (e: React.ReactElement) => renderToStaticMarkup(e);
+  const MISSING = "Model cost unavailable.";
+  assert.ok(html(React.createElement(RecentHistoryStatus, { value: BASE, operator: true })).includes(MISSING));
+  assert.equal(html(React.createElement(RecentHistoryStatus, { value: RAW, operator: true })).includes(MISSING), false);
+  assert.equal(html(React.createElement(RecentHistoryStatus, { value: BASE })).includes(MISSING), false);
+  const c = { ...parseConnection(connection, ACCOUNT)!, recentHistory: BASE };
+  assert.ok(html(React.createElement(ConnectionSyncStatus, { connection: c, state: "connected", operator: true })).includes(MISSING));
+  assert.equal(html(React.createElement(ConnectionSyncStatus, { connection: c, state: "connected" })).includes(MISSING), false);
+  const r = { ...recovery(null), recentHistory: BASE } as Parameters<typeof MemoryDiagnostics>[0]["recovery"];
+  const p = progress as Parameters<typeof MemoryDiagnostics>[0]["progress"];
+  assert.ok(html(React.createElement(MemoryDiagnostics, { progress: p, recovery: r, operator: true })).includes(MISSING));
+  assert.equal(html(React.createElement(MemoryDiagnostics, { progress: p, recovery: r })).includes(MISSING), false);
+});
+
+if (ensureModuleMocks(import.meta.url, { controls: 3, rest: 4 })) {
   beforeEach(async () => { reset(); await ready(); wire(); });
 
   test("control: the operator gets the cost on both memory reads, and the browser parsers keep it", async () => {
@@ -92,6 +118,14 @@ if (ensureModuleMocks(import.meta.url, { controls: 3, rest: 3 })) {
     const { json, recent } = await fan();
     assert.deepEqual(leaks(json), [], "our model cost reached an agency session");
     assert.deepEqual(recent, BASE, "the stripped block must still re-parse in the browser");
+  });
+
+  test("r2: the memory page marks only the internal operator as operator", async () => {
+    const { default: MemoryPage } = await import("../../app/onlyfans/launch/memory/page");
+    const page = async () => ((await MemoryPage({ searchParams: Promise.resolve({}) })) as React.ReactElement<{ operator?: boolean }>).props.operator;
+    assert.equal(await page(), true);
+    state.identity = { grant: GRANT };
+    assert.equal(await page(), false);
   });
 
   test("connections.get (platformSnapshot, creator GET) never returns the cost", async () => {

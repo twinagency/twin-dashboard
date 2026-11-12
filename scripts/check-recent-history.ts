@@ -13,11 +13,10 @@ assert(parseRecentHistory(recent));
 for (const patch of [{ percentComplete: 100 }, { lifetimeTotalMessages: 0 }, { initialHistory: {...recent.initialHistory, conversationsAwaitingWork: 1} },
   { initialHistory: {...recent.initialHistory, discoveryComplete: false} }, { initialHistory: {...recent.initialHistory, providerErrors: { invalid_page: 1 }} },
   { memoryProcessing: {...recent.memoryProcessing, budgetHold: "profile-budget-exhausted"} }]) assert.equal(parseRecentHistory({...recent,...patch}),null);
-// TEST-CHANGE (N1 memory-cost-agency): our cost is default-deny and optional; an invalid one drops only itself.
+// TEST-CHANGE (N1 memory-cost-agency): our cost is default-deny; the operator parse (cost=true) refuses a malformed one, as before.
 assert.equal(parseRecentHistory(recent)?.memoryModelAccounting, undefined, "No cost unless asked");
 assert.deepEqual(parseRecentHistory(recent, true)?.memoryModelAccounting, recent.memoryModelAccounting, "Operator keeps cost");
-const bad = parseRecentHistory({...recent, memoryModelAccounting: {...recent.memoryModelAccounting, providerReportedUsd: "NaN"}}, true);
-assert(bad && bad.memoryModelAccounting === undefined, "Invalid cost drops only itself");
+assert.equal(parseRecentHistory({...recent, memoryModelAccounting: {...recent.memoryModelAccounting, providerReportedUsd: "NaN"}}, true), null, "Invalid cost refused");
 const connection = { accountId:"of-1",revision:1,status:"verified",ownerId:"1",expiresAt:"2026-11-03T03:00:00Z",verifiedAt:"2026-11-02T03:00:00Z",lastError:null,
   outgoingEnabled:false,policyRevision:1,usedUnits:0,limitUnits:100,mediaEnabled:false,automateNewConversations:false };
 const response = (c: object) => ({ schemaVersion:"of-connections.v1",ok:true,connection:c });
@@ -27,4 +26,4 @@ assert(parseConnection(response({...connection,recentHistory:recent}),"of-1"),"R
 const dropped = parseConnection(response({...connection,recentHistory:{...recent,percentComplete:95}}),"of-1");
 assert(dropped,"Invalid recentHistory keeps the connection"); assert.equal(dropped.recentHistory,undefined);
 assert.equal(parseConnection(response({...connection,unrecognized:true}),"of-1"),null,"Unknown fields remain refused");
-console.log("Recent history contract: 15 checks passed");
+console.log("Recent history contract: 14 checks passed");

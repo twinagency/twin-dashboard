@@ -65,9 +65,12 @@ export function parseRecentHistory(v: unknown, cost = false): RecentHistory | nu
     olderHistory: { activatedFanJobs: n(o.activatedFanJobs), completedFanJobs: n(o.completedFanJobs), pendingFanJobs: n(o.pendingFanJobs) },
     lifetimeHistory: { complete: l.complete as boolean, conversationsComplete: n(l.conversationsComplete) },
     percentComplete: null, lifetimeTotalMessages: null };
-  // Our cost, operator only. Absent or invalid drops only itself, never the block (the browser re-parses an agency's stripped copy).
+  // Our cost, operator only, ignored otherwise. Absent stays parseable (the browser re-parses an agency's stripped copy; operator
+  // surfaces say "Model cost unavailable."); present but malformed refuses the block, as before default deny.
   const a = v.memoryModelAccounting, keys = ["providerReportedUsd", "tokenEstimateUsd", "activeReservationUsd", "unresolvedReservationUsd"] as const;
-  if (cost && obj(a) && keys.every(k => money(a[k]))) r.memoryModelAccounting = { providerReportedUsd: s(a.providerReportedUsd),
-    tokenEstimateUsd: s(a.tokenEstimateUsd), activeReservationUsd: s(a.activeReservationUsd), unresolvedReservationUsd: s(a.unresolvedReservationUsd) };
+  if (!cost || !("memoryModelAccounting" in v)) return r;
+  if (!obj(a) || !keys.every(k => money(a[k]))) return null;
+  r.memoryModelAccounting = { providerReportedUsd: s(a.providerReportedUsd), tokenEstimateUsd: s(a.tokenEstimateUsd),
+    activeReservationUsd: s(a.activeReservationUsd), unresolvedReservationUsd: s(a.unresolvedReservationUsd) };
   return r;
 }
