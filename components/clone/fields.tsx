@@ -18,7 +18,7 @@ import { createPortal } from "react-dom";
 // (solid). Never drop that placeholder class: without it a field's placeholder
 // and its saved value stop being clearly distinguishable.
 import { inputCls, selectCls } from "@/lib/clone-field-styles";
-import { CLONE_DEFAULT_FALLBACKS, DEFAULT_SPOIL_OPTIONS } from "@/lib/clone-default-policy";
+import { DEFAULT_MODELS } from "@/lib/clone-default-policy";
 export { inputCls, selectCls } from "@/lib/clone-field-styles";
 
 // ── Card / section shell ──────────────────────────────────────────────────────
@@ -1276,19 +1276,16 @@ export const DEFAULT_PAYWALL_RESUME_STEER =
   "Welcome him back like you missed him, pick up the exact thread you were on when he ran out, and " +
   "deliver the surprise you teased - never mention prices or Stars.";
 
-export { DEFAULT_SPOIL_OPTIONS };
-const MODEL_DEF = CLONE_DEFAULT_FALLBACKS as Record<string, string>;
-
 export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
-  { name: "text_model", label: "Text", def: MODEL_DEF.text_model },
-  { name: "voice_model", label: "Voice", def: MODEL_DEF.voice_model },
-  { name: "media_model", label: "Media match", def: MODEL_DEF.media_model },
-  { name: "routing_model", label: "Routing / Smart decider", def: MODEL_DEF.routing_model },
-  { name: "voice_enhance_model", label: "Voice enhance", def: MODEL_DEF.voice_enhance_model },
+  { name: "text_model", label: "Text", def: DEFAULT_MODELS.text_model },
+  { name: "voice_model", label: "Voice", def: DEFAULT_MODELS.voice_model },
+  { name: "media_model", label: "Media match", def: DEFAULT_MODELS.media_model },
+  { name: "routing_model", label: "Routing / Smart decider", def: DEFAULT_MODELS.routing_model },
+  { name: "voice_enhance_model", label: "Voice enhance", def: DEFAULT_MODELS.voice_enhance_model },
   // Also fires when the fan sends a VIDEO (she reacts to a grabbed frame) —
   // there is no separate video model, this one covers both (see flows/vision.ts).
-  { name: "photo_reply_model", label: "Photo & video reply", def: MODEL_DEF.photo_reply_model },
-  { name: "vision_model", label: "Vision (media library tagging)", def: MODEL_DEF.vision_model },
+  { name: "photo_reply_model", label: "Photo & video reply", def: DEFAULT_MODELS.photo_reply_model },
+  { name: "vision_model", label: "Vision (media library tagging)", def: DEFAULT_MODELS.vision_model },
 ];
 
 // ── Recommended models per job ────────────────────────────────────────────────

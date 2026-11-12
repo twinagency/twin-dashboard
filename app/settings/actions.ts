@@ -8,7 +8,8 @@ import { invalidateCloneCaches } from "@/lib/query-cache";
 import type { Clone } from "@/lib/types";
 import { MIN_PAID_MEDIA_PRICE_STARS, normalizeSafeCategoryGuide } from "@/lib/pricing";
 import {
-  CLONE_DEFAULT_FALLBACKS, CLONE_DEFAULT_GROUPS,
+  CLONE_DEFAULT_GROUPS,
+  effectiveCloneDefaults,
   filterCloneDefaultCascade,
   OPERATIONAL_DEFAULT_JSON,
   OPERATIONAL_DEFAULT_MODELS,
@@ -121,9 +122,8 @@ export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollower
   // cross-field ordering; sanitizeCloneDefaults is intentionally read/fallback
   // behavior and must not be used as the save gate.
   const safeDefaults = validateCloneDefaultsForWrite(out) as Record<string, unknown>;
-  // W7: cascade only CHANGED fields, so an unrelated edit never reverts a creator's own price, tip rate or toggle. The
-  // follower filter is on the UPDATE, which runs BEFORE the upsert: on either failure the stored template is the old
-  // one and a retry resends the same delta. Known gap (pre-existing): two concurrent saves can race.
+  // W7: cascade only CHANGED fields, so an unrelated edit never reverts a creator's own price, tip rate or toggle. The follower
+  // UPDATE runs BEFORE the upsert: on any failure the template is the old one, a retry resends the delta. Concurrent saves can race.
   const update = changedCascadeFields((await getCloneDefaults()) as Record<string, unknown>, safeDefaults);
   let applied = 0;
   if (Object.keys(update).length) {
@@ -144,9 +144,8 @@ export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollower
   return { appliedFollowers: applied };
 }
 
-// Effective template = the form's fallbacks under the sanitized template. A posted cascade field is written when its
-// effective value differs (sorted-key compare); a changed member pulls in its whole group. Compared object = written object.
-const effective = (t: Record<string, unknown>): Record<string, unknown> => ({ ...CLONE_DEFAULT_FALLBACKS, ...sanitizeCloneDefaults(t) });
+// A posted field cascades when its effective value differs (sorted keys), with its whole group; compared = written.
+const effective = (t: unknown) => effectiveCloneDefaults(t) as Record<string, unknown>;
 const canonical = (v: unknown): string => JSON.stringify(v ?? null, (_k, x) =>
   x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([p], [q]) => p.localeCompare(q))) : x);
 function changedCascadeFields(previous: Record<string, unknown>, next: Record<string, unknown>): Record<string, unknown> {
@@ -165,9 +164,9 @@ function changedCascadeFields(previous: Record<string, unknown>, next: Record<st
 // it (see createCloneRow in app/clones/actions.ts, which reads
 // getCloneDefaults().category_pricing directly).
 // Write a set of config fields (from the same operational allowlist
-// saveCloneDefaults produces) onto one or more EXISTING clone rows. Used by
-// the manual push and by setCloneUsesDefault below (the save-time cascade
-// writes only changed fields). Never touches identity/persona — `out`/`fields` only
+// saveCloneDefaults produces) onto one or more EXISTING clone rows. Shared by
+// the manual "push to selected clones" button (Save writes only changed fields)
+// on the Settings page. Never touches identity/persona — `out`/`fields` only
 // is filtered again at the write boundary, even if stored JSON is stale.
 async function applyConfigToClones(cloneIds: string[], fields: Record<string, unknown>): Promise<void> {
   const update = filterCloneDefaultCascade(fields);
@@ -191,13 +190,12 @@ export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
   }));
 }
 
-// Flip one clone between following the fleet default and running its own custom config. Switching TO default
-// applies the effective template (operational fields and prices, never identity or category pricing) to her at once,
-// before the flag, so later changed-only cascades start from the template's values.
+// Flip one clone between following the fleet default and her own config. Switching TO default writes the effective
+// template (operational fields and prices only) in the same UPDATE as the flag, so later diffs start from it.
 export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean): Promise<void> {
   await guardDashboardAction("app/settings/actions.ts#setCloneUsesDefault", [cloneId, usesDefault]);
-  if (usesDefault) await applyConfigToClones([cloneId], effective((await getCloneDefaults()) as Record<string, unknown>));
-  const { error } = await supabaseAdmin.from("clones").update({ uses_default_config: usesDefault }).eq("id", cloneId);
+  const fields = usesDefault ? filterCloneDefaultCascade(effective(await getCloneDefaults())) : {};
+  const { error } = await supabaseAdmin.from("clones").update({ ...fields, uses_default_config: usesDefault }).eq("id", cloneId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
   revalidatePath("/clones");
@@ -213,7 +211,7 @@ export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
   await guardDashboardAction("app/settings/actions.ts#pushDefaultsToClones", [cloneIds]);
   if (!cloneIds.length) return;
   const defaults = await getCloneDefaults();
-  await applyConfigToClones(cloneIds, defaults as Record<string, unknown>);
+  await applyConfigToClones(cloneIds, effective(defaults));
   revalidatePath("/settings");
   revalidatePath("/clones");
   for (const id of cloneIds) revalidatePath(`/clones/${id}`);

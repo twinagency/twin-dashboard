@@ -137,11 +137,14 @@ export const BUILTIN_CLONE_DEFAULTS: Partial<Clone> = {
 
 export const DEFAULT_SPOIL_OPTIONS = [1000, 2500, 5000, 10000, 25000, 50000, 100000].map((stars) => ({ stars, label: "" }));
 
-// What /settings shows for a key the template lacks (useCloneConfig's `??` values). ONE map, shared by CloneDefaultsForm
-// and the save-time diff in app/settings/actions.ts, so changing an absent key cascades and posting its fallback does not.
+export const DEFAULT_MODELS: Record<(typeof OPERATIONAL_DEFAULT_MODELS)[number], string> = {
+  eleven_model: "eleven_multilingual_v2", text_model: "x-ai/grok-4.20", voice_model: "deepseek/deepseek-v4-pro", vision_model: "qwen/qwen3-vl-235b-a22b-instruct",
+  media_model: "mistralai/mistral-small-3.2-24b-instruct", routing_model: "qwen/qwen3-30b-a3b-instruct-2507", voice_enhance_model: "google/gemini-2.5-flash-lite",
+  photo_reply_model: "qwen/qwen3-vl-32b-instruct",
+};
+// What /settings shows for a key the template lacks (mirrors useCloneConfig's `??`). Only use via effectiveCloneDefaults.
 export const CLONE_DEFAULT_FALLBACKS: Partial<Clone> = {
-  ai_mode: "classic", push_level: "medium", media_caption_mode: "inline", price_guard_mode: "block",
-  silence_fallback_mode: "on", variety_guard: "normal",
+  ai_mode: "classic", push_level: "medium", media_caption_mode: "inline", price_guard_mode: "block", silence_fallback_mode: "on", variety_guard: "normal",
   smart_split: true, photos_enabled: true, video_vision_enabled: true, bundles_enabled: true, voice_enabled: true,
   charge_messages: true, tips_enabled: false, live_captions_enabled: false, thank_you_enabled: true, discounts_enabled: false,
   drip_enabled: true, reactions_enabled: true, message_effects_enabled: true, ai_disclosure: false, smart_paywall_enabled: true,
@@ -151,11 +154,7 @@ export const CLONE_DEFAULT_FALLBACKS: Partial<Clone> = {
   voice_style: 0.25, voice_speed: 0.95, paywall_prime_before: 3, discount_level_light_pct: 34, discount_level_medium_pct: 67,
   discount_level_max_pct: 100, discount_tier_share_none_pct: 50, discount_tier_share_low_pct: 60, discount_tier_share_mid_pct: 75,
   discount_tier_share_high_pct: 90, discount_tier_share_whale_pct: 100, discount_absolute_max_pct: 90, tip_max_stars: 100000,
-  bubble_delay_min_ms: 600, bubble_delay_max_ms: 1400, llm_max_tries: 3, spoil_options: DEFAULT_SPOIL_OPTIONS,
-  eleven_model: "eleven_multilingual_v2", text_model: "x-ai/grok-4.20", voice_model: "deepseek/deepseek-v4-pro",
-  media_model: "mistralai/mistral-small-3.2-24b-instruct", routing_model: "qwen/qwen3-30b-a3b-instruct-2507",
-  voice_enhance_model: "google/gemini-2.5-flash-lite", photo_reply_model: "qwen/qwen3-vl-32b-instruct",
-  vision_model: "qwen/qwen3-vl-235b-a22b-instruct",
+  bubble_delay_min_ms: 600, bubble_delay_max_ms: 1400, llm_max_tries: 3, spoil_options: DEFAULT_SPOIL_OPTIONS, ...DEFAULT_MODELS,
 };
 
 // Fields a follower must receive together: a partial cascade could leave her min above the new max.
@@ -320,15 +319,7 @@ export function sanitizeCloneDefaults(raw: unknown): Partial<Clone> {
   try {
     assertRelationships(clean);
   } catch {
-    delete clean.response_wait_min;
-    delete clean.response_wait_max;
-    delete clean.bubble_delay_min_ms;
-    delete clean.bubble_delay_max_ms;
-    for (const key of [
-      "discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct",
-      "discount_tier_share_none_pct", "discount_tier_share_low_pct", "discount_tier_share_mid_pct",
-      "discount_tier_share_high_pct", "discount_tier_share_whale_pct",
-    ]) delete clean[key];
+    for (const key of CLONE_DEFAULT_GROUPS.flat()) delete clean[key];
     Object.assign(clean, {
       response_wait_min: BUILTIN_CLONE_DEFAULTS.response_wait_min,
       response_wait_max: BUILTIN_CLONE_DEFAULTS.response_wait_max,
@@ -337,6 +328,9 @@ export function sanitizeCloneDefaults(raw: unknown): Partial<Clone> {
 
   return clean as Partial<Clone>;
 }
+
+// The template as /settings shows it and Save, Push and Switch apply it: fallbacks under the sanitized blob.
+export const effectiveCloneDefaults = (raw: unknown): Partial<Clone> => ({ ...CLONE_DEFAULT_FALLBACKS, ...sanitizeCloneDefaults(raw) });
 
 export function filterCloneDefaultCascade(fields: Record<string, unknown>): Record<string, unknown> {
   const update: Record<string, unknown> = {};

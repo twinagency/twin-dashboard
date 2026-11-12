@@ -2,6 +2,7 @@ import CloneDefaultsForm from "@/components/CloneDefaultsForm";
 import CloneDefaultSyncTable from "@/components/CloneDefaultSyncTable";
 import { saveApiKeys, getApiKeyStatus, getCloneDefaults, getModelsInUse, getCloneDefaultStatuses } from "./actions";
 import { API_KEY_FIELDS } from "./fields";
+import { effectiveCloneDefaults } from "@/lib/clone-default-policy";
 import { OPENROUTER_FIELD_NOTES } from "@/lib/openrouter-fields";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const [status, cloneDefaults, modelsInUse, cloneStatuses] = await Promise.all([
     getApiKeyStatus(),
-    getCloneDefaults(),
+    getCloneDefaults().then(effectiveCloneDefaults),
     getModelsInUse(),
     getCloneDefaultStatuses(),
   ]);

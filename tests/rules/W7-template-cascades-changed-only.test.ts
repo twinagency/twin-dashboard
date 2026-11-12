@@ -1,12 +1,6 @@
-// Rule (W7 ui-agencyjoin-plus17 F2, HIGH, money). A /settings template save (saveCloneDefaults, app/settings/actions.ts)
-// used to write EVERY operational column onto every follower, so an unrelated template edit silently replaced a price, tip
-// rate or toggle set on a creator's own page (updateClone, setCloneToggle, /flows). Fix (rwl R1+R2 decisions): the save
-// cascades only the fields whose EFFECTIVE value changed, previous = CLONE_DEFAULT_FALLBACKS (what the form shows for an
-// absent key) under getCloneDefaults(), read before any write. A related group (wait, bubble, discount levels+tiers)
-// cascades whole. The follower UPDATE runs before the template upsert, so a failed save is retried with the same delta.
-// Posting the form's own fallback (tip 0) is a no-op; changing a field absent from the stored template (a brake) cascades.
-// Switching a creator back to Following default applies the effective template at once; pushDefaultsToClones is unchanged.
-// Real action sources transpiled and run against a fake Supabase client (precedent scripts/check-agency-clone-save.ts).
+// Rule (W7 F2, HIGH, money). A /settings template save used to write EVERY operational column onto every follower,
+// replacing a price, tip rate or toggle set on her own page. Now Save cascades only fields whose effective value
+// (effectiveCloneDefaults) changed, whole groups, followers before the template; Switch and Push apply the effective template.
 // Run: nice -n 10 node --import tsx --test tests/rules/W7-template-cascades-changed-only.test.ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -42,22 +36,17 @@ function query(table: string) {
     select: () => q, order: () => q, single: async () => run(), maybeSingle: async () => run(),
     eq: (k: string, v: unknown) => { filters.push(r => r[k] === v); return q; },
     in: (k: string, vs: unknown[]) => { filters.push(r => vs.includes(r[k])); return q; },
-    update: (p: Row) => { op = "update"; payload = p; return q; },
-    upsert: (p: Row) => { op = "upsert"; payload = p; return q; },
+    update: (p: Row) => { op = "update"; payload = p; return q; }, upsert: (p: Row) => { op = "upsert"; payload = p; return q; },
     then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) => { try { return resolve(run()); } catch (e) { return reject(e); } },
   };
   return q;
 }
 
 const deps: Record<string, unknown> = {
-  "@/lib/supabase": { supabaseAdmin: { from: query } },
-  "@/lib/agency-management": { guardDashboardAction: async () => {} },
-  "@/lib/dashboard-access": { getDashboardAccess: async () => null },
-  "@/lib/compiler": { compileClone: async () => {} },
-  "@/lib/query-cache": { invalidateCloneCaches: async () => {} },
-  "next/cache": { revalidatePath: () => {} },
-  "@/lib/intake": { INTAKE_FIELD_KEYS: [], assembleAnswers: () => "" },
-  "@/lib/vibes": { vibePresetFor: () => null },
+  "@/lib/supabase": { supabaseAdmin: { from: query } }, "@/lib/agency-management": { guardDashboardAction: async () => {} },
+  "@/lib/dashboard-access": { getDashboardAccess: async () => null }, "@/lib/compiler": { compileClone: async () => {} },
+  "@/lib/query-cache": { invalidateCloneCaches: async () => {} }, "next/cache": { revalidatePath: () => {} },
+  "@/lib/intake": { INTAKE_FIELD_KEYS: [], assembleAnswers: () => "" }, "@/lib/vibes": { vibePresetFor: () => null },
   "@/lib/clone-default-policy": policy, "@/lib/pricing": pricing, "@/lib/agency-write": agencyWrite,
   "./fields": settingsFields, "./toggle-fields": toggleFields,
 };
@@ -188,14 +177,6 @@ test("C2: a brake absent from the stored template reaches followers when changed
   assert.equal(clones.get(ID)!.push_level, "low");
 });
 
-test("C3: switching a creator back to Following default applies the template to her at once", async () => {
-  await templateSave(0, { credit_pack_price_stars: "350" });
-  clones.set(CUSTOM, { id: CUSTOM, uses_default_config: false, credit_pack_price_stars: 777, personality: "hers" });
-  await (settings.setCloneUsesDefault as unknown as (id: string, v: boolean) => Promise<void>)(CUSTOM, true);
-  const { uses_default_config, credit_pack_price_stars, personality, category_pricing } = clones.get(CUSTOM)!;
-  assert.deepEqual([uses_default_config, credit_pack_price_stars, personality, category_pricing], [true, 350, "hers", undefined]);
-});
-
 test("C4: a changed wait max cascades the whole pair (30/20 case)", async () => {
   await templateSave(0);
   seed(true);
@@ -210,4 +191,23 @@ test("C5: the same spoil menu with a different key order is unchanged", async ()
   cloneWrites = [];
   await templateSave(0, { spoil_options: '[{"label":"x","stars":1000}]' });
   assert.deepEqual(cloneWrites, []);
+});
+
+test("C3: Push and Switch apply the same effective template; Switch is one UPDATE", async () => {
+  await templateSave(0, { credit_pack_price_stars: "350" });
+  for (const id of ["a", "b"]) clones.set(id, { id, uses_default_config: false, push_level: "high", personality: "hers" });
+  cloneWrites = [];
+  await (settings.setCloneUsesDefault as unknown as (id: string, v: boolean) => Promise<void>)("a", true);
+  assert.equal(cloneWrites.length, 1, "no window where she follows the default without its values");
+  await (settings.pushDefaultsToClones as unknown as (ids: string[]) => Promise<void>)(["b"]);
+  const { id: _a, uses_default_config: _ua, ...a } = clones.get("a")!, { id: _b, uses_default_config: _ub, ...b } = clones.get("b")!;
+  assert.deepEqual(a, b);
+  assert.deepEqual([a.push_level, a.credit_pack_price_stars, a.personality, a.category_pricing, clones.get("a")!.uses_default_config],
+    ["medium", 350, "hers", undefined, true], "fallback for an absent key, template price, never identity or category pricing");
+});
+
+test("every operational field has a built-in default or a form fallback", () => {
+  const { OPERATIONAL_DEFAULT_TOGGLES: t, OPERATIONAL_DEFAULT_SELECTS: s, OPERATIONAL_DEFAULT_NUMBERS: n, OPERATIONAL_DEFAULT_JSON: j,
+    OPERATIONAL_DEFAULT_MODELS: m, CLONE_DEFAULT_FALLBACKS: f } = policy;
+  for (const k of [...t, ...s, ...n, ...j, ...m]) assert.ok(k in BUILTIN_CLONE_DEFAULTS || k in f, `${k} has no fallback`);
 });
