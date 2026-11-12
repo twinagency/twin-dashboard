@@ -390,3 +390,6 @@ RED by pick group (file count; a file can hold several findings):
 Removed 108 worktrees (13 fix-*, 95 rwl lanes), all clean, plain `git worktree remove` (no --force). Branches untouched.
 Backup first: `.local-dev/backups/worktree-cleanup-20261112/` = scratch.tgz (273 ignored .scratch files) + branches.bundle (all rwl/*, fix/*; verified).
 Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone clones, not worktrees); fix-sweep, fix-w45, fix-cut, other sessions' worktrees.
+- 2026-11-12 22:3xZ owner: FREQUENT MERGES + FAST FF. Merge each fix when green (premerge + rwl), update-branch onto fresh head, squash. After every merge: `git -C ~/Projects/twinagency/twin-dashboard pull --ff-only` (root on target + clean) else `git fetch origin T:T`; non-ff = stop+report. 2 disjoint worker slots kept busy.
+- In flight: fix-w45 (rwl r1: 1 major /api/dashboard unbounded range + 1 minor), fix-cut (rwl r1: 2 major fleet byTier window-variant + refund blend >1), fix-pay (payments-paging F2+F3), fix-memc (memory-cost agency).
+- DEFERRED → next fix "cut-helper-dedupe": lib/api-public-v2.ts:33-41 netStars + lib/api-public.ts:327-335 pass gross on missing cut (null clone_id); after fix-pay merges.
