@@ -1,5 +1,6 @@
 import { signDashboardMedia } from "./media-signing-cache";
 import { supabaseAdmin } from './supabase';
+import { usesFlirtAgencyWorkspace } from './flirt-overview-routing';
 import { getDashboardAccess } from './dashboard-access';
 import { chartColorForClone, profileImagePathForClone } from './colors';
 import { getOverviewAudience } from './creator-overview';
@@ -7,7 +8,7 @@ import { agencyOverviewPhotos, type AgencyOverviewCrop, type AgencyOverviewPrese
 
 export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
   const access = await getDashboardAccess();
-  if (!access || access.name.trim().toLowerCase() !== 'flirt' || access.id.startsWith('creator:')) {
+  if (!access || !usesFlirtAgencyWorkspace(access.name) || access.id.startsWith('creator:')) {
     throw new Error('Agency overview access denied');
   }
   if (!access.cloneIds.length) return { creators: [], audience: { total: 0 } };

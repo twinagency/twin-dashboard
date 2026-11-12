@@ -6,6 +6,7 @@ import { getCreatorOverview, getOverviewAudience } from "@/lib/creator-overview"
 import { getFleetClones } from "@/lib/query-cache";
 import FlirtSharedOverview, { FlirtFleetOverview } from "@/components/overview/FlirtSharedOverview";
 import CreatorOverview from "@/components/overview/CreatorOverview";
+import { usesFlirtAgencyWorkspace } from "@/lib/flirt-overview-routing";
 import { getAgencyOverview } from "@/lib/agency-overview";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function RevenuePage() {
   const cloneId = await getCloneScope();
   const access = await getDashboardAccess();
-  if (access?.name.trim().toLowerCase() === "flirt" && !access.id.startsWith('creator:')) {
+  if (access && usesFlirtAgencyWorkspace(access.name) && !access.id.startsWith("creator:")) {
     const agency = await getAgencyOverview();
     return <FlirtSharedOverview key={cloneId ?? "all"} cloneId={cloneId} initialAgency={agency} />;
   }

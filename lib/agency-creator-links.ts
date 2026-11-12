@@ -1,7 +1,7 @@
 import type { AgencyIdentity } from "./agency-identity";
 import { getDashboardAccess } from "./dashboard-access";
 import { serviceClientForAccess } from "./supabase-service";
-import { isLiveAccess } from "../deployment/flirt-live-twin.cjs";
+import { isLiveAccess, isScopedLiveAgency } from "../deployment/flirt-live-twin.cjs";
 
 export type CreatorBot = { id: string; name: string; slug: string | null };
 export type CreatorBotLink = { clone_id: string | null; twin_slug: string | null };
@@ -11,7 +11,7 @@ export type CreatorBotOptions = { source: "local" | "twin-live"; clones: Creator
 // the four live Twin bots. Never infer that access from a submitted ID or slug.
 export async function getCreatorBotOptions(intake: AgencyIdentity): Promise<CreatorBotOptions> {
   const dashboard = await getDashboardAccess();
-  const live = dashboard?.id === intake.id && isLiveAccess(dashboard);
+  const live = dashboard?.id === intake.id && (isLiveAccess(dashboard) || isScopedLiveAgency(dashboard));
   const scope = live ? dashboard! : intake;
   if (!scope.cloneIds.length) return { source: live ? "twin-live" : "local", clones: [] };
   const result = await serviceClientForAccess(scope).from("clones")

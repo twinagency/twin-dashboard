@@ -2,7 +2,7 @@ import { getDashboardAccess } from "./dashboard-access";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
 import { cloneExists } from "./query-cache";
-import { FLIRT_OVERVIEW_SCOPE_HEADER, isFlirtOverviewPath } from "./flirt-overview-routing";
+import { FLIRT_OVERVIEW_SCOPE_HEADER, isFlirtOverviewPath, usesFlirtAgencyWorkspace } from "./flirt-overview-routing";
 
 // Single global "which clone am I looking at" selector, shared by every data
 // page (Revenue/Fans/Info/Drip/Media/Logs). "All" = no cookie = null. Picking a
@@ -31,7 +31,7 @@ export const CLONE_SCOPE_COOKIE = "clone_scope";
 export const getCloneScope = cache(async (): Promise<string | null> => {
   const id = (await cookies()).get(CLONE_SCOPE_COOKIE)?.value || null;
   const agency = await getDashboardAccess();
-  if (agency?.name.trim().toLowerCase() === "flirt" && !agency.id.startsWith("creator:")) {
+  if (agency && usesFlirtAgencyWorkspace(agency.name) && !agency.id.startsWith("creator:")) {
     const requestHeaders = await headers();
     if (isFlirtOverviewPath(requestHeaders.get("x-pathname"), agency.name)) {
       const selected = requestHeaders.get(FLIRT_OVERVIEW_SCOPE_HEADER);

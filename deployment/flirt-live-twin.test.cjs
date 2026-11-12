@@ -20,6 +20,23 @@ test('Zoey creator earnings are limited to her own live Telegram bot', () => {
     { ...access, dataSource: undefined },
   ]) assert.equal(live.isLiveData(invalid), false);
 });
+test('Top OnlyFans can access only Johnny and cannot use the Flirt owner connection', () => {
+  const access = {
+    id: live.TOP_ONLYFANS_AGENCY_ID, dataSource: 'twin-live',
+    cloneIds: [live.JOHNNY_COCO_CLONE_ID],
+  };
+  assert.equal(live.isLiveData(access), true);
+  assert.equal(live.isLiveAccess(access), false);
+  assert.equal(live.isScopedLiveCreator(access), false);
+  for (const invalid of [
+    { ...access, dataSource: undefined },
+    { ...access, id: 'another-agency' },
+    { ...access, cloneIds: [] },
+    { ...access, cloneIds: [live.CLONES[0]] },
+    { ...access, cloneIds: [...access.cloneIds, live.CLONES[0]] },
+  ]) assert.equal(live.isLiveData(invalid), false);
+});
+
 test('live access requires the complete verified assignment', () => {
   const access = live.identity();
   assert.deepEqual(access.cloneIds, [

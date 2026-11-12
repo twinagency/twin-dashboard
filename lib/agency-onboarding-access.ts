@@ -1,4 +1,4 @@
-import { isLiveAccess } from "../deployment/flirt-live-twin.cjs";
+import { isLiveAccess, isScopedLiveAgency } from "../deployment/flirt-live-twin.cjs";
 import { getDashboardAccess } from "./dashboard-access";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
@@ -8,7 +8,7 @@ import type { AgencyIdentity } from "./agency-identity";
 // Never send Twin clone IDs into local account linking or invite generation.
 export async function getAgencyOnboardingAccess(): Promise<AgencyIdentity | null> {
   const access = await getDashboardAccess();
-  if (!access || !isLiveAccess(access)) return access;
+  if (!access || (!isLiveAccess(access) && !isScopedLiveAgency(access))) return access;
   const db = serviceClient();
   const [agency, grants] = await Promise.all([
     db.from("partner_agencies").select("id,name").eq("id", access.id).eq("active", true).maybeSingle(),
