@@ -51,7 +51,7 @@ export type Tenant = {
   label: string;
 };
 
-export type TenantFailure = { ok: false; status: 401 | 429; error: string };
+export type TenantFailure = { ok: false; status: 401 | 429 | 503; error: string };
 export type TenantResult = { ok: true; tenant: Tenant } | TenantFailure;
 
 // Same header shapes as the admin API. No query-string key: it would land in
@@ -112,10 +112,21 @@ export function rateLimit(
   return { allowed: cur.count <= limit, remaining: Math.max(0, limit - cur.count), resetAt: cur.resetAt };
 }
 
+// Read-only check, for use BEFORE the key lookup: a key already over its limit
+// is refused without a database round trip. It never inserts, so a key that
+// does not resolve never takes a slot and the map stays bounded by issued keys.
+export function isRateLimited(id: string, now: number, limit = RATE_LIMIT_PER_MINUTE): boolean {
+  const cur = hits.get(id);
+  return !!cur && now < cur.resetAt && cur.count >= limit;
+}
+
 // Test seam: the checks drive rateLimit() directly with an explicit clock, and
 // need to reset between cases.
 export function _resetRateLimits(): void {
   hits.clear();
+}
+export function _rateLimitEntries(): number {
+  return hits.size;
 }
 
 // ── the scope invariant ──────────────────────────────────────────────────────
@@ -156,7 +167,8 @@ export function tenantFromRow(row: {
 // ── the lookup ───────────────────────────────────────────────────────────────
 // Looks a key up by HASH. A revoked key is not found (the partial index is on
 // `revoked_at is null`), so revocation takes effect on the next request with no
-// cache to invalidate.
+// cache to invalidate. A read ERROR throws rather than returning null: an
+// outage is not "this key is invalid", and a 401 tells the client to drop it.
 export async function resolveKey(presented: string | null): Promise<Tenant | null> {
   if (!presented) return null;
   const hash = hashKey(presented);
@@ -167,7 +179,8 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
     .eq("key_hash", hash)
     .is("revoked_at", null)
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) throw new Error("api_keys lookup failed");
+  if (!data) return null;
 
   // The .eq above already matched, so this is belt-and-braces against a future
   // refactor that widens the query (e.g. to prefix matching) and quietly turns
@@ -193,16 +206,26 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
 }
 
 export async function authenticateModel(req: Request, now = Date.now()): Promise<TenantResult> {
-  const tenant = await resolveKey(presentedKey(req.headers));
-  if (!tenant) return { ok: false, status: 401, error: "invalid or revoked API key" };
+  const limited: TenantFailure = {
+    ok: false,
+    status: 429,
+    error: `rate limit exceeded (${RATE_LIMIT_PER_MINUTE} requests/minute)`,
+  };
+  const presented = presentedKey(req.headers);
+  // Limited by the presented key's hash, checked BEFORE the lookup so a key
+  // over its limit costs the database nothing. Counted only after it resolves.
+  const limitId = presented ? hashKey(presented) : null;
+  if (limitId && isRateLimited(limitId, now)) return limited;
 
-  const rl = rateLimit(tenant.keyId, now);
-  if (!rl.allowed) {
-    return {
-      ok: false,
-      status: 429,
-      error: `rate limit exceeded (${RATE_LIMIT_PER_MINUTE} requests/minute)`,
-    };
+  let tenant: Tenant | null;
+  try {
+    tenant = await resolveKey(presented);
+  } catch {
+    // No error detail: it would describe our database to the internet.
+    return { ok: false, status: 503, error: "API key check temporarily unavailable, retry shortly" };
   }
+  if (!tenant || !limitId) return { ok: false, status: 401, error: "invalid or revoked API key" };
+
+  if (!rateLimit(limitId, now).allowed) return limited;
   return { ok: true, tenant };
 }
