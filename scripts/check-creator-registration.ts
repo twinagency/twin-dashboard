@@ -44,7 +44,7 @@ const db = {
 const dependencies: Record<string, any> = {
   "@/lib/creator-email": { exactCaseInsensitiveEmailPattern: (s: string) => s },
   "@/lib/creator-invite-agency": { lookupCreatorInvitation: async () => ({ status: invite, agency: null }) },
-  "@/lib/form-origin": { trustedFormOrigin: (r: Request) => r.headers.get("origin") === "https://test.example", isLynqHost: () => moxyHost },
+  "@/lib/form-origin": { trustedFormOrigin: (r: Request) => r.headers.get("origin") === "https://test.example", isLynqHost: () => moxyHost, trustedMiniAppCreatorSignup: () => false },
   "node:crypto": { randomUUID }, "next/server": { NextResponse },
   "next/headers": { cookies: async () => ({ set: () => { cookieWrites++; }, delete: () => {} }) },
   "@/lib/supabase-service": { serviceClient: () => db },
