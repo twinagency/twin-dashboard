@@ -136,10 +136,10 @@ async function mountEditor(replies: { start: Reply; polls?: Reply[]; cancel?: Re
 }
 const notice = () => q("[data-of-connection-notice]")?.textContent ?? "";
 
-test("start, poll every 2s, done: capture, X-Hash and owner are filled and the live view is gone", async () => {
+test("start, poll every 2s, done: the capture is held by ref, the owner is filled and the live view is gone", async () => {
   const calls = await mountEditor({ start: { body: { ok: true, jobId: JOB, state: "starting", liveViewUrl: LIVE } },
     polls: [{ body: { ok: true, jobId: JOB, state: "waiting_login", liveViewUrl: LIVE } },
-      { body: { ok: true, jobId: JOB, state: "done", liveViewUrl: LIVE, capture, xHash: "synthetic-bb-hash", ownerId: OWNER } }] });
+      { body: { ok: true, jobId: JOB, state: "done", liveViewUrl: LIVE, ownerId: OWNER, captureId: "bbcap_0123456789abcdefghij" } }] });
   await click(q("[data-of-connection-browserbase]"));
   const frame = q<HTMLIFrameElement>("[data-of-connection-browserbase-frame]");
   assert.ok(frame, "live view is embedded");
@@ -154,8 +154,8 @@ test("start, poll every 2s, done: capture, X-Hash and owner are filled and the l
   await settle(2100);
   const polled = calls.filter(c => c.method === "GET" && c.path.includes("/browserbase-login/"));
   assert.equal(polled.length, 2); assert.equal(polled[0].path, `/api/onlyfans-connections/accounts/${ACCOUNT}/browserbase-login/${JOB}`);
-  assert.equal(notice(), "Logged in via Browserbase: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
-  assert.equal(q<HTMLInputElement>("[data-of-connection-hash]")?.value, "synthetic-bb-hash");
+  assert.equal(notice(), "Logged in via Browserbase: session captured and owner filled in. Set the proxy and window if needed, then Save credentials.");
+  assert.equal(q<HTMLInputElement>("[data-of-connection-hash]")?.value, ""); assert.equal(q<HTMLInputElement>("[data-of-connection-hash]")?.disabled, true);
   assert.equal(q<HTMLInputElement>("[data-of-connection-owner]")?.value, String(OWNER));
   assert.equal(q<HTMLButtonElement>("[data-of-connection-save]")?.disabled, false, "Save credentials is enabled");
   assert.equal(q("[data-of-connection-browserbase-frame]"), null, "live view closed after done");

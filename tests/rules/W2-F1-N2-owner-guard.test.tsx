@@ -89,20 +89,21 @@ async function pasteAndApply() {
   await type("[data-of-connection-curl]", `curl 'https://example.invalid/api2/v2/users/me' -H 'synthetic: ${sentinel()}'`);
   await click("[data-of-connection-curl-apply]");
 }
-const conversion = (owner: number) => ({ schemaVersion: SCHEMA, ok: true, capture: capture(owner), xHash: sentinel("xh"), ownerId: owner });
+const REF = `ref_${sentinel("cap").replace(/-/g, "_")}`;
+const conversion = (owner: number) => ({ schemaVersion: SCHEMA, ok: true, capture: capture(owner), xHash: sentinel("xh"), ownerId: owner, captureId: REF });
 const curlCalls = (calls: Call[]) => calls.filter(c => c.method === "POST" && c.path === `${ENDPOINT}/capture-from-curl`);
 const pollCalls = (calls: Call[]) => calls.filter(c => c.method === "GET" && c.path.startsWith(`${ENDPOINT}/browserbase-login/`));
 const waiting = (job: string) => json({ schemaVersion: SCHEMA, ok: true, jobId: job, state: "waiting_login", liveViewUrl: LIVE });
 
 // ── F1: pasted curl ──
-test("control: a curl for the recorded owner fills owner and X-Hash and enables Save", async () => {
+test("control: a curl for the recorded owner fills the owner, holds the capture by ref (X-Hash disabled) and enables Save", async () => {
   const reply = conversion(111);
   const calls = await mount({ ownerId: "111", curl: json(reply) });
   await pasteAndApply();
   assert.equal(curlCalls(calls).length, 1, "one conversion POST");
   assert.deepEqual(Object.keys(JSON.parse(curlCalls(calls)[0].body!)), ["curl"]);
   assert.equal(q("[data-of-connection-owner]")?.value, "111");
-  assert.equal(q("[data-of-connection-hash]")?.value, reply.xHash);
+  assert.equal(q("[data-of-connection-hash]")?.value, ""); assert.equal(q("[data-of-connection-hash]")?.disabled, true);
   assert.equal(saveDisabled(), false, "capture accepted, Save enabled");
 });
 
@@ -141,7 +142,7 @@ test("F1: on an unbound account with owner 111 typed in, a curl that converts to
 // ── N2: Browserbase done job ──
 test("control N2: a done job for the recorded owner reaches done, fills the owner and enables Save", async () => {
   const job = jobId();
-  const calls = await mount({ ownerId: "111", start: waiting(job), polls: [json({ schemaVersion: SCHEMA, ...doneJob(job, 111) })] });
+  const calls = await mount({ ownerId: "111", start: waiting(job), polls: [json({ schemaVersion: SCHEMA, ...doneJob(job, 111), captureId: REF })] });
   await click("[data-of-connection-browserbase]");
   await tick();
   assert.equal(pollCalls(calls).length, 1);
@@ -152,7 +153,7 @@ test("control N2: a done job for the recorded owner reaches done, fills the owne
 
 test("N2: a done job for another OnlyFans owner (222) leaves the recorded owner 111 and Save disabled", async () => {
   const job = jobId();
-  const calls = await mount({ ownerId: "111", start: waiting(job), polls: [json({ schemaVersion: SCHEMA, ...doneJob(job, 222) })] });
+  const calls = await mount({ ownerId: "111", start: waiting(job), polls: [json({ schemaVersion: SCHEMA, ...doneJob(job, 222), captureId: REF })] });
   await click("[data-of-connection-browserbase]");
   await tick();
   assert.equal(pollCalls(calls).length, 1, "harness reached the done poll");

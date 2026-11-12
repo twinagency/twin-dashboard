@@ -21,6 +21,8 @@ export type ConnectionRequest = { expectedRevision: number } & (
   { action: "activate"; payload: { limitUnits: number; throttleSeconds: number; mediaEnabled: boolean; automateNewConversations?: boolean } } |
   { action: "verify" | "pause"; payload: Record<string, never> }
 );
+/** A save naming a capture held server-side (capture-store.ts) instead of carrying it; the route swaps capture + xHash in. */
+export type ConnectionRefSave = { action: "save"; expectedRevision: number; payload: Omit<ConnectionSave, "capture" | "xHash"> & { captureRef: string } };
 export type ConnectionRegistration = { creatorId: string; ownerId: number; handle: string };
 export type ConnectionEnrollment = { id: string; status: "pending" | "checking" | "accepted" | "failed" | "expired"; accountId: string | null; error: string | null; expiresAt: string };
 export type ConnectionEnrollmentRequest = { creatorId: string; creatorName: string; handle: string; initialProxyUrl?: string | null; session: Pick<ConnectionSave,"ownerId"|"capture"|"xHash"|"expiresAt"> | import("@/lib/creator-platforms/browser-connection").BrowserSession };
@@ -57,6 +59,8 @@ export function connectionCapture(value: unknown, ownerId: number): value is Rec
   }
   try { return cookieBytes <= 16386 && new TextEncoder().encode(JSON.stringify(value)).length <= 98_304; } catch { return false; }
 }
+/** A handle minted by the capture routes (24 random bytes, base64url). */
+export const connectionCaptureRef = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_-]{22,128}$/.test(value);
 export function validConnectionRequest(value: unknown): value is ConnectionRequest {
   if (!object(value) || !exact(value, ["action", "payload", "expectedRevision"]) || !integer(value.expectedRevision, 0, 2 ** 31 - 2) || !object(value.payload)) return false;
   const p = value.payload;
@@ -67,7 +71,15 @@ export function validConnectionRequest(value: unknown): value is ConnectionReque
   const sessionOnly = value.action === "session";
   if (!["save", "session"].includes(value.action as string) || !exact(p, sessionOnly ? ["ownerId", "capture", "xHash", "expiresAt"] : ["ownerId", "capture", "xHash", "proxyUrl", "expiresAt", "model"]) || !integer(p.ownerId, 1) ||
     !connectionCapture(p.capture, p.ownerId) || !header(p.xHash) || !stamp(p.expiresAt)) return false;
-  if (sessionOnly) return true;
+  return sessionOnly || validSaveRest(p);
+}
+export function validConnectionRefSave(value: unknown): value is ConnectionRefSave {
+  if (!object(value) || !exact(value, ["action", "payload", "expectedRevision"]) || value.action !== "save" || !integer(value.expectedRevision, 0, 2 ** 31 - 2) || !object(value.payload)) return false;
+  const p = value.payload;
+  return exact(p, ["ownerId", "captureRef", "proxyUrl", "expiresAt", "model"]) && integer(p.ownerId, 1) && connectionCaptureRef(p.captureRef) && stamp(p.expiresAt) && validSaveRest(p);
+}
+/** proxyUrl and model, shared by both save shapes. */
+function validSaveRest(p: Record<string, unknown>): boolean {
   if (p.proxyUrl !== null) {
     if (!header(p.proxyUrl)) return false;
     try { const proxy = new URL(p.proxyUrl); const port = /:([0-9]+)\/?$/.exec(p.proxyUrl)?.[1];
@@ -114,7 +126,7 @@ export function parseConnection(value: unknown, accountId: string): Connection |
     !integer(c.policyRevision) || !integer(c.usedUnits) || !integer(c.limitUnits) || (c.outgoingEnabled && (c.status !== "verified" || c.verifiedAt === null || c.expiresAt === null))) return null;
   return c as Connection;
 }
-export function parseConnectionAck(value: unknown, expected: ConnectionRequest & { accountId: string; commandKey?: string }): ConnectionAck | null {
+export function parseConnectionAck(value: unknown, expected: { action: ConnectionRequest["action"]; expectedRevision: number; accountId: string; commandKey?: string }): ConnectionAck | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "applied", "accountId", "commandKey", "recordedRevision", "action"]) || value.schemaVersion !== CONNECTION_SCHEMA ||
     value.ok !== true || value.applied !== true || value.accountId !== expected.accountId || value.action !== expected.action || !hash(value.commandKey) ||
     value.recordedRevision !== expected.expectedRevision + 1 || (expected.commandKey !== undefined && value.commandKey !== expected.commandKey)) return null;
