@@ -53,9 +53,9 @@ krs=(tests/known-red/*.test.*)
 for kr in ${krs[@]+"${krs[@]}"}; do
   n=$(basename "$kr" | cut -d. -f1); flags=(--import tsx --test)
   grep -q 'mock\.module' "$kr" && flags+=(--experimental-test-module-mocks)
-  if ! clean node "${flags[@]}" --test-name-pattern='^control' "$kr" >"$LOG/kr-$n-control.log" 2>&1; then
+  if ! clean node "${flags[@]}" --test-name-pattern='(^|: )control:' "$kr" >"$LOG/kr-$n-control.log" 2>&1; then
     bad "known-red $n harness broken: control failed (log $LOG/kr-$n-control.log)"
-  elif clean node "${flags[@]}" --test-skip-pattern='^control' "$kr" >"$LOG/kr-$n.log" 2>&1; then
+  elif clean node "${flags[@]}" --test-skip-pattern='(^|: )control:' "$kr" >"$LOG/kr-$n.log" 2>&1; then
     bad "known-red $n now GREEN: promote it to tests/rules"
   elif grep -q ERR_ASSERTION "$LOG/kr-$n.log"; then
     pass "known-red $n still red on an assertion"
