@@ -1,5 +1,22 @@
 # Dashboard FIX-QUEUE (fix-orchestrator, 2026-11-12)
 
+## RE-SORT 2026-11-13 (THROUGHPUT PLAN, triage on Flash, approved by Opus)
+Source: DeepSeek Flash triage @c9966fd8, full per-file table in `docs/fix/TRIAGE-FLASH.md` (measured: 303 run, 286 RED, 15 GREEN, 2 CRASH). Opus spot-check 5/5 rows reproduce (core-recent-history-blast GREEN #364; plan-c-client-non2xx-success, fans-min-spent, users-search-wildcard, moxy-route RED with the quoted assertions; measured).
+Opus corrections to Flash buckets: Flash had blk=0, but the lane findings tag these blockers: G01 PlanCConsole STOP/approve (preview-plan-c-status-ui B2-B4), G47 engine-status "mark completed" = purchase claim (B1), G48 server-only/token reach client (plan-c D3), G45 CI typecheck/suite wiring (harness-config F1), G44b moxy hardcoded creators + hides engagement (preview-shell-launch P1/P2) → all blk. G43 split: moxy-route projection/duplicate keys are dashboard-side → maj (G43a); only the relay commandKey contract stays relay-deferred (G43b). users-search-wildcard is maj by itself (unbounded scan), but its group G36 stays sec-money-maj.
+
+**Counts (files/groups): blk 27/5 · sec-money-maj 196/32 · maj 50/9 · minor 11/4 · relay-deferred 1/1 · fixed-by-team 0 · fixed-by-us 12 · GREEN-n/a 3 · CRASH 2 · in-flight 1 (W7).**
+
+### Order (one PR per root cause, ≤300 LOC; 2 slots, disjoint files)
+- slot 1: F0 check.sh (in flight) → then queue head. slot 2: W7 cascade (in flight) → then queue head.
+1. blk: G01 PlanCConsole STOP/approve gating (9) · G47 engine-status/client outcome labels (8) · G48 server-only/secret bundles (4) · G44b moxy hardcoded creators + hidden engagement (2) · G45 CI typecheck/suites (4, after F0: package.json overlap).
+2. sec-money-maj, Flash order: G02 D7 acks (15) · G05 actor scope (12) · G04 commandKey stability (8) · G18 AI approve/write (10) · G19 business/health routes (8) · G30 migrations RPC grants · G16 admin money routes · G24 · G25 · G26 · G27 · G28 · G29 · G35 · G36 · G38 · G39 · G40 · G41 · G42 · G46 · G12 · G21 · G22 · G23 · G31 · G32 · G33 · G15 · G20 · G09 · G14.
+3. maj: G06 native envelope (11) · G07 · G34 · G03 · G08 · G17 · G37 · G13 · G43a moxy-route projection.
+4. minor batches: P-M1 (G10+G11) · P-M2 (G44 rest) · P-M3 (G49 test-only fixture update).
+5. relay-deferred "before relay re-enable": G43b moxy relay commandKey.
+Disjoint pairs: G01 ∥ G47 (PlanCConsole vs engine-status; verify at pick), then G48 ∥ G44b, then Flash's G02 ∥ G06, G18 ∥ G05.
+
+## Step-0 sweep 2026-11-12 (superseded by RE-SORT above; kept for history)
+
 Step 0 dedupe sweep (measured): worktree off origin/claude/commercial-dashboard-r2-20261111 **e1744a90**, all known-red files from jaka/w1..w7-close + rwl/W* lane branches (321 files, 303 runnable `*.test.*`) + 134 test-support files. Runner = init.sh logic (control passes, rest fails on ERR_ASSERTION, 240 s cap); mock.module files re-run with `--experimental-test-module-mocks` (all still RED).
 
 **Counts: 303 run · RED 298 (fix queue) · fixed-by-team 0 · GREEN-but-n/a 3 · env-crash 2.**
@@ -24,7 +41,7 @@ RED by pick group (file count; a file can hold several findings):
 | 6 gates | 14 |
 | 9 other (not in picks 1-6 / W7-W8) | 118 |
 
-## Queue order (serial, one fix worker)
+## Queue order (serial, one fix worker) [SUPERSEDED 2026-11-13]
 1. PR-0 gates: `scripts/premerge.sh` + `test:offline` repair (W2c N18 = W1 10 F2).
 2. PR-1 own: W2 F1 + W2c N2 owner guard (ConnectionEditor, client).
 3. PR-2 own: additive `captureRef` on save + `captureId` in curl/bb replies (server-side handle store).
