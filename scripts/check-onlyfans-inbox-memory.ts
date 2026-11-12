@@ -4,7 +4,7 @@ import { clearInboxViewMemory, recallFilters, recallScroll, recallSelected, reme
 
 // Everyday pages come first, in working order; technical controls sit under Settings.
 const nav = ONLYFANS_CHANNEL.nav;
-assert.deepEqual(nav.filter(item => !item.group).map(item => item.label), ["Today", "Inbox", "Creators", "Content", "Earnings", "Campaigns"]);
+assert.deepEqual(nav.filter(item => !item.group).map(item => item.label), ["Today", "Inbox", "Creators", "Content", "Revenue", "Earnings", "Campaigns"]); // Revenue: 44bd819d (#344)
 assert.deepEqual(nav.filter(item => item.group === "settings").map(item => item.label), ["Settings", "Launch control", "Operations"]);
 assert.ok(nav.findIndex(item => item.group === "settings") > nav.findIndex(item => item.label === "Campaigns"), "settings group comes last");
 assert.deepEqual(nav.filter(item => item.combined).map(item => item.label), ["Today"], "only Today is an every-creator page");

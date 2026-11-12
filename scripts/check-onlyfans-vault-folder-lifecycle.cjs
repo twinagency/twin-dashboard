@@ -37,7 +37,7 @@ const dependencies = {
   './VaultAssetPreview': { default: ({ mediaId }) => element('span', { 'data-preview': mediaId }, `Preview ${mediaId}`), __esModule: true },
   './VaultMediaPicker.module.css': { default: {}, __esModule: true },
 };
-for (const name of ['ContentEditor', 'VaultMetadataEditor', 'VaultUploader', 'ContentSyncSave', 'VaultMediaPicker'])
+for (const name of ['ContentEditor', 'CategoryDrafts', 'Preparation', 'VaultMetadataEditor', 'VaultUploader', 'ContentSyncSave', 'VaultMediaPicker'])
   dependencies['./' + name] = { default: () => null, __esModule: true };
 function load(name) {
   const source = fs.readFileSync(path.join(process.env.VAULT_COMPONENT_ROOT || 'components/onlyfans-preview', name + '.tsx'), 'utf8');
