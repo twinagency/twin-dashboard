@@ -350,3 +350,6 @@ RED by pick group (file count; a file can hold several findings):
 ## Status log
 - 2026-11-12 PR-0 W2c N18 (test:offline + premerge.sh) → #355 → merged 6ca978ae. Local proof: premerge PASS 150s (measured). CI billing-locked. Deferred: storage-transport 384MB flake; lint n/a (no eslint).
 - 2026-11-12 PR-1 W2 F1 + W2c N2 (owner guard, client) → #356 → merged 4060a7cf. Rule test red 3/7 → green 7/7; premerge PASS; codex solo NONE (measured). Live UI check pending batch.
+- 2026-11-12 gate: storage-transport RSS cap 384→480 MiB → #357 → merged 25574602. 3/3 standalone pass, peaks 302-401 MB (measured).
+- 2026-11-12 test harness (W2c route harness, tests only) → #358 → merged 8681b237. premerge PASS.
+- 2026-11-12 PR-2 W2c N1 part 2/3 (server capture handle, captureRef on save) → #359 → merged 0801deb2. rules 12/12; 6 plants red; rwl full r1 + delta + codex final NONE (measured).

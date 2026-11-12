@@ -10,3 +10,8 @@ Target: origin/claude/commercial-dashboard-r2-20261111 (e1744a90 at start). step
 - premerge runs test:offline/api/public always (path gating skipped shared code); refuses dirty tree; requires a `control:` ok line.
 - Rejected: env-prefix covers only first && cmd (measured: second cmds pass unmapped).
 - Deferred: per-test known-red granularity, hardcoded default base (PREMERGE_BASE overrides), storage-transport RSS flake (owner call).
+
+## D5 (2026-11-12) PR-2 shape
+- storage-only capture-store; swap private to save route (route.ts import would drag server-only into 7 routes + scripts).
+- captureRef: action save only ("session" = creator self-connect, out of scope); owner mismatch = plain validation 400 (no 409 code).
+- Harness split to #358 to keep PR-2 ≤300 LOC. Storage-transport cap raised (#357): flake blocked premerge 3/5.
