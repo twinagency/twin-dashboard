@@ -1,4 +1,4 @@
-import { BOUNDED_CODE, parseRecentHistory, type RecentHistory } from "./recent-history";
+import { parseRecentHistory, type RecentHistory } from "./recent-history";
 /** Public account connection contract. Credentials are write-only. */
 export const CONNECTION_SCHEMA = "of-connections.v1";
 export const CONNECTION_HEADER = "X-OnlyFans-Connection-Version";
@@ -102,7 +102,7 @@ export function parseConnectionSync(value: unknown): ConnectionSync | null {
 export function parseConnectionRunner(value: unknown): ConnectionRunner | null {
   if (!object(value) || !exact(value, ["state", "reason", "observedAt", "stale", "restarts"])
     || !["running", "held", "restarting", "stopping", "not_supervised", "unknown"].includes(String(value.state))
-    || !(value.reason === null || (typeof value.reason === "string" && BOUNDED_CODE.test(value.reason)))
+    || !(value.reason === null || (typeof value.reason === "string" && /^[A-Za-z0-9:_.-]{1,80}$/.test(value.reason)))
     || !(value.observedAt === null || stamp(value.observedAt)) || typeof value.stale !== "boolean"
     || !(value.restarts === null || integer(value.restarts, 0, 999_999_999))) return null;
   return value as ConnectionRunner;
