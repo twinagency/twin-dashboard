@@ -10,10 +10,10 @@ import "../support/admin-route-env";
  *     nextCursor was null while 500 more payments existed.
  * rwl r1/r2 (/tmp/pay-findings.md): (a) every limit = dedupeStarRows(own clone's rows), ids and sum, incl. a >50-row
  *     group, another clone's rows interleaved; (b) empty page only with nextCursor null; (c) = F3; (d) dedupe rule only
- *     in lib/star-dedupe.ts; (e) bad cursor row fails closed; oversize group fails closed; short last page = one read;
- *     >1000 fans on a page all named.
+ *     in lib/star-dedupe.ts; (e) a TON id (`+`, `/`) ends a page and old {t, i} cursors still page (codex final);
+ *     oversize group fails closed; short last page = one read; >1000 fans on a page all named.
  * ASSUMPTIONS in the fake below: max_rows = 1000 (Supabase default; the live setting is unmeasured); `id` sorts
- * bytewise (C collation); only the filters, `or` keyset shape and order publicPayments sends are modelled, anything
+ * bytewise (C collation); only the filters and order publicPayments sends are modelled (no `or`), anything
  * else throws. No cut configured, so stars are gross; the route/auth layer is not exercised.
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/W4-payments-paging.test.ts
  */
@@ -35,20 +35,13 @@ const cmp = (col: string, a: unknown, b: string) =>
   : col === "amount_stars" ? Number(a) - Number(b)
   : String(a) < b ? -1 : String(a) > b ? 1 : 0;
 const OPS: Partial<Record<string, (c: number) => boolean>> = { eq: (c) => c === 0, lt: (c) => c < 0, lte: (c) => c <= 0, gt: (c) => c > 0, gte: (c) => c >= 0 };
-const KEYSET = /^\(paid_at\.lt\.([^,]+),and\(paid_at\.eq\.([^,]+),id\.lt\.([^)]+)\)\)$/;
 
-/** star_transactions as PostgREST answers publicPayments: filters, keyset `or`, paid_at/id desc, limit capped at max_rows. */
+/** star_transactions as PostgREST answers publicPayments: plain filters, paid_at/id desc, limit capped at max_rows. */
 function serveStx(c: WireCall) {
   let rows = stx;
   for (const [k, v] of c.url.searchParams) {
     if (k === "select" || k === "limit") continue;
     if (k === "order") { assert.equal(v, "paid_at.desc,id.desc", "unmodelled order"); continue; }
-    if (k === "or") {
-      const m = KEYSET.exec(v);
-      assert.ok(m, `unmodelled or=${v}`);
-      rows = rows.filter((r) => cmp("paid_at", r.paid_at, m[1]) < 0 || (cmp("paid_at", r.paid_at, m[2]) === 0 && cmp("id", r.id, m[3]) < 0));
-      continue;
-    }
     const dot = v.indexOf(".");
     const op = OPS[v.slice(0, dot)];
     assert.ok(op && ["clone_id", "paid_at", "amount_stars", "id"].includes(k), `unmodelled filter ${k}=${v}`);
@@ -107,6 +100,8 @@ async function pageAll(limit: number) {
 const T = "2026-11-10T10:00:00.000Z";
 const DUPES = [pay("dup-a1", T), pay("dup-a2", T)];
 const MIXED = [pay("new", "2026-11-10T11:00:00.000Z", 7, 30), pay("dup-b1", T), pay("dup-b2", T, 9, 50), pay("dup-b3", T), pay("old", "2026-11-09T00:00:00.000Z", 8, 20)];
+// A TON payment's id embeds an external tx hash, which can hold `+`, `/` and `=`.
+const TON = [MIXED[0], pay("ton:ab+/cd=", T, 11, 40), MIXED[4]];
 
 // 1500 distinct payments one minute apart inside the window, newest first.
 const MANY = Array.from({ length: 1500 }, (_, i) =>
@@ -141,7 +136,7 @@ const elsewhere = (rows: Row[]) => [...rows, { ...pay("o-last", "2026-11-08T00:0
 const dbOrder = (rows: Row[]) => [...rows].sort((a, b) => cmp("paid_at", b.paid_at, String(a.paid_at)) || cmp("id", b.id, String(a.id)));
 
 test("(a) every limit returns exactly dedupeStarRows(all rows), ids and sum, incl. a >50-row same-paid_at group", async () => {
-  for (const set of [DUPES, MIXED, BIG]) {
+  for (const set of [DUPES, MIXED, BIG, TON]) {
     stx = [...set, ...elsewhere(set)];
     const want = dedupeStarRows(dbOrder(set) as never[]) as unknown as Row[];
     const wantSum = want.reduce((a, r) => a + Number(r.amount_stars), 0);
@@ -165,10 +160,14 @@ test("fail closed: a same-paid_at group the boundary read cannot hold whole is r
   await assert.rejects(publicPayments(CLONE, query(1)));
 });
 
-test("(e) a page ending on a row whose id cannot be a cursor fails closed instead of minting it", async () => {
-  stx = [pay("x),clone_id.neq.0,(y", T), pay("old", "2026-11-09T00:00:00.000Z", 8, 20)];
-  await assert.rejects(publicPayments(CLONE, query(1)), /cursor/);
-  for (const c of wire.calls("GET /rest/v1/star_transactions")) assert.ok(!c.url.searchParams.has("or"), "the id reached an or= filter");
+test("(e) a page ending on a TON id pages on by paid_at alone; an old {t, i} cursor still works", async () => {
+  stx = TON;
+  const p = await publicPayments(CLONE, query(2));
+  assert.deepEqual([p.payments.map((x) => x.id), !!p.nextCursor], [["new", "ton:ab+/cd="], true]);
+  const old = Buffer.from(JSON.stringify({ t: T, i: "dup-b2" })).toString("base64url");
+  const next = await publicPayments(CLONE, query(1, old));
+  assert.deepEqual([next.payments.map((x) => x.id), next.nextCursor], [["old"], null]);
+  for (const c of wire.calls("GET /rest/v1/star_transactions")) assert.ok(!c.url.searchParams.getAll("id").some((v) => v.includes("dup-b2")), "a cursor id reached a filter");
 });
 
 test("a short last page costs one star_transactions read", async () => {

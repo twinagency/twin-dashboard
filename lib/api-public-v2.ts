@@ -28,7 +28,7 @@ import { STAR_USD } from "./money";
 import { resolveCloneCuts } from "./revenue-projection";
 import { applyCut, applyStackedCut } from "./platform-cut";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
-import { cursorAt, encodeCursor, type PaymentCursor, type PaymentQuery } from "./api-public-query";
+import { cursorAt, encodeCursor, type PaymentQuery } from "./api-public-query";
 
 type Cuts = { platformPct: number; agencyCreatorPct: number };
 type Mode = "clone" | "fleet";
@@ -85,8 +85,6 @@ type RawPayment = {
 // page is dedupeStarRows over the window, and pages sum to /revenue (W4 F2).
 // A group bigger than this is refused rather than split.
 const GROUP_ROWS = PAGE;
-/** Keyset: strictly after (t, i) in paid_at desc, id desc order. */
-const after = (c: PaymentCursor) => `paid_at.lt.${c.t},and(paid_at.eq.${c.t},id.lt.${c.i})`;
 
 /** star_transactions in this key's scope, window and filters; every read below starts here. */
 function scopedPayments(cloneId: string | null, q: PaymentQuery, limit: number) {
@@ -109,10 +107,11 @@ async function rowsOf(query: PromiseLike<{ data: unknown; error: { message: stri
 async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
   // Read `limit` rows, not limit+1: asking for one extra to spot a next page broke at the
   // max, where PostgREST max_rows (1000) silently drops the extra row (W4 F3).
-  // Keyset pagination: strictly older than the last row handed out, a cursor
-  // decodeCursor re-validated. The reads past the page use plain eq/lt filters.
+  // Keyset pagination on paid_at alone: the previous page ended on a whole
+  // group, so this one is everything strictly older. No id reaches a filter
+  // from a cursor (a TON id can hold `+` and `/`), and every read is plain eq/lt.
   const head = scopedPayments(cloneId, q, q.limit);
-  const page = await rowsOf(q.cursor ? head.or(after(q.cursor)) : head);
+  const page = await rowsOf(q.cursor ? head.lt("paid_at", q.cursor.t) : head);
   let hasMore = false;
   // A short page is the end of the window (max_rows >= 1000 >= limit, as
   // selectAllRows assumes). A full one reads the rest of its last paid_at
@@ -125,8 +124,8 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
     hasMore = (await rowsOf(scopedPayments(cloneId, q, 1).lt("paid_at", t))).length > 0;
   }
   const last = page[page.length - 1];
-  const cursor = hasMore ? cursorAt(last.paid_at, String(last.id)) : null;
-  if (hasMore && !cursor) throw new Error(`payments: row ${String(last.id)} cannot be a page cursor`);
+  const cursor = hasMore ? cursorAt(last.paid_at) : null;
+  if (hasMore && !cursor) throw new Error(`payments: paid_at ${String(last.paid_at)} cannot be a page cursor`);
   // Duplicate payments from the 2026-09 bot bug are collapsed here for the same
   // reason they are collapsed in the revenue number, so the two agree.
   const rows = dedupeStarRows(page);
