@@ -17,6 +17,7 @@ import {
   hash,
   memoryField,
   object,
+  parseCorrectionAck,
   parseEngagementAction,
   parseEngagementPage,
   parseEngagementSettings,
@@ -160,9 +161,9 @@ export async function memoryFan(
     commandKey: identity(actor, g.accountId, `${base}/corrections`, body),
   });
   if (!r.ok) return fail(r);
-  const c = r.data.correction;
-  return object(c) && count(c.revision) && typeof c.replayed === "boolean"
-    ? bAnswer({ ok: true, accountId: g.accountId, fanId: fan, correction: c })
+  const correction = parseCorrectionAck(r.data.correction);
+  return correction
+    ? bAnswer({ ok: true, accountId: g.accountId, fanId: fan, correction })
     : bAnswer(
         {
           ok: false,

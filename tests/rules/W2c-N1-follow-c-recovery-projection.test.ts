@@ -2,7 +2,8 @@
 // in lib/onlyfans/launch/native.ts validated known fields, then returned the RAW upstream object (`v as RecoveryProgress`, with a
 // `[key: string]: unknown` index signature), so the memory BFF routes forwarded every unknown key, including raw `recentHistory`
 // with extra cost figures, to BMemoryPanel. Each parser must build a new object naming every field; recentHistory is only ever
-// parseRecentHistory's projection, and an invalid one drops only itself. Pure parser tests, no I/O.
+// parseRecentHistory's projection, and an invalid one drops only itself. A fact's optional source fields are kept only when valid
+// (else dropped, never refused), and the correction PATCH forwards only the ack fields the client reads. Pure parser tests, no I/O.
 // Run: nice -n 10 node --import tsx --test tests/rules/W2c-N1-follow-c-recovery-projection.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -29,7 +30,7 @@ const fanRow = () => ({ fanId: FAN, displayName: "Fan", username: null, storedMe
 const fanPage = () => ({ memoryVersion: "of-history-memory.v1", fans: [fanRow()], nextCursor: "binding.cursor-1" });
 const parsedPage = () => ({ fans: [fanRow()], nextCursor: "binding.cursor-1" });
 
-test("control: the fixtures are valid and parse on base", () => {
+test("control: valid fixtures round-trip through every parser unchanged", () => {
   assert.deepEqual(parseRecoveryProgress(recovery(FAN), ACCOUNT, FAN), recovery(FAN));
   assert.deepEqual(parseRecoveryProgress({ ...recovery(), recentHistory: RECENT }, ACCOUNT)?.recentHistory, RECENT);
   assert.deepEqual(parseMemoryProgress(progress()), progress());
@@ -82,4 +83,20 @@ test("parseMemoryFanPage drops unknown keys on every fan row and archive", () =>
   const r = parseMemoryFanPage({ ...fanPage(), ...LEAK, fans: [{ ...f, ...LEAK, archive: { ...f.archive, ...LEAK } }] });
   assert.deepEqual(leaks(r), []); assert.deepEqual(r, parsedPage());
   assert.equal(parseMemoryFanPage({ ...fanPage(), fans: [{ ...f, processedMessages: 121 }] }), null);
+});
+
+test("parseNativeMemory: a non-history fact keeps only valid optional fields, invalid ones dropped not refused", () => {
+  const m = memory();
+  const junk = { value: "Golf", source: "operator", revision: -1, sourceMessageId: "abc", sourceAt: "not a date", quote: "q".repeat(10000), sourceDigest: "zz" };
+  const r = parseNativeMemory({ ...m, facts: { ...m.facts, hobbies: junk } });
+  assert.deepEqual(r?.facts.hobbies, { value: "Golf", source: "operator" }, "invalid optional fields dropped, memory not refused");
+  assert.equal(parseNativeMemory({ ...m, facts: { home_city: { ...m.facts.home_city, quote: "q".repeat(1001) } } }), null, "history evidence still required");
+});
+
+test("correction ack: only revision and replayed are forwarded", async () => {
+  const { parseCorrectionAck } = await import("../../lib/onlyfans/launch/native") as { parseCorrectionAck?: (v: unknown) => unknown };
+  assert.equal(typeof parseCorrectionAck, "function", "the PATCH route needs a by-name ack projection");
+  const ack = parseCorrectionAck!({ revision: 3, replayed: false, ...LEAK });
+  assert.deepEqual(leaks(ack), []); assert.deepEqual(ack, { revision: 3, replayed: false });
+  assert.equal(parseCorrectionAck!({ revision: -1, replayed: false }), null); assert.equal(parseCorrectionAck!({ revision: 3 }), null);
 });

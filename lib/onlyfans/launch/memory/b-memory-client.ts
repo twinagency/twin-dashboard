@@ -1,6 +1,6 @@
 /** Browser transport for the validated, current-binding native memory BFF. */
 import { B_CONTRACT_SCHEMA, bFetch, bId, type BReply } from "../b-common";
-import { count, decimalId, hash, memoryField, object, parseMemoryFanPage, parseMemoryProgress, parseNativeMemory, parseRecoveryProgress,
+import { decimalId, hash, memoryField, object, parseCorrectionAck, parseMemoryFanPage, parseMemoryProgress, parseNativeMemory, parseRecoveryProgress,
   type MemoryFanPage, type MemoryField, type MemoryProgress, type NativeMemory, type RecoveryProgress } from "../native";
 
 const enc = encodeURIComponent;
@@ -54,8 +54,8 @@ export async function correctFact(accountId: string, fanId: string, correction: 
   const r = await bFetch(fanBase(accountId, fanId), { method: "PATCH", body: correction, signal });
   if (r.kind !== "ok") return r as BReply<CorrectionAck>;
   const v = r.data;
-  return object(v) && v.schemaVersion === B_CONTRACT_SCHEMA && v.ok === true && v.accountId === accountId && v.fanId === fanId && object(v.correction) && count(v.correction.revision) && typeof v.correction.replayed === "boolean" ?
-    { kind: "ok", data: { revision: v.correction.revision, replayed: v.correction.replayed } } :
+  const ack = object(v) && v.schemaVersion === B_CONTRACT_SCHEMA && v.ok === true && v.accountId === accountId && v.fanId === fanId ? parseCorrectionAck(v.correction) : null;
+  return ack ? { kind: "ok", data: ack } :
     { kind: "unconfirmed", error: "The correction acknowledgement did not match. Read current memory or retry the identical correction." };
 }
 /** This acknowledges scheduling only. Progress must be read separately. */
