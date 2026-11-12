@@ -1,6 +1,7 @@
 import { createBackendTransport, configuredBackendPurpose } from "@/lib/onlyfans/backend-transport";
-import { CONNECTION_HEADER, CONNECTION_SCHEMA, parseConnection, parseConnectionAck, parseRegistrationAck,
+import { CONNECTION_HEADER, CONNECTION_SCHEMA, connectionCapture, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   parseEnrollment, type ConnectionEnrollmentRequest, type ConnectionRequest, type ConnectionRegistration, type ConnectionFailure } from "./contract";
+import { browserbaseState, parseBrowserbaseJob } from "./browserbase";
 type Identity = { actor: string; commandKey: string };
 export function createConnectionBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
@@ -45,6 +46,46 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
         if (response.ok) { const data = parseConnection(await response.json(), accountId); if (data) return { ok: true as const, data }; }
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The recorded account connection could not be read." };
       } catch { return { ok: false as const, status: 503, error: "The recorded account connection could not be read." }; }
+    },
+    async captureFromCurl(accountId: string, curl: string, staticParamOverride?: string | null) {
+      const result = await post(base + "/" + encodeURIComponent(accountId) + "/capture-from-curl",
+        staticParamOverride ? { curl, staticParamOverride } : { curl });
+      if (!result.ok) return result;
+      const body = result.body as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown };
+      if (body?.ok === true && object(body.capture) && typeof body.xHash === "string" && Number.isSafeInteger(body.ownerId) && (body.ownerId as number) > 0
+        && connectionCapture(body.capture, body.ownerId as number))
+        return { ok: true as const, data: { capture: body.capture, xHash: body.xHash, ownerId: body.ownerId as number } };
+      return { ok: false as const, status: 502, outcome: "unconfirmed", error: "The pasted curl could not be converted to a capture." } as ConnectionFailure;
+    },
+    async browserbaseStart(accountId: string) {
+      const path = base + "/" + encodeURIComponent(accountId) + "/browserbase-login";
+      try {
+        const response = await call(path, { method: "POST", timeoutMs: 30_000, headers: { ...headers, "Content-Type": "application/json" }, body: "{}" });
+        const body = await response.json().catch(() => null) as unknown;
+        if (response.status === 503 && object(body) && body.code === "browserbase_unconfigured")
+          return { ok: false as const, status: 503, code: "browserbase_unconfigured" as const, error: "Browserbase login is not configured on the server." };
+        if (response.status === 429 && object(body) && body.code === "browserbase_busy")
+          return { ok: false as const, status: 429, code: "browserbase_busy" as const, error: "Too many Browserbase logins are running. Try again in a few minutes." };
+        if ([400, 401, 403, 404, 409, 429, 503].includes(response.status)) return { ok: false as const, status: response.status, code: null, error: "The Browserbase login could not be started." };
+        const job = response.ok ? parseBrowserbaseJob(body) : null;
+        if (job) return { ok: true as const, data: { jobId: job.jobId, state: job.state, liveViewUrl: job.liveViewUrl } };
+      } catch { /* Outcome unknown; the job, if any, expires on the backend. */ }
+      return { ok: false as const, status: 502, code: null, error: "The Browserbase login start is not confirmed. Try again." };
+    },
+    async browserbaseStatus(accountId: string, jobId: string) {
+      try {
+        const response = await call(base + "/" + encodeURIComponent(accountId) + "/browserbase-login/" + encodeURIComponent(jobId), { method: "GET", headers });
+        if (response.status === 404) return { ok: false as const, status: 404, error: "That Browserbase login was not found." };
+        const job = response.ok ? parseBrowserbaseJob(await response.json(), jobId) : null;
+        if (job) return { ok: true as const, data: job };
+      } catch {}
+      return { ok: false as const, status: 503, error: "The Browserbase login status could not be read." };
+    },
+    async browserbaseCancel(accountId: string, jobId: string) {
+      const result = await post(base + "/" + encodeURIComponent(accountId) + "/browserbase-login/" + encodeURIComponent(jobId) + "/cancel", {});
+      if (!result.ok) return result;
+      const body = result.body as { ok?: boolean; state?: unknown }, state = body?.ok === true ? browserbaseState(body.state) : null;
+      return state ? { ok: true as const, data: { state } } : { ok: false as const, status: 502, outcome: "unconfirmed", error: "The Browserbase cancel is not confirmed." } as ConnectionFailure;
     },
     async command(accountId: string, command: ConnectionRequest & Identity) {
       const result = await post(base + "/" + encodeURIComponent(accountId), command);
