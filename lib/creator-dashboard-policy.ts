@@ -14,7 +14,7 @@ export const CREATOR_DASHBOARD_NAV = [
 ] as const;
 export const CREATOR_AUDIENCE_HEADER = "x-dashboard-audience";
 export function isCreatorDashboardPath(path: string | null | undefined): boolean {
-  return CREATOR_DASHBOARD_NAV.some(item => item.href === path) || path === "/creator/earnings" || path === "/creator/help";
+  return CREATOR_DASHBOARD_NAV.some(item => item.href === path) || path === "/creator/earnings" || path === "/creator/help" || path === "/creator/account";
 }
 export function creatorApiAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (serverAction) return false;
