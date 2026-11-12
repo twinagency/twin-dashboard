@@ -35,7 +35,7 @@ import { isAgencyPath } from "@/lib/agency-policy";
 import { isLynq, isMoxy, isTopOnlyfansAgency, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
 import { isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
-import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { cn } from "@/lib/utils";
 import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
@@ -47,10 +47,10 @@ import { channelAccess, resolveChannelScope } from "@/lib/channel-scope";
 import type { DashboardChannel } from "@/lib/channel-nav";
 import { isOnlyFansOnly, ONLYFANS_ONLY_HOME } from "@/lib/app-mode";
 
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
-const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
-const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
-const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
+const inter = localFont({src:'./fonts/Inter.ttf',variable:'--font-sans',display:'swap'});
+const plexMono = localFont({src:'./fonts/Inter.ttf',variable:'--font-mono',display:'swap'});
+const spaceGrotesk = localFont({src:'./fonts/SpaceGrotesk.ttf',variable:'--font-heading',display:'swap'});
+const interTight = localFont({src:'./fonts/InterTight.ttf',variable:'--font-display',display:'swap'});
 const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable);
 
 export async function generateMetadata(): Promise<Metadata> {
