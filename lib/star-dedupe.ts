@@ -46,6 +46,12 @@ function businessKey(row: StarDedupeKeyFields): string {
   );
 }
 
+/** The key dedupeStarRows collapses on, or null for a refund/adjustment row (never collapsed). For a reader that pages
+ *  rows and so must collapse a group split across pages itself (lib/api-public-v2.ts payments). */
+export function starDedupeKey<T extends StarDedupeKeyFields & { invoice_payload?: string | null }>(row: T): string | null {
+  return isAdjustmentRow(row) ? null : businessKey(row);
+}
+
 /**
  * Collapse duplicate star_transactions rows: rows sharing the same
  * (clone_id, telegram_id, kind, amount_stars, paid_at) collapse to the one

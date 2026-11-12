@@ -22,13 +22,13 @@
 
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
-import { dedupeStarRows } from "./star-dedupe";
+import { dedupeStarRows, starDedupeKey } from "./star-dedupe";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { STAR_USD } from "./money";
 import { resolveCloneCuts } from "./revenue-projection";
 import { applyCut, applyStackedCut } from "./platform-cut";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
-import { encodeCursor, type PaymentQuery } from "./api-public-query";
+import { encodeCursor, type PaymentCursor, type PaymentQuery } from "./api-public-query";
 
 type Cuts = { platformPct: number; agencyCreatorPct: number };
 type Mode = "clone" | "fleet";
@@ -79,14 +79,17 @@ type RawPayment = {
   invoice_payload: string | null;
 };
 
-async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
-  let query = supabaseAdmin
-    .from("star_transactions")
-    .select(PAYMENT_COLUMNS)
-    .gte("paid_at", q.since)
-    .lte("paid_at", q.until)
-    // one extra row tells us whether another page exists
-    .limit(q.limit + 1);
+// Rows a duplicate on this page can share a business key with but sit past its end: they share the last row's exact
+// paid_at, so they come first after it in page order. The same read answers "is there a next page". Assumes fewer
+// than this many payments in one scope share one paid_at; past that, a split pair counts twice, as before the fix.
+const PROBE_ROWS = 50;
+const DEDUPE_COLUMNS = "id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload";
+/** Keyset: strictly after (t, i) in paid_at desc, id desc order. */
+const after = (c: PaymentCursor) => `paid_at.lt.${c.t},and(paid_at.eq.${c.t},id.lt.${c.i})`;
+
+/** star_transactions in this key's scope, window and filters; the page read and the probe both start here. */
+function scopedPayments(cloneId: string | null, q: PaymentQuery, columns: string, limit: number) {
+  let query = supabaseAdmin.from("star_transactions").select(columns).limit(limit).gte("paid_at", q.since).lte("paid_at", q.until);
   // The tenancy boundary for the per-clone read. The fleet read passes null and
   // is reached only from a route that proved tenant.scope === "fleet".
   if (cloneId !== null) query = query.eq("clone_id", cloneId);
@@ -94,24 +97,43 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   if (q.kind) query = query.eq("kind", q.kind);
   if (q.minStars > 0) query = query.gte("amount_stars", q.minStars);
   else if (!q.includeRefunds) query = query.gt("amount_stars", 0);
-  if (q.cursor) {
-    // Keyset pagination: strictly older than the last row handed out. Both
-    // halves were re-validated against a strict shape in decodeCursor.
-    query = query.or(`paid_at.lt.${q.cursor.t},and(paid_at.eq.${q.cursor.t},id.lt.${q.cursor.i})`);
-  }
-  // Fetch one extra row to know whether another page exists.
+  return query;
+}
+
+async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
+  // Exactly `limit` rows: asking for limit+1 to spot a next page broke at the
+  // max, where PostgREST max_rows (1000) silently drops the extra row (W4 F3).
+  let query = scopedPayments(cloneId, q, PAYMENT_COLUMNS, q.limit);
+  // Keyset pagination: strictly older than the last row handed out. Both
+  // halves were re-validated against a strict shape in decodeCursor.
+  if (q.cursor) query = query.or(after(q.cursor));
   const { data, error } = await query
     .order("paid_at", { ascending: false })
     .order("id", { ascending: false });
   if (error) throw new Error(error.message);
 
-  const raw = (data ?? []) as unknown as RawPayment[];
-  const hasMore = raw.length > q.limit;
-  const page = hasMore ? raw.slice(0, q.limit) : raw;
+  const page = (data ?? []) as unknown as RawPayment[];
   const last = page[page.length - 1];
-  // Duplicate payments from the 2026-09 bot bug are collapsed here for the same
-  // reason they are collapsed in the revenue number, so the two agree.
-  const rows = dedupeStarRows(page.map((r) => ({ ...r, telegram_id: r.telegram_id, clone_id: r.clone_id })));
+  let next: RawPayment[] = [];
+  if (last) {
+    const probe = await scopedPayments(cloneId, q, DEDUPE_COLUMNS, PROBE_ROWS)
+      .or(after({ t: last.paid_at, i: String(last.id) }))
+      .order("paid_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (probe.error) throw new Error(probe.error.message);
+    next = (probe.data ?? []) as unknown as RawPayment[];
+  }
+  const hasMore = next.length > 0;
+  // Duplicate payments from the 2026-09 bot bug are collapsed for the same
+  // reason they are collapsed in the revenue number, so the two agree. Each
+  // group keeps its LAST row in page order (its lowest id, as dedupeStarRows
+  // keeps, when ids sort bytewise), judged against the rows just past the page
+  // too, so a group split by a page boundary is shown once, on its last page,
+  // and a client summing pages counts it once (W4 F2).
+  const keys = [...page, ...next.filter((r) => r.paid_at === last?.paid_at)].map(starDedupeKey);
+  const lastAt = new Map<string, number>();
+  keys.forEach((k, i) => { if (k !== null) lastAt.set(k, i); });
+  const rows = page.filter((_, i) => keys[i] === null || lastAt.get(keys[i]!) === i);
 
   // Who paid: one lookup for the page, filtered by the clone(s) on it.
   const tgIds = [...new Set(rows.map((r) => r.telegram_id).filter((v): v is number => typeof v === "number"))];
