@@ -171,7 +171,8 @@ async function routeMiddleware(req: NextRequest) {
   if (isAgencyPath(pathname)) {
     if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
     const token = req.cookies.get(AGENCY_COOKIE)?.value;
-    if (token && !["/agency/login", "/agency/auth", "/agency/logout"].includes(pathname)
+    if (token && (pathname === "/agency" || pathname.startsWith("/agency/"))
+      && !["/agency/login", "/agency/auth", "/agency/logout"].includes(pathname)
       && !topOnlyfansAgencyPath(pathname, req.method, req.headers.has("next-action"))) {
       const agency = await agencyIdentity(token);
       if (agency?.id === TOP_ONLYFANS_AGENCY_ID) return new NextResponse("Agency reporting access only", { status: 403 });
