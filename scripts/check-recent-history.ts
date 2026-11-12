@@ -19,6 +19,8 @@ const connection = { accountId:"of-1",revision:1,status:"verified",ownerId:"1",e
 const response = (c: object) => ({ schemaVersion:"of-connections.v1",ok:true,connection:c });
 assert(parseConnection(response(connection),"of-1"),"Older backend still parses");
 assert(parseConnection(response({...connection,recentHistory:recent}),"of-1"),"Recent readiness and incomplete lifetime coexist");
-assert.equal(parseConnection(response({...connection,recentHistory:{...recent,percentComplete:95}}),"of-1"),null);
+// TEST-CHANGE: F4, an invalid optional diagnostic no longer nulls the connection
+const dropped = parseConnection(response({...connection,recentHistory:{...recent,percentComplete:95}}),"of-1");
+assert(dropped,"Invalid recentHistory keeps the connection"); assert.equal(dropped.recentHistory,undefined);
 assert.equal(parseConnection(response({...connection,unrecognized:true}),"of-1"),null,"Unknown fields remain refused");
-console.log("Recent history contract: 12 checks passed");
+console.log("Recent history contract: 13 checks passed");
