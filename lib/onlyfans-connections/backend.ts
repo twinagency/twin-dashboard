@@ -40,10 +40,11 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
       }catch{}
       return {ok:false as const,status:503,error:"Connection requests could not be loaded."};
     },
-    async get(accountId: string) {
+    /** cost defaults off: platformSnapshot and the creator routes must never carry our model cost. */
+    async get(accountId: string, cost = false) {
       try {
         const response = await call(base + "/" + encodeURIComponent(accountId) + "?progress=1&runner=1&policy=1", { method: "GET", headers });
-        if (response.ok) { const data = parseConnection(await response.json(), accountId); if (data) return { ok: true as const, data }; }
+        if (response.ok) { const data = parseConnection(await response.json(), accountId, cost); if (data) return { ok: true as const, data }; }
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The recorded account connection could not be read." };
       } catch { return { ok: false as const, status: 503, error: "The recorded account connection could not be read." }; }
     },
