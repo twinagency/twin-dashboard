@@ -52,7 +52,10 @@ async function main(){
   const errors:string[]=[];page.on("pageerror",e=>errors.push(String(e)));
   await page.route("**/*",route=>{const url=new URL(route.request().url());return url.origin===base||["data:","blob:"].includes(url.protocol)?route.continue():route.abort();});
   const info=await(await fetch(backend+"/fixture")).json() as Json;
-  const account=info.account as string,fan=info.fan as number;
+  const account=info.account as string,fan=info.fan as number,foreignAccount=info.foreignAccount as string;
+  assert.ok(foreignAccount && foreignAccount!==account);
+  const foreignBefore=(await(await fetch(backend+"/fixture/state")).json()).foreign;
+  assert.equal(foreignBefore.runtimeEnabled,false);assert.equal(foreignBefore.grants,0);
   const cfg="/api/onlyfans-configuration/accounts/"+account;
   const vault="/api/onlyfans-content/accounts/"+account+"/vault";
   await page.goto(base+"/api/onlyfans/accounts");
@@ -65,6 +68,10 @@ async function main(){
   await ok("/api/onlyfans-controls/accounts/"+account+"/conversations/"+account+":"+fan,{action:"resume_automation",expectedRevision:0});
   const prep={action:"configure",expectedRevision:0,requestId:randomUUID(),reason:"Offline reviewed preparation",config:info.preparation};
   assert.equal((await request(cfg+"/preparation",{...prep,actor:"spoof"})).status,400);
+  const foreignCfg="/api/onlyfans-configuration/accounts/"+foreignAccount;
+  assert.equal((await request(foreignCfg+"/preparation")).status,404,"existing foreign account cannot be read");
+  assert.equal((await request(foreignCfg+"/preparation",{...prep,requestId:randomUUID()})).status,404,"existing foreign account cannot be configured");
+  assert.deepEqual((await(await fetch(backend+"/fixture/state")).json()).foreign,foreignBefore);
   await ok(cfg+"/preparation",prep);
   await page.goto(base+"/onlyfans/content?account="+account);
   await page.locator("[data-history-preparation] summary").click();
@@ -103,7 +110,7 @@ async function main(){
   await page.waitForFunction(async path=>(await(await fetch(path)).json()).terms.discountCents===900,cfg+"/catalogue-terms/"+itemId);
   const currentTerms=await ok(cfg+"/catalogue-terms/"+itemId);
   assert.equal((await request(cfg+"/catalogue-terms/"+itemId,{action:"withdraw",expectedRevision:0,requestId:randomUUID()})).status,409);
-  assert.equal((await request("/api/onlyfans-configuration/accounts/no-such-account/catalogue-terms/"+itemId)).status,404);
+  assert.equal((await request(foreignCfg+"/catalogue-terms/"+itemId)).status,404);
   await page.screenshot({path:output+"-terms.png",fullPage:true});
   await fetch(backend+"/fixture/sync",{method:"POST"});
   const promotion=await(await fetch(backend+"/fixture/promotion")).json() as Json;
@@ -141,9 +148,10 @@ async function main(){
   await anonymous.close();
   validSession=false;assert.notEqual((await request(lifecycle)).status,200);
   assert.equal((await(await fetch(backend+"/fixture/state")).json()).access,1);
+  assert.deepEqual((await(await fetch(backend+"/fixture/state")).json()).foreign,foreignBefore,"foreign account stays unchanged throughout the journey");
   const evidence={status:"passed",journey:"browser/BFF/backend/Postgres/autonomous worker",identity:"synthetic revocable named-owner service",
    model:"scripted",provider:"mock transport",sourceOverlay:false,backendImage:process.env.QUALIFICATION_BACKEND_IMAGE,dashboardImage:process.env.QUALIFICATION_DASHBOARD_IMAGE,
-   posts:result.posts.length,paidCards:1,access:1,consoleErrors:errors,termsRevision:currentTerms.terms.revision};
+   posts:result.posts.length,paidCards:1,access:1,crossAccount:"existing foreign tenant read and mutation refused, state unchanged",consoleErrors:errors,termsRevision:currentTerms.terms.revision};
   writeFileSync(output+"-result.json",JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
  }catch(error){
   if(page){writeFileSync(output+"-failed-page.txt",await page.locator("body").innerText().catch(()=>"unavailable"));await page.screenshot({path:output+"-failed.png",fullPage:true}).catch(()=>{});}
