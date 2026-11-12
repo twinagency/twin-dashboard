@@ -1,4 +1,5 @@
 /** Validated projections of the native configuration-purpose launch contracts. */
+import { parseRecentHistory, type RecentHistory } from "../../onlyfans-connections/recent-history";
 import {
   FACT_KEYS,
   type FactKey,
@@ -374,7 +375,7 @@ export type NativeMemory = {
       source: "operator" | "canonical" | "history";
       revision?: number;
       sourceMessageId?: string;
-      sourceAt?: string;
+      sourceAt?: string | null;
       quote?: string;
       sourceDigest?: string;
     }
@@ -383,13 +384,51 @@ export type NativeMemory = {
   overrides: Record<string, { operation: "set" | "clear"; revision: number }>;
   interactions: {
     sourceMessageId: string;
-    sourceAt: string;
+    sourceAt: string | null;
     direction: "in" | "out";
     excerpt: string;
     sourceDigest: string;
   }[];
   summaryKind: "saved_profile_and_source_excerpts";
 };
+/** The listed literal equal to String(v), the same coercion the checks always used; undefined when none. */
+const pick = <T extends string>(xs: readonly T[], v: unknown): T | undefined =>
+  xs.find((x) => x === String(v));
+type Fact = NativeMemory["facts"][string];
+/** Optional source fields are kept only when valid (else dropped); a history fact must carry all four. */
+function parseFact(x: unknown): Fact | null {
+  const source = object(x) ? pick(["operator", "canonical", "history"] as const, x.source) : undefined;
+  if (!object(x) || !text(x.value, 600) || !source) return null;
+  const f: Fact = { value: x.value, source };
+  if (count(x.revision)) f.revision = x.revision;
+  if (decimalId(x.sourceMessageId)) f.sourceMessageId = x.sourceMessageId;
+  if (timestamp(x.sourceAt)) f.sourceAt = x.sourceAt;
+  if (text(x.quote, 1000)) f.quote = x.quote;
+  if (hash(x.sourceDigest)) f.sourceDigest = x.sourceDigest;
+  const evidence = !!f.sourceMessageId && "sourceAt" in f && f.quote !== undefined && !!f.sourceDigest;
+  return f.source !== "history" || evidence ? f : null;
+}
+function parseOverride(x: unknown): NativeMemory["overrides"][string] | null {
+  const operation = object(x) ? pick(["set", "clear"] as const, x.operation) : undefined;
+  return object(x) && operation && count(x.revision) ? { operation, revision: x.revision } : null;
+}
+function parseInteraction(x: unknown): NativeMemory["interactions"][number] | null {
+  const direction = object(x) ? pick(["in", "out"] as const, x.direction) : undefined;
+  return object(x) && decimalId(x.sourceMessageId) && timestamp(x.sourceAt) && direction && text(x.excerpt, 320) && hash(x.sourceDigest)
+    ? { sourceMessageId: x.sourceMessageId, sourceAt: x.sourceAt, direction, excerpt: x.excerpt, sourceDigest: x.sourceDigest }
+    : null;
+}
+/** A new record of parsed entries, or null when any key or value is refused. */
+function entries<T>(v: Record<string, unknown>, key: (k: string) => boolean, parse: (x: unknown) => T | null) {
+  const out: Record<string, T> = {};
+  for (const [k, x] of Object.entries(v)) {
+    const p = key(k) ? parse(x) : null;
+    if (p === null) return null;
+    out[k] = p;
+  }
+  return out;
+}
+/** A new object naming every field, at every level: unknown upstream keys never reach the browser. */
 export function parseNativeMemory(v: unknown): NativeMemory | null {
   if (
     !object(v) ||
@@ -407,42 +446,18 @@ export function parseNativeMemory(v: unknown): NativeMemory | null {
     v.interactions.length > 8
   )
     return null;
-  if (
-    !Object.entries(v.facts).every(
-      ([k, x]) =>
-        memoryField(k) &&
-        object(x) &&
-        text(x.value, 600) &&
-        ["operator", "canonical", "history"].includes(String(x.source)) &&
-        (x.source !== "history" ||
-          (decimalId(x.sourceMessageId) &&
-            timestamp(x.sourceAt) &&
-            text(x.quote, 1000) &&
-            hash(x.sourceDigest))),
-    ) ||
-    !Object.entries(v.summaries).every(
-      ([k, x]) =>
-        ["short_bio", "bullet_points"].includes(k) && nullableText(x, 600),
-    ) ||
-    !Object.entries(v.overrides).every(
-      ([k, x]) =>
-        memoryField(k) &&
-        object(x) &&
-        ["set", "clear"].includes(String(x.operation)) &&
-        count(x.revision),
-    ) ||
-    !v.interactions.every(
-      (x) =>
-        object(x) &&
-        decimalId(x.sourceMessageId) &&
-        timestamp(x.sourceAt) &&
-        ["in", "out"].includes(String(x.direction)) &&
-        text(x.excerpt, 320) &&
-        hash(x.sourceDigest),
-    )
-  )
-    return null;
-  return v as NativeMemory;
+  const facts = entries(v.facts, memoryField, parseFact),
+    overrides = entries(v.overrides, memoryField, parseOverride),
+    interactions = v.interactions.map(parseInteraction);
+  const summaries: NativeMemory["summaries"] = {};
+  for (const [k, x] of Object.entries(v.summaries)) {
+    if (!["short_bio", "bullet_points"].includes(k) || !nullableText(x, 600)) return null;
+    summaries[k] = x;
+  }
+  if (!facts || !overrides || !interactions.every((x) => x !== null)) return null;
+  return { schemaVersion: "of-history-memory.v1", algorithm: v.algorithm, revision: v.revision, version: v.version,
+    canonicalDigest: v.canonicalDigest, fingerprint: v.fingerprint, facts, summaries, overrides, interactions,
+    summaryKind: "saved_profile_and_source_excerpts" };
 }
 export type MemoryFanPage = {
   fans: {
@@ -462,34 +477,34 @@ export type MemoryFanPage = {
   }[];
   nextCursor: string | null;
 };
+type FanRow = MemoryFanPage["fans"][number];
+const parseArchive = (x: unknown): FanRow["archive"] | undefined =>
+  x === null
+    ? null
+    : object(x) && text(x.status, 64) && count(x.pagesCompleted) && count(x.messagesObserved) && timestamp(x.completedAt)
+      ? { status: x.status, pagesCompleted: x.pagesCompleted, messagesObserved: x.messagesObserved, completedAt: x.completedAt }
+      : undefined;
+function parseFanRow(x: unknown): FanRow | null {
+  if (!object(x) || !decimalId(x.fanId) || !nullableText(x.displayName, 500) || !nullableText(x.username, 500) ||
+    !count(x.storedMessages) || !count(x.processedMessages) || x.processedMessages > x.storedMessages ||
+    !count(x.memoryRevision) || !timestamp(x.lastProcessedAt))
+    return null;
+  const archive = parseArchive(x.archive);
+  if (archive === undefined) return null;
+  return { fanId: x.fanId, displayName: x.displayName, username: x.username, storedMessages: x.storedMessages,
+    processedMessages: x.processedMessages, memoryRevision: x.memoryRevision, lastProcessedAt: x.lastProcessedAt, archive };
+}
 export function parseMemoryFanPage(v: unknown): MemoryFanPage | null {
   if (
     !object(v) ||
     v.memoryVersion !== "of-history-memory.v1" ||
     !Array.isArray(v.fans) ||
     v.fans.length > 100 ||
-    !nullableText(v.nextCursor, 2000) ||
-    !v.fans.every(
-      (x) =>
-        object(x) &&
-        decimalId(x.fanId) &&
-        nullableText(x.displayName, 500) &&
-        nullableText(x.username, 500) &&
-        count(x.storedMessages) &&
-        count(x.processedMessages) &&
-        x.processedMessages <= x.storedMessages &&
-        count(x.memoryRevision) &&
-        timestamp(x.lastProcessedAt) &&
-        (x.archive === null ||
-          (object(x.archive) &&
-            text(x.archive.status, 64) &&
-            count(x.archive.pagesCompleted) &&
-            count(x.archive.messagesObserved) &&
-            timestamp(x.archive.completedAt))),
-    )
+    !nullableText(v.nextCursor, 2000)
   )
     return null;
-  return { fans: v.fans as MemoryFanPage["fans"], nextCursor: v.nextCursor };
+  const fans = v.fans.map(parseFanRow);
+  return fans.every((x): x is FanRow => x !== null) ? { fans, nextCursor: v.nextCursor } : null;
 }
 export type EngagementPolicy = {
   enabled: boolean;
@@ -627,33 +642,31 @@ export type RecoveryProgress = {
   totalMessages: null;
   percentComplete: null;
   recentRecoveryNeeded: boolean;
-  [key: string]: unknown;
+  /** Only ever parseRecentHistory's projection; absent when missing or invalid. */
+  recentHistory?: RecentHistory;
 };
+/** A new object naming every field: unknown upstream keys (cost figures, tokens) never reach the browser. */
 export function parseRecoveryProgress(
   v: unknown,
   accountId: string,
   fanId: string | null = null,
 ): RecoveryProgress | null {
-  return object(v) &&
-    v.schemaVersion === "of-history-recovery.v1" &&
-    v.accountId === accountId &&
-    v.fanId === fanId &&
-    ["complete", "incomplete"].includes(String(v.status)) &&
-    typeof v.discoveryComplete === "boolean" &&
-    [
-      "conversationsDiscovered",
-      "conversationsComplete",
-      "conversationsRetrying",
-      "conversationsDeferredForLiveInput",
-      "pagesCommitted",
-      "messagesObserved",
-      "messagesAdded",
-    ].every((k) => count(v[k])) &&
-    v.totalMessages === null &&
-    v.percentComplete === null &&
-    typeof v.recentRecoveryNeeded === "boolean"
-    ? (v as RecoveryProgress)
-    : null;
+  const status = object(v) ? pick(["complete", "incomplete"] as const, v.status) : undefined;
+  if (!object(v) || v.schemaVersion !== "of-history-recovery.v1" || v.accountId !== accountId || v.fanId !== fanId || !status ||
+    typeof v.discoveryComplete !== "boolean" || !count(v.conversationsDiscovered) || !count(v.conversationsComplete) ||
+    !count(v.conversationsRetrying) || !count(v.conversationsDeferredForLiveInput) || !count(v.pagesCommitted) ||
+    !count(v.messagesObserved) || !count(v.messagesAdded) || v.totalMessages !== null || v.percentComplete !== null ||
+    typeof v.recentRecoveryNeeded !== "boolean")
+    return null;
+  const r: RecoveryProgress = { schemaVersion: "of-history-recovery.v1", accountId, fanId, status, discoveryComplete: v.discoveryComplete,
+    conversationsDiscovered: v.conversationsDiscovered, conversationsComplete: v.conversationsComplete,
+    conversationsRetrying: v.conversationsRetrying, conversationsDeferredForLiveInput: v.conversationsDeferredForLiveInput,
+    pagesCommitted: v.pagesCommitted, messagesObserved: v.messagesObserved, messagesAdded: v.messagesAdded,
+    totalMessages: null, percentComplete: null, recentRecoveryNeeded: v.recentRecoveryNeeded };
+  // An optional diagnostic: invalid drops only itself, never the recovery (F4).
+  const recentHistory = parseRecentHistory(v.recentHistory);
+  if (recentHistory) r.recentHistory = recentHistory;
+  return r;
 }
 export type MemoryProgress = {
   schemaVersion: "of-history-memory-progress.v1";
@@ -682,9 +695,15 @@ export function parseMemoryProgress(v: unknown): MemoryProgress | null {
     timestamp(v.oldestStoredAt) &&
     timestamp(v.newestStoredAt) &&
     timestamp(v.lastProcessedAt)
-    ? (v as MemoryProgress)
+    ? { schemaVersion: "of-history-memory-progress.v1", algorithm: v.algorithm, storedMessages: v.storedMessages,
+        processedCurrentMessages: v.processedCurrentMessages, pendingMessages: v.pendingMessages,
+        storedMemoryComplete: v.storedMemoryComplete, providerHistoryComplete: null, revision: v.revision,
+        oldestStoredAt: v.oldestStoredAt, newestStoredAt: v.newestStoredAt, lastProcessedAt: v.lastProcessedAt }
     : null;
 }
+/** The correction acknowledgement, by name: only what the browser reads. */
+export const parseCorrectionAck = (v: unknown): { revision: number; replayed: boolean } | null =>
+  object(v) && count(v.revision) && typeof v.replayed === "boolean" ? { revision: v.revision, replayed: v.replayed } : null;
 export type AccountControl = {
   enabled: boolean;
   bindingId: string;
