@@ -69,9 +69,8 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <span>
-          Saving the template above pushes to every
-          &quot;Default&quot; clone automatically; use the button below to push to a &quot;Custom&quot; clone on demand without
-          switching it.
+          Saving the template above pushes the fields you changed to every &quot;Default&quot; clone. Push to selected
+          overwrites the chosen clones&apos; own values and prices with the whole template, without switching them.
         </span>
         <Button type="button" size="sm" disabled={selected.size === 0 || pushing} onClick={pushSelected}>
           {pushing ? "Pushing…" : "Push to selected"}

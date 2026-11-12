@@ -1,14 +1,12 @@
 // Rule (W7 ui-agencyjoin-plus17 F2, HIGH, money). A /settings template save (saveCloneDefaults, app/settings/actions.ts)
 // used to write EVERY operational column onto every follower, so an unrelated template edit silently replaced a price, tip
-// rate or toggle set on a creator's own page (updateClone, setCloneToggle, /flows). Fix (rwl R1 decision): the save-time
-// cascade writes only the fields whose value differs between the previous effective template (getCloneDefaults(), before
-// the upsert) and the new one, both through sanitizeCloneDefaults; the follower filter sits on the UPDATE itself. An
-// unchanged save writes nothing. A changed template field still reaches every follower (last write per field wins).
-// A field absent from the previous template never reached a follower, so it counts as unchanged: the original known-red's
-// template save posts tip_credits_per_100_stars=0 against a never-saved template (the form's `?? 0`), and that is not the
-// admin changing the tip rate, so the creator keeps hers. pushDefaultsToClones (explicit push) is unchanged.
-// Plain tests/rules style: the real action sources are transpiled and run with a fake Supabase client injected (precedent
-// scripts/check-agency-clone-save.ts). No network, no DB.
+// rate or toggle set on a creator's own page (updateClone, setCloneToggle, /flows). Fix (rwl R1+R2 decisions): the save
+// cascades only the fields whose EFFECTIVE value changed, previous = CLONE_DEFAULT_FALLBACKS (what the form shows for an
+// absent key) under getCloneDefaults(), read before any write. A related group (wait, bubble, discount levels+tiers)
+// cascades whole. The follower UPDATE runs before the template upsert, so a failed save is retried with the same delta.
+// Posting the form's own fallback (tip 0) is a no-op; changing a field absent from the stored template (a brake) cascades.
+// Switching a creator back to Following default applies the effective template at once; pushDefaultsToClones is unchanged.
+// Real action sources transpiled and run against a fake Supabase client (precedent scripts/check-agency-clone-save.ts).
 // Run: nice -n 10 node --import tsx --test tests/rules/W7-template-cascades-changed-only.test.ts
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -24,12 +22,14 @@ type Row = Record<string, unknown>;
 const clones = new Map<string, Row>();
 let template: string | null = null;
 let cloneWrites: Row[] = [];
+let failOn: "update" | "upsert" | null = null;
 
 function query(table: string) {
   let op: "select" | "update" | "upsert" = "select";
   let payload: Row = {};
   const filters: ((r: Row) => boolean)[] = [];
   const run = () => {
+    if (op === failOn) return { data: null, error: { message: `fake ${op} error` } };
     if (table === "app_settings") {
       if (op === "upsert") template = String(payload.value);
       return { data: template == null ? null : { value: template }, error: null };
@@ -71,8 +71,7 @@ function load(path: string): Record<string, (...args: never[]) => Promise<unknow
   }, exports);
   return exports as Record<string, (...args: never[]) => Promise<unknown>>;
 }
-const settings = load("app/settings/actions.ts");
-deps["@/app/settings/actions"] = settings;
+const settings = load("app/settings/actions.ts"); deps["@/app/settings/actions"] = settings;
 const cloneActions = load("app/clones/actions.ts");
 const saveCloneDefaults = settings.saveCloneDefaults as unknown as (fd: FormData) => Promise<{ appliedFollowers: number }>;
 const updateClone = cloneActions.updateClone as unknown as (id: string, fd: FormData) => Promise<void>;
@@ -81,10 +80,8 @@ const { BUILTIN_CLONE_DEFAULTS } = policy;
 
 const ID = "c1", CUSTOM = "c2";
 const MONEY = { credit_pack_price_stars: 499, tip_credits_per_100_stars: 50 };
-const seed = (usesDefault: boolean) => {
-  clones.set(ID, { id: ID, uses_default_config: usesDefault, credit_pack_price_stars: BUILTIN_CLONE_DEFAULTS.credit_pack_price_stars,
-    tip_credits_per_100_stars: 0 });
-};
+const seed = (usesDefault: boolean) => clones.set(ID, { id: ID, uses_default_config: usesDefault,
+  credit_pack_price_stars: BUILTIN_CLONE_DEFAULTS.credit_pack_price_stars, tip_credits_per_100_stars: 0 });
 beforeEach(() => { clones.clear(); template = null; cloneWrites = []; });
 // The creator's own Configure save: only the fields this test cares about need to be meaningful.
 const configureSave = async () => {
@@ -95,14 +92,15 @@ const configureSave = async () => {
 };
 // A /settings save of the template as the form posts it: built-ins, tip 0 (defaultValue ?? 0, CloneDefaultsForm.tsx),
 // response_wait_max moved by `waitBump`, plus `extra`.
-const templateSave = async (waitBump = 1, extra: Record<string, string> = {}) => {
+const templateSave = async (waitBump = 1, extra: Record<string, string> = {}, fail: typeof failOn = null) => {
   const fd = new FormData();
+  failOn = fail;
   for (const [k, v] of Object.entries(BUILTIN_CLONE_DEFAULTS)) fd.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
   fd.set("tip_credits_per_100_stars", "0");
   fd.set("tips_enabled", "false");
   fd.set("response_wait_max", String(Number(BUILTIN_CLONE_DEFAULTS.response_wait_max) + waitBump));
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
-  return saveCloneDefaults(fd);
+  try { return await saveCloneDefaults(fd); } finally { failOn = null; }
 };
 const money = () => { const r = clones.get(ID)!; return { credit_pack_price_stars: r.credit_pack_price_stars, tip_credits_per_100_stars: r.tip_credits_per_100_stars }; };
 
@@ -128,7 +126,8 @@ test("an unrelated template field save keeps her price and tip rate once the tem
   await configureSave();
   cloneWrites = [];
   assert.equal((await templateSave(2)).appliedFollowers, 1);
-  assert.deepEqual(cloneWrites, [{ response_wait_max: Number(BUILTIN_CLONE_DEFAULTS.response_wait_max) + 2 }], "only the changed field is written");
+  assert.deepEqual(cloneWrites, [{ response_wait_min: BUILTIN_CLONE_DEFAULTS.response_wait_min,
+    response_wait_max: Number(BUILTIN_CLONE_DEFAULTS.response_wait_max) + 2 }], "only the changed field (and its pair) is written");
   assert.deepEqual(money(), MONEY);
 });
 
@@ -138,8 +137,7 @@ test("a changed template price reaches followers, never a detached creator", asy
   clones.set(CUSTOM, { id: CUSTOM, uses_default_config: false, credit_pack_price_stars: 777 });
   await configureSave();
   assert.equal((await templateSave(0, { credit_pack_price_stars: "350" })).appliedFollowers, 1);
-  assert.equal(clones.get(ID)!.credit_pack_price_stars, 350, "a changed template field is the fleet's latest word");
-  assert.equal(clones.get(ID)!.tip_credits_per_100_stars, 50);
+  assert.deepEqual(money(), { ...MONEY, credit_pack_price_stars: 350 }, "a changed template field is the fleet's latest word");
   assert.equal(clones.get(CUSTOM)!.credit_pack_price_stars, 777, "a detached creator is untouched");
 });
 
@@ -157,4 +155,60 @@ test("a toggle set through setCloneToggle on a follower survives an unrelated te
   await setCloneToggle(ID, "tips_enabled", true);
   await templateSave(3);
   assert.equal(clones.get(ID)!.tips_enabled, true);
+});
+
+test("C1: a failed follower UPDATE leaves the template unchanged, and the retry resends", async () => {
+  await templateSave(0);
+  seed(true);
+  const before = template;
+  await assert.rejects(templateSave(5, {}, "update"));
+  assert.equal(template, before, "template must not move past followers that never got the change");
+  await templateSave(5);
+  assert.equal(clones.get(ID)!.response_wait_max, Number(BUILTIN_CLONE_DEFAULTS.response_wait_max) + 5);
+});
+
+test("C1: a failed template upsert after the UPDATE throws, and the retry resends the same delta", async () => {
+  await templateSave(0);
+  seed(true);
+  cloneWrites = [];
+  await assert.rejects(templateSave(5, {}, "upsert"));
+  assert.equal(cloneWrites.length, 1, "followers are written before the template");
+  await templateSave(5);
+  assert.deepEqual(cloneWrites[1], cloneWrites[0], "retry re-diffs against the unchanged template");
+});
+
+test("C2: a brake absent from the stored template reaches followers when changed; its fallback is a no-op", async () => {
+  await templateSave(0); // stored template has no push_level / price_guard_mode
+  seed(true);
+  cloneWrites = [];
+  await templateSave(0, { push_level: "medium", price_guard_mode: "block" });
+  assert.deepEqual(cloneWrites, [], "posting the value the form shows changes nothing");
+  await templateSave(0); // drops them from the stored template again: effective value unchanged
+  assert.deepEqual(cloneWrites, []);
+  await templateSave(0, { push_level: "low" });
+  assert.equal(clones.get(ID)!.push_level, "low");
+});
+
+test("C3: switching a creator back to Following default applies the template to her at once", async () => {
+  await templateSave(0, { credit_pack_price_stars: "350" });
+  clones.set(CUSTOM, { id: CUSTOM, uses_default_config: false, credit_pack_price_stars: 777, personality: "hers" });
+  await (settings.setCloneUsesDefault as unknown as (id: string, v: boolean) => Promise<void>)(CUSTOM, true);
+  const { uses_default_config, credit_pack_price_stars, personality, category_pricing } = clones.get(CUSTOM)!;
+  assert.deepEqual([uses_default_config, credit_pack_price_stars, personality, category_pricing], [true, 350, "hers", undefined]);
+});
+
+test("C4: a changed wait max cascades the whole pair (30/20 case)", async () => {
+  await templateSave(0);
+  seed(true);
+  clones.get(ID)!.response_wait_min = 30;
+  await templateSave(20 - Number(BUILTIN_CLONE_DEFAULTS.response_wait_max));
+  assert.deepEqual([clones.get(ID)!.response_wait_min, clones.get(ID)!.response_wait_max], [BUILTIN_CLONE_DEFAULTS.response_wait_min, 20]);
+});
+
+test("C5: the same spoil menu with a different key order is unchanged", async () => {
+  await templateSave(0, { spoil_options: '[{"stars":1000,"label":"x"}]' });
+  seed(true);
+  cloneWrites = [];
+  await templateSave(0, { spoil_options: '[{"label":"x","stars":1000}]' });
+  assert.deepEqual(cloneWrites, []);
 });

@@ -113,7 +113,7 @@ export default async function SettingsPage() {
           <div className="border-t border-line pt-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
               Which creators are on this default
-              <Info text="Following default: this template's values apply to her automatically on the next Save above, or immediately via Push. Custom: she's been detached and keeps her own values until switched back." />
+              <Info text="Following default: switching her to it applies this template's operational fields and prices to her at once, then each Save above pushes the fields you changed. Custom: she keeps her own values until switched back. Push to selected overwrites a creator's own values and prices with the whole template." />
             </div>
             <CloneDefaultSyncTable clones={cloneStatuses} />
           </div>

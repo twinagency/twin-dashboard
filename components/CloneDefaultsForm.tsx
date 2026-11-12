@@ -15,6 +15,7 @@ import {
 import { CategoryPricingEditor, SpoilMenuEditor } from "./clone/editors";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { saveCloneDefaults } from "@/app/settings/actions";
+import { CLONE_DEFAULT_FALLBACKS } from "@/lib/clone-default-policy";
 
 // Operational defaults for new and selected existing clones. Personality,
 // identity, creator-specific style and welcome prose intentionally stay on each
@@ -23,7 +24,8 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
   const [models, setModels] = useState<OrModel[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [cfg, set] = useCloneConfig(defaults);
+  const shown: Partial<Clone> = { ...CLONE_DEFAULT_FALLBACKS, ...defaults };
+  const [cfg, set] = useCloneConfig(shown);
 
   useEffect(() => {
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
@@ -139,7 +141,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           type="number"
           min={0}
           step={1}
-          defaultValue={defaults.tip_credits_per_100_stars ?? 0}
+          defaultValue={shown.tip_credits_per_100_stars}
           hint="What a tip gives back in message credits. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down. Changing it here updates every creator following the fleet default. Saving other fields leaves each creator's own rate alone."
         />
       </div>
@@ -221,7 +223,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           type="number"
           min={1}
           step={1}
-          defaultValue={defaults.tip_max_stars ?? 100000}
+          defaultValue={shown.tip_max_stars}
         />
       </div>
 
@@ -341,7 +343,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
             Do not add it back to this fleet-defaults form. */}
         {cfg.dripEnabled && (
           <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
-            <Field label="Follow-up if quiet mid-chat (minutes, 0 = off)" name="followup_after_minutes" type="number" defaultValue={defaults.followup_after_minutes ?? 0} placeholder="0" />
+            <Field label="Follow-up if quiet mid-chat (minutes, 0 = off)" name="followup_after_minutes" type="number" defaultValue={shown.followup_after_minutes} placeholder="0" />
           </div>
         )}
       </div>
@@ -349,7 +351,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       {/* ── VOICE TUNING ── */}
       <div className="grid gap-3">
         <Group label="Voice tuning (ElevenLabs)" />
-        <Field label="ElevenLabs model" name="eleven_model" defaultValue={defaults.eleven_model ?? "eleven_multilingual_v2"} placeholder="eleven_multilingual_v2" />
+        <Field label="ElevenLabs model" name="eleven_model" defaultValue={shown.eleven_model} placeholder="eleven_multilingual_v2" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Slider label="Stability" name="voice_stability" value={cfg.stability} onChange={(v) => set("stability", v)} />
           <Slider label="Similarity" name="voice_similarity" value={cfg.similarity} onChange={(v) => set("similarity", v)} />
@@ -380,7 +382,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
               label={m.label}
               name={m.name}
               models={models}
-              defaultValue={(defaults[m.name as keyof Clone] as string) || m.def}
+              defaultValue={(shown[m.name as keyof Clone] as string) || m.def}
               effectiveFor={m.name === "vision_model" ? describeVisionAnalysisModels : undefined}
             />
           ))}

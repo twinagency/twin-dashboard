@@ -135,6 +135,36 @@ export const BUILTIN_CLONE_DEFAULTS: Partial<Clone> = {
   read_receipts_enabled: true,
 };
 
+export const DEFAULT_SPOIL_OPTIONS = [1000, 2500, 5000, 10000, 25000, 50000, 100000].map((stars) => ({ stars, label: "" }));
+
+// What /settings shows for a key the template lacks (useCloneConfig's `??` values). ONE map, shared by CloneDefaultsForm
+// and the save-time diff in app/settings/actions.ts, so changing an absent key cascades and posting its fallback does not.
+export const CLONE_DEFAULT_FALLBACKS: Partial<Clone> = {
+  ai_mode: "classic", push_level: "medium", media_caption_mode: "inline", price_guard_mode: "block",
+  silence_fallback_mode: "on", variety_guard: "normal",
+  smart_split: true, photos_enabled: true, video_vision_enabled: true, bundles_enabled: true, voice_enabled: true,
+  charge_messages: true, tips_enabled: false, live_captions_enabled: false, thank_you_enabled: true, discounts_enabled: false,
+  drip_enabled: true, reactions_enabled: true, message_effects_enabled: true, ai_disclosure: false, smart_paywall_enabled: true,
+  paywall_as_voice: false, voice_speaker_boost: true, paywall_prime_enabled: false, paywall_prime_as_voice: false,
+  paywall_resume_enabled: false, paywall_resume_free: true, realism_effects_enabled: true, strict_onboarding_steps: true,
+  tip_credits_per_100_stars: 0, followup_after_minutes: 0, memory_window: 24, voice_stability: 0.4, voice_similarity: 0.75,
+  voice_style: 0.25, voice_speed: 0.95, paywall_prime_before: 3, discount_level_light_pct: 34, discount_level_medium_pct: 67,
+  discount_level_max_pct: 100, discount_tier_share_none_pct: 50, discount_tier_share_low_pct: 60, discount_tier_share_mid_pct: 75,
+  discount_tier_share_high_pct: 90, discount_tier_share_whale_pct: 100, discount_absolute_max_pct: 90, tip_max_stars: 100000,
+  bubble_delay_min_ms: 600, bubble_delay_max_ms: 1400, llm_max_tries: 3, spoil_options: DEFAULT_SPOIL_OPTIONS,
+  eleven_model: "eleven_multilingual_v2", text_model: "x-ai/grok-4.20", voice_model: "deepseek/deepseek-v4-pro",
+  media_model: "mistralai/mistral-small-3.2-24b-instruct", routing_model: "qwen/qwen3-30b-a3b-instruct-2507",
+  voice_enhance_model: "google/gemini-2.5-flash-lite", photo_reply_model: "qwen/qwen3-vl-32b-instruct",
+  vision_model: "qwen/qwen3-vl-235b-a22b-instruct",
+};
+
+// Fields a follower must receive together: a partial cascade could leave her min above the new max.
+export const CLONE_DEFAULT_GROUPS: readonly (readonly string[])[] = [
+  ["response_wait_min", "response_wait_max"], ["bubble_delay_min_ms", "bubble_delay_max_ms"],
+  ["discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct", "discount_tier_share_none_pct",
+    "discount_tier_share_low_pct", "discount_tier_share_mid_pct", "discount_tier_share_high_pct", "discount_tier_share_whale_pct"],
+];
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
 }
