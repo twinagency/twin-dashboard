@@ -349,3 +349,4 @@ RED by pick group (file count; a file can hold several findings):
 
 ## Status log
 - 2026-11-12 PR-0 W2c N18 (test:offline + premerge.sh) → #355 → merged 6ca978ae. Local proof: premerge PASS 150s (measured). CI billing-locked. Deferred: storage-transport 384MB flake; lint n/a (no eslint).
+- 2026-11-12 PR-1 W2 F1 + W2c N2 (owner guard, client) → #356 → merged 4060a7cf. Rule test red 3/7 → green 7/7; premerge PASS; codex solo NONE (measured). Live UI check pending batch.
