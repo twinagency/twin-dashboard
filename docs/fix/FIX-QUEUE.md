@@ -398,3 +398,4 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - 2026-11-12 #369 merged 22d44ae1 (W4 F5 cut ratio fail closed; full rwl: R1 2 major+codex P1+da P1 closed d0b44dff, Sonnet APPROVE, codex final NONE). Root ff'd to 22d44ae1.
 - #370 (revenue window) opened, update-branch → 76cd6fec, premerge running. Deferred minor: date picker >1100d.
 - F0 check.sh started (fix-f0) on slot 1; slot 2 = memc rwl fixer (default-deny redesign). Pay rwl r1: 3 major (lookahead miss, empty page, split dedupe rule) → snap-to-paid_at-group design, fixer queued for next free slot (/tmp/pay-findings.md).
+- 2026-11-12 #370 merged 7bb00611 (W4/W5 revenue window: custom range validated, CUSTOM w/o range 400, ALL lookup fail closed; full rwl closed, premerge PASS @76cd6fec). Root ff'd to 7bb00611. 16 merged. memc r2 Sonnet APPROVE (#1-#6 CLOSED, caller grep clean, measured); codex final running.
