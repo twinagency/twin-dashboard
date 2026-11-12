@@ -43,7 +43,7 @@ export function parseRecentHistory(v: unknown): RecentHistory | null {
   if ((h.conversationsReady as number) + (h.conversationsAwaitingWork as number) !== h.conversationsDiscovered
     || (m.messagesProcessed as number) + (m.messagesAwaitingProcessing as number) !== m.incomingMessagesInWindow
     || (o.completedFanJobs as number) + (o.pendingFanJobs as number) !== o.activatedFanJobs) return null;
-  // Guards read the substituted codes, so "" (-> "unrecognized") cannot ship as a ready block with a visible blocker.
+  // Guards read the projected values: a blank blocker is null (no blocker); any other off-shape string is "unrecognized" and still blocks "ready".
   const discoveryError = optCode(h.discoveryError), budgetHold = optCode(m.budgetHold);
   if (h.state === "recent_history_ready" && (!h.discoveryComplete || h.conversationsAwaitingWork !== 0 || discoveryError || Object.values(h.providerErrors).some(Boolean))) return null;
   if (m.state === "ready" && (h.state !== "recent_history_ready" || m.messagesAwaitingProcessing !== 0 || m.errors !== 0 || budgetHold)) return null;
