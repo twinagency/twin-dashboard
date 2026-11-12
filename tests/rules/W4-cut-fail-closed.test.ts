@@ -5,6 +5,11 @@ import "../support/admin-route-env";
  * lib/api-public.ts publicFleetFans kept gross when cuts.get missed. star_transactions.clone_id and users.clone_id are
  * NOT NULL + FK (bot db/migrations/015), so a miss is a broken invariant; the null-clone rows below are impossible
  * live and exist only to break it. The fake answers a "null" uuid lookup the way Postgres does (22P02).
+ * REACHABILITY: /payments skips null ids in its cut lookup, so it reaches net() with no cut. /stats and fleet /fans
+ * look up every row's id and resolveCloneCuts fills an entry for each, keyed exactly as they read it back (same value,
+ * Map SameValueZero), so through those public functions a missing cut is unreachable for ANY wire response: a null id
+ * rejects at the lookup (22P02) and a valid uuid gets an entry (no row = 0%). Their gross fallback is therefore
+ * guarded by net() itself, tested directly below.
  * Drives the real publicFleetPayments/publicFleetStats/publicFleetFans/publicPayments over tests/support/postgrest-wire.ts.
  * Fixture: clone A platform cut 20%, one 100-Star sale on A and one 100-Star sale with clone_id null.
  * Also MEASURES the /payments vs /revenue claim: per-row rounding to 0.01 Star vs one cut on the aggregate.
@@ -16,6 +21,7 @@ import { json, useWire, type WireCall } from "../support/postgrest-wire";
 import { publicFleetPayments, publicFleetStats, publicPayments, _resetStatsCache } from "../../lib/api-public-v2";
 import { publicFleetFans } from "../../lib/api-public";
 import { applyCut } from "../../lib/platform-cut";
+import { net } from "../../lib/revenue-projection";
 import { isQueryError, parsePaymentQuery } from "../../lib/api-public-query";
 
 const A = "00000000-0000-4000-8000-0000000000a1";
@@ -78,20 +84,25 @@ test("control: a resolved row is net (100 x 0.8)", async () => {
   assert.deepEqual((await publicFleetFans(100)).fans.map((r) => r.total_spent_stars), [80]);
 });
 
-test("fleet /payments: a row with no resolved cut throws, never gross", async () => {
+test("fleet /payments: a row with no resolved cut reaches net() and throws, never gross", async () => {
   stx = [pay("a", A), pay("n", null)];
   await failsClosed(() => publicFleetPayments(query()));
 });
 
-test("fleet /stats: a row with no resolved cut throws, never gross", async () => {
+test("fleet /stats: a null clone rejects (22P02 at the cut lookup), never gross", async () => {
   _resetStatsCache();
   stx = [pay("a", A), pay("n", null)];
   await failsClosed(() => publicFleetStats(NOW));
 });
 
-test("fleet /fans: a fan with no resolved cut throws, never gross", async () => {
+test("fleet /fans: a null clone rejects (22P02 at the cut lookup), never gross", async () => {
   users = [{ clone_id: A, telegram_id: 1, total_spent_stars: 100 }, { clone_id: null, telegram_id: 2, total_spent_stars: 100 }];
   await failsClosed(() => publicFleetFans(100));
+});
+
+test("net(): a missing cut throws in both modes (the guard /stats and /fans rely on), never gross", () => {
+  for (const mode of ["agency", "creator"] as const) assert.throws(() => net(100, undefined, mode), /No cut resolved/);
+  assert.equal(net(100, { platformPct: 20, agencyCreatorPct: 0 }, "agency"), 80);
 });
 
 test("measured: /payments sums per-row-rounded Stars, /revenue cuts the aggregate; they differ by <= 0.005 Star per payment", async () => {
