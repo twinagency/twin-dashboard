@@ -361,3 +361,4 @@ RED by pick group (file count; a file can hold several findings):
 - QUEUED N1-follow-a (secrets): bb status `error` free text forwarded verbatim (parser keeps 300 printable chars; `x_bc=...` passes). Fix: fixed message/code allowlist.
 - QUEUED N1-follow-b (secrets): account GET recentHistory keeps unknown nested keys (parseRecentHistory); project by name.
 - 2026-11-12 N1-follow-a (bb status error free text) → #362 → merged 76fa30ef. 37 LOC; red/green/plant; premerge PASS; codex solo NONE (measured).
+- QUEUED N1-follow-c (secrets): lib/onlyfans/launch/native.ts:614 RecoveryProgress has [key: string]: unknown; parseRecoveryProgress passes raw recovery (incl raw recentHistory) b-native-routes → client BMemoryPanel (inferred, read). Fix: by-name projection.
