@@ -108,7 +108,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         sessionDenied.current = true; clearSecrets(); dropRetry(); setOwner(""); setModelId(""); setData(null); setDenied(true);
         setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return false;
       }
-      const next = response.ok ? parseConnection(await response.json(), accountId) : null;
+      const next = response.ok ? parseConnection(await response.json(), accountId, true) : null;
       if (!active.current) return false;
       if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
       setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); }
@@ -327,7 +327,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         <p className="mt-2 text-xs text-muted" data-of-connection-detail>{CONNECTION_DETAILS[state]}</p>
         {data.lastError ? <details className="mt-2 text-xs" data-of-connection-error><summary>Recorded connection error</summary><code className="mt-1 block break-all">{data.lastError}</code></details> : null}
         {data.verifiedAt ? <p className="mt-1 text-xs text-muted">Successful background verification renews the deadline. An elapsed deadline alone does not confirm a logout.</p> : null}
-        <ConnectionSyncStatus connection={data} state={state} />
+        <ConnectionSyncStatus connection={data} state={state} operator /* mounted only for managing operators (AccountsView: !agencyConnections && !readOnly); server strips cost unless internalOperator */ />
         <div className="mt-3 flex flex-wrap gap-2">
           {creatorId && creatorName ? <AdminOnlyFansSignIn creators={[{id:creatorId,name:creatorName}]} accountId={accountId} /> : null}
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>

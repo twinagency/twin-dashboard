@@ -650,6 +650,8 @@ export function parseRecoveryProgress(
   v: unknown,
   accountId: string,
   fanId: string | null = null,
+  /** Our model cost: true only for an operator response, or the browser re-parsing one. */
+  cost = false,
 ): RecoveryProgress | null {
   const status = object(v) ? pick(["complete", "incomplete"] as const, v.status) : undefined;
   if (!object(v) || v.schemaVersion !== "of-history-recovery.v1" || v.accountId !== accountId || v.fanId !== fanId || !status ||
@@ -664,7 +666,7 @@ export function parseRecoveryProgress(
     pagesCommitted: v.pagesCommitted, messagesObserved: v.messagesObserved, messagesAdded: v.messagesAdded,
     totalMessages: null, percentComplete: null, recentRecoveryNeeded: v.recentRecoveryNeeded };
   // An optional diagnostic: invalid drops only itself, never the recovery (F4).
-  const recentHistory = parseRecentHistory(v.recentHistory);
+  const recentHistory = parseRecentHistory(v.recentHistory, cost);
   if (recentHistory) r.recentHistory = recentHistory;
   return r;
 }

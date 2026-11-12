@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseRecentHistory } from "../../lib/onlyfans-connections/recent-history";
 import { parseConnection } from "../../lib/onlyfans-connections/contract";
-import { CONNECTION, RECENT, connectionResponse } from "./core-recent-fixtures";
+import { CONNECTION, COST, RECENT, connectionResponse } from "./core-recent-fixtures";
 
 const EXTRA = "syntheticExtraField";
 const withRecent = (r: object) => parseConnection(connectionResponse({ ...CONNECTION, recentHistory: r }), "of-1")?.recentHistory;
@@ -26,12 +26,14 @@ test("control: a valid block keeps every known field through parseRecentHistory 
 
 test("F5: an unknown key at the top level or inside a nested block does not survive parsing", () => {
   // The top level plus every object-valued block of the fixture (initialHistory, memoryProcessing, olderHistory, ...).
-  const nested = Object.entries(RECENT).flatMap(([key, value]): Array<[string, object, string[]]> =>
-    value && typeof value === "object" && !Array.isArray(value) ? [[key, { ...RECENT, [key]: { ...value, [EXTRA]: "synthetic" } }, [key]]] : []);
+  // TEST-CHANGE (N1 memory-cost-agency): RECENT no longer carries the cost; FULL adds it back and the operator parse (cost=true) is checked.
+  const FULL = { ...RECENT, memoryModelAccounting: COST };
+  const nested = Object.entries(FULL).flatMap(([key, value]): Array<[string, object, string[]]> =>
+    value && typeof value === "object" && !Array.isArray(value) ? [[key, { ...FULL, [key]: { ...value, [EXTRA]: "synthetic" } }, [key]]] : []);
   assert.ok(nested.length >= 5, `fixture lost its nested blocks: ${nested.map(([key]) => key).join(", ")}`);
   const cases: Array<[string, object, string[]]> = [["top level", { ...RECENT, [EXTRA]: "synthetic" }, []], ...nested];
   for (const [name, block, path] of cases) {
-    assert.equal(leaked(parseRecentHistory(block), path), false, `parseRecentHistory passed an unknown key (${name})`);
+    assert.equal(leaked(parseRecentHistory(block, true), path), false, `parseRecentHistory passed an unknown key (${name})`);
     assert.equal(leaked(withRecent(block), path), false, `parseConnection passed an unknown key (${name})`);
   }
 });

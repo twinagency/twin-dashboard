@@ -125,6 +125,9 @@ export function authorizeRead(auth: ReadAuth): ReadDenial | null {
   return null;
 }
 
+/** The internal operator: a verified dashboard session with no agency identity and no view-as. Fails closed. */
+export const internalOperator = (auth: ReadAuth) => auth.operatorSession && !auth.agency && !auth.viewAs && !auth.agencyGrant;
+
 function unavailable(reason: string): ReadDenial {
   return { ok: false, status: 503, state: "unavailable", code: "backend_unavailable", error: reason };
 }

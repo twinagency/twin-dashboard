@@ -10,8 +10,11 @@ export const RECENT: RecentHistory = { schemaVersion: "of-recent-history.v1", st
     providerRequests: 8, failedReadAttempts: 0, unfinishedReadAttempts: 0, providerOrdering: "id_desc_exhaustive_date_filter", elapsedSeconds: 42 },
   memoryProcessing: { state: "ready", incomingMessagesInWindow: 7, messagesProcessed: 7, messagesAwaitingProcessing: 0, errors: 0, budgetHold: null },
   olderHistory: { activatedFanJobs: 1, completedFanJobs: 0, pendingFanJobs: 1 }, lifetimeHistory: { complete: false, conversationsComplete: 0 },
-  memoryModelAccounting: { providerReportedUsd: "0.004", tokenEstimateUsd: "0", activeReservationUsd: "0.01", unresolvedReservationUsd: "0.02" },
+  // TEST-CHANGE (N1 memory-cost-agency): no memoryModelAccounting. parseRecentHistory drops our cost by default, so RECENT is the
+  // default projection; the operator-only cost path is covered in N1-memory-cost-agency.test.ts.
   percentComplete: null, lifetimeTotalMessages: null };
+/** Our model cost as the backend sends it; only an operator parse (cost=true) keeps it. */
+export const COST = { providerReportedUsd: "0.731", tokenEstimateUsd: "0.052", activeReservationUsd: "0.913", unresolvedReservationUsd: "0.274" };
 export const CONNECTION = { accountId: "of-1", revision: 1, status: "verified", ownerId: "1", expiresAt: "2026-11-03T03:00:00Z", verifiedAt: "2026-11-02T03:00:00Z",
   lastError: null, outgoingEnabled: true, policyRevision: 1, usedUnits: 0, limitUnits: 100, mediaEnabled: false, automateNewConversations: false };
 export const connectionResponse = (c: object) => ({ schemaVersion: "of-connections.v1", ok: true, connection: c });

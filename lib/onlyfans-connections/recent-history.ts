@@ -11,7 +11,8 @@ export type RecentHistory = {
     incomingMessagesInWindow: number; errors: number; budgetHold: string | null };
   olderHistory: { activatedFanJobs: number; completedFanJobs: number; pendingFanJobs: number };
   lifetimeHistory: { complete: boolean; conversationsComplete: number };
-  memoryModelAccounting: { providerReportedUsd: string; tokenEstimateUsd: string;
+  /** Our model cost. Default deny: only parseRecentHistory(v, true) sets it, and only operator responses pass true. */
+  memoryModelAccounting?: { providerReportedUsd: string; tokenEstimateUsd: string;
     activeReservationUsd: string; unresolvedReservationUsd: string };
   percentComplete: null; lifetimeTotalMessages: null;
 };
@@ -25,11 +26,11 @@ export const DIAGNOSTIC_CODE = /^[a-z][a-z0-9]{0,19}(?:[_:.-][a-z0-9]{1,20}){0,7
 const code = (v: string) => DIAGNOSTIC_CODE.test(v) ? v : "unrecognized";
 /** Blank means "no blocker" (the old truthiness), so it can never refuse a ready block. */
 const optCode = (v: unknown) => v === null || !(v as string).trim() ? null : code(v as string);
-export function parseRecentHistory(v: unknown): RecentHistory | null {
+export function parseRecentHistory(v: unknown, cost = false): RecentHistory | null {
   if (!obj(v) || v.schemaVersion !== "of-recent-history.v1" || !stamp(v.startedAt) || !stamp(v.cutoffAt)
     || v.percentComplete !== null || v.lifetimeTotalMessages !== null || !obj(v.initialHistory)
-    || !obj(v.memoryProcessing) || !obj(v.olderHistory) || !obj(v.lifetimeHistory) || !obj(v.memoryModelAccounting)) return null;
-  const h = v.initialHistory, m = v.memoryProcessing, o = v.olderHistory, l = v.lifetimeHistory, a = v.memoryModelAccounting;
+    || !obj(v.memoryProcessing) || !obj(v.olderHistory) || !obj(v.lifetimeHistory)) return null;
+  const h = v.initialHistory, m = v.memoryProcessing, o = v.olderHistory, l = v.lifetimeHistory;
   if (!["recent_history_ready", "incomplete"].includes(String(h.state)) || typeof h.discoveryComplete !== "boolean"
     || !["conversationsDiscovered", "conversationsReady", "conversationsAwaitingWork", "messagesSavedInWindow", "fansWithStoredWindowMessages", "providerRequests", "failedReadAttempts", "unfinishedReadAttempts"].every(k => count(h[k]))
     || !obj(h.providerErrors) || !Object.values(h.providerErrors).every(count)
@@ -38,8 +39,7 @@ export function parseRecentHistory(v: unknown): RecentHistory | null {
     || !["ready", "incomplete"].includes(String(m.state)) || !["messagesProcessed", "messagesAwaitingProcessing", "incomingMessagesInWindow", "errors"].every(k => count(m[k]))
     || !(m.budgetHold === null || typeof m.budgetHold === "string")
     || !["activatedFanJobs", "completedFanJobs", "pendingFanJobs"].every(k => count(o[k]))
-    || typeof l.complete !== "boolean" || !count(l.conversationsComplete)
-    || !["providerReportedUsd", "tokenEstimateUsd", "activeReservationUsd", "unresolvedReservationUsd"].every(k => money(a[k]))) return null;
+    || typeof l.complete !== "boolean" || !count(l.conversationsComplete)) return null;
   if ((h.conversationsReady as number) + (h.conversationsAwaitingWork as number) !== h.conversationsDiscovered
     || (m.messagesProcessed as number) + (m.messagesAwaitingProcessing as number) !== m.incomingMessagesInWindow
     || (o.completedFanJobs as number) + (o.pendingFanJobs as number) !== o.activatedFanJobs) return null;
@@ -52,7 +52,7 @@ export function parseRecentHistory(v: unknown): RecentHistory | null {
   for (const [k, c] of Object.entries(h.providerErrors)) errors.set(code(k), Math.min(Number.MAX_SAFE_INTEGER, (errors.get(code(k)) ?? 0) + (c as number)));
   // A new object naming every field: unknown keys at any level never reach the browser.
   const n = (x: unknown) => x as number, s = (x: unknown) => x as string;
-  return { schemaVersion: "of-recent-history.v1", startedAt: s(v.startedAt), cutoffAt: s(v.cutoffAt),
+  const r: RecentHistory = { schemaVersion: "of-recent-history.v1", startedAt: s(v.startedAt), cutoffAt: s(v.cutoffAt),
     initialHistory: { state: h.state as RecentHistory["initialHistory"]["state"], discoveryComplete: h.discoveryComplete as boolean,
       conversationsDiscovered: n(h.conversationsDiscovered), conversationsReady: n(h.conversationsReady), conversationsAwaitingWork: n(h.conversationsAwaitingWork),
       messagesSavedInWindow: n(h.messagesSavedInWindow), fansWithStoredWindowMessages: n(h.fansWithStoredWindowMessages),
@@ -64,7 +64,13 @@ export function parseRecentHistory(v: unknown): RecentHistory | null {
       budgetHold },
     olderHistory: { activatedFanJobs: n(o.activatedFanJobs), completedFanJobs: n(o.completedFanJobs), pendingFanJobs: n(o.pendingFanJobs) },
     lifetimeHistory: { complete: l.complete as boolean, conversationsComplete: n(l.conversationsComplete) },
-    memoryModelAccounting: { providerReportedUsd: s(a.providerReportedUsd), tokenEstimateUsd: s(a.tokenEstimateUsd),
-      activeReservationUsd: s(a.activeReservationUsd), unresolvedReservationUsd: s(a.unresolvedReservationUsd) },
     percentComplete: null, lifetimeTotalMessages: null };
+  // Our cost, operator only, ignored otherwise. Absent stays parseable (the browser re-parses an agency's stripped copy; operator
+  // surfaces say "Model cost unavailable."); present but malformed refuses the block, as before default deny.
+  const a = v.memoryModelAccounting, keys = ["providerReportedUsd", "tokenEstimateUsd", "activeReservationUsd", "unresolvedReservationUsd"] as const;
+  if (!cost || !("memoryModelAccounting" in v)) return r;
+  if (!obj(a) || !keys.every(k => money(a[k]))) return null;
+  r.memoryModelAccounting = { providerReportedUsd: s(a.providerReportedUsd), tokenEstimateUsd: s(a.tokenEstimateUsd),
+    activeReservationUsd: s(a.activeReservationUsd), unresolvedReservationUsd: s(a.unresolvedReservationUsd) };
+  return r;
 }
