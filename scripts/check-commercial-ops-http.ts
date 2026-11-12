@@ -6,14 +6,14 @@ import assert from "node:assert/strict";
 import {createServer,get as httpGet} from "node:http";
 import {spawn} from "node:child_process";
 import {openSync,closeSync,readFileSync,writeFileSync,existsSync} from "node:fs";
-import {createServer as httpsServer} from "node:https";
+import {createServer as httpsServer,get as httpsGet} from "node:https";
 import {request as httpRequest} from "node:http";
 import {randomUUID} from "node:crypto";
 const backend=process.env.COMMERCIAL_TEST_BACKEND??"http://127.0.0.1:18787",base=process.env.COMMERCIAL_TEST_ORIGIN??"http://127.0.0.1:3198";
 const agency="bc670215-110b-4ea0-8f5c-af3dfe21d253",manager="44444444-4444-4444-8444-444444444444",reader="55555555-5555-4555-8555-555555555555",creator="11111111-1111-4111-8111-111111111111",other="22222222-2222-4222-8222-222222222222";
 type Json=Record<string,any>;
 /** next dev compiles each route on first request (minutes on one CPU): warm every route this check uses with a long timeout. */
-const warm=(path:string)=>new Promise<void>(resolve=>{const req=httpGet(base+path,{headers:{Cookie:"twin_agency_access=synthetic-manager"},timeout:900000},res=>{res.resume();res.on("end",()=>resolve());});req.on("error",()=>resolve());req.on("timeout",()=>{req.destroy();resolve();});});
+const warm=(path:string)=>new Promise<void>(resolve=>{const req=(base.startsWith("https:")?httpsGet:httpGet)(base+path,{headers:{Cookie:"twin_agency_access=synthetic-manager"},timeout:900000},res=>{res.resume();res.on("end",()=>resolve());});req.on("error",()=>resolve());req.on("timeout",()=>{req.destroy();resolve();});});
 async function main(){
  let assigned=creator,active=true;
  const identity=createServer(async(req,res)=>{
