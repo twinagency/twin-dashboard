@@ -9,6 +9,14 @@ import { trustedFormOrigin } from "@/lib/form-origin";
 export const connectionAnswer = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: PRIVATE_HEADERS });
 export const connectionRefusal = (status: number, error: string) => connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: false, outcome: "refused", error }, status);
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
+/** Bodyless reads that return credential material: verified operator session, same-origin fetch only. */
+export async function connectionSessionContext(request: NextRequest) {
+  const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
+  const session = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!await verifySessionToken(session)) return connectionRefusal(401, "Sign in again before changing account connections.");
+  if (![null, "same-origin"].includes(request.headers.get("sec-fetch-site"))) return connectionRefusal(403, "Change connections from this dashboard.");
+  return { actor: `op-session:${digest(session!)}` };
+}
 export async function connectionCommandContext(request: NextRequest) {
   const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
   const session = (await cookies()).get(SESSION_COOKIE)?.value;
