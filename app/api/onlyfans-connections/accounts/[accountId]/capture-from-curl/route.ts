@@ -18,7 +18,7 @@ export async function POST(request: NextRequest, context: Context) {
   const backend = configuredConnectionBackend(); if (!backend) return connectionRefusal(503, "Account connection management is not configured.");
   const result = await backend.captureFromCurl(accountId, body.curl, typeof body.staticParamOverride === "string" ? body.staticParamOverride : null);
   return result.ok
-    // By-name projection: the capture and X-Hash stay server-side, the browser gets the owner and a handle (REVIEW inv 6).
+    // By-name projection: the capture and X-Hash stay server-side, the browser gets the owner and a handle (rule: OnlyFans session data never reaches the browser).
     ? connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, ownerId: result.data.ownerId, captureId: putCapture({ accountId, actor: ctx.actor }, result.data) })
     : connectionRefusal(result.status, result.error);
 }

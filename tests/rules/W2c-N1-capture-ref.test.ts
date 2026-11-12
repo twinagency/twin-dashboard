@@ -67,7 +67,7 @@ if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 11 })) {
     const poll = async () => await (await call(`${ACCOUNT}/browserbase-login/[jobId]`, { accountId: A, jobId: job })).json() as Reply;
     const first = await poll(), second = await poll();
     assert.match(String(first.captureId), /^[A-Za-z0-9_-]{22,}$/); assert.equal(second.captureId, first.captureId);
-    assert.equal("capture" in first, false); assert.equal("xHash" in first, false); assert.equal(first.ownerId, OWNER);
+    assert.deepEqual(Object.keys(first).sort(), ["captureId", "error", "jobId", "liveViewUrl", "ok", "ownerId", "schemaVersion", "state"]); assert.equal(first.ownerId, OWNER);
     backend(); assert.equal((await save({ captureRef: first.captureId })).status, 200);
     assert.deepEqual((saves()[0].body as { payload: { capture: unknown } }).payload.capture, done.capture);
   });

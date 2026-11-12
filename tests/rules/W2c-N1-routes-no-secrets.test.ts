@@ -1,4 +1,4 @@
-// Rule (W2c N1 step 3 of 3 + W3 C-C3; REVIEW.md inv 6 "OnlyFans session data never reaches the browser"): the capture-from-curl reply
+// Rule (W2c N1 step 3 of 3 + W3 C-C3; rule "OnlyFans session data never reaches the browser"): the capture-from-curl reply
 // and the Browserbase status GET are by-name projections. The capture (cookies[].value, headers.x_bc, any unknown key) and the X-Hash stay
 // server-side in lib/onlyfans-connections/capture-store.ts; the browser gets ownerId + captureId only.
 // Drives the REAL routes through tests/helpers/W2c-delta-route-harness.ts (lib/onlyfans/route.ts, next/headers, server-only,

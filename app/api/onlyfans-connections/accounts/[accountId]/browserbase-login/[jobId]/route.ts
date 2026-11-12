@@ -18,6 +18,6 @@ export async function GET(request: NextRequest, context: Context) {
   if (!result.ok) return connectionRefusal(result.status, result.error);
   const { state, liveViewUrl, error, capture, xHash, ownerId } = result.data;
   const held = state === "done" && capture && xHash && ownerId ? { captureId: putCapture({ accountId, actor: ctx.actor, jobId }, { capture, xHash, ownerId }) } : {};
-  // By-name projection: capture and X-Hash never reach the browser (REVIEW inv 6).
+  // By-name projection: capture and X-Hash never reach the browser (rule: OnlyFans session data never reaches the browser).
   return connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, jobId: result.data.jobId, state, liveViewUrl, error, ownerId, ...held });
 }
