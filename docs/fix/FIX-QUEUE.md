@@ -385,3 +385,8 @@ RED by pick group (file count; a file can hold several findings):
 - NEXT: Fix 1 W4-follow + public-envelope (fix/w4f-public-envelope-denied-log).
 - 2026-11-12 W4 F6/F11 public-envelope + denied logging (W4-follow) → #368 → merged dec042e0. 229 LOC; errors stamped generatedAt + no-store, 500 = "internal error", logDenied 1 row/status/60s with suppressed count; red 6/10 → 12/12, 6 plants red; rules 72/72, api 52, public 61, premerge PASS; rwl full-lite: Opus 1 major/3 minor + codex clean + codex-da (3 rejected w/ reason) → delta Sonnet APPROVE, codex final clean (measured). CI billing-locked, verified. Deferred minor: W4-tenant-auth local wire helpers (patch /tmp/w4f-tenant-auth-move.patch, 356 LOC).
 - NEXT: Fix 2 revenue-window W4+W5; live-5 (public API surface) after it.
+
+## Worktree cleanup 2026-11-12 23:17Z (owner item 4)
+Removed 108 worktrees (13 fix-*, 95 rwl lanes), all clean, plain `git worktree remove` (no --force). Branches untouched.
+Backup first: `.local-dev/backups/worktree-cleanup-20261112/` = scratch.tgz (273 ignored .scratch files) + branches.bundle (all rwl/*, fix/*; verified).
+Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone clones, not worktrees); fix-sweep, fix-w45, fix-cut, other sessions' worktrees.
