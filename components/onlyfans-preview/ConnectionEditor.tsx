@@ -289,7 +289,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       if (active.current && !sessionLost) {
         retry.current = uncertain ? command : null; setHasRetry(uncertain);
         if (expired) { setCaptureRef(null); setCaptureReady(false); } else clearSecrets(); // expiry keeps the typed proxy and model key
-        const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed || expired) setNotice(message); setBusy(false); router.refresh(); }
+        const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed || (expired && !sessionDenied.current)) setNotice(message); setBusy(false); router.refresh(); }
       }
       if (active.current && sessionLost) setBusy(false);
       submitting.current = false;

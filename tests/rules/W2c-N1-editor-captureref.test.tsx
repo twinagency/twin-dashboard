@@ -130,9 +130,9 @@ test("410 capture_expired: says so, offers no retry, clears only the capture (ty
   const save = calls.findIndex(c => c.method === "POST" && c.path === ENDPOINT);
   assert.ok(calls.slice(save + 1).some(c => c.method === "GET" && c.path === ENDPOINT), "status refreshed after the 410");
 });
-test("410 capture_expired keeps its notice when the follow-up status refresh fails", async () => {
-  await mount({ curl: [refReply()], saves: [expired], refreshAfterSave: json({ ok: false }, 500) });
-  await pasteAndApply(); await click("[data-of-connection-save]"); assert.equal(notice(), EXPIRED);
+test("410 capture_expired keeps its notice when the refresh fails, but a denied refresh keeps the sign-in notice", async () => {
+  for (const [status, want] of [[500, EXPIRED], [401, "Your session cannot manage this account. Sign in again."]] as const) { await mount({ curl: [refReply()], saves: [expired], refreshAfterSave: json({ ok: false }, status) });
+    await pasteAndApply(); await click("[data-of-connection-save]"); assert.equal(notice(), want); await act(async () => root!.unmount()); root = undefined; }
 });
 
 test("an unconfirmed ref save retries the exact same captureRef", async () => {
