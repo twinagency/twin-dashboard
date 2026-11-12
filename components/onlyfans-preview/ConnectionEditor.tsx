@@ -1,13 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { Card } from "@/components/ui/card";
 import { connectionState, CONNECTION_LABELS, CONNECTION_DETAILS } from "@/lib/onlyfans-connections/presentation";
 import { normalizeProxyInput, PROXY_RULE } from "@/lib/onlyfans-connections/proxy";
 import ConnectionSyncStatus from "./ConnectionSyncStatus";
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
+import LoginMethodChoice, { type LoginMethod } from "./LoginMethodChoice";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
@@ -16,9 +18,10 @@ import { BROWSERBASE_TERMINAL, browserbaseState, parseBrowserbaseJob, type Brows
 
 const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
+const primaryClass = "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const BROWSERBASE_POLL_MS = 2000, BROWSERBASE_POLL_FAILURES = 5, BROWSERBASE_DEADLINE_MS = 11 * 60_000;
 const BROWSERBASE_STATUS: Record<BrowserbaseState, string> = {
-  starting: "Starting the Browserbase browser…", waiting_login: "Sign in to OnlyFans in the browser below. The session is captured automatically after login.",
+  starting: "Starting the Browserbase browser…", waiting_login: "Sign in to OnlyFans in the hosted browser. The session is captured automatically after login.",
   capturing: "Logged in. Capturing the session…", done: "Session captured.", failed: "Browserbase login failed.",
   cancelled: "Browserbase login cancelled.", expired: "The Browserbase login expired. Start it again.",
 };
@@ -34,6 +37,25 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const [hours, setHours] = useState("6"), [captureReady, setCaptureReady] = useState(false);
   const [curlText, setCurlText] = useState(""), [curlBusy, setCurlBusy] = useState(false);
   const [bb, setBb] = useState<BrowserbaseView | null>(null), [bbBusy, setBbBusy] = useState(false);
+  const [method, setMethod] = useState<LoginMethod>("browser"), [bbHidden, setBbHidden] = useState(false);
+  const bbActive = !!bb && !BROWSERBASE_TERMINAL.includes(bb.state);
+  const bbOpen = bbActive && !!bb?.liveViewUrl && !bbHidden;
+  const bbDialog = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { // modal: focus in on open, give focus back on close
+    if (!bbOpen) return;
+    const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    bbDialog.current?.querySelector<HTMLElement>("button")?.focus();
+    return () => { if (back?.isConnected) back.focus(); };
+  }, [bbOpen]);
+  function bbDialogKey(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") { event.preventDefault(); setBbHidden(true); return; }
+    if (event.key !== "Tab" || !bbDialog.current) return;
+    const items = [...bbDialog.current.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),iframe")];
+    if (!items.length) return;
+    const first = items[0], last = items[items.length - 1], at = document.activeElement;
+    if (event.shiftKey && (at === first || at === bbDialog.current)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && at === last) { event.preventDefault(); first.focus(); }
+  }
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
   const [hasRetry, setHasRetry] = useState(false);
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
@@ -139,7 +161,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   async function startBrowserbase() {
     if (bbBusy || bb && !BROWSERBASE_TERMINAL.includes(bb.state)) return;
     stopBrowserbasePoll(); const run = bbRun.current; bbDeadline.current = Date.now() + BROWSERBASE_DEADLINE_MS;
-    setBb(null); setBbBusy(true); setNotice("Starting a Browserbase login…");
+    setBb(null); setBbHidden(false); setMethod("browser"); setBbBusy(true); setNotice("Starting a Browserbase login…");
     try {
       const response = await fetch(`${endpoint}/browserbase-login`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
         headers: { "Content-Type": "application/json" }, body: "{}" });
@@ -292,30 +314,31 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           <fieldset disabled={busy || hasRetry} className="min-w-0 space-y-3">
             <legend className="mb-2 text-sm font-semibold">1. Save account credentials</legend>
             <label className="block text-xs">OnlyFans owner ID<input data-of-connection-owner className={inputClass} inputMode="numeric" value={owner} disabled={data.ownerId !== null} onChange={event => setOwner(event.target.value)} required /></label>
-            <div className="rounded-lg border border-line p-2">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <a data-of-connection-extension className={`${buttonClass} inline-block no-underline`} href="/downloads/fastt-login-capture.zip" download>⬇ Install Fastt Login Capture extension</a>
-                <span className="text-xs text-muted">Unzip → open <code>chrome://extensions</code> → Developer mode → Load unpacked → sign in to OnlyFans → Copy curl → paste below.</span>
-              </div>
-              <div className="mb-3 min-w-0" data-of-connection-browserbase-panel>
+            <LoginMethodChoice value={method} onChange={setMethod} disabled={bbBusy || bbActive} panels={{
+              browser: <div className="min-w-0" data-of-connection-browserbase-panel>
+                <p className="mb-3 text-xs text-muted">Opens OnlyFans in a hosted browser. Sign in there (2FA included) and the session is captured for you. Your password never passes through Twin.</p>
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" data-of-connection-browserbase className={buttonClass} disabled={busy || bbBusy || !!bb && !BROWSERBASE_TERMINAL.includes(bb.state)} onClick={() => void startBrowserbase()}>{bbBusy && !bb ? "Starting Browserbase…" : "Log in with Browserbase"}</button>
-                  {bb && !BROWSERBASE_TERMINAL.includes(bb.state) ? <button type="button" data-of-connection-browserbase-cancel className={buttonClass} disabled={bbBusy} onClick={() => void cancelBrowserbase()}>Cancel</button> : null}
-                  {!bb ? <span className="text-xs text-muted">Opens a hosted browser here; sign in to OnlyFans and the session is captured for you.</span> : null}
+                  <button type="button" data-of-connection-browserbase className={primaryClass} disabled={busy || bbBusy || bbActive} onClick={() => void startBrowserbase()}>{bbBusy && !bb ? "Starting browser…" : bb?.state === "done" ? "Log in again" : "Log in with Browserbase"}</button>
                 </div>
-                {bb ? <p role="status" className="mt-2 text-xs" data-of-connection-browserbase-status data-state={bb.state}>{BROWSERBASE_STATUS[bb.state]}{bb.state === "failed" && bb.error ? ` ${bb.error}` : ""}</p> : null}
-                {bb && bb.liveViewUrl && !BROWSERBASE_TERMINAL.includes(bb.state) ? <>
-                  <iframe data-of-connection-browserbase-frame src={bb.liveViewUrl} title="Browserbase OnlyFans login" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-                    referrerPolicy="no-referrer" className="mt-2 block w-full rounded-lg border border-line" style={{ maxWidth: 900, aspectRatio: "3 / 2" }} />
-                  <a data-of-connection-browserbase-open className="mt-1 inline-block text-xs text-accent" href={bb.liveViewUrl} target="_blank" rel="noopener noreferrer">Open in new tab</a>
-                </> : null}
-              </div>
-              <label className="block text-xs">Paste curl (direct) — from the Fastt Login Capture extension, or a signed <code>/api2/v2/*</code> request from DevTools
-                <textarea data-of-connection-curl className={`${inputClass} h-24 font-mono text-xs`} value={curlText} placeholder="curl 'https://onlyfans.com/api2/v2/…' -H 'user-id: …' -H 'x-bc: …' -H 'sign: …' -b '…'" onChange={event => setCurlText(event.target.value)} /></label>
-              <button type="button" data-of-connection-curl-apply className={`${buttonClass} mt-2`} disabled={busy || curlBusy || !curlText.trim()} onClick={() => void applyCurl()}>{curlBusy ? "Reading curl…" : "Use pasted curl"}</button>
-              <span className="mt-1 block text-xs text-muted">Fills the owner, capture and X-Hash below from the pasted request. Then Save credentials.</span>
-            </div>
-            <label className="block text-xs">Or upload a Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>
+              </div>,
+              extension: <div className="min-w-0 space-y-3">
+                <ol className="list-decimal space-y-1 pl-4 text-xs text-muted">
+                  <li>Download and unzip the extension.</li>
+                  <li>Open <code>chrome://extensions</code>, turn on Developer mode, click Load unpacked.</li>
+                  <li>Sign in to OnlyFans in that Chrome, open the extension, Copy curl, paste it below.</li>
+                </ol>
+                <a data-of-connection-extension className={`${buttonClass} inline-block no-underline`} href="/downloads/fastt-login-capture.zip" download>⬇ Download Fastt Login Capture</a>
+                <label className="block text-xs">Paste curl — from the extension, or a signed <code>/api2/v2/*</code> request from DevTools
+                  <textarea data-of-connection-curl className={`${inputClass} h-24 font-mono text-xs`} value={curlText} placeholder="curl 'https://onlyfans.com/api2/v2/…' -H 'user-id: …' -H 'x-bc: …' -H 'sign: …' -b '…'" onChange={event => setCurlText(event.target.value)} /></label>
+                <button type="button" data-of-connection-curl-apply className={primaryClass} disabled={busy || curlBusy || !curlText.trim()} onClick={() => void applyCurl()}>{curlBusy ? "Reading curl…" : "Use pasted curl"}</button>
+              </div>,
+              file: <label className="block text-xs">Fastt session capture (.json)<input data-of-connection-capture ref={fileInput} type="file" accept="application/json,.json" className={`${inputClass} text-xs`} onChange={event => void chooseCapture(event.target.files?.[0])} /></label>,
+            }} />
+            {bb ? <div className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-line p-2" data-of-connection-browserbase-bar>
+              <p role="status" className={`w-full min-w-0 basis-full text-xs ${bb.state === "done" ? "font-semibold text-[#1a7f37]" : bb.state === "failed" || bb.state === "expired" ? "text-[#b42318]" : ""}`} data-of-connection-browserbase-status data-state={bb.state}>{bb.state === "done" ? "✓ " : ""}{BROWSERBASE_STATUS[bb.state]}{bb.state === "failed" && bb.error ? ` ${bb.error}` : ""}</p>
+              {bbActive && bb.liveViewUrl && bbHidden ? <button type="button" data-of-connection-browserbase-show className={buttonClass} onClick={() => setBbHidden(false)}>Show browser</button> : null}
+              {bbActive && (!bb.liveViewUrl || bbHidden) ? <button type="button" data-of-connection-browserbase-cancel className={buttonClass} disabled={bbBusy} onClick={() => void cancelBrowserbase()}>Cancel</button> : null}
+            </div> : null}
             <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} onChange={event => setXHash(event.target.value)} required /></label>
             <label className="block text-xs">Fixed proxy (residential, same country as the creator)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" placeholder="user:pass@host:port" value={proxy} onChange={event => setProxy(event.target.value)} />
               <span className="mt-1 block text-xs text-muted" data-of-connection-proxy-preview title={PROXY_RULE}>{proxyEntry.ok ? `Will be saved as: ${proxyEntry.masked}` : proxyEntry.message}</span></label>
@@ -330,6 +353,18 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
             <p className="text-xs text-muted">The capture is encrypted by the backend. Saving stages identity verification with outgoing messages disabled.</p>
             <button type="submit" data-of-connection-save className={buttonClass} disabled={!captureReady || !xHash || !connectionOwner(owner) || !proxyEntry.ok}>Save credentials</button>
           </fieldset>
+        {bbOpen && bb?.liveViewUrl ? createPortal(<div ref={bbDialog} tabIndex={-1} onKeyDown={bbDialogKey} className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 outline-none" data-of-connection-browserbase-overlay role="dialog" aria-modal="true" aria-label="Sign in to OnlyFans">
+          <div className="flex h-full max-h-[860px] w-full max-w-[1200px] flex-col overflow-hidden rounded-xl border border-line bg-card shadow-2xl">
+            <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-3">
+              <div className="min-w-0 flex-1"><p className="text-sm font-semibold">Sign in to OnlyFans</p><p className="text-xs text-muted">{BROWSERBASE_STATUS[bb.state]}</p></div>
+              <a data-of-connection-browserbase-open className={`${buttonClass} no-underline`} href={bb.liveViewUrl} target="_blank" rel="noopener noreferrer">Open in new tab</a>
+              <button type="button" className={buttonClass} onClick={() => setBbHidden(true)}>Minimise</button>
+              <button type="button" data-of-connection-browserbase-cancel className={buttonClass} disabled={bbBusy} onClick={() => void cancelBrowserbase()}>Cancel</button>
+            </div>
+            <iframe data-of-connection-browserbase-frame src={bb.liveViewUrl} title="Browserbase OnlyFans login" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+              referrerPolicy="no-referrer" className="block min-h-0 w-full flex-1 bg-white" />
+          </div>
+        </div>, document.body) : null}
         </form>
         <form className="mt-5" onSubmit={event => { event.preventDefault(); activate(); }}>
           <fieldset disabled={busy || hasRetry || state !== "connected"} className="min-w-0 space-y-3">
