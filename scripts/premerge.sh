@@ -45,7 +45,7 @@ run test:public npm run test:public
 # promoted rules
 shopt -s nullglob
 rules=(tests/rules/*.test.*)
-if [ ${#rules[@]} -gt 0 ]; then run rules node --import tsx --test --test-concurrency=1 "${rules[@]}"; else echo "n/a   rules (no tests/rules on this branch)"; fi
+if [ ${#rules[@]} -gt 0 ]; then run rules npm run -s test:rules; else echo "n/a   rules (no tests/rules on this branch)"; fi
 
 # known-reds: control passes, the rest still fails on an assertion
 krs=(tests/known-red/*.test.*)

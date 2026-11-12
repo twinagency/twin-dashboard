@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { OrToolDef } from "@/lib/openrouter";
 import { activeDialConflicts, type DialConflictCfg } from "@/lib/dial-conflicts";
+import { resolveCloneRef } from "@/lib/clone-name-match";
 
 // ── Read-only tool surface for the internal AI assistant ─────────────────────
 // HARD RULE (see CLAUDE.md / project memory): this DB holds live payment and
@@ -211,18 +212,10 @@ async function execGetRecentErrors(args: Record<string, unknown>): Promise<unkno
 }
 
 // Loose clone lookup shared by the test-run read tools below: try UUID, then
-// slug, then exact-ish name, same three-step pattern write-tools.ts's
-// resolveCloneId uses. A non-UUID string passed to .eq("id", ...) just comes
-// back as {data: null} from supabase-js (never throws), so this is safe to
-// try unconditionally.
+// slug, then exact name (lib/clone-name-match.ts). A read error throws, and
+// executeTool's caller (lib/openrouter.ts) turns that into a tool {error}.
 async function resolveCloneIdLoose(idOrName: string): Promise<string | null> {
-  const byId = await supabaseAdmin.from("clones").select("id").eq("id", idOrName).maybeSingle();
-  if (byId.data) return byId.data.id;
-  const bySlug = await supabaseAdmin.from("clones").select("id").eq("slug", idOrName).maybeSingle();
-  if (bySlug.data) return bySlug.data.id;
-  const byName = await supabaseAdmin.from("clones").select("id").ilike("name", idOrName).limit(1).maybeSingle();
-  if (byName.data) return byName.data.id;
-  return null;
+  return (await resolveCloneRef(supabaseAdmin, idOrName))?.id ?? null;
 }
 
 // Mirror of heatLevel() in components/clone/useCloneConfig.ts, kept minimal:

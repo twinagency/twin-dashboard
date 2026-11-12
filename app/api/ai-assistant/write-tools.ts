@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { resolveCloneRef } from "@/lib/clone-name-match";
 import type { OrToolDef } from "@/lib/openrouter";
 import {
   setStatus as setCloneStatusAction,
@@ -47,15 +48,12 @@ async function cloneName(id: string): Promise<string> {
   return data?.name ?? id;
 }
 
-// Resolve a clone by UUID or by name (case-insensitive exact match) so the
+// Resolve a clone by UUID, slug or name (case-insensitive exact match) so the
 // model can refer to "Aria" the way a person would, without a prior lookup.
+// lib/clone-name-match.ts: wildcards never match; a read error throws (approve route: 500).
 async function resolveCloneId(idOrName: string): Promise<{ id: string; name: string; slug: string }> {
-  const byId = await supabaseAdmin.from("clones").select("id,name,slug").eq("id", idOrName).maybeSingle();
-  if (byId.data) return byId.data;
-  const bySlug = await supabaseAdmin.from("clones").select("id,name,slug").eq("slug", idOrName).maybeSingle();
-  if (bySlug.data) return bySlug.data;
-  const byName = await supabaseAdmin.from("clones").select("id,name,slug").ilike("name", idOrName).limit(1).maybeSingle();
-  if (byName.data) return byName.data;
+  const clone = await resolveCloneRef(supabaseAdmin, idOrName);
+  if (clone) return clone;
   throw new Error(`no clone found matching "${idOrName}"`);
 }
 

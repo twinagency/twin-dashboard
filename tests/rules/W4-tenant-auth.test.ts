@@ -3,7 +3,7 @@ import "../support/admin-route-env";
  * Rule (W4 lib-api-public-v2-plus6 F4, F29; promoted from tests/known-red/W4-lib-api-public-v2-plus6-tenant-auth.test.ts
  * on jaka/w7-close-20261112): lib/api-tenant.ts authenticateModel, the only gate on the internet-facing /api/v1/*.
  * Drives the real function (real sha256 lookup via real supabase-js through lib/supabase.ts) with PostgREST faked at
- * the wire by a minimal inline fetch (the review branch's tests/support/admin-wire.ts is not on this base); the key is
+ * the wire (tests/support/postgrest-wire.ts); the key is
  * a synthetic 43-char test string, stored only as its sha256 in the fake api_keys table.
  * F29: an api_keys read error (statement timeout) must not answer 401 "invalid or revoked API key" (a client would
  *   discard a valid key during an outage).
@@ -14,6 +14,7 @@ import "../support/admin-route-env";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withModelKey } from "../../lib/api-public-route";
+import { installWire as installPostgrest, json, statementTimeout, type WireCall } from "../support/postgrest-wire";
 import { _rateLimitEntries, _resetRateLimits, authenticateModel, hashKey, RATE_LIMIT_PER_MINUTE } from "../../lib/api-tenant";
 
 const CLONE_ID = "00000000-0000-4000-8000-000000000001";
@@ -22,25 +23,19 @@ const NOW = Date.parse("2026-11-12T12:00:00.000Z");
 const req = () => new Request("http://localhost/api/v1/revenue", { headers: { authorization: `Bearer ${KEY}` } });
 const keyRow = { id: "key-1", clone_id: CLONE_ID, scope: "clone", label: "fake test key", key_hash: hashKey(KEY), revoked_at: null };
 
-type Call = { method: string; url: URL };
-const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
-
 /** Fakes PostgREST for api_keys (GET by key_hash, PATCH last_used_at) and the system_logs insert. Anything else fails loud. */
 function installWire(opts: { fail?: boolean; row?: Record<string, unknown> } = {}) {
   const row = opts.row ?? keyRow;
-  const calls: Call[] = [];
-  const real = globalThis.fetch;
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    if (url.pathname === "/rest/v1/system_logs") return new Response(null, { status: 201 });
-    if (url.pathname !== "/rest/v1/api_keys") throw new Error(`fake wire: unmodelled ${method} ${url.href}`);
-    calls.push({ method, url });
-    if (opts.fail) return json({ code: "57014", message: "canceling statement due to statement timeout", details: null, hint: null }, 500);
-    if (method === "PATCH") return new Response(null, { status: 204 });
-    return json(url.searchParams.get("key_hash") === `eq.${row.key_hash}` ? [row] : []);
-  }) as typeof fetch;
-  return { calls, idle: () => new Promise((r) => setTimeout(r, 10)), restore: () => { globalThis.fetch = real; } };
+  const calls: WireCall[] = [];
+  const w = installPostgrest((call) => {
+    if (call.table === "system_logs") return new Response(null, { status: 201 });
+    if (call.table !== "api_keys") return undefined;
+    calls.push(call);
+    if (opts.fail) return statementTimeout();
+    if (call.method === "PATCH") return new Response(null, { status: 204 });
+    return json(call.url.searchParams.get("key_hash") === `eq.${row.key_hash}` ? [row] : []);
+  });
+  return { calls, idle: () => new Promise((r) => setTimeout(r, 10)), restore: w.restore };
 }
 
 test("control: a valid key authenticates as its clone; request 121 in a minute is 429", async () => {

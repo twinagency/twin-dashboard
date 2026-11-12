@@ -12,6 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { generateKey } from "../lib/api-keys-admin";
 import { hashKey, keyPrefix } from "../lib/api-tenant";
+import { resolveCloneRef } from "../lib/clone-name-match";
 
 // This script runs outside Next, so .env is not loaded for it.
 function loadEnv(): void {
@@ -46,19 +47,6 @@ function arg(name: string): string | undefined {
   return i >= 0 ? process.argv[i + 1] : undefined;
 }
 
-async function resolveClone(idOrSlug: string): Promise<{ id: string; slug: string; name: string } | null> {
-  const cols = "id,slug,name";
-  for (const q of [
-    db.from("clones").select(cols).eq("id", idOrSlug).maybeSingle(),
-    db.from("clones").select(cols).eq("slug", idOrSlug).maybeSingle(),
-    db.from("clones").select(cols).ilike("name", idOrSlug).limit(1).maybeSingle(),
-  ]) {
-    const { data } = await q;
-    if (data) return data as { id: string; slug: string; name: string };
-  }
-  return null;
-}
-
 async function issue(): Promise<void> {
   const cloneArg = arg("clone");
   const label = arg("label");
@@ -66,7 +54,7 @@ async function issue(): Promise<void> {
     console.error('usage: --clone <uuid|slug|name> --label "what this key is for"');
     process.exit(1);
   }
-  const clone = await resolveClone(cloneArg);
+  const clone = await resolveCloneRef(db, cloneArg);
   if (!clone) {
     console.error(`no clone matching "${cloneArg}"`);
     process.exit(1);
@@ -105,7 +93,7 @@ async function list(): Promise<void> {
     .select("key_prefix,label,created_at,last_used_at,revoked_at,clones(slug,name)")
     .order("created_at", { ascending: true });
   if (cloneArg) {
-    const clone = await resolveClone(cloneArg);
+    const clone = await resolveCloneRef(db, cloneArg);
     if (!clone) {
       console.error(`no clone matching "${cloneArg}"`);
       process.exit(1);
