@@ -353,3 +353,4 @@ RED by pick group (file count; a file can hold several findings):
 - 2026-11-12 gate: storage-transport RSS cap 384→480 MiB → #357 → merged 25574602. 3/3 standalone pass, peaks 302-401 MB (measured).
 - 2026-11-12 test harness (W2c route harness, tests only) → #358 → merged 8681b237. premerge PASS.
 - 2026-11-12 PR-2 W2c N1 part 2/3 (server capture handle, captureRef on save) → #359 → merged 0801deb2. rules 12/12; 6 plants red; rwl full r1 + delta + codex final NONE (measured).
+- 2026-11-12 live-1 @0801deb2: N1 probes 400/410/400/400 PASS, F1 owner guard PASS (fake upstream). Evidence ~/Projects/twinagency/.local-dev/evidence/fix/live-1-0801deb2/
