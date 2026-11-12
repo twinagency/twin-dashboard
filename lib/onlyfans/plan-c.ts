@@ -176,7 +176,8 @@ export function parsePlanCDrafts(value: unknown, accountId: string): PlanCDraftL
 
 // ── Unresolved work ───────────────────────────────────────────────────────────
 export type PlanCUnresolvedItem = { id: string; kind: string; owner: string; nextStep: string; summary: string | null;
-  conversationId: string | null; conversationRevision: number | null; createdAt: string | null };
+  conversationId: string | null; conversationRevision: number | null; createdAt: string | null;
+  requestId?: string; attemptId?: string; intentId?: string; cause?: string; ageSeconds?: number };
 export type PlanCUnresolvedList = { accountId: string; items: PlanCUnresolvedItem[] };
 
 export function parsePlanCUnresolved(value: unknown, accountId: string): PlanCUnresolvedList | null {
@@ -191,7 +192,16 @@ export function parsePlanCUnresolved(value: unknown, accountId: string): PlanCUn
         !(summary === undefined || summary === null || text(summary, 1000)) ||
         !(conversation === undefined || conversation === null || (typeof conversation === "string" && ID.test(conversation) && conversation.startsWith(`${accountId}:`))) ||
         !(revision === undefined || revision === null || intIn(revision, 0, 2 ** 31 - 2)) || !(created === undefined || created === null || isoDate(created))) return null;
-    items.push({ id, kind, owner, nextStep: next, summary: typeof summary === "string" ? summary : null,
+    const details: Pick<PlanCUnresolvedItem,"requestId"|"attemptId"|"intentId"|"cause"|"ageSeconds"> = {};
+    for (const key of ["requestId","attemptId","intentId"] as const) {
+      if (raw[key] !== undefined && raw[key] !== null) {
+        if (typeof raw[key] !== "string" || !/^[A-Za-z0-9._:-]{1,100}$/.test(raw[key])) return null;
+        details[key] = raw[key];
+      }
+    }
+    if(raw.cause!==undefined){if(!text(raw.cause,96))return null;details.cause=raw.cause;}
+    if(raw.ageSeconds!==undefined){if(!intIn(raw.ageSeconds,0,2**31-1))return null;details.ageSeconds=raw.ageSeconds;}
+    items.push({ ...details, id, kind, owner, nextStep: next, summary: typeof summary === "string" ? summary : null,
       conversationId: typeof conversation === "string" ? conversation : null, conversationRevision: typeof revision === "number" ? revision : null,
       createdAt: typeof created === "string" ? created : null });
   }

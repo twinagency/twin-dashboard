@@ -378,3 +378,15 @@ test("there is no auto-approve, bulk or automatic hand back path", () => {
   for (const name of ["onApprove(", "onReject(", "onEdit(", "onCommand(", "onReconcile("]) for (const line of ui.split("\n").filter(l => l.includes(name) && !l.includes("=> Promise") && !l.includes("const run") && !l.includes("const submit")))
     assert.ok(/onClick|const result = await|run\(|submit|void run/.test(line), `${name} outside a click path: ${line.trim().slice(0, 100)}`);
 });
+
+
+test("uncertain-send cases retain linked work and cause without inventing a release action",()=>{
+ const item={...unresolvedRow(),requestId:"request-1",attemptId:"attempt-1",intentId:"intent-1",cause:"invalid_receipt",ageSeconds:123};
+ const value=parsePlanCUnresolved({schemaVersion:PLAN_C_SCHEMA,ok:true,accountId:MOCK_ACCOUNT,items:[item]},MOCK_ACCOUNT);
+ assert.ok(value);
+ assert.equal(value.items[0].requestId,"request-1");
+ assert.equal(value.items[0].attemptId,"attempt-1");
+ assert.equal(value.items[0].cause,"invalid_receipt");
+ assert.equal(value.items[0].ageSeconds,123);
+ assert.equal(parsePlanCUnresolved({schemaVersion:PLAN_C_SCHEMA,items:[{...item,ageSeconds:-1}]},MOCK_ACCOUNT),null);
+});

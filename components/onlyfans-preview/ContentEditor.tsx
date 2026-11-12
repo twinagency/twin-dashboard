@@ -10,6 +10,7 @@ import { parseContentItemV2 as parseContentItem, parseContentAckV2 as parseConte
 import type { SyncDraft } from "@/lib/onlyfans/content-sync";
 import { syncCall, type SyncReply } from "@/lib/onlyfans/content-sync-client";
 import ContentSyncDraft from "./ContentSyncDraft";
+import CommercialTerms from "./CommercialTerms";
 
 const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -153,6 +154,7 @@ export default function ContentEditor({ accountId, itemId }: { accountId: string
           <button data-of-save-content type="submit" className={buttonClass} disabled={!request || !validContentRequest(request)}>Save catalogue item</button>
         </fieldset>
       </form> : null}
+      {data && !denied ? <CommercialTerms key={data.fingerprint} accountId={accountId} itemId={itemId}/> : null}
       {retry && !denied ? <div className="mt-3 flex flex-wrap gap-2">
         <button data-of-retry-content disabled={busy} className={buttonClass} onClick={() => void save(retry)}>Retry same save</button>
         <button disabled={busy || !data} className={buttonClass} onClick={() => { setRetry(null); setNotice("Review the refreshed item before editing again."); }}>Use refreshed item</button>

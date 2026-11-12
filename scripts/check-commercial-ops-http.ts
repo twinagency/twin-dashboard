@@ -125,6 +125,23 @@ async function main(){
   assert.equal((await state()).commands.filter((c:Json)=>c.kind==="commercial_scope").length,2,"refused direct calls wrote nothing");
   const final=await state();
   assert.equal(final.providerReads,setup.providerReads+2,"no provider read from any commercial operation");
+  // Exact terms review uses the same authenticated BFF and PostgreSQL owner.
+  s=await (await fetch(backend+"/fixture/state")).json();
+  const productId=String(s.terms[0].itemId);
+  const termsPath="/api/onlyfans-configuration/accounts/"+account+"/catalogue-terms/"+productId;
+  const currentTerms=(await ok(await get(termsPath))).terms;
+  const approveTerms={action:"approve",expectedRevision:currentTerms.revision,expectedFingerprint:currentTerms.contentFingerprint,
+    standardCents:1200,discountCents:900,requestId:randomUUID()};
+  assert.equal((await post(termsPath,approveTerms,"synthetic-reader")).status,403);
+  const termsAck=await ok(await post(termsPath,approveTerms));
+  assert.equal(termsAck.terms.discountCents,900);
+  assert.equal(termsAck.terms.revision,currentTerms.revision+1);
+  assert.deepEqual((await ok(await post(termsPath,approveTerms))).terms,termsAck.terms);
+  assert.equal((await post(termsPath,{...approveTerms,requestId:randomUUID()})).status,409);
+  assigned=other;assert.equal((await get(termsPath)).status,404);assigned=creator;
+  const withdrawn=await ok(await post(termsPath,{action:"withdraw",expectedRevision:termsAck.terms.revision,requestId:randomUUID()}));
+  assert.equal(withdrawn.terms.status,"withdrawn");
+
   console.log(JSON.stringify({result:"passed",boundary:"actual Next BFF -> actual ASGI middleware -> PostgreSQL",identity:"synthetic auth service",provider:"synthetic preparation wire only",terms:final.terms.length,commands:final.commands.length}));
  }finally{child.kill("SIGTERM");await new Promise<void>(r=>{if(child.exitCode!==null)r();else child.once("exit",()=>r());});closeSync(fd);identity.close();}
 }

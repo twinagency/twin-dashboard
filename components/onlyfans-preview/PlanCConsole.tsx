@@ -130,6 +130,10 @@ function UnresolvedRow({ item, accountId, canAct, onReconcile }: { item: PlanCUn
     <p className="font-semibold">{kindLabel(item.kind)} <span className="font-normal text-muted">({item.conversationId ? place(item.conversationId, accountId) : "account"})</span></p>
     {item.summary ? <p className="whitespace-pre-wrap break-words">{item.summary}</p> : null}
     <p className="text-muted" data-plan-c-owner>Owner: {item.owner}. Next step: {item.nextStep.replace(/_/g, " ")}.</p>
+    {item.cause ? <p className="text-xs">Cause: {item.cause.replace(/_/g," ")}</p> : null}
+    {item.requestId ? <p className="break-all text-xs">Request: {item.requestId}</p> : null}
+    {item.attemptId ? <p className="break-all text-xs">Attempt: {item.attemptId}</p> : null}
+    {item.ageSeconds !== undefined ? <p className="text-xs">Open for {Math.floor(item.ageSeconds/60)} minutes at last refresh</p> : null}
     {item.createdAt ? <p className="text-xs text-muted">Since {new Date(item.createdAt).toLocaleString()}</p> : null}
     {canRecordEvidence ? <div className="mt-2 space-y-1">
       <label className="block text-xs">Evidence reference (what you checked)<input aria-label="Evidence reference" className="mt-1 w-full rounded border border-line px-2 py-1 text-base" maxLength={108} value={evidence} onChange={event => setEvidence(event.target.value)} /></label>
