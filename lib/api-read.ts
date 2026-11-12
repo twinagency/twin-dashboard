@@ -229,8 +229,13 @@ export async function resolveClone(idOrSlug: string): Promise<{ id: string; slug
 export const PERIODS = ["ALL", "1Y", "6M", "3M", "1M", "2W", "1W", "1D", "CUSTOM"] as const;
 export type PeriodName = (typeof PERIODS)[number];
 
+/** Widest custom window the revenue routes accept. Each one walks the range day by day in the shared Next process. */
+export const MAX_CUSTOM_RANGE_DAYS = 1100;
+const DAY_MS = 86_400_000;
+
 export function parseRevenueWindow(
   params: URLSearchParams,
+  nowMs = Date.now(),
 ): { period: PeriodName; range?: { startMs: number; endMs: number } } | QueryError {
   const p = params.get("period");
   if (p && !(PERIODS as readonly string[]).includes(p)) {
@@ -240,17 +245,25 @@ export function parseRevenueWindow(
   const rawStart = params.get("start");
   const rawEnd = params.get("end");
   if (rawStart === null && rawEnd === null) {
-    return { period: (p as PeriodName) ?? "1M" };
+    // An empty `period=` is treated as absent, as the check above already does: the 1M default, never period "".
+    if (p === "CUSTOM") return { error: "period CUSTOM needs start and end", status: 400 };
+    return { period: (p || "1M") as PeriodName };
   }
   if (rawStart === null || rawEnd === null) {
     return { error: "start and end must BOTH be given, or neither", status: 400 };
   }
   const startMs = Number(rawStart);
   const endMs = Number(rawEnd);
-  if (rawStart.trim() === "" || rawEnd.trim() === "" || !Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    return { error: "start and end must be epoch-millisecond numbers", status: 400 };
+  if (rawStart.trim() === "" || rawEnd.trim() === "" || !Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) {
+    return { error: "start and end must be whole epoch-millisecond numbers", status: 400 };
   }
   if (endMs < startMs) return { error: "end must not be before start", status: 400 };
+  if (startMs < 0 || endMs > nowMs + DAY_MS) {
+    return { error: "start must not be before 1970 and end must not be later than tomorrow", status: 400 };
+  }
+  if (endMs - startMs > MAX_CUSTOM_RANGE_DAYS * DAY_MS) {
+    return { error: `a custom range may span at most ${MAX_CUSTOM_RANGE_DAYS} days`, status: 400 };
+  }
   return { period: "CUSTOM", range: { startMs, endMs } };
 }
 

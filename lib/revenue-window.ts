@@ -51,13 +51,17 @@ export async function resolveRevenueWindow(
 ): Promise<DateRange> {
   const preset = resolvePresetRevenueWindow(period, nowMs, explicitRange);
   if (preset) return preset;
+  // Without this, a rangeless CUSTOM fell through to the all-time lookup and was served as ALL.
+  if (period === "CUSTOM") throw new Error("A custom revenue window needs a start and an end");
 
-  const { data: earliest } = await supabaseAdmin
+  const { data: earliest, error } = await supabaseAdmin
     .from("star_transactions")
     .select("paid_at")
     .order("paid_at", { ascending: true })
     .limit(1)
     .maybeSingle();
+  // A failed lookup must not pass for an empty ledger: that would label a 180-day window as all time.
+  if (error) throw new Error("Could not read the earliest payment for the all-time window", { cause: error });
 
   return {
     startMs: earliest?.paid_at ? new Date(earliest.paid_at).getTime() : nowMs - 180 * MS_DAY,
