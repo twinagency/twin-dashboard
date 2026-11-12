@@ -3,7 +3,11 @@
  * SUPABASE_URL from tests/support/admin-route-env.ts). `handler` answers each request; returning undefined throws
  * "unmodelled", so a request a test did not expect fails loud instead of reaching the network.
  */
-export type WireCall = { method: string; url: URL; table: string };
+import { createHash, randomBytes } from "node:crypto";
+import { after, beforeEach } from "node:test";
+import { _resetDeniedLog } from "../../lib/api-public-route";
+
+export type WireCall = { method: string; url: URL; table: string; body?: unknown };
 
 export const json = (v: unknown, status = 200) =>
   new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
@@ -15,7 +19,8 @@ export function installWire(handler: (call: WireCall) => Response | undefined) {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-    const res = handler({ method, url, table: url.pathname.replace(/^\/rest\/v1\//, "") });
+    const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+    const res = handler({ method, url, table: url.pathname.replace(/^\/rest\/v1\//, ""), body });
     if (!res) throw new Error(`fake wire: unmodelled ${method} ${url.href}`);
     return res;
   }) as typeof fetch;
@@ -34,4 +39,46 @@ export function ilikeRegex(pattern: string): RegExp {
     else re += c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
   return new RegExp(`^${re}$`, "i");
+}
+
+/** Lets fire-and-forget writes (`void supabaseAdmin...then()`) reach the fake before a test counts them. */
+export const settle = (ms = 25) => new Promise<void>((r) => setTimeout(r, ms));
+
+type Route = (call: WireCall) => Response;
+/** Registers a reply for "<METHOD> <path>"; a later `on` for the same route replaces it. */
+export type WireRoutes = { on(route: string, reply: Route): void };
+/**
+ * installWire for a whole test file, routed by "<METHOD> <path>" (e.g. "GET /rest/v1/api_keys"). Before each test the
+ * routes, the call log and the public API's denied-log window are cleared and `serve` registers the routes again;
+ * `calls(route)` lists what reached one route.
+ */
+export function useWire(serve: (w: WireRoutes) => void) {
+  const routes = new Map<string, Route>();
+  const seen: WireCall[] = [];
+  const route = (c: WireCall) => `${c.method} ${c.url.pathname}`;
+  const w = installWire((c) => { seen.push(c); return routes.get(route(c))?.(c); });
+  beforeEach(() => { routes.clear(); seen.length = 0; _resetDeniedLog(); serve({ on: (r, h) => void routes.set(r, h) }); });
+  after(async () => { await settle(); w.restore(); });
+  return { calls: (r: string) => seen.filter((c) => route(c) === r) };
+}
+
+// ── public API keys (lib/api-tenant.ts, lib/api-public-route.ts) ─────────────
+export const newModelKey = () => randomBytes(32).toString("base64url");
+
+/** An api_keys row as migrations 103/127 shape it, hashed independently of lib/api-tenant.ts. */
+export function modelKeyRow(key: string, scope: "clone" | "fleet", id = `key-${scope}`): Record<string, unknown> {
+  const clone_id = scope === "clone" ? "00000000-0000-4000-8000-000000000001" : null;
+  return { id, clone_id, scope, label: scope, key_hash: createHash("sha256").update(key, "utf8").digest("hex"), revoked_at: null };
+}
+
+/** api_keys lookup by key_hash, the last_used_at PATCH, and the system_logs insert. */
+export function serveModelKeys(w: WireRoutes, rows: readonly Record<string, unknown>[]): void {
+  w.on("GET /rest/v1/api_keys", (c) => json(rows.filter((r) => c.url.searchParams.get("key_hash") === `eq.${r.key_hash}`)));
+  w.on("PATCH /rest/v1/api_keys", () => new Response(null, { status: 204 }));
+  w.on("POST /rest/v1/system_logs", () => new Response(null, { status: 201 }));
+}
+
+/** One request to a withModelKey route with `Authorization: Bearer <key>`. */
+export function bearerCall<R>(route: (req: Request) => Promise<R>, key: string, qs = "", path = "/api/v1/x"): Promise<R> {
+  return route(new Request(`http://localhost${path}${qs}`, { headers: { authorization: `Bearer ${key}` } }));
 }

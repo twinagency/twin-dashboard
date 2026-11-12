@@ -13,14 +13,32 @@ import { supabaseAdmin } from "./supabase";
 
 export const PUBLIC_API_VERSION = "v1";
 
+// One system_logs row per refusal status (401/429/503) per minute, not per
+// request: a wrong-key loop wrote one row per request. Keyed on status alone
+// because the path is attacker-chosen; the path of the row opening a window is
+// kept in its message and detail. ACCEPTED LIMITS, for readers of system_logs:
+// a row is a lower bound. A burst followed by silence logs only its first row;
+// its count arrives as `suppressed` on the next window's row. The count is per
+// process and lost on restart. A failed insert still opens the window on
+// purpose, so a database outage is not hit once per refused request.
+const DENIED_WINDOW_MS = 60_000;
+const denied = new Map<number, { until: number; suppressed: number }>();
+
 function logDenied(status: number, error: string, path: string): void {
+  const now = Date.now();
+  const cur = denied.get(status);
+  if (cur && now < cur.until) {
+    cur.suppressed += 1;
+    return;
+  }
+  denied.set(status, { until: now + DENIED_WINDOW_MS, suppressed: 0 });
   void supabaseAdmin
     .from("system_logs")
     .insert({
       level: "warn",
       source: "public-api",
       message: `public API denied (${status}) on ${path}`,
-      detail: { status, error, path },
+      detail: { status, error, path, suppressed: cur?.suppressed ?? 0 },
     })
     .then(
       () => undefined,
@@ -28,8 +46,23 @@ function logDenied(status: number, error: string, path: string): void {
     );
 }
 
-export function publicError(error: string, status: number): NextResponse {
-  return NextResponse.json({ ok: false, error }, { status });
+// Test seam, like _resetRateLimits in api-tenant.ts.
+export function _resetDeniedLog(): void {
+  denied.clear();
+}
+
+// Every reply, error or not, is stamped and uncacheable: a shared cache must
+// not replay a 401/429 for another caller, any more than a 200. A payload's
+// own top-level generatedAt (/payments sets one) wins over the stamp.
+function stamped(body: Record<string, unknown>, status: number, headers: Record<string, string> = {}): NextResponse {
+  return NextResponse.json(
+    { generatedAt: new Date().toISOString(), ...body },
+    { status, headers: { ...headers, "Cache-Control": "private, no-store" } },
+  );
+}
+
+export function publicError(error: string, status: number, headers?: Record<string, string>): NextResponse {
+  return stamped({ ok: false, error }, status, headers);
 }
 
 // The handler receives the tenant and NEVER the raw request's clone parameter.
@@ -54,7 +87,7 @@ export function withModelKey(handler: PublicHandler): (req: Request) => Promise<
       if (auth.status === 401) headers["WWW-Authenticate"] = 'Bearer realm="twin"';
       if (auth.status === 429) headers["Retry-After"] = "60";
       if (auth.status === 503) headers["Retry-After"] = "10";
-      return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status, headers });
+      return publicError(auth.error, auth.status, headers);
     }
 
     const params = (() => {
@@ -88,16 +121,17 @@ export function withModelKey(handler: PublicHandler): (req: Request) => Promise<
     try {
       return await handler({ req, tenant: auth.tenant, params });
     } catch (e) {
-      return publicError(e instanceof Error ? e.message : "failed", 500);
+      // The message can name RPCs and PG codes: log it here, never send it.
+      console.error(`public API ${path} failed:`, e);
+      return publicError("internal error", 500);
     }
   };
 }
 
 export function publicOk(payload: Record<string, unknown>): NextResponse {
-  return NextResponse.json(
-    { ok: true, version: PUBLIC_API_VERSION, generatedAt: new Date().toISOString(), ...payload },
-    // no-store: this is live money. A shared cache between the caller and us
-    // must never serve one key's numbers to another, or an old number as new.
-    { headers: { "X-RateLimit-Limit": String(RATE_LIMIT_PER_MINUTE), "Cache-Control": "private, no-store" } },
-  );
+  // no-store: this is live money. A shared cache between the caller and us
+  // must never serve one key's numbers to another, or an old number as new.
+  return stamped({ ok: true, version: PUBLIC_API_VERSION, ...payload }, 200, {
+    "X-RateLimit-Limit": String(RATE_LIMIT_PER_MINUTE),
+  });
 }
