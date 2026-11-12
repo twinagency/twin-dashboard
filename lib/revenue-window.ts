@@ -17,6 +17,21 @@ const PERIOD_DAYS: Record<Period, number | null> = {
   CUSTOM: null,
 };
 
+/** Widest custom window accepted. Every revenue surface walks a window day by day in the shared Next process. */
+export const MAX_CUSTOM_RANGE_DAYS = 1100;
+/** How far ahead a custom end may sit: the dashboard date picker allows future dates, so not "tomorrow". */
+const MAX_FUTURE_DAYS = 366;
+
+/** Why a custom range is unsafe to walk, for a 400; null when it is fine. Shared by every route that takes one. */
+export function validateCustomRange(range: DateRange, nowMs: number): string | null {
+  const { startMs, endMs } = range;
+  if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) return "start and end must be whole epoch-millisecond numbers";
+  if (endMs < startMs) return "end must not be before start";
+  if (startMs < 0 || endMs > nowMs + MAX_FUTURE_DAYS * MS_DAY) return "start must not be before 1970 and end must not be more than a year ahead";
+  if (endMs - startMs > MAX_CUSTOM_RANGE_DAYS * MS_DAY) return `a custom range may span at most ${MAX_CUSTOM_RANGE_DAYS} days`;
+  return null;
+}
+
 /**
  * One window definition for every revenue surface.
  *

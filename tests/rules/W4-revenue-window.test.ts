@@ -5,7 +5,7 @@ import "../support/admin-route-env"; // server-only shim + fake env: lib/api-rea
  * no wire, no network: the parser is called with URLSearchParams exactly as the routes build them.
  * F1: any finite start <= end is accepted, so `start=0&end=8640000000000000` (Date's max) passes and reaches a
  *   per-day loop (~1e8 iterations in the shared Next process; the cost is INFERRED, the acceptance is MEASURED here).
- *   Fixed = refused: integer ms, start >= 0, end <= now + 1 day, span <= MAX_CUSTOM_RANGE_DAYS. Each guard has its
+ *   Fixed = refused: integer ms, start >= 0, end <= now + 366 days, span <= MAX_CUSTOM_RANGE_DAYS. Each guard has its
  *   own case below so planting either one back goes red.
  * F24: `period=` (empty) skips validation and `?? "1M"` keeps "", so period "" reaches getAnalytics. Fixed = either a
  *   400 or the 1M default (fixed: the 1M default, matching how the validation already read an empty period).
@@ -13,7 +13,9 @@ import "../support/admin-route-env"; // server-only shim + fake env: lib/api-rea
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isQueryError, MAX_CUSTOM_RANGE_DAYS, parseRevenueWindow } from "../../lib/api-read";
+import { isQueryError, parseRevenueWindow } from "../../lib/api-read";
+import { MAX_CUSTOM_RANGE_DAYS } from "../../lib/revenue-window";
+import { installWire } from "../support/postgrest-wire";
 
 const parse = (qs: string) => parseRevenueWindow(new URLSearchParams(qs));
 const START = Date.parse("2026-10-01T00:00:00.000Z");
@@ -36,7 +38,8 @@ test("F1: each bound holds on its own", () => {
   const maxSpan = parse(`start=${END - MAX_CUSTOM_RANGE_DAYS * DAY}&end=${END}`);
   assert.ok(!isQueryError(maxSpan), `the widest allowed span is refused: ${JSON.stringify(maxSpan)}`);
   assert.ok(isQueryError(parse(`start=${END - MAX_CUSTOM_RANGE_DAYS * DAY - 1}&end=${END}`)), "span cap");
-  assert.ok(isQueryError(parse(`start=${Date.now() + 2 * DAY}&end=${Date.now() + 3 * DAY}`)), "end later than tomorrow");
+  assert.ok(!isQueryError(parse(`start=${START}&end=${Date.now() + 30 * DAY}`)), "a future end the date picker allows");
+  assert.ok(isQueryError(parse(`start=${Date.now() + 367 * DAY}&end=${Date.now() + 368 * DAY}`)), "end more than a year ahead");
   assert.ok(isQueryError(parse(`start=-${DAY}&end=0`)), "start before 1970");
   assert.ok(isQueryError(parse(`start=${START}.5&end=${END}`)), "fractional ms");
 });
@@ -48,4 +51,32 @@ test("F8 at the edge: period=CUSTOM without start/end is a 400 here, not a 500 f
 test("F24: an empty period= is refused or defaults to 1M, never period \"\"", () => {
   const r = parse("period=");
   assert.ok(isQueryError(r) || r.period === "1M", `parsed to ${JSON.stringify(r)}`);
+});
+
+// rwl r1 (major + minor): /api/dashboard parsed start/end itself (isFinite only), so an agency or creator login could
+// send the same unbounded range. It now shares validateCustomRange with the parser above. Drives the real GET; the
+// wire answers nothing, so any request that slips past the guard fails as a non-400.
+const dashboard = async (qs: string) => {
+  const { GET } = await import("../../app/api/dashboard/route");
+  const { NextRequest } = await import("next/server");
+  const wire = installWire(() => undefined);
+  try {
+    const res = await GET(new NextRequest(`http://localhost/api/dashboard?${qs}`));
+    return { status: res.status, body: (await res.json()) as { error?: string } };
+  } finally { wire.restore(); }
+};
+
+test("dashboard: an over-cap, reversed or garbage start/end is a 400", async () => {
+  for (const qs of [`start=${END - 1200 * 86_400_000}&end=${END}`, `start=${END}&end=${START}`, `start=${START}&end=abc`, `start=${START}`]) {
+    const r = await dashboard(qs);
+    assert.equal(r.status, 400, `${qs} -> ${r.status} ${JSON.stringify(r.body)}`);
+  }
+});
+
+test("dashboard: the Date-max range is a 400 (before the fix it reached the day loop)", async () => {
+  assert.equal((await dashboard("start=0&end=8640000000000000")).status, 400);
+});
+
+test("dashboard: period=CUSTOM without a valid range is a 400, not a 500", async () => {
+  for (const qs of ["period=CUSTOM", "period=CUSTOM&start=x&end=y"]) assert.equal((await dashboard(qs)).status, 400, qs);
 });

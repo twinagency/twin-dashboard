@@ -18,6 +18,7 @@
 import { supabaseAdmin } from "./supabase";
 import { ALLOWLIST } from "@/app/api/ai-assistant/tools";
 import { resolveCloneRef } from "./clone-name-match";
+import { validateCustomRange } from "./revenue-window";
 
 // Re-admitted for admin callers only. `persona` is the live compiled slot data
 // the runtime actually uses. The four *_prompt columns are FROZEN LEGACY and
@@ -229,10 +230,6 @@ export async function resolveClone(idOrSlug: string): Promise<{ id: string; slug
 export const PERIODS = ["ALL", "1Y", "6M", "3M", "1M", "2W", "1W", "1D", "CUSTOM"] as const;
 export type PeriodName = (typeof PERIODS)[number];
 
-/** Widest custom window the revenue routes accept. Each one walks the range day by day in the shared Next process. */
-export const MAX_CUSTOM_RANGE_DAYS = 1100;
-const DAY_MS = 86_400_000;
-
 export function parseRevenueWindow(
   params: URLSearchParams,
   nowMs = Date.now(),
@@ -254,16 +251,8 @@ export function parseRevenueWindow(
   }
   const startMs = Number(rawStart);
   const endMs = Number(rawEnd);
-  if (rawStart.trim() === "" || rawEnd.trim() === "" || !Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) {
-    return { error: "start and end must be whole epoch-millisecond numbers", status: 400 };
-  }
-  if (endMs < startMs) return { error: "end must not be before start", status: 400 };
-  if (startMs < 0 || endMs > nowMs + DAY_MS) {
-    return { error: "start must not be before 1970 and end must not be later than tomorrow", status: 400 };
-  }
-  if (endMs - startMs > MAX_CUSTOM_RANGE_DAYS * DAY_MS) {
-    return { error: `a custom range may span at most ${MAX_CUSTOM_RANGE_DAYS} days`, status: 400 };
-  }
+  const invalid = rawStart.trim() === "" || rawEnd.trim() === "" ? "start and end must not be empty" : validateCustomRange({ startMs, endMs }, nowMs);
+  if (invalid) return { error: invalid, status: 400 };
   return { period: "CUSTOM", range: { startMs, endMs } };
 }
 
