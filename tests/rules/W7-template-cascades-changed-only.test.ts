@@ -183,8 +183,7 @@ test("C2: a brake absent from the stored template reaches followers when changed
   cloneWrites = [];
   await templateSave(0, { push_level: "medium", price_guard_mode: "block" });
   assert.deepEqual(cloneWrites, [], "posting the value the form shows changes nothing");
-  await templateSave(0); // drops them from the stored template again: effective value unchanged
-  assert.deepEqual(cloneWrites, []);
+  await templateSave(0); assert.deepEqual(cloneWrites, [], "dropping them from the stored template changes nothing either");
   await templateSave(0, { push_level: "low" });
   assert.equal(clones.get(ID)!.push_level, "low");
 });
