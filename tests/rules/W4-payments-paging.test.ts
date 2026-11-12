@@ -8,6 +8,10 @@ import "../support/admin-route-env";
  *     a page boundary was counted twice by a client summing pages. Paging at any limit must sum like one page.
  * F3 (data loss): limit=1000 asked for 1001 rows to detect a next page; PostgREST max_rows=1000 capped it, so
  *     nextCursor was null while 500 more payments existed.
+ * rwl round 1 (/tmp/pay-findings.md): (a) paging at every limit returns exactly dedupeStarRows(all rows), ids and sum,
+ *     including a >50-row same-paid_at group; (b) an empty page only with nextCursor null; (c) = F3; (d) the dedupe rule
+ *     stays in lib/star-dedupe.ts; (e) a row that cannot be a valid cursor fails closed; plus a same-paid_at group too
+ *     big to read whole fails closed, and a short last page costs one read.
  * ASSUMPTIONS in the fake below: max_rows = 1000 (Supabase default; the live setting is unmeasured); `id` sorts
  * bytewise (C collation); only the filters, `or` keyset shape and order publicPayments sends are modelled, anything
  * else throws. No cut configured, so stars are gross; the route/auth layer is not exercised.
@@ -15,8 +19,10 @@ import "../support/admin-route-env";
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { readFileSync } from "node:fs";
 import { json, useWire, type WireCall } from "../support/postgrest-wire";
 import { publicPayments } from "../../lib/api-public-v2";
+import { dedupeStarRows } from "../../lib/star-dedupe";
 import { isQueryError, parsePaymentQuery, type PaymentQuery } from "../../lib/api-public-query";
 
 const CLONE = "00000000-0000-4000-8000-000000000001";
@@ -52,7 +58,7 @@ function serveStx(c: WireCall) {
   return json(sorted.slice(0, Math.min(Number(c.url.searchParams.get("limit") ?? MAX_ROWS), MAX_ROWS)));
 }
 
-useWire((w) => {
+const wire = useWire((w) => {
   w.on("GET /rest/v1/star_transactions", serveStx);
   for (const t of ["users", "platform_cuts", "agency_creators", "agency_creator_cuts"]) w.on(`GET /rest/v1/${t}`, () => json([]));
 });
@@ -76,8 +82,9 @@ const pay = (id: string, paidAt: string, telegramId = 5, stars = 100): Row => ({
 async function pageAll(limit: number) {
   const rows: { id: string; stars: number }[] = [];
   let cursor: string | null = null;
-  for (let pages = 1; pages <= 20; pages++) {
+  for (let pages = 1; pages <= 500; pages++) {
     const p = await publicPayments(CLONE, query(limit, cursor));
+    assert.ok(p.count > 0 || p.nextCursor === null, `(b) limit=${limit} page ${pages}: count 0 with a nextCursor`);
     rows.push(...p.payments.map((x) => ({ id: x.id, stars: x.stars })));
     if (!p.nextCursor) return { rows, pages, sum: rows.reduce((a, r) => a + r.stars, 0) };
     cursor = p.nextCursor;
@@ -138,4 +145,62 @@ test("F3: a window of exactly one full page ends without an empty extra page", a
   const { rows, pages } = await pageAll(1000);
   assert.equal(distinct(rows), 1000);
   assert.equal(pages, 1);
+});
+
+// A same-paid_at group of 64 rows (> the old 50-row lookahead): 30 fans each paid twice (the duplicate bug), with two
+// refunds that share every key field (never collapsed) and a distinct sale interleaved by id.
+const BIG = [
+  pay("new", "2026-11-10T11:00:00.000Z", 7, 30),
+  ...Array.from({ length: 30 }, (_, f) => [pay(`g-${String(f).padStart(2, "0")}-a`, T, 100 + f, 10 + f), pay(`g-${String(f).padStart(2, "0")}-b`, T, 100 + f, 10 + f)]).flat(),
+  { ...pay("g-r1", T, 5, -40), invoice_payload: "refund" }, { ...pay("g-r2", T, 5, -40), invoice_payload: "refund" },
+  pay("g-15-x", T, 999, 5), pay("old", "2026-11-09T00:00:00.000Z", 8, 20),
+];
+const dbOrder = (rows: Row[]) => [...rows].sort((a, b) => cmp("paid_at", b.paid_at, String(a.paid_at)) || cmp("id", b.id, String(a.id)));
+
+test("(a) every limit returns exactly dedupeStarRows(all rows), ids and sum, incl. a >50-row same-paid_at group", async () => {
+  for (const set of [MIXED, BIG]) {
+    stx = set;
+    const want = dedupeStarRows(dbOrder(set) as never[]) as unknown as Row[];
+    const wantSum = want.reduce((a, r) => a + Number(r.amount_stars), 0);
+    for (let limit = 1; limit <= set.length + 1; limit++) {
+      const got = await pageAll(limit);
+      assert.deepEqual(got.rows.map((r) => r.id), want.map((r) => r.id), `ids at limit=${limit}`);
+      assert.equal(got.sum, wantSum, `sum at limit=${limit}`);
+    }
+  }
+});
+
+test("(b) limit=1 over a duplicate pair: one page, one payment, no cursor", async () => {
+  stx = DUPES;
+  const p = await publicPayments(CLONE, query(1));
+  assert.equal(p.count, 1);
+  assert.equal(p.nextCursor, null);
+});
+
+test("fail closed: a same-paid_at group the boundary read cannot hold whole is refused, not split", async () => {
+  stx = Array.from({ length: 1001 }, (_, i) => pay(`z-${String(i).padStart(4, "0")}`, T, 2000 + i));
+  await assert.rejects(publicPayments(CLONE, query(1)));
+});
+
+test("(e) a page ending on a row whose id cannot be a cursor fails closed instead of minting it", async () => {
+  stx = [pay("x),clone_id.neq.0,(y", T), pay("old", "2026-11-09T00:00:00.000Z", 8, 20)];
+  await assert.rejects(publicPayments(CLONE, query(1)), /cursor/);
+  for (const c of wire.calls("GET /rest/v1/star_transactions")) assert.ok(!c.url.searchParams.has("or"), "the id reached an or= filter");
+});
+
+test("a short last page costs one star_transactions read", async () => {
+  stx = MANY.slice(0, 500);
+  const p = await publicPayments(CLONE, query(1000));
+  assert.equal(p.count, 500);
+  assert.equal(p.nextCursor, null);
+  assert.equal(wire.calls("GET /rest/v1/star_transactions").length, 1);
+});
+
+test("(d) the duplicate rule lives in lib/star-dedupe.ts only: the payments read calls dedupeStarRows, keys nothing itself", () => {
+  const v2 = readFileSync(new URL("../../lib/api-public-v2.ts", import.meta.url), "utf8");
+  const dedupe = readFileSync(new URL("../../lib/star-dedupe.ts", import.meta.url), "utf8");
+  const read = v2.slice(v2.indexOf("async function readPayments"), v2.indexOf("export function publicPayments"));
+  assert.match(read, /dedupeStarRows\(/);
+  assert.doesNotMatch(v2, /starDedupeKey|businessKey/);
+  assert.doesNotMatch(dedupe, /export function (starDedupeKey|businessKey|isAdjustmentRow)/);
 });

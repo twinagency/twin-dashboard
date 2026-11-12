@@ -114,17 +114,21 @@ export function encodeCursor(c: PaymentCursor): string {
   return Buffer.from(JSON.stringify(c)).toString("base64url");
 }
 
+/** The cursor is spliced into a PostgREST filter string, so both halves are
+ *  validated against a strict shape, whether a caller handed them to us or we
+ *  are about to mint them from a row. */
+export function cursorAt(t: unknown, i: unknown): PaymentCursor | null {
+  if (typeof t !== "string" || typeof i !== "string") return null;
+  if (!ISO_RE.test(t) || !ID_RE.test(i)) return null;
+  return { t, i };
+}
+
 export function decodeCursor(raw: string): PaymentCursor | null {
   try {
     const v = JSON.parse(Buffer.from(raw, "base64url").toString("utf8")) as unknown;
     if (typeof v !== "object" || v === null) return null;
     const { t, i } = v as Record<string, unknown>;
-    // The cursor is spliced into a PostgREST filter string, so both halves are
-    // re-validated against a strict shape rather than trusted because we
-    // minted them: a caller can hand us any string they like.
-    if (typeof t !== "string" || typeof i !== "string") return null;
-    if (!ISO_RE.test(t) || !ID_RE.test(i)) return null;
-    return { t, i };
+    return cursorAt(t, i);
   } catch {
     return null;
   }
