@@ -348,3 +348,4 @@ RED by pick group (file count; a file can hold several findings):
 - w1-content-config-moxy-route
 
 ## Status log
+- 2026-11-12 PR-0 W2c N18 (test:offline + premerge.sh) → #355 → merged 6ca978ae. Local proof: premerge PASS 150s (measured). CI billing-locked. Deferred: storage-transport 384MB flake; lint n/a (no eslint).
