@@ -92,15 +92,21 @@ export const RATE_LIMIT_PER_MINUTE = 120;
 const WINDOW_MS = 60_000;
 const hits = new Map<string, { count: number; resetAt: number }>();
 
+// The entry for `id` if its window is still open; an expired one reads as none.
+function liveEntry(id: string, now: number): { count: number; resetAt: number } | undefined {
+  const cur = hits.get(id);
+  return cur && now < cur.resetAt ? cur : undefined;
+}
+
 export function rateLimit(
-  keyId: string,
+  id: string,
   now: number,
   limit = RATE_LIMIT_PER_MINUTE,
 ): { allowed: boolean; remaining: number; resetAt: number } {
-  const cur = hits.get(keyId);
-  if (!cur || now >= cur.resetAt) {
+  const cur = liveEntry(id, now);
+  if (!cur) {
     const next = { count: 1, resetAt: now + WINDOW_MS };
-    hits.set(keyId, next);
+    hits.set(id, next);
     // Opportunistic sweep so a long-lived process doesn't accumulate a row per
     // key that ever called. Cheap: the map is bounded by issued key count.
     if (hits.size > 1000) {
@@ -116,8 +122,8 @@ export function rateLimit(
 // is refused without a database round trip. It never inserts, so a key that
 // does not resolve never takes a slot and the map stays bounded by issued keys.
 export function isRateLimited(id: string, now: number, limit = RATE_LIMIT_PER_MINUTE): boolean {
-  const cur = hits.get(id);
-  return !!cur && now < cur.resetAt && cur.count >= limit;
+  const cur = liveEntry(id, now);
+  return !!cur && cur.count >= limit;
 }
 
 // Test seam: the checks drive rateLimit() directly with an explicit clock, and
@@ -165,14 +171,18 @@ export function tenantFromRow(row: {
 }
 
 // ── the lookup ───────────────────────────────────────────────────────────────
-// Looks a key up by HASH. A revoked key is not found (the partial index is on
-// `revoked_at is null`), so revocation takes effect on the next request with no
-// cache to invalidate. A read ERROR throws rather than returning null: an
-// outage is not "this key is invalid", and a 401 tells the client to drop it.
-export async function resolveKey(presented: string | null): Promise<Tenant | null> {
-  if (!presented) return null;
-  const hash = hashKey(presented);
-
+// Looks a key up by its sha256 HASH (hashKey of the presented key). A revoked
+// key is not found (the partial index is on `revoked_at is null`), so
+// revocation takes effect on the next request that reaches the lookup, with no
+// cache to invalidate. One exception: a key already over its rate limit is
+// answered 429 before the lookup, so a key revoked mid-window keeps getting 429
+// (still a refusal) until its window ends, at most 60s, then 401. Clearing its
+// limiter entry on revoke would not close that, since revocation can come from
+// another process (the key:revoke CLI). A read ERROR throws rather than
+// returning null: an outage is not "this key is invalid", and a 401 tells the
+// client to drop it. key_hash is UNIQUE (migration 103), so maybeSingle cannot
+// see two rows.
+export async function resolveKey(hash: string): Promise<Tenant | null> {
   const { data, error } = await supabaseAdmin
     .from("api_keys")
     .select("id,clone_id,scope,label,key_hash,revoked_at")
@@ -205,27 +215,30 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
   return tenant;
 }
 
+const RATE_LIMITED: TenantFailure = {
+  ok: false,
+  status: 429,
+  error: `rate limit exceeded (${RATE_LIMIT_PER_MINUTE} requests/minute)`,
+};
+const INVALID_KEY: TenantFailure = { ok: false, status: 401, error: "invalid or revoked API key" };
+
 export async function authenticateModel(req: Request, now = Date.now()): Promise<TenantResult> {
-  const limited: TenantFailure = {
-    ok: false,
-    status: 429,
-    error: `rate limit exceeded (${RATE_LIMIT_PER_MINUTE} requests/minute)`,
-  };
   const presented = presentedKey(req.headers);
+  if (!presented) return INVALID_KEY;
   // Limited by the presented key's hash, checked BEFORE the lookup so a key
   // over its limit costs the database nothing. Counted only after it resolves.
-  const limitId = presented ? hashKey(presented) : null;
-  if (limitId && isRateLimited(limitId, now)) return limited;
+  const hash = hashKey(presented);
+  if (isRateLimited(hash, now)) return RATE_LIMITED;
 
   let tenant: Tenant | null;
   try {
-    tenant = await resolveKey(presented);
+    tenant = await resolveKey(hash);
   } catch {
     // No error detail: it would describe our database to the internet.
     return { ok: false, status: 503, error: "API key check temporarily unavailable, retry shortly" };
   }
-  if (!tenant || !limitId) return { ok: false, status: 401, error: "invalid or revoked API key" };
+  if (!tenant) return INVALID_KEY;
 
-  if (!rateLimit(limitId, now).allowed) return limited;
+  if (!rateLimit(hash, now).allowed) return RATE_LIMITED;
   return { ok: true, tenant };
 }

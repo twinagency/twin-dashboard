@@ -13,6 +13,7 @@ import "../support/admin-route-env";
  */
 import assert from "node:assert/strict";
 import test from "node:test";
+import { withModelKey } from "../../lib/api-public-route";
 import { _rateLimitEntries, _resetRateLimits, authenticateModel, hashKey, RATE_LIMIT_PER_MINUTE } from "../../lib/api-tenant";
 
 const CLONE_ID = "00000000-0000-4000-8000-000000000001";
@@ -24,18 +25,20 @@ const keyRow = { id: "key-1", clone_id: CLONE_ID, scope: "clone", label: "fake t
 type Call = { method: string; url: URL };
 const json = (v: unknown, status = 200) => new Response(JSON.stringify(v), { status, headers: { "content-type": "application/json" } });
 
-/** Fakes PostgREST for api_keys only: GET by key_hash, PATCH last_used_at. Anything else fails loud. */
-function installWire(opts: { fail?: boolean } = {}) {
+/** Fakes PostgREST for api_keys (GET by key_hash, PATCH last_used_at) and the system_logs insert. Anything else fails loud. */
+function installWire(opts: { fail?: boolean; row?: Record<string, unknown> } = {}) {
+  const row = opts.row ?? keyRow;
   const calls: Call[] = [];
   const real = globalThis.fetch;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
+    if (url.pathname === "/rest/v1/system_logs") return new Response(null, { status: 201 });
     if (url.pathname !== "/rest/v1/api_keys") throw new Error(`fake wire: unmodelled ${method} ${url.href}`);
     calls.push({ method, url });
     if (opts.fail) return json({ code: "57014", message: "canceling statement due to statement timeout", details: null, hint: null }, 500);
     if (method === "PATCH") return new Response(null, { status: 204 });
-    return json(url.searchParams.get("key_hash") === `eq.${keyRow.key_hash}` ? [keyRow] : []);
+    return json(url.searchParams.get("key_hash") === `eq.${row.key_hash}` ? [row] : []);
   }) as typeof fetch;
   return { calls, idle: () => new Promise((r) => setTimeout(r, 10)), restore: () => { globalThis.fetch = real; } };
 }
@@ -67,6 +70,17 @@ test("F29: an api_keys read failure is not reported as an invalid key (401)", as
   } finally { w.restore(); }
 });
 
+test("F29: the public route answers an api_keys outage 503 with a short Retry-After", async () => {
+  _resetRateLimits();
+  const w = installWire({ fail: true });
+  try {
+    const res = await withModelKey(async () => { throw new Error("handler must not run"); })(req());
+    assert.equal(res.status, 503);
+    assert.equal(res.headers.get("retry-after"), "10");
+    await w.idle();
+  } finally { w.restore(); }
+});
+
 test("F4: a request over the per-key limit makes no api_keys request", async () => {
   _resetRateLimits();
   const w = installWire();
@@ -93,6 +107,17 @@ test("control: unknown keys never enter the limiter, so random keys cannot grow 
     assert.equal(_rateLimitEntries(), 0, "a key that does not resolve must not take a limiter slot");
     assert.equal((await authenticateModel(req(), NOW)).ok, true);
     assert.equal(_rateLimitEntries(), 1);
+    await w.idle();
+  } finally { w.restore(); }
+});
+
+test("control: a fleet row that names a clone is refused 401 and takes no limiter slot", async () => {
+  _resetRateLimits();
+  const w = installWire({ row: { ...keyRow, scope: "fleet" } });
+  try {
+    const r = await authenticateModel(req(), NOW);
+    assert.equal(r.ok ? 200 : r.status, 401);
+    assert.equal(_rateLimitEntries(), 0);
     await w.idle();
   } finally { w.restore(); }
 });

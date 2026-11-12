@@ -53,6 +53,7 @@ export function withModelKey(handler: PublicHandler): (req: Request) => Promise<
       const headers: Record<string, string> = {};
       if (auth.status === 401) headers["WWW-Authenticate"] = 'Bearer realm="twin"';
       if (auth.status === 429) headers["Retry-After"] = "60";
+      if (auth.status === 503) headers["Retry-After"] = "10";
       return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status, headers });
     }
 
