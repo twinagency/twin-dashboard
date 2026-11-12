@@ -3,6 +3,7 @@ import { requestId } from "@/lib/onlyfans/route";
 import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend";
 import { CONNECTION_SCHEMA, object } from "@/lib/onlyfans-connections/contract";
 import { connectionAnswer, connectionRefusal, connectionCommandContext } from "@/lib/onlyfans-connections/route";
+import { putCapture } from "@/lib/onlyfans-connections/capture-store";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 type Context = { params: Promise<{ accountId: string }> };
@@ -17,6 +18,6 @@ export async function POST(request: NextRequest, context: Context) {
   const backend = configuredConnectionBackend(); if (!backend) return connectionRefusal(503, "Account connection management is not configured.");
   const result = await backend.captureFromCurl(accountId, body.curl, typeof body.staticParamOverride === "string" ? body.staticParamOverride : null);
   return result.ok
-    ? connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, ...result.data })
+    ? connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, ...result.data, captureId: putCapture({ accountId, actor: ctx.actor }, result.data) })
     : connectionRefusal(result.status, result.error);
 }

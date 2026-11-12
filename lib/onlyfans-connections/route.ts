@@ -7,7 +7,7 @@ import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { canonicalConnection, CONNECTION_SCHEMA } from "./contract";
 import { trustedFormOrigin } from "@/lib/form-origin";
 export const connectionAnswer = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: PRIVATE_HEADERS });
-export const connectionRefusal = (status: number, error: string) => connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: false, outcome: "refused", error }, status);
+export const connectionRefusal = (status: number, error: string, code?: string) => connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: false, outcome: "refused", ...(code ? { code } : {}), error }, status);
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 /** Bodyless reads that return credential material: verified operator session, same-origin fetch only. */
 export async function connectionSessionContext(request: NextRequest) {
