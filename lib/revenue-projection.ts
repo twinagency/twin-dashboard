@@ -36,7 +36,10 @@ export async function resolveCloneCuts(cloneIds: Iterable<string>): Promise<Map<
 }
 
 function net(gross: number, cuts: CloneCuts | undefined, mode: ViewerMode): number {
-  if (!cuts) return gross; // unknown clone id (e.g. a null-attributed row) — leave untouched, nothing to cut
+  // Fail closed. resolveCloneCuts gives every id it is asked about an entry (no
+  // platform_cuts row = a real 0%), so a missing entry means the caller never
+  // looked this clone up. Passing gross through as net would leak the cut.
+  if (!cuts) throw new Error("No cut resolved for a clone in this payload");
   return mode === "creator" ? applyStackedCut(gross, cuts.platformPct, cuts.agencyCreatorPct) : applyCut(gross, cuts.platformPct);
 }
 
@@ -116,9 +119,12 @@ export function scaleAnalyticsData(data: AnalyticsData, cuts: Map<string, CloneC
     netRevenue += scaled;
     return { ...c, revenueStars: scaled };
   });
-  // Single-clone scope (the common case): use that clone's own ratio exactly,
-  // rather than a blend that would collapse to the same thing anyway.
-  const blendRatio = grossRevenue > 0 ? netRevenue / grossRevenue : clones.length === 1 ? (netRevenue === 0 && grossRevenue === 0 ? 1 : 0) : 1;
+  // Zero gross (a window without sales) must still scale: byTier is lifetime,
+  // so a ratio of 1 here would show it gross in one window and net in another,
+  // and the two divide out the exact cut. Use the clones' own multiplier, the
+  // lowest one when several are in scope (clones[] empty: the resolved cuts).
+  const ids = data.clones.length ? data.clones.map((c) => c.id) : [...cuts.keys()];
+  const blendRatio = grossRevenue > 0 ? netRevenue / grossRevenue : ids.length ? Math.min(...ids.map((id) => net(1, cuts.get(id), mode))) : 0;
   const scaleStars = (v: number) => v * blendRatio;
 
   return {
