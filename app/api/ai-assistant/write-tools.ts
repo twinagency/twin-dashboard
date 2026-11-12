@@ -48,7 +48,7 @@ async function cloneName(id: string): Promise<string> {
   return data?.name ?? id;
 }
 
-// Resolve a clone by UUID or by name (case-insensitive exact match) so the
+// Resolve a clone by UUID, slug or name (case-insensitive exact match) so the
 // model can refer to "Aria" the way a person would, without a prior lookup.
 // lib/clone-name-match.ts: wildcards never match; a read error throws (approve route: 500).
 async function resolveCloneId(idOrName: string): Promise<{ id: string; name: string; slug: string }> {

@@ -94,7 +94,8 @@ export const POST = withAdmin(async (req) => {
 
   try {
     const id = await createCloneRow(fd);
-    // The row exists: a failed read-back falls back to `{ id }`, not a 500.
+    // The row exists: a failed read-back falls back to `{ id }`, not a 500
+    // (a retry would then hit "already exists").
     const created = await resolveClone(id).catch(() => null);
 
     logAdminWrite(`clone created "${name}"`, id, {

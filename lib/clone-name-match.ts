@@ -1,3 +1,5 @@
+// Type-only import on purpose: no runtime deps, so scripts and the assistant
+// import this without server-only or the api-read <-> ai-assistant/tools cycle.
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 // The one "uuid, slug or name" clone resolver: admin API, assistant read and

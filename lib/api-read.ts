@@ -213,9 +213,8 @@ export async function runQuery(spec: QuerySpec): Promise<QueryResult | QueryErro
   };
 }
 
-// Clone lookup by UUID, slug, or name — same three-step shape as the assistant's
-// resolveCloneIdLoose, so "cat-chase" works everywhere it works in the UI.
-// Both are lib/clone-name-match.ts; a read error throws (withAdmin: 500, not 404).
+// Clone lookup by UUID, slug or name via lib/clone-name-match.ts (shared with the
+// assistant). A read error throws (withAdmin: 500, not 404).
 export async function resolveClone(idOrSlug: string): Promise<{ id: string; slug: string; name: string } | null> {
   return resolveCloneRef(supabaseAdmin, idOrSlug);
 }
