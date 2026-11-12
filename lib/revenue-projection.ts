@@ -35,7 +35,7 @@ export async function resolveCloneCuts(cloneIds: Iterable<string>): Promise<Map<
   return new Map(entries);
 }
 
-function net(gross: number, cuts: CloneCuts | undefined, mode: ViewerMode): number {
+export function net(gross: number, cuts: CloneCuts | undefined, mode: ViewerMode): number {
   // Fail closed. resolveCloneCuts gives every id it is asked about an entry (no
   // platform_cuts row = a real 0%), so a missing entry means the caller never
   // looked this clone up. Passing gross through as net would leak the cut.

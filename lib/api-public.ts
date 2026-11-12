@@ -19,7 +19,7 @@ import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import type { Period, DateRange } from "./dashboard-data";
 import { supabaseAdmin } from "./supabase";
 import { STAR_USD, AUD_PER_USD } from "./money";
-import { resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
+import { net, resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
 import { getCutPctForClone, getAgencyCreatorCutPct, applyStackedCut } from "./platform-cut";
 import { FAN_SORT_COLUMN, type FanQuery } from "./api-public-query";
 
@@ -325,16 +325,15 @@ export async function publicFleetFans(limit: number, opts?: FanQuery): Promise<P
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
   // Fleet key is agency-facing: platform cut only, per row's own clone.
   const cuts = await resolveCloneCuts(rows.map((r) => String(r.clone_id)).filter(Boolean));
-  const fans = rows.map((row) => {
-    const c = cuts.get(String(row.clone_id));
-    return {
-      ...row,
-      total_spent_stars:
-        typeof row.total_spent_stars === "number" && c
-          ? applyStackedCut(row.total_spent_stars, c.platformPct, 0)
-          : row.total_spent_stars,
-    };
-  });
+  // A missing cut THROWS (net()): users.clone_id is NOT NULL + FK, so every
+  // fan's clone resolves; a miss is a broken invariant, never a gross pass-through.
+  const fans = rows.map((row) => ({
+    ...row,
+    total_spent_stars:
+      typeof row.total_spent_stars === "number"
+        ? net(row.total_spent_stars, cuts.get(String(row.clone_id)), "agency")
+        : row.total_spent_stars,
+  }));
   return {
     fans,
     rowCount: fans.length,

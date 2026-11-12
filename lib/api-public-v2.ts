@@ -18,26 +18,27 @@
 // MONEY MATCHES /api/v1/revenue. Rows go through the same duplicate collapse
 // (lib/star-dedupe.ts) and the same cuts as the revenue endpoint: a clone key
 // sees both cuts stacked, a fleet key the platform cut only, per row's own
-// clone. So a sum of /payments equals /revenue for the same window.
+// clone. So a sum of /payments equals /revenue for the same window up to
+// per-row rounding: each payment is rounded to 0.01 Star, /revenue cuts the
+// unrounded aggregate, so they differ by at most 0.005 Star per payment.
 
 import { supabaseAdmin } from "./supabase";
 import { PAGE, selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { STAR_USD } from "./money";
-import { resolveCloneCuts } from "./revenue-projection";
-import { applyCut, applyStackedCut } from "./platform-cut";
+import { net, resolveCloneCuts, type CloneCuts } from "./revenue-projection";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
 import { cursorAt, encodeCursor, type PaymentQuery } from "./api-public-query";
 
-type Cuts = { platformPct: number; agencyCreatorPct: number };
 type Mode = "clone" | "fleet";
 
-/** Net of the cuts this key's role is entitled to, rounded to cents of a Star. */
-function netStars(gross: number, cuts: Cuts | undefined, mode: Mode): number {
-  if (!cuts) return gross;
-  const v = mode === "clone" ? applyStackedCut(gross, cuts.platformPct, cuts.agencyCreatorPct) : applyCut(gross, cuts.platformPct);
-  return Math.round(v * 100) / 100;
+/** Net of the cuts this key's role is entitled to (clone key = creator, fleet =
+ *  agency), rounded to cents of a Star. A missing cut THROWS (net()): clone_id is
+ *  NOT NULL + FK on star_transactions, so every row's clone resolves; a miss is a
+ *  broken invariant, and gross must never go out as net. */
+function netStars(gross: number, cuts: CloneCuts | undefined, mode: Mode): number {
+  return Math.round(net(gross, cuts, mode === "clone" ? "creator" : "agency") * 100) / 100;
 }
 const usd = (stars: number) => Math.round(stars * STAR_USD * 100) / 100;
 
