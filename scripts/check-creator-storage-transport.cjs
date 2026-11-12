@@ -28,8 +28,8 @@ async function sender() {
     }));
     peak = Math.max(peak, process.memoryUsage().rss);
     // A former single file retained >512 MiB in fetch's redirect replay branch.
-    // This leaves meaningful room for the rest of a 512 MiB production process.
-    assert(peak < 384 * MiB, `Upload transport retained too much memory: ${peak} bytes`);
+    // 480 MiB still fails on one retained file (>512 MiB); 384 MiB flaked at 403-439 MB under normal load (2026-11-12).
+    assert(peak < 480 * MiB, `Upload transport retained too much memory: ${peak} bytes`);
     process.send({ count: Number(count), peakRssBytes: peak, node: process.version });
   } finally { clearInterval(timer); }
 }
