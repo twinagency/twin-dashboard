@@ -19,7 +19,7 @@ import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import type { Period, DateRange } from "./dashboard-data";
 import { supabaseAdmin } from "./supabase";
 import { STAR_USD, AUD_PER_USD } from "./money";
-import { resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
+import { netOrWithheld, resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
 import { getCutPctForClone, getAgencyCreatorCutPct, applyStackedCut } from "./platform-cut";
 import { FAN_SORT_COLUMN, type FanQuery } from "./api-public-query";
 
@@ -324,17 +324,16 @@ export async function publicFleetFans(limit: number, opts?: FanQuery): Promise<P
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];
   // Fleet key is agency-facing: platform cut only, per row's own clone.
-  const cuts = await resolveCloneCuts(rows.map((r) => String(r.clone_id)).filter(Boolean));
-  const fans = rows.map((row) => {
-    const c = cuts.get(String(row.clone_id));
-    return {
-      ...row,
-      total_spent_stars:
-        typeof row.total_spent_stars === "number" && c
-          ? applyStackedCut(row.total_spent_stars, c.platformPct, 0)
-          : row.total_spent_stars,
-    };
-  });
+  // A fan whose clone has no resolvable cut keeps the row (it is not money)
+  // but total_spent_stars is null (withheld), never gross.
+  const cuts = await resolveCloneCuts(rows.map((r) => r.clone_id as string | null));
+  const fans = rows.map((row) => ({
+    ...row,
+    total_spent_stars:
+      typeof row.total_spent_stars === "number"
+        ? netOrWithheld(row.total_spent_stars, cuts, row.clone_id, "agency")
+        : row.total_spent_stars,
+  }));
   return {
     fans,
     rowCount: fans.length,

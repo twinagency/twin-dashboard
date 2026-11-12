@@ -24,8 +24,9 @@ export type CloneCuts = { platformPct: number; agencyCreatorPct: number };
 export type ViewerMode = "agency" | "creator";
 
 /** Resolve both cuts for every clone id in one payload, once, before scaling anything. */
-export async function resolveCloneCuts(cloneIds: Iterable<string>): Promise<Map<string, CloneCuts>> {
-  const ids = [...new Set(cloneIds)];
+export async function resolveCloneCuts(cloneIds: Iterable<string | null | undefined>): Promise<Map<string, CloneCuts>> {
+  // A null/empty clone_id is not a clone: never look it up (a uuid column 400s on "null").
+  const ids = [...new Set(cloneIds)].filter((id): id is string => typeof id === "string" && id !== "");
   const entries = await Promise.all(
     ids.map(async (id) => {
       const [platformPct, agencyCreatorPct] = await Promise.all([getCutPctForClone(id), getAgencyCreatorCutPct(id)]);
@@ -41,6 +42,16 @@ function net(gross: number, cuts: CloneCuts | undefined, mode: ViewerMode): numb
   // looked this clone up. Passing gross through as net would leak the cut.
   if (!cuts) throw new Error("No cut resolved for a clone in this payload");
   return mode === "creator" ? applyStackedCut(gross, cuts.platformPct, cuts.agencyCreatorPct) : applyCut(gross, cuts.platformPct);
+}
+
+/**
+ * The ONE rule for a public (internet-facing) money row: net of its clone's
+ * cut, or null = WITHHELD when no cut resolved (null or unknown clone_id).
+ * Never gross, never a throw: one orphan row must not 500 a fleet page.
+ */
+export function netOrWithheld(gross: number, cuts: Map<string, CloneCuts>, cloneId: unknown, mode: ViewerMode): number | null {
+  const c = typeof cloneId === "string" ? cuts.get(cloneId) : undefined;
+  return c ? net(gross, c, mode) : null;
 }
 
 /**
