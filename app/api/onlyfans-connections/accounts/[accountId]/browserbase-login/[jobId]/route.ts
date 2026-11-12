@@ -4,6 +4,7 @@ import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend"
 import { browserbaseJobId } from "@/lib/onlyfans-connections/browserbase";
 import { CONNECTION_SCHEMA } from "@/lib/onlyfans-connections/contract";
 import { connectionAnswer, connectionRefusal, connectionSessionContext } from "@/lib/onlyfans-connections/route";
+import { putCapture } from "@/lib/onlyfans-connections/capture-store";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 type Context = { params: Promise<{ accountId: string; jobId: string }> };
@@ -14,5 +15,8 @@ export async function GET(request: NextRequest, context: Context) {
   if (!accountId || !jobId) return connectionRefusal(400, "That Browserbase login reference is invalid.");
   const backend = configuredConnectionBackend(); if (!backend) return connectionRefusal(503, "Account connection management is not configured.");
   const result = await backend.browserbaseStatus(accountId, jobId);
-  return result.ok ? connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, ...result.data }) : connectionRefusal(result.status, result.error);
+  if (!result.ok) return connectionRefusal(result.status, result.error);
+  const { capture, xHash, ownerId } = result.data;
+  const held = result.data.state === "done" && capture && xHash && ownerId ? { captureId: putCapture({ accountId, actor: ctx.actor, jobId }, { capture, xHash, ownerId }) } : {};
+  return connectionAnswer({ schemaVersion: CONNECTION_SCHEMA, ok: true, ...result.data, ...held });
 }
