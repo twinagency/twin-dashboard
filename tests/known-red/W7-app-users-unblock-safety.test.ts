@@ -1,0 +1,109 @@
+/**
+ * Known red (W7 app-users F1, security/safety): `setBlocked` (app/users/actions.ts:71-81) writes only `blocked`
+ * whatever the reason, and the guard lists setBlocked for agency managers (lib/agency-management.ts:84) while its own
+ * doc (:41-43) keeps "safety overrides" internal. So an agency manager can lift a minor-flagged fan's block and text
+ * replies restart. Controls: admin unblock of a minor-flagged fan (documented, actions.ts:65-69) and agency unblock of
+ * a plain operator block both write {blocked:false}. Turns green when setBlocked(false) re-reads the row and refuses a
+ * non-admin caller whose block is a safety verdict (minor_flagged_at set / blocked_reason "minor" or "us_location"),
+ * writing nothing.
+ * Harness: actions.ts transpiled with a fake `@/lib/supabase`; the REAL guard runs under withDashboardAccess, and its
+ * ownedResource read (serviceClient, lib/supabase-service.ts) is answered by a stubbed globalThis.fetch at the wire.
+ */
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import ts from "typescript";
+import { guardDashboardAction } from "../../lib/agency-management";
+import * as dashboardAccess from "../../lib/dashboard-access";
+import { TOP_ONLYFANS_AGENCY } from "../../lib/partner-portals";
+const { withDashboardAccess } = dashboardAccess;
+
+// serviceClient() is lazy: these are read on the guard's first call, after module load.
+process.env.SUPABASE_URL = "https://offline.supabase.invalid";
+process.env.SUPABASE_SERVICE_KEY = "fake-service-key-for-offline-test";
+
+const assigned = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const manager = { ...TOP_ONLYFANS_AGENCY, cloneIds: [assigned], canManage: true };
+const FAN = "11111111-1111-4111-8111-111111111111";
+type Row = { id: string; clone_id: string; telegram_id: number; paused: boolean; blocked: boolean; blocked_reason: string | null; minor_flagged_at: string | null };
+let row: Row;
+const plainBlock = (): Row => ({ id: FAN, clone_id: assigned, telegram_id: 4242, paused: false, blocked: true, blocked_reason: null, minor_flagged_at: null });
+const minorBlock = (): Row => ({ ...plainBlock(), blocked_reason: "minor", minor_flagged_at: "2026-11-01T00:00:00Z" });
+const usBlock = (): Row => ({ ...plainBlock(), blocked_reason: "us_location" });
+
+// Wire fake for the guard's serviceClient read: GET /rest/v1/users?select=id,clone_id,telegram_id,paused&id=eq.<FAN>...
+const realFetch = globalThis.fetch;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  assert.equal(url.host, "offline.supabase.invalid", "only the fake host may be fetched");
+  assert.equal(url.pathname, "/rest/v1/users");
+  assert.equal((init?.method ?? "GET").toUpperCase(), "GET");
+  const hit = url.searchParams.get("id") === `eq.${row.id}` ? [{ id: row.id, clone_id: row.clone_id, telegram_id: row.telegram_id, paused: row.paused }] : [];
+  const accept = new Headers(init?.headers).get("accept") ?? "";
+  const body = accept.includes("vnd.pgrst.object") ? JSON.stringify(hit[0] ?? null) : JSON.stringify(hit);
+  return new Response(body, { status: 200, headers: { "content-type": "application/json" } });
+}) as typeof fetch;
+test.after(() => { globalThis.fetch = realFetch; });
+
+// Fake supabaseAdmin: recording builder; a users select by id serves the full row (so a fixed action can re-read it).
+const writes: { table: string; patch: Record<string, unknown> }[] = [];
+function builder(table: string) {
+  const b: any = {
+    select(cols: string) { b.cols = cols; return b; },
+    update(patch: Record<string, unknown>) { b.patch = patch; return b; },
+    eq(key: string, value: unknown) { (b.eqs ??= {})[key] = value; return b; },
+    maybeSingle() { b.single = true; return b; },
+    single() { b.single = true; return b; },
+    then(resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) {
+      let out: unknown = { data: null, error: null };
+      if (b.patch) writes.push({ table, patch: { ...b.patch } });
+      else if (table === "users" && b.cols !== undefined) {
+        const hit = b.eqs?.id === row.id ? [{ ...row }] : [];
+        out = { data: b.single ? hit[0] ?? null : hit, error: null };
+      }
+      return Promise.resolve(out).then(resolve, reject);
+    },
+  };
+  return b;
+}
+const db = { from: (table: string) => builder(table) };
+
+const output = ts.transpileModule(readFileSync("app/users/actions.ts", "utf8"), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+}).outputText;
+const actions: Record<string, (fd: FormData) => Promise<void>> = {};
+new Function("require", "exports", output)((name: string) => {
+  if (name === "@/lib/agency-management") return { guardDashboardAction };
+  if (name === "@/lib/dashboard-access") return dashboardAccess;
+  if (name === "@/lib/supabase") return { supabaseAdmin: db };
+  if (name === "next/cache") return { revalidatePath() {} };
+  throw new Error("Unexpected action import: " + name);
+}, actions);
+
+const unblock = () => { const fd = new FormData(); fd.set("userId", FAN); fd.set("blocked", "false"); return fd; };
+
+test("control: admin unblock of a minor-flagged fan writes blocked:false (documented design)", async () => {
+  row = minorBlock(); writes.length = 0;
+  await withDashboardAccess(null, () => actions.setBlocked(unblock()));
+  assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
+});
+
+test("control: agency manager unblock of a plain operator block writes blocked:false", async () => {
+  row = plainBlock(); writes.length = 0;
+  await withDashboardAccess(manager, () => actions.setBlocked(unblock()));
+  assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
+});
+
+test("agency manager cannot lift a minor safety block", async () => {
+  row = minorBlock(); writes.length = 0;
+  const outcome = await withDashboardAccess(manager, () => actions.setBlocked(unblock())).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
+  assert.deepEqual(writes, [], `agency manager lifted a minor safety block: wrote ${JSON.stringify(writes)} (outcome ${outcome})`);
+  assert.match(outcome, /^rejected/, "agency unblock of a minor-flagged fan must reject");
+});
+
+test("agency manager cannot lift a us_location safety block", async () => {
+  row = usBlock(); writes.length = 0;
+  const outcome = await withDashboardAccess(manager, () => actions.setBlocked(unblock())).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
+  assert.deepEqual(writes, [], `agency manager lifted a us_location safety block: wrote ${JSON.stringify(writes)} (outcome ${outcome})`);
+  assert.match(outcome, /^rejected/, "agency unblock of a us_location-blocked fan must reject");
+});
