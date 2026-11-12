@@ -1,4 +1,4 @@
-import { parseRecentHistory, type RecentHistory } from "./recent-history";
+import { BOUNDED_CODE, parseRecentHistory, type RecentHistory } from "./recent-history";
 /** Public account connection contract. Credentials are write-only. */
 export const CONNECTION_SCHEMA = "of-connections.v1";
 export const CONNECTION_HEADER = "X-OnlyFans-Connection-Version";
@@ -102,7 +102,7 @@ export function parseConnectionSync(value: unknown): ConnectionSync | null {
 export function parseConnectionRunner(value: unknown): ConnectionRunner | null {
   if (!object(value) || !exact(value, ["state", "reason", "observedAt", "stale", "restarts"])
     || !["running", "held", "restarting", "stopping", "not_supervised", "unknown"].includes(String(value.state))
-    || !(value.reason === null || (typeof value.reason === "string" && /^[A-Za-z0-9:_.-]{1,80}$/.test(value.reason)))
+    || !(value.reason === null || (typeof value.reason === "string" && BOUNDED_CODE.test(value.reason)))
     || !(value.observedAt === null || stamp(value.observedAt)) || typeof value.stale !== "boolean"
     || !(value.restarts === null || integer(value.restarts, 0, 999_999_999))) return null;
   return value as ConnectionRunner;
@@ -113,9 +113,10 @@ export function parseConnection(value: unknown, accountId: string): Connection |
   const base = ["accountId", "revision", "status", "ownerId", "expiresAt", "verifiedAt", "lastError", "outgoingEnabled", "policyRevision", "usedUnits", "limitUnits", "mediaEnabled", "automateNewConversations"];
   // Optional keys are accepted only as known, valid shapes; runner and aiLive travel together, and aiLive can never contradict the runner.
   const optional = ["sync", "runner", "aiLive", "throttleSeconds", "recentHistory"].filter(key => key in c);
+  const recentHistory = "recentHistory" in c ? parseRecentHistory(c.recentHistory) : undefined;
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
-    ("recentHistory" in c && !parseRecentHistory(c.recentHistory)) ||
+    recentHistory === null ||
     ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||
     ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
       (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
@@ -124,7 +125,8 @@ export function parseConnection(value: unknown, accountId: string): Connection |
     !(c.ownerId === null || ownerString(c.ownerId)) || !(c.expiresAt === null || stamp(c.expiresAt)) || !(c.verifiedAt === null || stamp(c.verifiedAt)) ||
     !(c.lastError === null || (bytes(c.lastError, 160) && /^[a-z0-9_]+$/.test(c.lastError))) || typeof c.outgoingEnabled !== "boolean" || typeof c.mediaEnabled !== "boolean" || typeof c.automateNewConversations !== "boolean" ||
     !integer(c.policyRevision) || !integer(c.usedUnits) || !integer(c.limitUnits) || (c.outgoingEnabled && (c.status !== "verified" || c.verifiedAt === null || c.expiresAt === null))) return null;
-  return c as Connection;
+  // c's own keys are exact-checked above; recentHistory is swapped for its field-by-field projection.
+  return (recentHistory ? { ...c, recentHistory } : c) as Connection;
 }
 export function parseConnectionAck(value: unknown, expected: { action: ConnectionRequest["action"]; expectedRevision: number; accountId: string; commandKey?: string }): ConnectionAck | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "applied", "accountId", "commandKey", "recordedRevision", "action"]) || value.schemaVersion !== CONNECTION_SCHEMA ||
