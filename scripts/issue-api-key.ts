@@ -12,6 +12,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { generateKey } from "../lib/api-keys-admin";
 import { hashKey, keyPrefix } from "../lib/api-tenant";
+import { findCloneByName } from "../lib/clone-name-match";
 
 // This script runs outside Next, so .env is not loaded for it.
 function loadEnv(): void {
@@ -51,12 +52,12 @@ async function resolveClone(idOrSlug: string): Promise<{ id: string; slug: strin
   for (const q of [
     db.from("clones").select(cols).eq("id", idOrSlug).maybeSingle(),
     db.from("clones").select(cols).eq("slug", idOrSlug).maybeSingle(),
-    db.from("clones").select(cols).ilike("name", idOrSlug).limit(1).maybeSingle(),
   ]) {
     const { data } = await q;
     if (data) return data as { id: string; slug: string; name: string };
   }
-  return null;
+  // Exact name only: "Other%" must not mint a key for "Other Clone".
+  return findCloneByName(idOrSlug, (p) => db.from("clones").select(cols).ilike("name", p)) as Promise<{ id: string; slug: string; name: string } | null>;
 }
 
 async function issue(): Promise<void> {
