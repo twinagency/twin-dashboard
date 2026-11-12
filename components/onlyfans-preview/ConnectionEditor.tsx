@@ -73,6 +73,17 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     captureGeneration.current++; capture.current = null; setCaptureReady(false); setXHash(""); setProxy(""); setApiKey("");
     if (fileInput.current) fileInput.current.value = "";
   }, []);
+  // Curl and Browserbase captures follow chooseCapture's rule: a recorded or typed owner must match. Read through a ref because a
+  // Browserbase poll runs in the closure of the click that started it.
+  const expectedOwner = useRef(""); expectedOwner.current = data?.ownerId ?? owner;
+  /** True (and nothing held) when `ownerId` is not the recorded or typed owner. */
+  const refuseOtherOwner = (ownerId: number, source: string) => {
+    const expected = expectedOwner.current;
+    if (!expected || connectionOwner(expected) === ownerId) return false;
+    captureGeneration.current++; capture.current = null; setCaptureReady(false);
+    setNotice(`${source} is for another OnlyFans account (owner ${ownerId}), not owner ${expected}. Sign in as this account and try again.`);
+    return true;
+  };
   const dropRetry = useCallback(() => { retry.current = null; setHasRetry(false); }, []);
   useEffect(() => { active.current = true; return () => { active.current = false; capture.current = null; retry.current = null; bbRun.current++; if (bbTimer.current !== null) window.clearTimeout(bbTimer.current);
     const open = bbLive.current; if (open) bbFireCancel(open); }; }, []);
@@ -148,6 +159,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       if (!payload || payload.ok !== true || !ownerId || typeof payload.xHash !== "string" || !object(payload.capture) || !connectionCapture(payload.capture, ownerId)) {
         setNotice("That curl could not be used. Copy a fresh curl from the Fastt Login Capture extension (or a signed /api2/v2/* request from DevTools) and paste it again."); return;
       }
+      if (refuseOtherOwner(ownerId, "That curl")) return;
       capture.current = payload.capture; setCaptureReady(true); setXHash(payload.xHash); setOwner(String(ownerId)); setCurlText("");
       setNotice("Curl applied: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
     } catch { if (active.current && generation === captureGeneration.current) setNotice("The curl could not be converted. Check the connection and try again."); }
@@ -206,7 +218,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         else again(failures + 1);
         return;
       }
-      setBb({ jobId, state: job.state, liveViewUrl: job.liveViewUrl, error: job.error });
+      const otherOwner = job.state === "done" && !!job.ownerId && refuseOtherOwner(job.ownerId, "The Browserbase login");
+      setBb({ jobId, state: otherOwner ? "failed" : job.state, liveViewUrl: job.liveViewUrl, error: otherOwner ? null : job.error });
+      if (otherOwner) return;
       if (job.state === "done" && job.capture && job.xHash && job.ownerId) {
         captureGeneration.current++; // newest capture wins over any curl or file still being read
         capture.current = job.capture; setCaptureReady(true); setXHash(job.xHash); setOwner(String(job.ownerId));
