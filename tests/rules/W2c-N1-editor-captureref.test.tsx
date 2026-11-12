@@ -1,9 +1,8 @@
-// Rule (W2c N1, step 3a of 3): the editor holds a capture by the server-side handle when a capture reply carries `captureId`, and
-// still works with the old reply (capture + xHash, no captureId). In ref mode Save sends payload.captureRef and no capture/xHash, the
-// X-Hash field is disabled (the server takes xHash from the stored capture), and a 410 capture_expired clears the ref with no retry.
-// The owner guard still runs first. jsdom render of the real ConnectionEditor ("of-a", initiallyOpen), fetch stubbed at the URL level,
-// window timers as a manual queue; same harness as tests/rules/W2-F1-N2-owner-guard.test.tsx. Synthetic values only.
-// Run: nice -n 10 node --import tsx --test tests/rules/W2c-N1-editor-captureref.test.tsx
+// Rule (W2c N1, step 3a of 3): curl and Browserbase captures are held only by the server-side handle (`captureId`); any capture/xHash
+// in those replies is ignored and a reply without captureId is refused. Save sends payload.captureRef and no capture/xHash, the X-Hash
+// field is disabled (the server takes xHash from the stored capture), and a 410 capture_expired clears only the ref, with no retry.
+// A session file is the one raw-capture path left. Harness as tests/rules/W2-F1-N2-owner-guard.test.tsx (which also runs the owner
+// guard with captureId replies). Synthetic values only. Run: nice -n 10 node --import tsx --test tests/rules/W2c-N1-editor-captureref.test.tsx
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test, { after, afterEach, before } from "node:test";
@@ -44,14 +43,14 @@ const json = (body: unknown, status = 200): Answer => () => Response.json(body, 
 const ack = json({ schemaVersion: SCHEMA, ok: true, applied: true, accountId: ACCOUNT, commandKey: "a".repeat(64), recordedRevision: 4, action: "save" });
 const expired = json({ schemaVersion: SCHEMA, ok: false, code: "capture_expired", error: "That capture expired. Capture the session again." }, 410);
 
-async function mount(opts: { curl?: Answer[]; start?: Answer; polls?: Answer[]; saves?: Answer[] }) {
-  const calls: Call[] = [], curls = [...opts.curl ?? []], polls = [...opts.polls ?? []], saves = [...opts.saves ?? []];
+async function mount(opts: { curl?: Answer[]; start?: Answer; polls?: Answer[]; saves?: Answer[]; refreshAfterSave?: Answer }) {
+  let saved = false; const calls: Call[] = [], curls = [...opts.curl ?? []], polls = [...opts.polls ?? []], saves = [...opts.saves ?? []];
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const path = new URL(String(input), "https://fixture.invalid").pathname, method = init.method ?? "GET";
     calls.push({ method, path, body: typeof init.body === "string" ? init.body : undefined });
     const next = (queue: Answer[]) => { const answer = queue.shift(); if (!answer) throw new Error(`unexpected fetch ${method} ${path}`); return answer(); };
-    if (path === ENDPOINT && method === "GET") return Response.json(connection);
-    if (path === ENDPOINT && method === "POST") return next(saves);
+    if (path === ENDPOINT && method === "GET") return saved && opts.refreshAfterSave ? opts.refreshAfterSave() : Response.json(connection);
+    if (path === ENDPOINT && method === "POST") { saved = true; return next(saves); }
     if (path === `${ENDPOINT}/capture-from-curl` && method === "POST") return next(curls);
     if (path === `${ENDPOINT}/browserbase-login` && method === "POST" && opts.start) return opts.start();
     if (path.startsWith(`${ENDPOINT}/browserbase-login/`) && method === "GET") return next(polls);
@@ -83,8 +82,7 @@ async function pasteAndApply() {
   await type("[data-of-connection-curl]", `curl 'https://example.invalid/api2/v2/users/me' -H 'synthetic: ${sentinel()}'`);
   await click("[data-of-connection-curl-apply]");
 }
-const refReply = (owner = OWNER, extra = {}) => json({ schemaVersion: SCHEMA, ok: true, ownerId: owner, captureId: REF, ...extra });
-const oldReply = (xHash = sentinel("xh"), held = capture(OWNER)) => json({ schemaVersion: SCHEMA, ok: true, capture: held, xHash, ownerId: OWNER });
+const refReply = (extra = {}) => json({ schemaVersion: SCHEMA, ok: true, ownerId: OWNER, captureId: REF, ...extra });
 const posted = (calls: Call[]) => calls.filter(c => c.method === "POST" && c.path === ENDPOINT).map(c => JSON.parse(c.body!) as { payload: Record<string, unknown> });
 function assertRefSave(calls: Call[]) {
   const [sent] = posted(calls); assert.ok(sent, "Save posted a command (not a silent no-op)");
@@ -92,24 +90,20 @@ function assertRefSave(calls: Call[]) {
   assert.equal("capture" in sent.payload, false, "no capture in the body"); assert.equal("xHash" in sent.payload, false, "no xHash in the body");
 }
 
-test("control: an old curl reply (capture + xHash, no captureId) saves capture and xHash as before", async () => {
-  const xHash = sentinel("xh"), held = capture(OWNER), calls = await mount({ curl: [oldReply(xHash, held)], saves: [ack] });
-  await pasteAndApply();
-  assert.equal(hash().value, xHash); assert.equal(hash().disabled, false); assert.equal(saveDisabled(), false);
-  await click("[data-of-connection-save]");
-  const [sent] = posted(calls); assert.ok(sent);
-  assert.deepEqual(sent.payload.capture, held);
-  assert.equal(sent.payload.xHash, xHash); assert.equal("captureRef" in sent.payload, false);
-});
-
-for (const [shape, extra] of [["no capture", {}], ["capture + xHash too (today's reply)", { capture: capture(OWNER), xHash: sentinel("xh") }]] as const)
+for (const [shape, extra] of [["no capture", {}], ["capture + xHash too (ignored)", { capture: capture(OWNER), xHash: sentinel("xh") }]] as const)
 test(`a curl reply with captureId and ${shape}: X-Hash disabled, Save sends captureRef only`, async () => {
-  const calls = await mount({ curl: [refReply(OWNER, extra)], saves: [ack] });
+  const calls = await mount({ curl: [refReply(extra)], saves: [ack] });
   await pasteAndApply(); assert.equal(hash().value, "", "no X-Hash held in ref mode");
   assert.equal(q("[data-of-connection-owner]")?.value, String(OWNER));
   assert.equal(hash().disabled, true, "X-Hash is taken from the stored capture"); assert.equal(saveDisabled(), false);
+  assert.match(notice(), /^Curl applied: session captured and owner filled in\./);
   await click("[data-of-connection-save]");
   assertRefSave(calls); assert.match(notice(), /Credential save recorded/);
+});
+
+test("a curl reply without captureId (capture + xHash only) holds nothing", async () => {
+  await mount({ curl: [json({ schemaVersion: SCHEMA, ok: true, capture: capture(OWNER), xHash: sentinel("xh"), ownerId: OWNER })] });
+  await pasteAndApply(); assert.match(notice(), /could not be used/); assert.equal(hash().value, ""); assert.equal(saveDisabled(), true);
 });
 
 test("a done Browserbase job with captureId and no capture is held, not cancelled, and Save sends captureRef", async () => {
@@ -124,15 +118,21 @@ test("a done Browserbase job with captureId and no capture is held, not cancelle
   assertRefSave(calls);
 });
 
-test("410 capture_expired: says so, offers no retry, clears the capture and refreshes the status", async () => {
+const EXPIRED = "That capture expired. If an earlier attempt may have saved, check the status below. Otherwise capture the session again.";
+test("410 capture_expired: says so, offers no retry, clears only the capture (typed proxy kept) and refreshes the status", async () => {
   const calls = await mount({ curl: [refReply()], saves: [expired] });
-  await pasteAndApply(); await click("[data-of-connection-save]");
+  await pasteAndApply(); await type("[data-of-connection-proxy]", "http://user:pass@proxy.invalid:8080"); await click("[data-of-connection-save]");
   assertRefSave(calls);
-  assert.equal(notice(), "That capture expired. Capture the session again.");
+  assert.equal(notice(), EXPIRED); assert.doesNotMatch(notice(), /—/);
   assert.equal(q("[data-of-connection-retry]"), null, "no Retry same command");
   assert.equal(saveDisabled(), true, "the capture is cleared"); assert.equal(hash().disabled, false, "ref mode ended");
+  assert.equal(q("[data-of-connection-proxy]")?.value, "http://user:pass@proxy.invalid:8080", "typed proxy kept");
   const save = calls.findIndex(c => c.method === "POST" && c.path === ENDPOINT);
   assert.ok(calls.slice(save + 1).some(c => c.method === "GET" && c.path === ENDPOINT), "status refreshed after the 410");
+});
+test("410 capture_expired keeps its notice when the follow-up status refresh fails", async () => {
+  await mount({ curl: [refReply()], saves: [expired], refreshAfterSave: json({ ok: false }, 500) });
+  await pasteAndApply(); await click("[data-of-connection-save]"); assert.equal(notice(), EXPIRED);
 });
 
 test("an unconfirmed ref save retries the exact same captureRef", async () => {
@@ -141,15 +141,7 @@ test("an unconfirmed ref save retries the exact same captureRef", async () => {
   const sent = posted(calls); assert.equal(sent.length, 2); assert.deepEqual(sent[1], sent[0]); assert.equal(sent[1].payload.captureRef, REF);
 });
 
-test("a new old-shape curl after a ref clears ref mode: X-Hash enabled and the new capture is saved", async () => {
-  const xHash = sentinel("xh"), calls = await mount({ curl: [refReply(), oldReply(xHash)], saves: [ack] });
-  await pasteAndApply(); assert.equal(hash().disabled, true);
-  await pasteAndApply(); assert.equal(hash().disabled, false); assert.equal(hash().value, xHash);
-  await click("[data-of-connection-save]");
-  const [sent] = posted(calls); assert.equal("captureRef" in sent.payload, false); assert.equal(sent.payload.xHash, xHash);
-});
-
-test("choosing a session file after a ref clears ref mode and saves the file's capture", async () => {
+test("control: a session file (here after a curl ref) saves its own capture and the typed X-Hash, no captureRef", async () => {
   const held = capture(OWNER), calls = await mount({ curl: [refReply()], saves: [ack] });
   await pasteAndApply(); await click("[data-of-connection-method=file] input");
   const input = q("[data-of-connection-capture]")!;
@@ -158,12 +150,5 @@ test("choosing a session file after a ref clears ref mode and saves the file's c
   assert.equal(hash().disabled, false, "ref mode ended"); await type("[data-of-connection-hash]", "synthetic-file-hash");
   await click("[data-of-connection-save]");
   const [sent] = posted(calls); assert.ok(sent); assert.equal("captureRef" in sent.payload, false); assert.deepEqual(sent.payload.capture, held);
-});
-
-test("owner guard still runs first in ref mode: a captureId for owner 222 is refused on owner 111", async () => {
-  await mount({ curl: [refReply(222)] });
-  await pasteAndApply();
-  assert.equal(q("[data-of-connection-owner]")?.value, String(OWNER));
-  assert.equal(saveDisabled(), true); assert.equal(hash().disabled, false, "no ref held");
-  assert.match(notice(), /another OnlyFans account/);
+  assert.equal(sent.payload.xHash, "synthetic-file-hash");
 });

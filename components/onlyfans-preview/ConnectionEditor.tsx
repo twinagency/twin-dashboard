@@ -14,7 +14,7 @@ import { parseCommandJson } from "@/lib/onlyfans/command-json";
 import { connectionCapture, connectionCaptureRef, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
   validConnectionRefSave, validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
   type ConnectionRefSave, type ConnectionRequest, type ConnectionRegistration } from "@/lib/onlyfans-connections/contract";
-import { BROWSERBASE_TERMINAL, browserbaseState, parseBrowserbaseJob, type BrowserbaseState } from "@/lib/onlyfans-connections/browserbase";
+import { BROWSERBASE_TERMINAL, browserbaseState, parseHeldBrowserbaseJob, type BrowserbaseState } from "@/lib/onlyfans-connections/browserbase";
 
 const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
@@ -86,9 +86,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     setNotice(`${source} is for another OnlyFans account (owner ${ownerId}), not owner ${expected}. Sign in as this account and try again.`);
     return true;
   };
-  /** Holds a converted capture: by its server-side handle when the reply has one (the server supplies X-Hash), else the raw capture. */
-  const holdCapture = (ownerId: number, ref: string | null, raw: { capture: Record<string, unknown>; xHash: string } | null) => {
-    capture.current = ref ? null : raw?.capture ?? null; setCaptureRef(ref); setXHash(ref ? "" : raw?.xHash ?? ""); setCaptureReady(true); setOwner(String(ownerId));
+  /** Holds a curl or Browserbase capture by its server-side handle only; the server supplies capture and X-Hash on save. */
+  const holdCapture = (ownerId: number, ref: string) => {
+    capture.current = null; setCaptureRef(ref); setXHash(""); setCaptureReady(true); setOwner(String(ownerId));
   };
   const dropRetry = useCallback(() => { retry.current = null; setHasRetry(false); }, []);
   useEffect(() => { active.current = true; return () => { active.current = false; capture.current = null; retry.current = null; bbRun.current++; if (bbTimer.current !== null) window.clearTimeout(bbTimer.current);
@@ -160,16 +160,15 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         sessionDenied.current = true; clearSecrets(); dropRetry(); setData(null); setOwner(""); setModelId(""); setDenied(true);
         setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return;
       }
-      const payload = response.ok ? await response.json() as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown; captureId?: unknown } : null;
+      const payload = response.ok ? await response.json() as { ok?: boolean; ownerId?: unknown; captureId?: unknown } : null;
       const ownerId = payload && Number.isSafeInteger(payload.ownerId) ? payload.ownerId as number : null;
       const ref = payload && connectionCaptureRef(payload.captureId) ? payload.captureId : null;
-      const raw = payload && ownerId && typeof payload.xHash === "string" && object(payload.capture) && connectionCapture(payload.capture, ownerId) ? { capture: payload.capture, xHash: payload.xHash } : null;
-      if (!payload || payload.ok !== true || !ownerId || !ref && !raw) {
+      if (!payload || payload.ok !== true || !ownerId || !ref) {
         setNotice("That curl could not be used. Copy a fresh curl from the Fastt Login Capture extension (or a signed /api2/v2/* request from DevTools) and paste it again."); return;
       }
       if (refuseOtherOwner(ownerId, "That curl")) return;
-      holdCapture(ownerId, ref, raw); setCurlText("");
-      setNotice("Curl applied: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
+      holdCapture(ownerId, ref); setCurlText("");
+      setNotice("Curl applied: session captured and owner filled in. Set the proxy and window if needed, then Save credentials.");
     } catch { if (active.current && generation === captureGeneration.current) setNotice("The curl could not be converted. Check the connection and try again."); }
     finally { if (active.current) setCurlBusy(false); }
   }
@@ -193,7 +192,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         setNotice("Browserbase login is not configured on this server. Use the Fastt Login Capture extension or paste a curl instead."); return;
       }
       if (response.status === 429 && payload?.code === "browserbase_busy") { setNotice("Too many Browserbase logins are running. Try again in a few minutes."); return; }
-      const job = response.ok ? parseBrowserbaseJob(payload) : null;
+      const job = response.ok ? parseHeldBrowserbaseJob(payload) : null;
       if (!job) { setNotice("The Browserbase login could not be started. Try again."); return; }
       setBb({ jobId: job.jobId, state: job.state, liveViewUrl: job.liveViewUrl, error: job.error }); setNotice("");
       if (!BROWSERBASE_TERMINAL.includes(job.state)) bbTimer.current = window.setTimeout(() => void pollBrowserbase(job.jobId, run, 0), BROWSERBASE_POLL_MS);
@@ -218,7 +217,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       if ([401, 403].includes(response.status)) { denyBrowserbase(); return; }
       const payload = response.ok ? await response.json().catch(() => null) as unknown : null;
       if (!active.current || run !== bbRun.current) return;
-      const job = parseBrowserbaseJob(payload, jobId, true);
+      const job = parseHeldBrowserbaseJob(payload, jobId);
       if (!job) {
         const doneButInvalid = typeof payload === "object" && payload !== null && (payload as { state?: unknown }).state === "done";
         if (doneButInvalid) giveUp("The Browserbase capture could not be used. Start the login again, or paste a curl instead.");
@@ -226,13 +225,13 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         else again(failures + 1);
         return;
       }
-      const otherOwner = job.state === "done" && !!job.ownerId && refuseOtherOwner(job.ownerId, "The Browserbase login");
+      const otherOwner = job.state === "done" && refuseOtherOwner(job.ownerId, "The Browserbase login");
       setBb({ jobId, state: otherOwner ? "failed" : job.state, liveViewUrl: job.liveViewUrl, error: otherOwner ? null : job.error });
       if (otherOwner) return;
-      if (job.state === "done" && job.ownerId && (job.captureId || job.capture && job.xHash)) {
+      if (job.state === "done") {
         captureGeneration.current++; // newest capture wins over any curl or file still being read
-        holdCapture(job.ownerId, job.captureId ?? null, job.capture && job.xHash ? { capture: job.capture, xHash: job.xHash } : null);
-        setNotice("Logged in via Browserbase: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
+        holdCapture(job.ownerId, job.captureId);
+        setNotice("Logged in via Browserbase: session captured and owner filled in. Set the proxy and window if needed, then Save credentials.");
         return;
       }
       if (!BROWSERBASE_TERMINAL.includes(job.state)) again(0);
@@ -265,7 +264,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     if (submitting.current || !validConnectionRequest(command) && !validConnectionRefSave(command)) return;
     submitting.current = true; setBusy(true); setNotice("Saving account connection command…");
     let message = "Outcome not confirmed. Refresh the recorded status or retry the exact same command.";
-    let uncertain = true, sessionLost = false;
+    let uncertain = true, sessionLost = false, expired = false;
     try {
       const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -281,15 +280,16 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           : command.action === "pause" ? "Pause recorded. Check the refreshed outgoing state."
           : "Activation recorded. Check the refreshed outgoing state and limits.";
       } else if (response.status === 410 && (await response.json().catch(() => null) as { code?: unknown } | null)?.code === "capture_expired") {
-        uncertain = false; message = "That capture expired. Capture the session again."; // the ref is cleared below; nothing was sent upstream
+        uncertain = false; expired = true; message = "That capture expired. If an earlier attempt may have saved, check the status below. Otherwise capture the session again.";
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
         uncertain = false; message = command.action === "save" ? "Save refused. Check the owner ID, that messages are not queued or sending right now, and that the proxy and capture are valid, then review the refreshed account." : "Command refused. Review the refreshed account, credentials and limits before trying again.";
       }
     } catch { /* Keep the exact retry in memory only, with no persistent browser storage. */ }
     finally {
       if (active.current && !sessionLost) {
-        retry.current = uncertain ? command : null; setHasRetry(uncertain); clearSecrets();
-        const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed) setNotice(message); setBusy(false); router.refresh(); }
+        retry.current = uncertain ? command : null; setHasRetry(uncertain);
+        if (expired) { setCaptureRef(null); setCaptureReady(false); } else clearSecrets(); // expiry keeps the typed proxy and model key
+        const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed || expired) setNotice(message); setBusy(false); router.refresh(); }
       }
       if (active.current && sessionLost) setBusy(false);
       submitting.current = false;

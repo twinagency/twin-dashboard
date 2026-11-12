@@ -25,4 +25,3 @@ export function peekCapture(handle: string, scope: Scope): StoredCapture | null 
   if (!entry || !live(entry) || entry.accountId !== scope.accountId || entry.actor !== scope.actor) return null;
   return { capture: entry.capture, xHash: entry.xHash, ownerId: entry.ownerId };
 }
-export const deleteCapture = (handle: string) => { store().delete(handle); };
