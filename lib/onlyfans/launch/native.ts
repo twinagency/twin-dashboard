@@ -1,5 +1,9 @@
 /** Validated projections of the native configuration-purpose launch contracts. */
 import {
+  parseRecentHistory,
+  type RecentHistory,
+} from "../../onlyfans-connections/recent-history";
+import {
   FACT_KEYS,
   type FactKey,
   validConfigurationRequest,
@@ -442,7 +446,42 @@ export function parseNativeMemory(v: unknown): NativeMemory | null {
     )
   )
     return null;
-  return v as NativeMemory;
+  // A new object naming every field, at every level: unknown upstream keys never reach the browser.
+  const facts: NativeMemory["facts"] = {};
+  for (const [k, x] of Object.entries(v.facts) as [string, Record<string, unknown>][]) {
+    const f: NativeMemory["facts"][string] = {
+      value: x.value as string,
+      source: x.source as NativeMemory["facts"][string]["source"],
+    };
+    if (count(x.revision)) f.revision = x.revision;
+    for (const o of ["sourceMessageId", "sourceAt", "quote", "sourceDigest"] as const)
+      if (typeof x[o] === "string") f[o] = x[o] as string;
+    facts[k] = f;
+  }
+  return {
+    schemaVersion: "of-history-memory.v1",
+    algorithm: v.algorithm,
+    revision: v.revision,
+    version: v.version,
+    canonicalDigest: v.canonicalDigest,
+    fingerprint: v.fingerprint,
+    facts,
+    summaries: { ...(v.summaries as NativeMemory["summaries"]) },
+    overrides: Object.fromEntries(
+      Object.entries(v.overrides as NativeMemory["overrides"]).map(([k, x]) => [
+        k,
+        { operation: x.operation, revision: x.revision },
+      ]),
+    ),
+    interactions: (v.interactions as NativeMemory["interactions"]).map((x) => ({
+      sourceMessageId: x.sourceMessageId,
+      sourceAt: x.sourceAt,
+      direction: x.direction,
+      excerpt: x.excerpt,
+      sourceDigest: x.sourceDigest,
+    })),
+    summaryKind: "saved_profile_and_source_excerpts",
+  };
 }
 export type MemoryFanPage = {
   fans: {
@@ -489,7 +528,24 @@ export function parseMemoryFanPage(v: unknown): MemoryFanPage | null {
     )
   )
     return null;
-  return { fans: v.fans as MemoryFanPage["fans"], nextCursor: v.nextCursor };
+  return {
+    fans: (v.fans as MemoryFanPage["fans"]).map((x) => ({
+      fanId: x.fanId,
+      displayName: x.displayName,
+      username: x.username,
+      storedMessages: x.storedMessages,
+      processedMessages: x.processedMessages,
+      memoryRevision: x.memoryRevision,
+      lastProcessedAt: x.lastProcessedAt,
+      archive: x.archive && {
+        status: x.archive.status,
+        pagesCompleted: x.archive.pagesCompleted,
+        messagesObserved: x.archive.messagesObserved,
+        completedAt: x.archive.completedAt,
+      },
+    })),
+    nextCursor: v.nextCursor,
+  };
 }
 export type EngagementPolicy = {
   enabled: boolean;
@@ -627,33 +683,60 @@ export type RecoveryProgress = {
   totalMessages: null;
   percentComplete: null;
   recentRecoveryNeeded: boolean;
-  [key: string]: unknown;
+  /** Only ever parseRecentHistory's projection; absent when missing or invalid. */
+  recentHistory?: RecentHistory;
 };
 export function parseRecoveryProgress(
   v: unknown,
   accountId: string,
   fanId: string | null = null,
 ): RecoveryProgress | null {
-  return object(v) &&
-    v.schemaVersion === "of-history-recovery.v1" &&
-    v.accountId === accountId &&
-    v.fanId === fanId &&
-    ["complete", "incomplete"].includes(String(v.status)) &&
-    typeof v.discoveryComplete === "boolean" &&
-    [
-      "conversationsDiscovered",
-      "conversationsComplete",
-      "conversationsRetrying",
-      "conversationsDeferredForLiveInput",
-      "pagesCommitted",
-      "messagesObserved",
-      "messagesAdded",
-    ].every((k) => count(v[k])) &&
-    v.totalMessages === null &&
-    v.percentComplete === null &&
-    typeof v.recentRecoveryNeeded === "boolean"
-    ? (v as RecoveryProgress)
-    : null;
+  if (
+    !(
+      object(v) &&
+      v.schemaVersion === "of-history-recovery.v1" &&
+      v.accountId === accountId &&
+      v.fanId === fanId &&
+      ["complete", "incomplete"].includes(String(v.status)) &&
+      typeof v.discoveryComplete === "boolean" &&
+      [
+        "conversationsDiscovered",
+        "conversationsComplete",
+        "conversationsRetrying",
+        "conversationsDeferredForLiveInput",
+        "pagesCommitted",
+        "messagesObserved",
+        "messagesAdded",
+      ].every((k) => count(v[k])) &&
+      v.totalMessages === null &&
+      v.percentComplete === null &&
+      typeof v.recentRecoveryNeeded === "boolean"
+    )
+  )
+    return null;
+  // A new object naming every field: unknown upstream keys (cost figures, tokens) never reach the browser.
+  const n = (k: string) => v[k] as number;
+  const r: RecoveryProgress = {
+    schemaVersion: "of-history-recovery.v1",
+    accountId,
+    fanId,
+    status: v.status as RecoveryProgress["status"],
+    discoveryComplete: v.discoveryComplete as boolean,
+    conversationsDiscovered: n("conversationsDiscovered"),
+    conversationsComplete: n("conversationsComplete"),
+    conversationsRetrying: n("conversationsRetrying"),
+    conversationsDeferredForLiveInput: n("conversationsDeferredForLiveInput"),
+    pagesCommitted: n("pagesCommitted"),
+    messagesObserved: n("messagesObserved"),
+    messagesAdded: n("messagesAdded"),
+    totalMessages: null,
+    percentComplete: null,
+    recentRecoveryNeeded: v.recentRecoveryNeeded as boolean,
+  };
+  // An optional diagnostic: invalid drops only itself, never the recovery (F4).
+  const recentHistory = parseRecentHistory(v.recentHistory);
+  if (recentHistory) r.recentHistory = recentHistory;
+  return r;
 }
 export type MemoryProgress = {
   schemaVersion: "of-history-memory-progress.v1";
@@ -682,7 +765,19 @@ export function parseMemoryProgress(v: unknown): MemoryProgress | null {
     timestamp(v.oldestStoredAt) &&
     timestamp(v.newestStoredAt) &&
     timestamp(v.lastProcessedAt)
-    ? (v as MemoryProgress)
+    ? {
+        schemaVersion: "of-history-memory-progress.v1",
+        algorithm: v.algorithm,
+        storedMessages: v.storedMessages,
+        processedCurrentMessages: v.processedCurrentMessages,
+        pendingMessages: v.pendingMessages,
+        storedMemoryComplete: v.storedMemoryComplete,
+        providerHistoryComplete: null,
+        revision: v.revision,
+        oldestStoredAt: v.oldestStoredAt,
+        newestStoredAt: v.newestStoredAt,
+        lastProcessedAt: v.lastProcessedAt,
+      }
     : null;
 }
 export type AccountControl = {

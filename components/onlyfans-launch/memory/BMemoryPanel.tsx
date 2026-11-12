@@ -1,5 +1,4 @@
 "use client";
-import { parseRecentHistory } from "@/lib/onlyfans-connections/recent-history";
 import RecentHistoryStatus from "@/components/onlyfans-preview/RecentHistoryStatus";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { parseWorkspaceScope, workspaceHref } from "@/lib/onlyfans-preview/scope";
@@ -195,7 +194,7 @@ function MemoryProgressView({ progress: p }: { progress: MemoryProgress }) {
 }
 /** Every archive, recovery, discovery and stored-message counter. The inbox sidebar keeps these inside a collapsed disclosure. */
 export function MemoryDiagnostics({ progress, recovery }: { progress: MemoryProgress; recovery: RecoveryProgress }) {
-  const recent = parseRecentHistory(recovery.recentHistory);
+  const recent = recovery.recentHistory;
   return <div className="grid min-w-0 gap-3" data-b-diagnostics>{recent ? <RecentHistoryStatus value={recent} /> : null}<MemoryProgressView progress={progress} /><RecoveryView progress={recovery} /></div>;
 }
 
@@ -207,7 +206,7 @@ export type MemoryState = { key: MemoryStateKey; label: string; detail: string; 
  */
 export function memoryState(progress: MemoryProgress, recovery: RecoveryProgress, memory: NativeMemory): MemoryState {
   const hasFacts = Object.keys(memory.facts).length > 0 || Object.values(memory.summaries).some(v => !!v);
-  const recent = parseRecentHistory(recovery.recentHistory);
+  const recent = recovery.recentHistory;
   if (recent?.initialHistory.state === "recent_history_ready" && recent.memoryProcessing.state === "ready")
     return { key: hasFacts ? "current" : "no_facts", label: hasFacts ? "Recent memory ready" : "Recent history processed, no supported facts", detailedProgress: true,
       detail: `The initial 30-day window is imported and processed. Lifetime history is ${recent.lifetimeHistory.complete ? "complete" : "incomplete; older history is retrieved progressively"}.` };
