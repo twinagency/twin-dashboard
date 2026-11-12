@@ -19,7 +19,7 @@ export function putCapture(scope: Scope, data: StoredCapture): string {
   map.set(handle, { capture: data.capture, xHash: data.xHash, ownerId: data.ownerId, accountId: scope.accountId, actor: scope.actor, jobId: scope.jobId ?? null, at: Date.now() });
   return handle;
 }
-/** The stored capture, only for the account and actor it was captured for. Does not consume it: delete once the save is acked. */
+/** The stored capture, only for the account and actor it was captured for. Does not consume it: a save never deletes it, the TTL does. */
 export function peekCapture(handle: string, scope: Scope): StoredCapture | null {
   const entry = store().get(handle);
   if (!entry || !live(entry) || entry.accountId !== scope.accountId || entry.actor !== scope.actor) return null;

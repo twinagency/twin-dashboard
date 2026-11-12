@@ -11,9 +11,9 @@ import ConnectionSyncStatus from "./ConnectionSyncStatus";
 import AdminOnlyFansSignIn from "./AdminOnlyFansSignIn";
 import LoginMethodChoice, { type LoginMethod } from "./LoginMethodChoice";
 import { parseCommandJson } from "@/lib/onlyfans/command-json";
-import { connectionCapture, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
-  validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
-  type ConnectionRequest, type ConnectionRegistration } from "@/lib/onlyfans-connections/contract";
+import { connectionCapture, connectionCaptureRef, connectionOwner, object, parseConnection, parseConnectionAck, parseRegistrationAck,
+  validConnectionRefSave, validConnectionRequest, validConnectionRegistration, type Connection, type ConnectionCreator,
+  type ConnectionRefSave, type ConnectionRequest, type ConnectionRegistration } from "@/lib/onlyfans-connections/contract";
 import { BROWSERBASE_TERMINAL, browserbaseState, parseBrowserbaseJob, type BrowserbaseState } from "@/lib/onlyfans-connections/browserbase";
 
 const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
@@ -35,6 +35,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const [owner, setOwner] = useState(""), [xHash, setXHash] = useState(""), [proxy, setProxy] = useState("");
   const [modelEnabled, setModelEnabled] = useState(false), [modelId, setModelId] = useState(""), [apiKey, setApiKey] = useState("");
   const [hours, setHours] = useState("6"), [captureReady, setCaptureReady] = useState(false);
+  // Ref mode: the capture is held server-side under this handle (the reply's captureId); Save sends it as payload.captureRef.
+  const [captureRef, setCaptureRef] = useState<string | null>(null);
   const [curlText, setCurlText] = useState(""), [curlBusy, setCurlBusy] = useState(false);
   const [bb, setBb] = useState<BrowserbaseView | null>(null), [bbBusy, setBbBusy] = useState(false);
   const [method, setMethod] = useState<LoginMethod>("browser"), [bbHidden, setBbHidden] = useState(false);
@@ -60,7 +62,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const [hasRetry, setHasRetry] = useState(false);
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
-  const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | null>(null);
+  const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | ConnectionRefSave | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const statusTarget = useRef<HTMLDivElement>(null);
   const captureGeneration = useRef(0);
@@ -70,7 +72,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const bbFireCancel = (jobId: string) => void fetch(`${endpoint}/browserbase-login/${encodeURIComponent(jobId)}/cancel`, { method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true,
     headers: { "Content-Type": "application/json" }, body: "{}" }).catch(() => undefined);
   const clearSecrets = useCallback(() => {
-    captureGeneration.current++; capture.current = null; setCaptureReady(false); setXHash(""); setProxy(""); setApiKey("");
+    captureGeneration.current++; capture.current = null; setCaptureRef(null); setCaptureReady(false); setXHash(""); setProxy(""); setApiKey("");
     if (fileInput.current) fileInput.current.value = "";
   }, []);
   // Curl and Browserbase captures follow chooseCapture's rule: a recorded or typed owner must match. Read through a ref because a
@@ -80,9 +82,13 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const refuseOtherOwner = (ownerId: number, source: string) => {
     const expected = expectedOwner.current;
     if (!expected || connectionOwner(expected) === ownerId) return false;
-    captureGeneration.current++; capture.current = null; setCaptureReady(false);
+    captureGeneration.current++; capture.current = null; setCaptureRef(null); setCaptureReady(false);
     setNotice(`${source} is for another OnlyFans account (owner ${ownerId}), not owner ${expected}. Sign in as this account and try again.`);
     return true;
+  };
+  /** Holds a converted capture: by its server-side handle when the reply has one (the server supplies X-Hash), else the raw capture. */
+  const holdCapture = (ownerId: number, ref: string | null, raw: { capture: Record<string, unknown>; xHash: string } | null) => {
+    capture.current = ref ? null : raw?.capture ?? null; setCaptureRef(ref); setXHash(ref ? "" : raw?.xHash ?? ""); setCaptureReady(true); setOwner(String(ownerId));
   };
   const dropRetry = useCallback(() => { retry.current = null; setHasRetry(false); }, []);
   useEffect(() => { active.current = true; return () => { active.current = false; capture.current = null; retry.current = null; bbRun.current++; if (bbTimer.current !== null) window.clearTimeout(bbTimer.current);
@@ -127,7 +133,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
 
   async function chooseCapture(file: File | undefined) {
     const generation = ++captureGeneration.current;
-    capture.current = null; setCaptureReady(false);
+    capture.current = null; setCaptureRef(null); setCaptureReady(false);
     if (!file) return;
     if (file.size > 98_304) { setNotice("The capture file is too large. Use a current session capture under 96 KB."); if (fileInput.current) fileInput.current.value = ""; return; }
     try {
@@ -144,7 +150,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     const text = curlText.trim();
     if (!text || curlBusy) return;
     const generation = ++captureGeneration.current;
-    capture.current = null; setCaptureReady(false); setCurlBusy(true);
+    capture.current = null; setCaptureRef(null); setCaptureReady(false); setCurlBusy(true);
     setNotice("Reading the pasted curl… deriving signing rules.");
     try {
       const response = await fetch(`${endpoint}/capture-from-curl`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
@@ -154,13 +160,15 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
         sessionDenied.current = true; clearSecrets(); dropRetry(); setData(null); setOwner(""); setModelId(""); setDenied(true);
         setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return;
       }
-      const payload = response.ok ? await response.json() as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown } : null;
+      const payload = response.ok ? await response.json() as { ok?: boolean; capture?: unknown; xHash?: unknown; ownerId?: unknown; captureId?: unknown } : null;
       const ownerId = payload && Number.isSafeInteger(payload.ownerId) ? payload.ownerId as number : null;
-      if (!payload || payload.ok !== true || !ownerId || typeof payload.xHash !== "string" || !object(payload.capture) || !connectionCapture(payload.capture, ownerId)) {
+      const ref = payload && connectionCaptureRef(payload.captureId) ? payload.captureId : null;
+      const raw = payload && ownerId && typeof payload.xHash === "string" && object(payload.capture) && connectionCapture(payload.capture, ownerId) ? { capture: payload.capture, xHash: payload.xHash } : null;
+      if (!payload || payload.ok !== true || !ownerId || !ref && !raw) {
         setNotice("That curl could not be used. Copy a fresh curl from the Fastt Login Capture extension (or a signed /api2/v2/* request from DevTools) and paste it again."); return;
       }
       if (refuseOtherOwner(ownerId, "That curl")) return;
-      capture.current = payload.capture; setCaptureReady(true); setXHash(payload.xHash); setOwner(String(ownerId)); setCurlText("");
+      holdCapture(ownerId, ref, raw); setCurlText("");
       setNotice("Curl applied: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
     } catch { if (active.current && generation === captureGeneration.current) setNotice("The curl could not be converted. Check the connection and try again."); }
     finally { if (active.current) setCurlBusy(false); }
@@ -210,7 +218,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       if ([401, 403].includes(response.status)) { denyBrowserbase(); return; }
       const payload = response.ok ? await response.json().catch(() => null) as unknown : null;
       if (!active.current || run !== bbRun.current) return;
-      const job = parseBrowserbaseJob(payload, jobId);
+      const job = parseBrowserbaseJob(payload, jobId, true);
       if (!job) {
         const doneButInvalid = typeof payload === "object" && payload !== null && (payload as { state?: unknown }).state === "done";
         if (doneButInvalid) giveUp("The Browserbase capture could not be used. Start the login again, or paste a curl instead.");
@@ -221,9 +229,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       const otherOwner = job.state === "done" && !!job.ownerId && refuseOtherOwner(job.ownerId, "The Browserbase login");
       setBb({ jobId, state: otherOwner ? "failed" : job.state, liveViewUrl: job.liveViewUrl, error: otherOwner ? null : job.error });
       if (otherOwner) return;
-      if (job.state === "done" && job.capture && job.xHash && job.ownerId) {
+      if (job.state === "done" && job.ownerId && (job.captureId || job.capture && job.xHash)) {
         captureGeneration.current++; // newest capture wins over any curl or file still being read
-        capture.current = job.capture; setCaptureReady(true); setXHash(job.xHash); setOwner(String(job.ownerId));
+        holdCapture(job.ownerId, job.captureId ?? null, job.capture && job.xHash ? { capture: job.capture, xHash: job.xHash } : null);
         setNotice("Logged in via Browserbase: capture, X-Hash and owner filled in. Set the proxy and window if needed, then Save credentials.");
         return;
       }
@@ -253,8 +261,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     } catch { if (active.current && run === bbRun.current) unconfirmed(); }
     finally { if (active.current) setBbBusy(false); }
   }
-  async function send(command: ConnectionRequest) {
-    if (submitting.current || !validConnectionRequest(command)) return;
+  async function send(command: ConnectionRequest | ConnectionRefSave) {
+    if (submitting.current || !validConnectionRequest(command) && !validConnectionRefSave(command)) return;
     submitting.current = true; setBusy(true); setNotice("Saving account connection command…");
     let message = "Outcome not confirmed. Refresh the recorded status or retry the exact same command.";
     let uncertain = true, sessionLost = false;
@@ -272,6 +280,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           : command.action === "verify" ? "Verification requested. Refresh for the worker’s recorded result."
           : command.action === "pause" ? "Pause recorded. Check the refreshed outgoing state."
           : "Activation recorded. Check the refreshed outgoing state and limits.";
+      } else if (response.status === 410 && (await response.json().catch(() => null) as { code?: unknown } | null)?.code === "capture_expired") {
+        uncertain = false; message = "That capture expired. Capture the session again."; // the ref is cleared below; nothing was sent upstream
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
         uncertain = false; message = command.action === "save" ? "Save refused. Check the owner ID, that messages are not queued or sending right now, and that the proxy and capture are valid, then review the refreshed account." : "Command refused. Review the refreshed account, credentials and limits before trying again.";
       }
@@ -286,12 +296,12 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     }
   }
   function saveCapture() {
-    const ownerId = connectionOwner(owner);
-    if (!data || !ownerId || !capture.current) return;
+    const ownerId = connectionOwner(owner), raw = capture.current;
+    if (!data || !ownerId || !captureRef && !raw) return;
     if (!proxyEntry.ok) { setNotice(proxyEntry.message); return; }
-    const command: ConnectionRequest = { action: "save", expectedRevision: data.revision, payload: { ownerId, capture: capture.current,
-      xHash, proxyUrl: proxyEntry.url, expiresAt: new Date(Date.now() + Number(hours) * 3_600_000).toISOString(), model: modelEnabled ? { modelId, apiKey } : null } };
-    if (!validConnectionRequest(command)) { setNotice("Review the owner, capture, hash, proxy and selected model details."); return; }
+    const rest = { ownerId, proxyUrl: proxyEntry.url, expiresAt: new Date(Date.now() + Number(hours) * 3_600_000).toISOString(), model: modelEnabled ? { modelId, apiKey } : null };
+    const command = { action: "save" as const, expectedRevision: data.revision, payload: captureRef ? { ...rest, captureRef } : { ...rest, capture: raw, xHash } };
+    if (!validConnectionRefSave(command) && !validConnectionRequest(command)) { setNotice("Review the owner, capture, hash, proxy and selected model details."); return; }
     void send(command);
   }
   function activate() {
@@ -353,7 +363,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
               {bbActive && bb.liveViewUrl && bbHidden ? <button type="button" data-of-connection-browserbase-show className={buttonClass} onClick={() => setBbHidden(false)}>Show browser</button> : null}
               {bbActive && (!bb.liveViewUrl || bbHidden) ? <button type="button" data-of-connection-browserbase-cancel className={buttonClass} disabled={bbBusy} onClick={() => void cancelBrowserbase()}>Cancel</button> : null}
             </div> : null}
-            <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} onChange={event => setXHash(event.target.value)} required /></label>
+            <label className="block text-xs">X-Hash<input data-of-connection-hash type="password" className={inputClass} autoComplete="new-password" value={xHash} disabled={!!captureRef} placeholder={captureRef ? "Taken from the capture" : undefined} onChange={event => setXHash(event.target.value)} required /></label>
             <label className="block text-xs">Fixed proxy (residential, same country as the creator)<input data-of-connection-proxy type="password" className={inputClass} autoComplete="new-password" placeholder="user:pass@host:port" value={proxy} onChange={event => setProxy(event.target.value)} />
               <span className="mt-1 block text-xs text-muted" data-of-connection-proxy-preview title={PROXY_RULE}>{proxyEntry.ok ? `Will be saved as: ${proxyEntry.masked}` : proxyEntry.message}</span></label>
             <p className="text-xs text-muted" data-of-connection-proxy-rule>{PROXY_RULE} Leaving the proxy empty saves the account with no proxy.</p>
@@ -365,7 +375,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
               <p className="text-xs text-muted">Use the exact model saved in <Link className="text-accent" href={`/onlyfans/settings?account=${encodeURIComponent(accountId)}`}>creator settings</Link>.</p>
             </> : null}
             <p className="text-xs text-muted">The capture is encrypted by the backend. Saving stages identity verification with outgoing messages disabled.</p>
-            <button type="submit" data-of-connection-save className={buttonClass} disabled={!captureReady || !xHash || !connectionOwner(owner) || !proxyEntry.ok}>Save credentials</button>
+            <button type="submit" data-of-connection-save className={buttonClass} disabled={!captureReady || !captureRef && !xHash || !connectionOwner(owner) || !proxyEntry.ok}>Save credentials</button>
           </fieldset>
         {bbOpen && bb?.liveViewUrl ? createPortal(<div ref={bbDialog} tabIndex={-1} onKeyDown={bbDialogKey} className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/50 p-4 outline-none" data-of-connection-browserbase-overlay role="dialog" aria-modal="true" aria-label="Sign in to OnlyFans">
           <div className="flex h-full max-h-[860px] w-full max-w-[1200px] flex-col overflow-hidden rounded-xl border border-line bg-card shadow-2xl">

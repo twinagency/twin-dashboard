@@ -1,7 +1,8 @@
 // Rule (W2c N1, step 1 of 3, additive): the capture routes also hold the OnlyFans capture server-side under `captureId`, and a save may
 // send `payload.captureRef` instead of capture + xHash. The ref resolves only for the same account and operator session, for 15 minutes,
 // newest 64 kept; the stored capture/xHash are swapped in before validation and before the commandKey is hashed, `captureRef` never
-// goes upstream, and the handle is deleted only once the backend acks the save. Only action "save" takes a ref. Saves without a ref are unchanged.
+// goes upstream, and the handle is never consumed by a save (it lives out its TTL, so a lost ack can be retried with the same commandKey).
+// Only action "save" takes a ref. Saves without a ref are unchanged.
 // Drives the REAL routes (capture-from-curl, browserbase-login/[jobId], accounts/[accountId]) through tests/helpers/W2c-delta-route-harness.ts
 // (lib/onlyfans/route.ts, next/headers, server-only, supabase-service mocked; real connectionCommandContext over a fake wire).
 // No extra module mocks. Expiry uses node:test mock.timers on Date only. Synthetic values only (tests/helpers/W2-F1-N2-owner-guard-fixtures.ts).
@@ -80,10 +81,11 @@ if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 11 })) {
     assert.equal(JSON.stringify(sent.body).includes(m.ref), false);
   });
 
-  test("an acked save deletes the handle: the same ref then answers capture_expired and sends nothing", async () => {
+  test("an acked save keeps the handle: a same-command retry (ack lost to the browser) reaches the backend with the same commandKey", async () => {
     backend(); const m = await mint();
-    assert.equal((await save({ captureRef: m.ref })).status, 200); calls.length = 0;
-    await expired(await save({ captureRef: m.ref })); assert.equal(saves().length, 0);
+    calls.length = 0; assert.equal((await save({ captureRef: m.ref })).status, 200);
+    assert.equal((await save({ captureRef: m.ref })).status, 200);
+    const [first, again] = saves().map(c => (c.body as { commandKey: string }).commandKey); assert.ok(first); assert.equal(again, first);
   });
 
   test("a refused or unconfirmed upstream save keeps the handle so Retry works", async () => {
