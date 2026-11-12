@@ -4,6 +4,7 @@ import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { type Period } from "@/lib/dashboard-data";
 import { getRevenueRollup } from "@/lib/revenue-cache";
+import { validateCustomRange } from "@/lib/revenue-window";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { reportDayStartMs, shiftReportDay } from "@/lib/revenue-why-changed";
 import { getDashboardAccess } from "@/lib/dashboard-access";
@@ -31,10 +32,12 @@ async function read(req: NextRequest) {
       if (rangeEndMs < rangeStartMs) return NextResponse.json({ error: "endDate must not be before startDate" }, { status: 400 });
       range = { startMs: rangeStartMs, endMs: rangeEndMs };
     } catch { return NextResponse.json({ error: "startDate and endDate must be real YYYY-MM-DD dates" }, { status: 400 }); }
-  } else {
-    const startMs = startParam ? Number(startParam) : NaN, endMs = endParam ? Number(endParam) : NaN;
-    range = Number.isFinite(startMs) && Number.isFinite(endMs) ? { startMs, endMs } : undefined;
+  } else if (startParam !== null || endParam !== null) {
+    range = { startMs: startParam ? Number(startParam) : NaN, endMs: endParam ? Number(endParam) : NaN };
   }
+  // One validator with /api/v1/revenue: an unbounded range would walk every day of it in this shared process.
+  const invalid = range ? validateCustomRange(range, Date.now()) : p === "CUSTOM" ? "period CUSTOM needs a start and an end" : null;
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 });
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {
     const access = await getDashboardAccess();

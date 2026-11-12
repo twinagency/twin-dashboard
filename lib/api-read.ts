@@ -18,6 +18,7 @@
 import { supabaseAdmin } from "./supabase";
 import { ALLOWLIST } from "@/app/api/ai-assistant/tools";
 import { resolveCloneRef } from "./clone-name-match";
+import { validateCustomRange } from "./revenue-window";
 
 // Re-admitted for admin callers only. `persona` is the live compiled slot data
 // the runtime actually uses. The four *_prompt columns are FROZEN LEGACY and
@@ -231,6 +232,7 @@ export type PeriodName = (typeof PERIODS)[number];
 
 export function parseRevenueWindow(
   params: URLSearchParams,
+  nowMs = Date.now(),
 ): { period: PeriodName; range?: { startMs: number; endMs: number } } | QueryError {
   const p = params.get("period");
   if (p && !(PERIODS as readonly string[]).includes(p)) {
@@ -240,17 +242,17 @@ export function parseRevenueWindow(
   const rawStart = params.get("start");
   const rawEnd = params.get("end");
   if (rawStart === null && rawEnd === null) {
-    return { period: (p as PeriodName) ?? "1M" };
+    // An empty `period=` is treated as absent, as the check above already does: the 1M default, never period "".
+    if (p === "CUSTOM") return { error: "period CUSTOM needs start and end", status: 400 };
+    return { period: (p || "1M") as PeriodName };
   }
   if (rawStart === null || rawEnd === null) {
     return { error: "start and end must BOTH be given, or neither", status: 400 };
   }
   const startMs = Number(rawStart);
   const endMs = Number(rawEnd);
-  if (rawStart.trim() === "" || rawEnd.trim() === "" || !Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-    return { error: "start and end must be epoch-millisecond numbers", status: 400 };
-  }
-  if (endMs < startMs) return { error: "end must not be before start", status: 400 };
+  const invalid = rawStart.trim() === "" || rawEnd.trim() === "" ? "start and end must not be empty" : validateCustomRange({ startMs, endMs }, nowMs);
+  if (invalid) return { error: invalid, status: 400 };
   return { period: "CUSTOM", range: { startMs, endMs } };
 }
 

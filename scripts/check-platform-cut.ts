@@ -203,7 +203,8 @@ async function main() {
   });
 
   check("A2 creator response stacks BOTH cuts (platform, then the agency's own)", () => {
-    const cuts = new Map<string, CloneCuts>([[CLONE_A, { platformPct: 20, agencyCreatorPct: 15 }]]);
+    // CLONE_B has no cut row, which resolveCloneCuts returns as 0%: a missing map entry now throws (W4 F5).
+    const cuts = new Map<string, CloneCuts>([[CLONE_A, { platformPct: 20, agencyCreatorPct: 15 }], [CLONE_B, { platformPct: 0, agencyCreatorPct: 0 }]]);
     const out = scaleDashboardData(dashboardFixture(), cuts, "creator");
     // 1000 * 0.8 * 0.85 = 680, NOT 1000 * (1 - 0.35) = 650.
     close(out.perClone[CLONE_A].stars, 680, "creator net stacks both cuts multiplicatively");
@@ -298,7 +299,7 @@ async function main() {
   });
 
   check("F-A3 an agency/creator response, once redacted, cannot recover gross (profit + cost)", () => {
-    const cuts = new Map<string, CloneCuts>([[CLONE_A, { platformPct: 30, agencyCreatorPct: 0 }]]);
+    const cuts = new Map<string, CloneCuts>([[CLONE_A, { platformPct: 30, agencyCreatorPct: 0 }], [CLONE_B, { platformPct: 0, agencyCreatorPct: 0 }]]);
     const scaled = scaleAnalyticsData(analyticsFixture(), cuts, "agency");
     const body = { analytics: scaled };
     const serialized = JSON.stringify(redactCostFields(body));
