@@ -373,7 +373,7 @@ async function main() {
     assert.match(sidebarSource, /data-creator-core=\{isCreator \? "hero" : undefined\}[\s\S]*?<IntelligenceCoreIcon size=\{64\} \/>[\s\S]*?AI Intelligence Core/,
       "Creator and Tether must share the exact 64px intelligence-core block");
     assert.match(sidebarSource, /<nav aria-label=\{isCreator \? "Creator navigation" : "Main navigation"\}/);
-    assert.match(sidebarSource, /\{isCreator \|\| isFlirtOwner \? null :[\s\S]*?More/);
+    assert.match(sidebarSource, /\{isCreator \|\| isFlirtWorkspace \? null :[\s\S]*?More/);
     assert.match(sidebarSource, /showAssistant && !isAgency && !isCreator/);
 
     const topBarSource = readFileSync("components/TopBar.tsx", "utf8");

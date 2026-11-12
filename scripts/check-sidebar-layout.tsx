@@ -10,6 +10,7 @@ import * as agencyBrand from "../lib/agency-brand";
 import * as portals from "../lib/partner-portals";
 import * as creatorPolicy from "../lib/creator-dashboard-policy";
 import * as workspaceRoutes from "../lib/dashboard-creator-route";
+import * as flirtOverview from "../lib/flirt-overview-routing";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -50,6 +51,8 @@ const components = compile("components/Sidebar.tsx", {
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
   "@/lib/clone-switcher-bus": { openCloneSwitcher: () => undefined },
   "@/components/TwinAssistant": { __esModule: true, default: () => null },
+  "@/components/ChannelSwitch": { __esModule: true, default: () => null },
+  "@/lib/flirt-overview-routing": flirtOverview,
   "@/components/TwinWordmark": wordmark,
   "@/components/IntelligenceCoreIcon": core,
 });
@@ -58,6 +61,12 @@ const render = (agencyName?: string, canManage = false, activeCloneId: string | 
   renderToStaticMarkup(<Access agencyName={agencyName} canManage={canManage}><Content activeCloneId={activeCloneId} showAssistant={false} headerAction={mobile ? <button aria-label="Close navigation">Close</button> : undefined} /></Access>);
 
 for (const mobile of [false, true]) {
+  const reporting = render("Top Onlyfans Agency", false, clone, mobile);
+  for (const href of ["/revenue", "/payouts", "/clones", "/agency/creators", "/agency/creator-invites"]) {
+    assert.ok(reporting.includes('href="' + href + '"'), 'Keep reporting or invitation link ' + href);
+  }
+  assert.doesNotMatch(reporting, /Post Stories|Live Telegram|>Content<|>Edit<|>Flows<|>Logs<|>Sequences</);
+  assert.match(render("FLIRT", true, clone, mobile), /Post Stories/, "The Flirt operator keeps the existing workspace");
   const kate = render(portals.JESS_KATE_PORTAL.name, true, clone, mobile);
   assert.doesNotMatch(kate, /CRM|\/crm\//, "Remove the whole CRM group, not just its heading");
   assert.match(kate, /<h2[^>]*>More<\/h2>/, "More is an always-visible heading");
