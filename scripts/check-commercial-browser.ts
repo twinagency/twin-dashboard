@@ -146,7 +146,22 @@ async function main(){
   assert.ok([401,403,307].includes(denied.status()),"anonymous API access must be refused");
   if(denied.status()===307)assert.ok(denied.headers().location.startsWith(base+"/twin"),"only the trusted sign-in redirect is allowed");
   await anonymous.close();
-  validSession=false;assert.notEqual((await request(lifecycle)).status,200);
+  // A revoked session is refused by the production middleware: a denial status or the trusted sign-in redirect, never an
+  // application answer. The redirect is NOT followed (the sign-in page is a 200 HTML document and would mask the refusal),
+  // and the write is the very request that the valid session just got a 409 conflict for, so the shape is proven valid.
+  const denial=(status:number,headers:Record<string,string>,what:string)=>{
+   assert.ok([401,403,307].includes(status),what+" must be refused, got "+status);
+   if(status===307)assert.ok(headers.location?.startsWith(base+"/twin"),what+": only the trusted sign-in redirect is allowed");
+  };
+  const writeBody={action:"activate",expectedRevision:before.scope.revision-1,commandKey:"e".repeat(64),reason:"revoked session must be refused"};
+  assert.equal((await request(lifecycle,writeBody)).status,409,"the same write with a valid session reaches the backend and conflicts");
+  const scopeBefore=(await(await fetch(backend+"/fixture/state")).json()).scope;
+  validSession=false;
+  const revokedRead=await context.request.get(base+lifecycle,{maxRedirects:0});
+  denial(revokedRead.status(),revokedRead.headers(),"revoked-session read");
+  const revokedWrite=await context.request.post(base+lifecycle,{maxRedirects:0,headers:{Origin:base,"Content-Type":"application/json"},data:writeBody});
+  denial(revokedWrite.status(),revokedWrite.headers(),"revoked-session write");
+  assert.deepEqual((await(await fetch(backend+"/fixture/state")).json()).scope,scopeBefore,"refused revoked-session calls changed no scope state");
   assert.equal((await(await fetch(backend+"/fixture/state")).json()).access,1);
   assert.deepEqual((await(await fetch(backend+"/fixture/state")).json()).foreign,foreignBefore,"foreign account stays unchanged throughout the journey");
   const evidence={status:"passed",journey:"browser/BFF/backend/Postgres/autonomous worker",identity:"synthetic revocable named-owner service",
