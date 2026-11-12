@@ -46,3 +46,11 @@ test("F4 B: a recentHistory count skew (ready + awaiting != discovered) does not
   assert.equal(parsed?.outgoingEnabled, true);
   assert.equal(parsed?.recentHistory, undefined);
 });
+
+test("F4 C: a dropped recentHistory also drops sync, so the UI shows progress unavailable, never a stale \"import complete\"", () => {
+  const sync = { discoveryStatus: "complete", pages: 1, conversationsComplete: 1, conversationsRemaining: 0, pendingMessages: 0, quarantinedMessages: 0, recoveryRequired: false, lastCompleteSyncAt: "2026-11-02T03:00:00Z" };
+  assert.equal(parseConnection(response({ ...connection, sync }), "of-1")?.sync?.discoveryStatus, "complete", "fixture sync must be valid");
+  const parsed = parseConnection(response({ ...connection, sync, recentHistory: { ...recent, startedAt: "2026-11-02T03:00:00+00:00" } }), "of-1");
+  assert.equal(parsed?.outgoingEnabled, true);
+  assert.equal(parsed && "sync" in parsed, false, "a stale sync block would render as Last import complete");
+});
