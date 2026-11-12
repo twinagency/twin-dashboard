@@ -116,7 +116,6 @@ export function parseConnection(value: unknown, accountId: string): Connection |
   const recentHistory = "recentHistory" in c ? parseRecentHistory(c.recentHistory) : undefined;
   if (!exact(c, [...base, ...optional]) || ("runner" in c) !== ("aiLive" in c) ||
     ("sync" in c && !parseConnectionSync(c.sync)) ||
-    recentHistory === null ||
     ("throttleSeconds" in c && c.throttleSeconds !== null && !integer(c.throttleSeconds, 1, 86400)) ||
     ("runner" in c && (!parseConnectionRunner(c.runner) || typeof c.aiLive !== "boolean" ||
       (c.aiLive && (!c.outgoingEnabled || (c.runner as ConnectionRunner).state !== "running" || (c.runner as ConnectionRunner).stale)))) ||
@@ -125,6 +124,8 @@ export function parseConnection(value: unknown, accountId: string): Connection |
     !(c.ownerId === null || ownerString(c.ownerId)) || !(c.expiresAt === null || stamp(c.expiresAt)) || !(c.verifiedAt === null || stamp(c.verifiedAt)) ||
     !(c.lastError === null || (bytes(c.lastError, 160) && /^[a-z0-9_]+$/.test(c.lastError))) || typeof c.outgoingEnabled !== "boolean" || typeof c.mediaEnabled !== "boolean" || typeof c.automateNewConversations !== "boolean" ||
     !integer(c.policyRevision) || !integer(c.usedUnits) || !integer(c.limitUnits) || (c.outgoingEnabled && (c.status !== "verified" || c.verifiedAt === null || c.expiresAt === null))) return null;
+  // An invalid recentHistory (an optional diagnostic) drops only itself, on a copy: it must never hide status or Pause outgoing (F4).
+  if (recentHistory === null) { const rest: Record<string, unknown> = { ...c }; delete rest.recentHistory; return rest as Connection; }
   // c's own keys are exact-checked above; recentHistory is swapped for its field-by-field projection.
   return (recentHistory ? { ...c, recentHistory } : c) as Connection;
 }
