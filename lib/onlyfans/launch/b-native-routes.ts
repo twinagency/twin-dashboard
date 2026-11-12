@@ -7,6 +7,8 @@ import { NextRequest } from "next/server";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
 import { bGate, bAnswer, bRefuse } from "./b-route";
+import { internalOperator } from "../reads";
+import { withoutModelCost } from "../../onlyfans-connections/recent-history";
 import {
   configuredNativeConfigurationBackend,
   type NativeResult,
@@ -85,7 +87,7 @@ export async function memoryFans(request: NextRequest, account: string) {
         accountId: g.accountId,
         memoryVersion: "of-history-memory.v1",
         ...page,
-        progress,
+        progress: internalOperator(g.ctx.auth) ? progress : withoutModelCost(progress),
       })
     : unavailable();
 }
@@ -125,7 +127,7 @@ export async function memoryFan(
           fanId: fan,
           memory,
           progress,
-          recovery,
+          recovery: internalOperator(g.ctx.auth) ? recovery : withoutModelCost(recovery),
         })
       : unavailable();
   }

@@ -10,8 +10,8 @@ export default function RecentHistoryStatus({ value: v }: { value: RecentHistory
     <p>Lifetime history: {v.lifetimeHistory.complete ? "Complete" : "Incomplete"}. Lifetime message total is unknown.</p>
     <p>{h.providerRequests} provider HTTP attempts. {h.failedReadAttempts} failed page reads, {h.unfinishedReadAttempts} interrupted reads.</p>
     {h.discoveryError || Object.keys(h.providerErrors).length || m.errors || m.budgetHold ? <p role="alert">Blockers: {[h.discoveryError, ...Object.keys(h.providerErrors), m.budgetHold, m.errors ? `${m.errors} memory errors` : null].filter(Boolean).join(", ")}</p> : null}
-    <p>Model charges reported: US${a.providerReportedUsd}. Token estimates: US${a.tokenEstimateUsd}.</p>
-    <p>Active reservations: US${a.activeReservationUsd}. Unresolved reservations: US${a.unresolvedReservationUsd}.</p>
+    {a ? <><p>Model charges reported: US${a.providerReportedUsd}. Token estimates: US${a.tokenEstimateUsd}.</p>
+    <p>Active reservations: US${a.activeReservationUsd}. Unresolved reservations: US${a.unresolvedReservationUsd}.</p></> : null}
     {h.providerOrdering === "id_desc_exhaustive_date_filter" ? <p>Timestamp ordering is unverified. Older pages must be checked to prove coverage.</p> : null}
   </section>;
 }

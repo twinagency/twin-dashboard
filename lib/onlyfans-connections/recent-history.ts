@@ -11,7 +11,8 @@ export type RecentHistory = {
     incomingMessagesInWindow: number; errors: number; budgetHold: string | null };
   olderHistory: { activatedFanJobs: number; completedFanJobs: number; pendingFanJobs: number };
   lifetimeHistory: { complete: boolean; conversationsComplete: number };
-  memoryModelAccounting: { providerReportedUsd: string; tokenEstimateUsd: string;
+  /** Our model cost. Required upstream; absent once withoutModelCost ran (every non-operator viewer). */
+  memoryModelAccounting?: { providerReportedUsd: string; tokenEstimateUsd: string;
     activeReservationUsd: string; unresolvedReservationUsd: string };
   percentComplete: null; lifetimeTotalMessages: null;
 };
@@ -67,4 +68,10 @@ export function parseRecentHistory(v: unknown): RecentHistory | null {
     memoryModelAccounting: { providerReportedUsd: s(a.providerReportedUsd), tokenEstimateUsd: s(a.tokenEstimateUsd),
       activeReservationUsd: s(a.activeReservationUsd), unresolvedReservationUsd: s(a.unresolvedReservationUsd) },
     percentComplete: null, lifetimeTotalMessages: null };
+}
+/** Our cost never leaves the building: a copy whose recentHistory has no memoryModelAccounting. Run it server-side for anyone but the internal operator. */
+export function withoutModelCost<T extends { recentHistory?: RecentHistory }>(v: T): T {
+  if (!v.recentHistory) return v;
+  const { memoryModelAccounting: _cost, ...recentHistory } = v.recentHistory;
+  return { ...v, recentHistory };
 }

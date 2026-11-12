@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { configuredConnectionBackend } from "@/lib/onlyfans-connections/backend";
 import { validConnectionRequest } from "@/lib/onlyfans-connections/contract";
+import { withoutModelCost } from "@/lib/onlyfans-connections/recent-history";
 import { platformCommand,platformIdentity,platformProfile,ownedPlatformAccounts,platformFailure,platformResponse } from "@/lib/creator-platforms/server";
 export const dynamic="force-dynamic";
 type Context={params:Promise<{accountId:string}>};
@@ -12,7 +13,7 @@ export async function GET(_request:NextRequest,context:Context){
   const creator=await platformIdentity();if(creator instanceof NextResponse)return creator;
   try{const {accountId}=await context.params;if(!await owned(creator,accountId))return platformFailure(404,"That account is unavailable.");
     const backend=configuredConnectionBackend();if(!backend)return platformFailure(503,"OnlyFans connection setup is unavailable.");
-    const result=await backend.get(accountId);return result.ok?platformResponse({schemaVersion:"of-connections.v1",ok:true,connection:result.data}):platformFailure(result.status,result.error);
+    const result=await backend.get(accountId);return result.ok?platformResponse({schemaVersion:"of-connections.v1",ok:true,connection:withoutModelCost(result.data)}):platformFailure(result.status,result.error);
   }catch{return platformFailure(503,"Connection status could not be verified. Please refresh.");}
 }
 export async function POST(request:NextRequest,context:Context){
