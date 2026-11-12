@@ -6,6 +6,7 @@
 // Drives the REAL routes (capture-from-curl, browserbase-login/[jobId], accounts/[accountId]) through tests/helpers/W2c-delta-route-harness.ts
 // (lib/onlyfans/route.ts, next/headers, server-only, supabase-service mocked; real connectionCommandContext over a fake wire).
 // No extra module mocks. Expiry uses node:test mock.timers on Date only. Synthetic values only (tests/helpers/W2-F1-N2-owner-guard-fixtures.ts).
+// Step 3 (PR-3b): the replies carry captureId instead of capture/xHash (tests/rules/W2c-N1-routes-no-secrets.test.ts).
 // Run: nice -n 10 node --import tsx --test tests/rules/W2c-N1-capture-ref.test.ts (re-runs itself under --experimental-test-module-mocks)
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -21,15 +22,16 @@ type Reply = Record<string, unknown> & { captureId?: unknown; code?: unknown; ok
 const ack = (c: Call) => { const b = c.body as Record<string, unknown>;
   return Response.json({ schemaVersion: SCHEMA, ok: true, applied: true, accountId: c.path.split("/").pop(), commandKey: b.commandKey,
     recordedRevision: (b.expectedRevision as number) + 1, action: b.action }); };
-/** Backend: converts curl to a fresh capture, answers saves with `save` (default: ack). */
+/** Backend: converts curl to a fresh capture (kept in `converted`, the reply no longer carries it), answers saves with `save` (default: ack). */
+let converted: { capture: unknown; xHash: string } = { capture: null, xHash: "" };
 function backend(save: (c: Call) => Response = ack) {
   upstream(c => c.path.endsWith("/capture-from-curl")
-    ? Response.json({ ok: true, capture: capture(OWNER), xHash: sentinel("xh"), ownerId: OWNER }) : save(c));
+    ? Response.json({ ok: true, ...(converted = { capture: capture(OWNER), xHash: sentinel("xh") }), ownerId: OWNER }) : save(c));
 }
 async function mint(account = A) {
   const r = await call(`${ACCOUNT}/capture-from-curl`, { accountId: account }, { body: { curl: "curl 'https://fixture.invalid/'" } });
-  assert.equal(r.status, 200); const body = await r.json() as Reply & { capture: unknown; xHash: string };
-  return { ref: body.captureId as string, capture: body.capture, xHash: body.xHash };
+  assert.equal(r.status, 200); const body = await r.json() as Reply;
+  return { ref: body.captureId as string, ...converted, reply: body };
 }
 const payload = (extra: Record<string, unknown>) => ({ ownerId: OWNER, proxyUrl: null, expiresAt: "2030-01-01T00:00:00Z", model: null, ...extra });
 const save = (extra: Record<string, unknown>, account = A) => call(ACCOUNT, { accountId: account }, { body: { action: "save", expectedRevision: 3, payload: payload(extra) } });
@@ -51,10 +53,10 @@ if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 11 })) {
     assert.equal(saves().length, 0);
   });
 
-  test("curl reply keeps capture/xHash/ownerId and adds an unguessable captureId", async () => {
+  test("curl reply is exactly schemaVersion/ok/ownerId plus an unguessable captureId (no capture or xHash)", async () => {
     backend(); const one = await mint(), two = await mint();
     assert.match(one.ref, /^[A-Za-z0-9_-]{22,}$/); assert.notEqual(one.ref, two.ref);
-    assert.ok(one.capture && one.xHash);
+    assert.deepEqual(Object.keys(one.reply).sort(), ["captureId", "ok", "ownerId", "schemaVersion"]);
   });
 
   test("a done Browserbase status adds captureId (stable across polls); a running one does not", async () => {
@@ -65,7 +67,7 @@ if (ensureModuleMocks(import.meta.url, { controls: 1, rest: 11 })) {
     const poll = async () => await (await call(`${ACCOUNT}/browserbase-login/[jobId]`, { accountId: A, jobId: job })).json() as Reply;
     const first = await poll(), second = await poll();
     assert.match(String(first.captureId), /^[A-Za-z0-9_-]{22,}$/); assert.equal(second.captureId, first.captureId);
-    assert.deepEqual(first.capture, done.capture);
+    assert.deepEqual(Object.keys(first).sort(), ["captureId", "error", "jobId", "liveViewUrl", "ok", "ownerId", "schemaVersion", "state"]); assert.equal(first.ownerId, OWNER);
     backend(); assert.equal((await save({ captureRef: first.captureId })).status, 200);
     assert.deepEqual((saves()[0].body as { payload: { capture: unknown } }).payload.capture, done.capture);
   });
