@@ -2,7 +2,7 @@
 import { isDashboardWorkspaceRoute, isCreatorStudioRoute } from "@/lib/dashboard-creator-route";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { agencyDashboardPath } from "@/lib/agency-policy";
-import { usesFlirtAgencyWorkspace } from "@/lib/flirt-overview-routing";
+import { isTopOnlyfansWorkspace, usesFlirtAgencyWorkspace } from "@/lib/flirt-overview-routing";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
@@ -252,6 +252,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const {readOnly,isAgency,isCreator,canManage,agencyName}=useDashboardAccess();
   const isFlirtOwner = isAgency && agencyName?.trim().toLowerCase() === "flirt";
   const isFlirtWorkspace = isAgency && usesFlirtAgencyWorkspace(agencyName);
+  const reportingAgency = isAgency && isTopOnlyfansWorkspace(agencyName);
   const showUnavailable = isAgency && readOnly && isMoxy(agencyName);
   const isJessKate = isAgency && agencyName === JESS_KATE_PORTAL.name;
   const isTether = agencyName === TETHER_PORTAL.name;
@@ -279,6 +280,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   };
   const linkKey = (link: NavLink) => link.kind === "route" ? link.href : link.tab;
   const renderLink = (link: NavLink) => {
+    if (reportingAgency && (link.kind !== "route" || !["/revenue", "/payouts", "/clones", "/agency/creators", "/agency/creator-invites"].includes(link.href))) return null;
     const colors = LINK_COLOR_CLASSES[link.color];
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) {

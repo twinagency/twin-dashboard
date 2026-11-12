@@ -1,10 +1,7 @@
-import { enabled as liveTwinEnabled, JOHNNY_COCO_CLONE_ID, TOP_ONLYFANS_AGENCY_ID } from "../deployment/flirt-live-twin.cjs";
+import { enabled as liveTwinEnabled, identity as liveTwinIdentity, TOP_ONLYFANS_AGENCY_ID } from "../deployment/flirt-live-twin.cjs";
 import { serviceClient, serviceClientForAccess } from "./supabase-service";
 
-const TOP_ONLYFANS_FLIRT_LOGIN = "tanner@toponlyfansagency.com";
-const TOP_ONLYFANS_TWIN_LOGIN = "toponlyfanstwin@dashboard.tgaiclone.xyz";
-
-export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; dataSource?: "twin-live"; canManage?: boolean };
+export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; dataSource?: "twin-live" };
 export async function agencyIdentity(token: string | undefined): Promise<AgencyIdentity | null> {
   if (!token) return null;
   const db = serviceClient();
@@ -20,23 +17,15 @@ export async function agencyIdentity(token: string | undefined): Promise<AgencyI
   if (agency.error || !agency.data || assigned.error) return null;
   if (agency.data.id === TOP_ONLYFANS_AGENCY_ID) {
     if (!liveTwinEnabled()) return null;
-    const access: AgencyIdentity = {
-      id: agency.data.id, name: agency.data.name,
-      cloneIds: [JOHNNY_COCO_CLONE_ID], dataSource: "twin-live",
-    };
-    const twin = serviceClientForAccess(access);
-    const managerLogin = data.user.email?.toLowerCase() === TOP_ONLYFANS_FLIRT_LOGIN;
-    const [assignment, manager] = await Promise.all([
-      twin.from("agency_creators").select("clone_id,partner_agencies!inner(active)")
-        .eq("agency_id", access.id).eq("clone_id", JOHNNY_COCO_CLONE_ID)
-        .eq("partner_agencies.active", true).maybeSingle(),
-      managerLogin
-        ? twin.from("agency_memberships").select("can_manage").eq("agency_id", access.id)
-          .eq("email", TOP_ONLYFANS_TWIN_LOGIN).eq("active", true).maybeSingle()
-        : Promise.resolve(null),
+    const twin = serviceClientForAccess(liveTwinIdentity());
+    const [partner, assignments] = await Promise.all([
+      twin.from("partner_agencies").select("id").eq("id", agency.data.id).eq("active", true).maybeSingle(),
+      twin.from("agency_creators").select("clone_id").eq("agency_id", agency.data.id).order("clone_id"),
     ]);
-    if (assignment.error || !assignment.data || manager?.error) return null;
-    return { ...access, canManage: manager?.data?.can_manage === true };
+    if (partner.error || !partner.data || assignments.error) return null;
+    const cloneIds = (assignments.data ?? []).map(row => String(row.clone_id));
+    if (cloneIds.some(id => !/^[0-9a-f-]{36}$/i.test(id))) return null;
+    return { id: agency.data.id, name: agency.data.name, cloneIds, dataSource: "twin-live" };
   }
   const cloneIds = (assigned.data ?? []).map(row => String(row.clone_id)).sort();
   if (cloneIds.some(id => !/^[0-9a-f-]{36}$/i.test(id))) return null;

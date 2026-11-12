@@ -6,6 +6,7 @@ import { House, Users, MessageCircle } from "lucide-react";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import MobileMenu from "./MobileMenu";
 import { usesCompactWorkspace } from "@/lib/compact-workspace";
+import { isTopOnlyfansWorkspace } from "@/lib/flirt-overview-routing";
 import { agencyDashboardPath } from "@/lib/agency-policy";
 
 export default function WorkspaceMobileNav({ activeCloneId }: { activeCloneId: string | null }) {
@@ -18,7 +19,8 @@ export default function WorkspaceMobileNav({ activeCloneId }: { activeCloneId: s
     { label: "Overview", href: "/revenue", Icon: House, active: pathname === "/revenue" },
     { label: "Creators", href: "/clones", Icon: Users, active: pathname === "/clones" || pathname.startsWith("/clones/") },
     { label: "Messages", href: "/users", Icon: MessageCircle, active: pathname === "/users" },
-  ].filter(link => admin || agencyDashboardPath(link.href, agencyName, canManage));
+  ].filter(link => admin || (agencyDashboardPath(link.href, agencyName, canManage)
+    && !(isTopOnlyfansWorkspace(agencyName) && link.href === "/users")));
   return <nav className="compact-mobile-nav" aria-label="Quick navigation">
     {links.map(({ label, href, Icon, active }) => <Link key={label} href={href} aria-current={active ? "page" : undefined}><Icon size={21} aria-hidden="true" /><span>{label}</span></Link>)}
     <MobileMenu activeCloneId={activeCloneId} variant="bottom" />

@@ -49,8 +49,8 @@ function isScopedLiveCreator(access) {
 }
 function isScopedLiveAgency(access) {
   return !!access && access.id === TOP_ONLYFANS_AGENCY_ID && access.dataSource === "twin-live"
-    && Array.isArray(access.cloneIds) && access.cloneIds.length === 1
-    && access.cloneIds[0] === JOHNNY_COCO_CLONE_ID;
+    && Array.isArray(access.cloneIds) && new Set(access.cloneIds).size === access.cloneIds.length
+    && access.cloneIds.every(id => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id));
 }
 function isLiveData(access) { return isLiveAccess(access) || isScopedLiveCreator(access) || isScopedLiveAgency(access); }
 function configuration(env = process.env) {

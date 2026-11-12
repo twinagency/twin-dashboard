@@ -101,18 +101,9 @@ async function uiChecks() {
   global.fetch=async(_url,options)=>{if(_url==='/api/fx')return Response.json({usd_to_aud:2});if(options?.method==='POST'){posts++;return Response.json({id:requestId},{status:201})}return Response.json(snapshot)};
   const root=createRoot(document.getElementById('root'));
   await act(async()=>{root.render(React.createElement(View,{audience:'admin',brand:'twin'}));await new Promise(resolve=>setTimeout(resolve,25))});
-  check('admin manual form is present',()=>assert(document.querySelector('form')));
-  check('no payout date is prefilled',()=>assert.equal(document.querySelector('input[name="paidOn"]').value,''));
-  check('no payout amount is prefilled',()=>assert.equal(document.querySelector('input[name="amount"]').value,''));
+  check('admin payout screen has no manual recording controls',()=>{assert.equal(document.querySelectorAll('form').length,0);assert(!/add payout|record a payout/i.test(document.body.textContent))});
   check('empty ledger has clear honest empty state',()=>assert(document.body.textContent.includes('No payouts recorded yet')));
   check('available balance is not displayed',()=>assert(!/available to withdraw|withdrawable balance|remaining balance/i.test(document.body.textContent)));
-  const select=document.querySelector('select[name="cloneId"]');
-  await act(async()=>{select.value=creator;select.dispatchEvent(new Event('change',{bubbles:true}))});
-  document.querySelector('input[name="amount"]').value='10.29';document.querySelector('input[name="paidOn"]').value='2026-10-20';
-  await act(async()=>{document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await new Promise(resolve=>setTimeout(resolve,20))});
-  check('admin submits one manual payout',()=>assert.equal(posts,1));
-  check('successful save clears typed date and amount',()=>{assert.equal(document.querySelector('input[name="amount"]').value,'');assert.equal(document.querySelector('input[name="paidOn"]').value,'')});
-  check('successful save is surfaced',()=>assert(document.body.textContent.includes('Payout recorded.')));
   snapshot.creators[0].paid={USD:100,AUD:2000};
   snapshot.history=[{id:'usd',cloneId:creator,creatorName:'Test creator',amountCents:100,currency:'USD',paidOn:'2026-10-20',reference:'USD receipt',voided:false},{id:'aud',cloneId:creator,creatorName:'Test creator',amountCents:2000,currency:'AUD',paidOn:'2026-10-21',reference:'AUD receipt',voided:false}];snapshot.historyCount=2;
   const displaySelect=()=>Array.from(document.querySelectorAll('label')).find(label=>label.textContent.includes('Display currency')).querySelector('select');
@@ -132,15 +123,15 @@ async function uiChecks() {
   await pageSwitch('AUD');
   check('page AUD switch also updates shared currency with live rate',()=>checkAmounts('AUD','A$15.60','A$22.00',['A$2.00','A$20.00']));
   check('converted history keeps the original recorded amount in its label',()=>assert(document.querySelector('[title="Originally paid $1.00 USD"]')));
-  check('display conversion never posts or changes source payout cents',()=>{assert.equal(posts,1);assert.equal(snapshot.history[0].amountCents,100);assert.equal(snapshot.history[1].amountCents,2000);assert.equal(snapshot.history[1].currency,'AUD')});
+  check('display conversion never posts or changes source payout cents',()=>{assert.equal(posts,0);assert.equal(snapshot.history[0].amountCents,100);assert.equal(snapshot.history[1].amountCents,2000);assert.equal(snapshot.history[1].currency,'AUD')});
   await act(async()=>root.unmount());
   const creatorRoot=createRoot(document.getElementById('root'));snapshot.audience='creator';snapshot.canManage=false;
   await act(async()=>{creatorRoot.render(React.createElement(View,{audience:'creator',brand:'moxy'}));await new Promise(resolve=>setTimeout(resolve,20))});
-  check('creator has no form or mutation control',()=>{assert.equal(document.querySelectorAll('form').length,0);assert(!document.body.textContent.includes('Add payout'));assert(!document.body.textContent.includes('Save payout'))});
+  check('creator has no payout recording or correction control',()=>{assert.equal(document.querySelectorAll('input[name="paidOn"], #correct-payout-title').length,0);assert(!document.body.textContent.includes('Add payout'));assert(!document.body.textContent.includes('Save payout'))});
   check('creator sees history and automatic sync state',()=>{assert(document.body.textContent.includes('Payment history'));assert(document.body.textContent.includes('New payments appear automatically.'))});
   check('Moxy styling is selected without changing layout',()=>assert(document.querySelector('[data-payout-brand="moxy"]')));
   await act(async()=>document.querySelector('[data-shared-currency]').click());
   check('creator payout history and totals share the same currency toggle',()=>{assert(document.querySelector('[aria-label="Earnings and payout totals"]').textContent.includes('$11.00'));assert(document.getElementById('payout-history').textContent.includes('$10.00'))});
   await act(async()=>creatorRoot.unmount());dom.window.close();fs.rmSync(temp,{recursive:true,force:true});
 }
-(async()=>{await serverChecks();await uiChecks();console.log(`Telegram payouts: ${checks} checks passed.`)})().catch(error=>{console.error(error);process.exitCode=1});
+(async()=>{await serverChecks();await uiChecks();console.log(`Telegram payouts: ${checks} checks passed.`)})().catch(error=>{console.error(error);process.exit(1)});

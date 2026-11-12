@@ -8,6 +8,7 @@ import { getAgencyOnboardingAccess } from "@/lib/agency-onboarding-access";
 import { getCreatorBotOptions, resolveCreatorBot } from "@/lib/agency-creator-links";
 import { creatorVoiceOnboardingEnabled } from "@/lib/flirt-onboarding";
 import { Card } from "@/components/ui/card";
+import { flirtOverviewHref } from "@/lib/flirt-overview-routing";
 import { TOP_ONLYFANS_AGENCY_ID } from "@/deployment/flirt-live-twin.cjs";
 
 export const dynamic = "force-dynamic";
@@ -34,15 +35,26 @@ export default async function AgencyCreatorsPage({ searchParams }: { searchParam
   const assignments = (assignmentRows ?? []) as Assignment[];
   const ids = assignments.map((row) => row.creator_account_id);
 
-  if (!ids.length && access.id === TOP_ONLYFANS_AGENCY_ID) {
-    const { clones } = await getCreatorBotOptions(access);
+  if (access.id === TOP_ONLYFANS_AGENCY_ID) {
+    const [{ clones }, signups] = await Promise.all([
+      getCreatorBotOptions(access),
+      ids.length ? serviceClient().from("creator_accounts").select("id,display_name,account_status").in("id", ids) : { data: [], error: null },
+    ]);
+    if (signups.error) throw new Error("Creator signup status is unavailable");
     return <div className="dashboard-page space-y-4 text-ink">
       <h1 className="text-2xl font-semibold">Accounts</h1>
+      <Link href="/agency/creator-invites" className="inline-block text-sm font-medium text-accent">Invite creator</Link>
       {clones.map(clone => <Card key={clone.id} className="flex items-center justify-between gap-4 p-5">
         <div><h2 className="font-semibold">{clone.name}</h2><p className="text-sm text-muted">Telegram</p></div>
-        <Link href={"/clones/" + clone.id} className="text-sm font-medium text-accent hover:underline">Open bot</Link>
+        <Link href={flirtOverviewHref(clone.id)} className="text-sm font-medium text-accent hover:underline">View earnings</Link>
       </Card>)}
-      <Link href="/agency/creator-invites" className="inline-block text-sm font-medium text-accent">Invite creator</Link>
+      {!!signups.data?.length && <section className="space-y-2">
+        <h2 className="font-semibold">Invited creators</h2>
+        {signups.data.map(creator => <Card key={creator.id} className="flex items-center justify-between gap-4 p-5">
+          <span>{creator.display_name || "New creator"}</span><span className="text-sm capitalize text-muted">{creator.account_status}</span>
+        </Card>)}
+      </section>}
+      {!clones.length && !signups.data?.length && <p className="text-sm text-muted">Invite your first creator to get started.</p>}
     </div>;
   }
 

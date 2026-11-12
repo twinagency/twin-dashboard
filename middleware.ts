@@ -5,7 +5,7 @@ import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-u
 import { FLIRT_OVERVIEW_SCOPE_HEADER } from "@/lib/flirt-overview-routing";
 import { flirtForeignBrandDecision } from "@/lib/flirt-brand-policy";
 import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
-import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./deployment/flirt-live-twin.cjs";
+import { enabled as liveTwinEnabled, identity as liveTwinIdentity, TOP_ONLYFANS_AGENCY_ID } from "./deployment/flirt-live-twin.cjs";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
@@ -17,7 +17,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath, creatorPortalCookieOptions, creatorPortalForIdentity, creatorPublicPortal, isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext, shouldRedirectAuthenticatedCreatorEntry } from "@/lib/creator-routing";
-import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
+import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE, topOnlyfansAgencyPath } from "@/lib/agency-policy";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
@@ -170,6 +170,12 @@ async function routeMiddleware(req: NextRequest) {
   }
   if (isAgencyPath(pathname)) {
     if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
+    const token = req.cookies.get(AGENCY_COOKIE)?.value;
+    if (token && !["/agency/login", "/agency/auth", "/agency/logout"].includes(pathname)
+      && !topOnlyfansAgencyPath(pathname, req.method, req.headers.has("next-action"))) {
+      const agency = await agencyIdentity(token);
+      if (agency?.id === TOP_ONLYFANS_AGENCY_ID) return new NextResponse("Agency reporting access only", { status: 403 });
+    }
     return privateResponse(withPathname(req));
   }
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
@@ -194,6 +200,9 @@ async function routeMiddleware(req: NextRequest) {
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
+    if (identity.id === TOP_ONLYFANS_AGENCY_ID && !topOnlyfansAgencyPath(pathname, req.method, serverAction)) {
+      return new NextResponse("Agency reporting access only", { status: 403 });
+    }
     if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
     if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
     if (!agencyDashboardPath(pathname, identity.name, canManage)) return new NextResponse("Administrator access required", {status:403});

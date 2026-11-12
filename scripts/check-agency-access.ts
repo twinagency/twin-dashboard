@@ -2,10 +2,21 @@ import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { dashboardOrigin, trustedFormOrigin } from "../lib/form-origin";
 import { NextRequest } from "next/server";
-import { agencyRequestAllowed, scopeAgencyClones } from "../lib/agency-policy";
+import { agencyRequestAllowed, scopeAgencyClones, topOnlyfansAgencyPath } from "../lib/agency-policy";
 import { middleware } from "../middleware";
 
 async function main() {
+  for (const path of ["/revenue", "/payouts", "/clones", "/agency/creators", "/agency/creator-invites"]) {
+    assert.equal(topOnlyfansAgencyPath(path,"GET",false),true);
+    assert.equal(topOnlyfansAgencyPath(path,"POST",true),false);
+  }
+  assert.equal(topOnlyfansAgencyPath("/agency/creator-invites/manage","POST",false),true);
+  for (const path of ["/business", "/users", "/media", "/agency/creators/file", "/agency/creators/build-packet", "/api/payouts/bank"]) {
+    assert.equal(topOnlyfansAgencyPath(path,"GET",false),false);
+  }
+  for (const path of ["/api/payouts", "/agency/creators/manage", "/agency/creators/link", "/agency/creators/review", "/agency/creators/build-clone"]) {
+    assert.equal(topOnlyfansAgencyPath(path,"POST",false),false);
+  }
   assert.deepEqual(scopeAgencyClones(["a","b"],"a"),["a"]);
   assert.deepEqual(scopeAgencyClones([],undefined),[]);
   assert.throws(()=>scopeAgencyClones(["a"],"other"));

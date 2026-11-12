@@ -8,6 +8,18 @@ export function agencyRequestAllowed(path: string, method: string, serverAction:
   if (method === "GET" || method === "HEAD") return true;
   return method === "POST" && ["/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/agency/creators/manage", "/agency/creators/review", "/agency/creators/build-clone", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
 }
+// Top OnlyFans can read reporting and invite its own creators. Middleware
+// selects this policy from the verified agency ID, independently of the UI.
+export function topOnlyfansAgencyPath(path: string, method: string, serverAction: boolean): boolean {
+  if (serverAction) return false;
+  if (method === "POST") return ["/agency/creator-invites/manage", "/agency/clone-scope"].includes(path);
+  return ["GET", "HEAD"].includes(method) && [
+    "/", "/revenue", "/payouts", "/clones", "/agency/creators", "/agency/creator-invites",
+    "/api/dashboard", "/api/dashboard/day-insight", "/api/creator-overview",
+    "/api/creator-overview/photo", "/api/media-sign", "/api/fx", "/api/avatar", "/api/payouts",
+  ].includes(path);
+}
+
 export function scopeAgencyClones(allowed: readonly string[], requested?: string): string[] {
   if (requested && !allowed.includes(requested)) throw new Error("Creator access denied");
   return requested ? [requested] : [...allowed];

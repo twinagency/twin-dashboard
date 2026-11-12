@@ -20,7 +20,7 @@ test('Zoey creator earnings are limited to her own live Telegram bot', () => {
     { ...access, dataSource: undefined },
   ]) assert.equal(live.isLiveData(invalid), false);
 });
-test('Top OnlyFans can access only Johnny and cannot use the Flirt owner connection', () => {
+test('Top OnlyFans uses its verified agency roster without receiving Flirt owner access', () => {
   const access = {
     id: live.TOP_ONLYFANS_AGENCY_ID, dataSource: 'twin-live',
     cloneIds: [live.JOHNNY_COCO_CLONE_ID],
@@ -28,12 +28,13 @@ test('Top OnlyFans can access only Johnny and cannot use the Flirt owner connect
   assert.equal(live.isLiveData(access), true);
   assert.equal(live.isLiveAccess(access), false);
   assert.equal(live.isScopedLiveCreator(access), false);
+  assert.equal(live.isLiveData({ ...access, cloneIds: [] }), true);
+  assert.equal(live.isLiveData({ ...access, cloneIds: [...access.cloneIds, live.CLONES[0]] }), true);
   for (const invalid of [
     { ...access, dataSource: undefined },
     { ...access, id: 'another-agency' },
-    { ...access, cloneIds: [] },
-    { ...access, cloneIds: [live.CLONES[0]] },
-    { ...access, cloneIds: [...access.cloneIds, live.CLONES[0]] },
+    { ...access, cloneIds: ['invalid'] },
+    { ...access, cloneIds: [...access.cloneIds, ...access.cloneIds] },
   ]) assert.equal(live.isLiveData(invalid), false);
 });
 

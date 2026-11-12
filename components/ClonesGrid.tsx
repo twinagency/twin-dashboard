@@ -5,6 +5,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "@/components/NavigationLink";
 import CreatorAvatar from "@/components/CreatorAvatar";
+import { flirtOverviewHref, isTopOnlyfansWorkspace } from "@/lib/flirt-overview-routing";
 import { toggleClonePause } from "@/app/clones/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +40,8 @@ const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
 ];
 
 export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
-  const {readOnly}=useDashboardAccess();
+  const {readOnly, agencyName}=useDashboardAccess();
+  const reportingAgency = isTopOnlyfansWorkspace(agencyName);
   const [query, setQuery] = useState("");
   const [cohortFilter, setCohortFilter] = useState<CloneCohortFilter>("all");
   const router = useRouter();
@@ -84,7 +86,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           placeholder="Search creators…"
           className="h-9 max-w-xs"
         />
-        <div
+        {!reportingAgency && <div
           role="group"
           aria-label="Filter creators by system"
           className="flex flex-wrap items-center gap-1 rounded-full border border-line bg-panel p-1"
@@ -109,7 +111,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
               </button>
             );
           })}
-        </div>
+        </div>}
       </div>
 
       {filtered.length === 0 ? (
@@ -121,7 +123,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           {filtered.map((c) => (
             <Link
               key={c.id}
-              href={`/clones/${c.id}`}
+              href={reportingAgency ? flirtOverviewHref(c.id) : `/clones/${c.id}`}
               className="compact-creator-card group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
             >
               {/* Header: avatar (ringed in the clone color) + name + status + features */}
@@ -134,7 +136,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="creator-name truncate text-lg font-semibold text-ink">{c.name}</span>
-                    <button
+                    {reportingAgency ? <Badge>{c.active ? "Active" : "Paused"}</Badge> : <button
                       type="button"
                       onClick={(e) => togglePause(e, c)}
                       disabled={readOnly}
@@ -150,9 +152,9 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                         <span className={"h-2 w-2 rounded-full " + (c.active ? "bg-good" : "bg-muted")} />
                         {readOnly ? (c.active ? "active" : "paused") : c.active ? "active · pause" : "paused · resume"}
                       </Badge>
-                    </button>
+                    </button>}
                   </div>
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {!reportingAgency && <><div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Badge
                       title={
                         c.cohort === "new-system-v3"
@@ -187,7 +189,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                   </div>
                   <div className="mt-1 text-[11px] font-medium text-muted">
                     {cloneCohortEnrollmentLabel(c.cohort, c.cohortEnrolledAt)}
-                  </div>
+                  </div></>}
                 </div>
               </div>
 
