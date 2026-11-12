@@ -1,23 +1,24 @@
-// Clone lookup by NAME, shared by every "uuid, slug or name" resolver (admin
-// API resolveClone, the assistant's read + write tools, scripts/issue-api-key).
-// No imports, so scripts and the assistant can use it without the
-// api-read <-> ai-assistant/tools import cycle or server-only.
-//
-// Exact, case-insensitive: LIKE wildcards (`\`, `%`, `_`) are escaped, `*`
-// (PostgREST's alias for `%`, which has no escape) never matches, and two hits
-// is no hit. Several of these resolvers pick the target of a WRITE, so
-// "Other%" must not resolve to "Other Clone". A read error throws: null means
-// "no such clone", and an outage must not read as one.
-type Rows<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function findCloneByName<T>(
-  name: string,
-  ilikeName: (pattern: string) => { limit(n: number): Rows<T> },
-): Promise<T | null> {
-  if (name.includes("*")) return null;
-  const { data, error } = await ilikeName(name.replace(/[\\%_]/g, "\\$&")).limit(2);
+// The one "uuid, slug or name" clone resolver: admin API, assistant read and
+// write tools, scripts/issue-api-key.ts. Several pick the target of a WRITE.
+// Any read error throws (null means "no such clone"; an outage is not one).
+// Name match is exact and case-insensitive: `\`, `%`, `_` escaped, `*`
+// (PostgREST's `%`, unescapable) refused, two hits is no hit.
+export type CloneRef = { id: string; slug: string; name: string };
+
+// Postgres uuid input forms (braces, hyphens optional); any other string on clones.id is 22P02.
+const UUID = /^(?:\{[0-9a-f]{4}(?:-?[0-9a-f]{4}){7}\}|[0-9a-f]{4}(?:-?[0-9a-f]{4}){7})$/i;
+
+export async function resolveCloneRef(db: SupabaseClient, input: string): Promise<CloneRef | null> {
+  const clones = () => db.from("clones").select("id,slug,name");
+  for (const col of UUID.test(input) ? ["id", "slug"] : ["slug"]) {
+    const { data, error } = await clones().eq(col, input).maybeSingle();
+    if (error) throw new Error(`clone lookup failed: ${error.message}`);
+    if (data) return data as CloneRef;
+  }
+  if (input.includes("*")) return null;
+  const { data, error } = await clones().ilike("name", input.replace(/[\\%_]/g, "\\$&")).limit(2);
   if (error) throw new Error(`clone lookup failed: ${error.message}`);
-  return data?.length === 1 ? data[0] : null;
+  return data?.length === 1 ? (data[0] as CloneRef) : null;
 }
-
-export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

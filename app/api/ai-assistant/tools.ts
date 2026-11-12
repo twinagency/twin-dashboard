@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { OrToolDef } from "@/lib/openrouter";
 import { activeDialConflicts, type DialConflictCfg } from "@/lib/dial-conflicts";
-import { findCloneByName, UUID } from "@/lib/clone-name-match";
+import { resolveCloneRef } from "@/lib/clone-name-match";
 
 // ── Read-only tool surface for the internal AI assistant ─────────────────────
 // HARD RULE (see CLAUDE.md / project memory): this DB holds live payment and
@@ -212,19 +212,10 @@ async function execGetRecentErrors(args: Record<string, unknown>): Promise<unkno
 }
 
 // Loose clone lookup shared by the test-run read tools below: try UUID, then
-// slug, then exact case-insensitive name (lib/clone-name-match.ts), same
-// three-step pattern write-tools.ts's resolveCloneId uses. The id step only
-// runs on uuid-shaped input (anything else is a 22P02 error on clones.id), so
-// any read error is real and throws; executeTool's caller (lib/openrouter.ts)
-// turns a throw into a tool {error} result.
+// slug, then exact name (lib/clone-name-match.ts). A read error throws, and
+// executeTool's caller (lib/openrouter.ts) turns that into a tool {error}.
 async function resolveCloneIdLoose(idOrName: string): Promise<string | null> {
-  for (const col of UUID.test(idOrName) ? ["id", "slug"] : ["slug"]) {
-    const r = await supabaseAdmin.from("clones").select("id").eq(col, idOrName).maybeSingle();
-    if (r.error) throw new Error(`clone lookup failed: ${r.error.message}`);
-    if (r.data) return r.data.id;
-  }
-  const byName = await findCloneByName<{ id: string }>(idOrName, (p) => supabaseAdmin.from("clones").select("id").ilike("name", p));
-  return byName?.id ?? null;
+  return (await resolveCloneRef(supabaseAdmin, idOrName))?.id ?? null;
 }
 
 // Mirror of heatLevel() in components/clone/useCloneConfig.ts, kept minimal:

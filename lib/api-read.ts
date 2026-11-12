@@ -17,7 +17,7 @@
 
 import { supabaseAdmin } from "./supabase";
 import { ALLOWLIST } from "@/app/api/ai-assistant/tools";
-import { findCloneByName, UUID } from "./clone-name-match";
+import { resolveCloneRef } from "./clone-name-match";
 
 // Re-admitted for admin callers only. `persona` is the live compiled slot data
 // the runtime actually uses. The four *_prompt columns are FROZEN LEGACY and
@@ -215,19 +215,9 @@ export async function runQuery(spec: QuerySpec): Promise<QueryResult | QueryErro
 
 // Clone lookup by UUID, slug, or name — same three-step shape as the assistant's
 // resolveCloneIdLoose, so "cat-chase" works everywhere it works in the UI.
-// Write routes resolve their target here, so the name step is exact (see
-// lib/clone-name-match.ts). A read error throws (withAdmin answers 500): null
-// means "no such clone" and an outage must not read as a 404. The id step only
-// runs on uuid-shaped input: clones.id is uuid, any other string errors (22P02).
-type CloneRef = { id: string; slug: string; name: string };
-export async function resolveClone(idOrSlug: string): Promise<CloneRef | null> {
-  const cols = "id,slug,name";
-  for (const col of UUID.test(idOrSlug) ? ["id", "slug"] : ["slug"]) {
-    const r = await supabaseAdmin.from("clones").select(cols).eq(col, idOrSlug).maybeSingle();
-    if (r.error) throw new Error(`clone lookup failed: ${r.error.message}`);
-    if (r.data) return r.data as CloneRef;
-  }
-  return findCloneByName<CloneRef>(idOrSlug, (p) => supabaseAdmin.from("clones").select(cols).ilike("name", p));
+// Both are lib/clone-name-match.ts; a read error throws (withAdmin: 500, not 404).
+export async function resolveClone(idOrSlug: string): Promise<{ id: string; slug: string; name: string } | null> {
+  return resolveCloneRef(supabaseAdmin, idOrSlug);
 }
 
 // ── the revenue window ───────────────────────────────────────────────────────

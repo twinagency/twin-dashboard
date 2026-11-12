@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { findCloneByName, UUID } from "@/lib/clone-name-match";
+import { resolveCloneRef } from "@/lib/clone-name-match";
 import type { OrToolDef } from "@/lib/openrouter";
 import {
   setStatus as setCloneStatusAction,
@@ -48,20 +48,12 @@ async function cloneName(id: string): Promise<string> {
   return data?.name ?? id;
 }
 
-// Resolve a clone by UUID, slug or exact case-insensitive name
-// (lib/clone-name-match.ts) so the model can refer to "Aria" the way a person
-// would, without a prior lookup. This picks the target of a WRITE, so a
-// wildcard never matches and a read error throws rather than reading as "no
-// such clone"; the approve route turns any throw into an error response.
+// Resolve a clone by UUID or by name (case-insensitive exact match) so the
+// model can refer to "Aria" the way a person would, without a prior lookup.
+// lib/clone-name-match.ts: wildcards never match; a read error throws (approve route: 500).
 async function resolveCloneId(idOrName: string): Promise<{ id: string; name: string; slug: string }> {
-  type Ref = { id: string; name: string; slug: string };
-  for (const col of UUID.test(idOrName) ? ["id", "slug"] : ["slug"]) {
-    const r = await supabaseAdmin.from("clones").select("id,name,slug").eq(col, idOrName).maybeSingle();
-    if (r.error) throw new Error(`clone lookup failed: ${r.error.message}`);
-    if (r.data) return r.data as Ref;
-  }
-  const byName = await findCloneByName<Ref>(idOrName, (p) => supabaseAdmin.from("clones").select("id,name,slug").ilike("name", p));
-  if (byName) return byName;
+  const clone = await resolveCloneRef(supabaseAdmin, idOrName);
+  if (clone) return clone;
   throw new Error(`no clone found matching "${idOrName}"`);
 }
 
