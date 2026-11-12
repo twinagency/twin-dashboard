@@ -20,25 +20,25 @@
 // sees both cuts stacked, a fleet key the platform cut only, per row's own
 // clone. So a sum of /payments equals /revenue for the same window up to
 // per-row rounding: each payment is rounded to 0.01 Star, /revenue cuts the
-// unrounded aggregate, so they differ by at most 0.005 Star per payment. A row
-// whose cut cannot be resolved (null clone_id) is withheld from both.
+// unrounded aggregate, so they differ by at most 0.005 Star per payment.
 
 import { supabaseAdmin } from "./supabase";
 import { PAGE, selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { STAR_USD } from "./money";
-import { netOrWithheld, resolveCloneCuts, type CloneCuts } from "./revenue-projection";
+import { net, resolveCloneCuts, type CloneCuts } from "./revenue-projection";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
 import { cursorAt, encodeCursor, type PaymentQuery } from "./api-public-query";
 
 type Mode = "clone" | "fleet";
 
-/** Net of the cuts this key's role is entitled to (clone key = creator, fleet = agency),
- *  rounded to cents of a Star; null = withheld, the row's cut did not resolve. */
-function netStars(gross: number, cuts: Map<string, CloneCuts>, cloneId: string | null, mode: Mode): number | null {
-  const v = netOrWithheld(gross, cuts, cloneId, mode === "clone" ? "creator" : "agency");
-  return v === null ? null : Math.round(v * 100) / 100;
+/** Net of the cuts this key's role is entitled to (clone key = creator, fleet =
+ *  agency), rounded to cents of a Star. A missing cut THROWS (net()): clone_id is
+ *  NOT NULL + FK on star_transactions, so every row's clone resolves; a miss is a
+ *  broken invariant, and gross must never go out as net. */
+function netStars(gross: number, cuts: CloneCuts | undefined, mode: Mode): number {
+  return Math.round(net(gross, cuts, mode === "clone" ? "creator" : "agency") * 100) / 100;
 }
 const usd = (stars: number) => Math.round(stars * STAR_USD * 100) / 100;
 
@@ -146,15 +146,9 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   }
   const cuts = await resolveCloneCuts(cloneIds);
 
-  // Withheld rows (no resolvable cut) are omitted, not shown gross: stars is a
-  // number in the payload contract, and an omitted row keeps totals honest.
-  // Paging is unaffected, the cursor comes from the raw page above.
-  const kept = rows.flatMap((r) => {
+  const payments: PublicPayment[] = rows.map((r) => {
     const c = classifyRevenueLedgerRow(r);
-    const stars = netStars(c.stars, cuts, r.clone_id, mode);
-    return stars === null ? [] : [{ r, c, stars }];
-  });
-  const payments: PublicPayment[] = kept.map(({ r, c, stars }) => {
+    const stars = netStars(c.stars, r.clone_id ? cuts.get(r.clone_id) : undefined, mode);
     const out: PublicPayment = {
       id: String(r.id),
       telegramId: r.telegram_id ?? null,
@@ -172,7 +166,7 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   });
 
   const paid = payments.filter((p) => !p.isRefund);
-  const buyers = new Set(kept.filter(({ r, c }) => c.paidOrder && r.telegram_id != null).map(({ r }) => r.telegram_id));
+  const buyers = new Set(rows.filter((r) => classifyRevenueLedgerRow(r).paidOrder && r.telegram_id != null).map((r) => r.telegram_id));
   const totalStars = Math.round(payments.reduce((a, p) => a + p.stars, 0) * 100) / 100;
   return {
     payments,
@@ -236,7 +230,7 @@ const D = 24 * H;
 
 type Tx = {
   id: string;
-  clone_id: string | null;
+  clone_id: string;
   telegram_id: number | null;
   kind: string | null;
   feature: string | null;
@@ -285,12 +279,9 @@ async function computeStats(cloneId: string | null, mode: Mode, now: number): Pr
 
   const deduped = dedupeStarRows(paged.rows);
   const cuts = await resolveCloneCuts(deduped.map((r) => r.clone_id));
-  // A row with no resolvable cut is withheld from every window (money, sales
-  // and buyers alike), as in /payments, never counted gross.
-  const classified = deduped.flatMap((r) => {
+  const classified = deduped.map((r) => {
     const c = classifyRevenueLedgerRow(r);
-    const stars = netStars(c.stars, cuts, r.clone_id, mode);
-    return stars === null ? [] : [{ ...c, clone_id: r.clone_id, feature: r.feature, ms: Date.parse(r.paid_at), stars }];
+    return { ...c, clone_id: r.clone_id, feature: r.feature, ms: Date.parse(r.paid_at), stars: netStars(c.stars, cuts.get(r.clone_id), mode) };
   });
   const within = (ms: number) => classified.filter((r) => r.ms >= now - ms);
   const r24 = within(D), r7 = within(7 * D);

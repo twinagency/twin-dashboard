@@ -1,17 +1,17 @@
 import "../support/admin-route-env";
 /**
- * Rule (W4 cut-helper-dedupe): a public API row whose cut cannot be resolved (null clone_id) WITHHOLDS its money,
- * never passes GROSS out as net, and never throws (one bad row must not 500 a fleet page).
- * Was: lib/api-public-v2.ts netStars `if (!cuts) return gross`; lib/api-public.ts publicFleetFans kept gross when
- * cuts.get missed, and String(null) = "null" was looked up as a clone id.
+ * Rule (W4 cut-helper-dedupe, rwl R1 decision): a public API money row whose cut does not resolve FAILS CLOSED
+ * (throws), never passes GROSS out as net. Was: lib/api-public-v2.ts netStars `if (!cuts) return gross`, and
+ * lib/api-public.ts publicFleetFans kept gross when cuts.get missed. star_transactions.clone_id and users.clone_id are
+ * NOT NULL + FK (bot db/migrations/015), so a miss is a broken invariant; the null-clone rows below are impossible
+ * live and exist only to break it. The fake answers a "null" uuid lookup the way Postgres does (22P02).
  * Drives the real publicFleetPayments/publicFleetStats/publicFleetFans/publicPayments over tests/support/postgrest-wire.ts.
- * Fixture: clone A platform cut 20% (agency mult 0.8), one 100-Star sale on A and one 100-Star sale with clone_id null.
+ * Fixture: clone A platform cut 20%, one 100-Star sale on A and one 100-Star sale with clone_id null.
  * Also MEASURES the /payments vs /revenue claim: per-row rounding to 0.01 Star vs one cut on the aggregate.
- * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/W4-cut-missing-withheld.test.ts
+ * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/W4-cut-fail-closed.test.ts
  */
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { readFileSync } from "node:fs";
 import { json, useWire, type WireCall } from "../support/postgrest-wire";
 import { publicFleetPayments, publicFleetStats, publicPayments, _resetStatsCache } from "../../lib/api-public-v2";
 import { publicFleetFans } from "../../lib/api-public";
@@ -62,27 +62,36 @@ function query(limit = 100) {
   return q;
 }
 
-test("fleet /payments: the null-clone row is withheld, the resolved row is net, the page still returns", async () => {
-  stx = [pay("a", A), pay("n", null)];
-  const p = await publicFleetPayments(query());
-  assert.deepEqual(p.payments.map((x) => [x.id, x.stars]), [["a", 80]]);
-  assert.equal(p.totals.stars, 80, "totals carry gross from the unresolved row");
-  assert.equal(p.count, 1);
+/** The call must reject, and no response may exist to carry the null-clone row's 100 gross Stars. */
+async function failsClosed(call: () => Promise<unknown>) {
+  let out: unknown;
+  await assert.rejects(async () => { out = await call(); });
+  assert.equal(out, undefined);
+}
+
+test("control: a resolved row is net (100 x 0.8)", async () => {
+  _resetStatsCache();
+  stx = [pay("a", A)];
+  users = [{ clone_id: A, telegram_id: 1, total_spent_stars: 100 }];
+  assert.deepEqual((await publicFleetPayments(query())).payments.map((x) => x.stars), [80]);
+  assert.equal((await publicFleetStats(NOW)).windows.last24h.stars, 80);
+  assert.deepEqual((await publicFleetFans(100)).fans.map((r) => r.total_spent_stars), [80]);
 });
 
-test("fleet /stats: windows and byFeature exclude the null-clone row, no throw", async () => {
+test("fleet /payments: a row with no resolved cut throws, never gross", async () => {
+  stx = [pay("a", A), pay("n", null)];
+  await failsClosed(() => publicFleetPayments(query()));
+});
+
+test("fleet /stats: a row with no resolved cut throws, never gross", async () => {
   _resetStatsCache();
   stx = [pay("a", A), pay("n", null)];
-  const s = await publicFleetStats(NOW);
-  assert.equal(s.windows.last24h.stars, 80);
-  assert.equal(s.windows.last30d.stars, 80);
-  assert.equal(s.byFeature24h.reduce((a, f) => a + f.stars, 0), 80);
+  await failsClosed(() => publicFleetStats(NOW));
 });
 
-test("fleet /fans: a null-clone fan's total_spent_stars is withheld (null), never gross; resolved fan is net", async () => {
+test("fleet /fans: a fan with no resolved cut throws, never gross", async () => {
   users = [{ clone_id: A, telegram_id: 1, total_spent_stars: 100 }, { clone_id: null, telegram_id: 2, total_spent_stars: 100 }];
-  const f = await publicFleetFans(100);
-  assert.deepEqual(f.fans.map((r) => [r.telegram_id, r.total_spent_stars]), [[1, 80], [2, null]]);
+  await failsClosed(() => publicFleetFans(100));
 });
 
 test("measured: /payments sums per-row-rounded Stars, /revenue cuts the aggregate; they differ by <= 0.005 Star per payment", async () => {
@@ -92,12 +101,4 @@ test("measured: /payments sums per-row-rounded Stars, /revenue cuts the aggregat
   const diff = Math.abs(p.totals.stars - aggregate);
   assert.ok(diff > 0, `expected per-row rounding to diverge here (payments ${p.totals.stars}, revenue ${aggregate})`);
   assert.ok(diff <= 0.005 * p.count + 1e-9, `diff ${diff} over the per-row rounding bound`);
-});
-
-test("one rule: both public files withhold through the shared helper, neither falls back to gross", () => {
-  for (const f of ["../../lib/api-public-v2.ts", "../../lib/api-public.ts"]) {
-    const src = readFileSync(new URL(f, import.meta.url), "utf8");
-    assert.ok(/netOrWithheld\(/.test(src), `${f} does not use the shared helper`);
-    assert.ok(!/return gross;/.test(src), `${f} passes gross through`);
-  }
 });
