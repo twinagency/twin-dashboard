@@ -108,17 +108,18 @@ const accountKeyStore = (accountId: string, operatorScope: string) => sharedStor
  * It survives a reload, not a re-sign-in: see forgetHeldKeys.
  */
 export const heldKeyStore = (kind: HeldKind, accountId: string, operatorScope?: string) => sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope);
-type HeldKind = "of-send-keys" | "of-campaign-keys";
+const HELD_KINDS = ["of-send-keys", "of-campaign-keys"] as const;
+type HeldKind = typeof HELD_KINDS[number];
 /**
- * On a session loss (401/403) the scope's held writes are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
+ * On a session loss (401/403) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
  * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
  */
-export function forgetHeldKeys(kind: HeldKind, operatorScope?: string) {
-  const prefix = `${kind}:${operatorScope ?? ""}:`;
-  for (const [name, store] of accountStores) if (name.startsWith(prefix)) store.clear();
+export function forgetHeldKeys(operatorScope?: string) {
+  const prefixes = HELD_KINDS.map(kind => `${kind}:${operatorScope ?? ""}:`), held = (name: string | null) => !!name && prefixes.some(p => name.startsWith(p));
+  for (const [name, store] of accountStores) if (held(name)) store.clear();
   try {
     const names = Array.from({ length: globalThis.sessionStorage.length }, (_, i) => globalThis.sessionStorage.key(i));
-    for (const name of names) if (name?.startsWith(prefix)) globalThis.sessionStorage.removeItem(name);
+    for (const name of names) if (held(name)) globalThis.sessionStorage.removeItem(name!);
   } catch { /* No storage: nothing was persisted. */ }
 }
 

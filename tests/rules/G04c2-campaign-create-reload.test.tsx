@@ -188,11 +188,15 @@ test("G04c2 #14: a session loss (401) forgets this scope's held create, in stora
   await load("op-a", "of-r-401", lostReply, "Hello there");
   await queue();
   assert.equal(stored(), 1, "control: the held create is in storage");
+  // codex final: a session loss forgets every held-write kind of the scope, so this operator's held manual send text goes too.
+  const sendName = dom.window.sessionStorage.key(0)!.replace("of-campaign-keys", "of-send-keys");
+  assert.notEqual(sendName, dom.window.sessionStorage.key(0), "control: the storage name carries the kind");
+  dom.window.sessionStorage.setItem(sendName, "[]");
   await reloadPage();
   await load("op-a", "of-r-401", () => new Response(null, { status: 401 }));
   await click(retryButton());
   assert.equal(posts().length, 1, "control: the retry reached the route");
-  assert.equal(stored(), 0, "the session loss left the held create (and its message text) in storage");
+  assert.equal(stored(), 0, "the session loss left a held write (and its message text) in storage");
   await reloadPage();
   await load("op-a", "of-r-401", () => ack("of-r-401"));
   assert.ok(!locked() && !retryButton(), "a held create from before the session loss was restored");

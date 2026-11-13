@@ -651,7 +651,7 @@ export default function OnlyFansWorkspace({
       try { result = await source.submitCommand(request); }
       catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request, note: UNCONFIRMED_NOTE }; }
       const refusal = result.simulated ? undefined : result.refusal;
-      if (sendKeys && refusal && [401, 403].includes(refusal.status)) forgetHeldKeys("of-send-keys", operatorScope);
+      if (sendKeys && refusal && [401, 403].includes(refusal.status)) forgetHeldKeys(operatorScope);
       const held = sendKeys?.settle(intent, result.simulated ? "refused" : result.outcome === "recorded" ? "ack" : result.outcome === "unconfirmed" ? "unconfirmed"
         : STALE_REFUSAL_CODES.includes(refusal?.code ?? "") ? "stale" : "refused");
       // A refusal does not prove an earlier unconfirmed attempt failed: the send stays held and its exact retry stays offered. Once this

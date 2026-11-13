@@ -77,9 +77,10 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const sessionLost = useCallback(() => {
+    forgetHeldKeys(operatorScope); // even when unmounted: a held write must not outlive the session (codex final)
     if (!active.current) return;
     sessionDenied.current = true;
-    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId); forgetHeldKeys("of-campaign-keys", operatorScope);
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
   }, [router, accountId, operatorScope]);
   const read = useCallback(async (id?: string | null) => {
