@@ -1,4 +1,6 @@
 // Regression guard (G25): was KNOWN RED tests/known-red/W4-lib-onlyfans-preview-2-plus2-stop-revision.test.ts (origin/jaka/fix-sweep-20261112), fixed in this PR (lib/onlyfans/controls.ts). Promoted: F13 (mark_no_contact, pause_automation, request_takeover). Original header below.
+// F13 is fixed on the DASHBOARD HALF ONLY: the backend still requires an exact revision on stops (controls-backend.ts:21, W3 F16), so a
+// stale-revision pause can still be refused. The real fix (the controls route pinning a fresh revision for stop actions) is a follow-up, not this PR.
 /**
  * KNOWN RED (W4 lib-onlyfans-preview-2-plus2 F13; REVIEW inv 7 "Holds and STOP: a STOP is never harder to trigger than a
  * go (no fingerprint/revision gate on stop)"). Driven through the real createFetchOnlyFansTransport(fakeFetch)
