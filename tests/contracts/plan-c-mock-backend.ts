@@ -101,9 +101,10 @@ export function createPlanCMock(options: MockOptions = {}) {
       else {
         const parts = body.parts;
         if (!Array.isArray(parts) || parts.length !== draft.parts.length || parts.some(p => typeof p !== "string" || !p.trim())) return respond(call, 400, { ok: false });
-        // An edit never rewrites an approved version: it retires this one and inserts version + 1, awaiting approval again.
+        // An edit never rewrites an approved version: it retires this one and inserts generation + 1, version + 1, awaiting
+        // approval again (backend approval.py edit: `generation_next = generation + 1`).
         draft.status = "invalidated";
-        state.drafts.push({ ...draft, draftVersion: draft.draftVersion + 1, draftHash: hex(0xed17 + draft.draftVersion), status: "awaiting", approvedBy: null, approvedAt: null,
+        state.drafts.push({ ...draft, generation: draft.generation + 1, draftVersion: draft.draftVersion + 1, draftHash: hex(0xed17 + draft.draftVersion), status: "awaiting", approvedBy: null, approvedAt: null,
           parts: draft.parts.map((p, i) => ({ ...p, body: parts[i] as string })) });
       }
       state.commits.push({ action, actor: body.actor as string, target: draft.requestId });

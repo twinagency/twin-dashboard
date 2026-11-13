@@ -37,7 +37,7 @@ test("command keys are random 64-hex values, one per intent, and stay stable unt
   const a = keys.keyFor("approve:x:v1"); assert.match(a, HEX64);
   assert.equal(keys.keyFor("approve:x:v1"), a, "the same intent reuses its key");
   assert.notEqual(keys.keyFor("approve:x:v2"), a, "a different version is a different intent");
-  keys.forget("approve:x:v1"); assert.notEqual(keys.keyFor("approve:x:v1"), a);
+  keys.settle("approve:x:v1", { ok: true, replayed: false, recordedVersion: 1, recordedRevision: null }); assert.notEqual(keys.keyFor("approve:x:v1"), a);
   assert.throws(() => newCommandKey(() => { throw new Error("no entropy"); }), /no entropy/, "never falls back to a guessable key");
 });
 
@@ -347,7 +347,7 @@ test("the proxy routes exist, take the token only on the server, and gate every 
     assert.ok(!/process\.env|ONLYFANS_|fetch\(/.test(source), `${file} does no I/O of its own`);
   }
   const guard = read("lib/onlyfans/plan-c-guard.ts");
-  assert.match(guard, /requireOnlyFansRead\(\{ agency: false, write, pilotIdentity: true \}\)/);
+  assert.match(guard, /authorizeOnlyFansRead\(\{ agency: false, write, pilotIdentity: true \}\)/);
   assert.match(guard, /planCOperatorOnly\(ctx\)/);
   assert.match(guard, /trustedFormOrigin\(request\)/);
   assert.match(guard, /readCommandJson\(request, PLAN_C_MAX_BODY_BYTES\)/);
