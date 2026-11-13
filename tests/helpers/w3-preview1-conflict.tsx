@@ -13,11 +13,11 @@ export const resolved: Answer = () => json({ ok: true, data: { conflict: { ...CO
 export const refusedWith = (status: number, code: string): Answer => () => routeFailure(status, "refused", { code });
 
 /** Mounts ContentSyncConflict; the open list always reads CONFLICTS; the n-th resolve POST is answered by `resolve(n)`. */
-export async function conflicts(resolve: (n: number) => Response | Promise<Response>) {
+export async function conflicts(resolve: (n: number) => Response | Promise<Response>, accountId = ACCOUNT) {
   let n = 0;
   serve(call => call.method === "GET" ? json({ ok: true, data: CONFLICTS }) : resolve(n++));
   const { default: ContentSyncConflict } = await import("../../components/onlyfans-preview/ContentSyncConflict");
-  await mount(<ContentSyncConflict accountId={ACCOUNT} />, "/onlyfans/content");
+  await mount(<ContentSyncConflict accountId={accountId} />, "/onlyfans/content");
   assert.equal(document.querySelectorAll("[data-sync-conflict]").length, 2, "both conflicts rendered from the fixture");
 }
 const form = (itemId: string) => q(`[data-sync-conflict="${itemId}"]`);

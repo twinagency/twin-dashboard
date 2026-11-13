@@ -15,6 +15,8 @@ const CHOICES: Record<Resolution, { label: string; help: string }> = {
 const DONE: Record<Resolution, string> = { accept_source: "Now using the new source terms.", keep_crm: "Keeping the CRM terms.", disable: "This item is switched off." };
 const ISSUES: Record<string,string> = {post_deleted:"The source post was deleted.",post_no_longer_paid:"The source post is no longer paid.",source_retracted:"The source message was retracted.",source_terms_unusable:"The current source terms are unusable."};
 type Pending = { conflictId: string; resolution: Resolution; body: { requestId: string; resolution: Resolution; expectedRevision: number; expectedItemFingerprint: string } };
+/** Decisions whose outcome is unconfirmed, per account and conflict. Module level so a remount keeps the exact retry; a reload does not (G04c). */
+const heldDecisions = new Map<string, Record<string, Pending>>();
 
 function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflict["current"]; lockedText?: boolean | null }) {
   return <div className="min-w-0 rounded-lg border border-line p-3" data-conflict-terms={title}>
@@ -32,7 +34,7 @@ function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflic
 /** Side-by-side review of changed OnlyFans terms. Nothing changes until a decision is applied. */
 export default function ContentSyncConflict({ accountId, readOnly = false, onResolved }: { accountId: string; readOnly?: boolean; onResolved?: () => void }) {
   const [items, setItems] = useState<SyncConflict[] | null>(null), [error, setError] = useState(""), [choice, setChoice] = useState<Record<string, Resolution>>({});
-  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retries, setRetries] = useState<Record<string, Pending>>({}), [connection, setConnection] = useState(false);
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retries, setRetries] = useState<Record<string, Pending>>(() => heldDecisions.get(accountId) ?? {}), [connection, setConnection] = useState(false);
   const controller = useRef<AbortController | null>(null), submitting = useRef(false), resolved = useRef(onResolved);
   resolved.current = onResolved;
 
@@ -48,14 +50,20 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
   async function apply(pending: Pending) {
     if (submitting.current) return;
     submitting.current = true; setBusy(true); setNotice(""); setConnection(false);
-    // An unconfirmed resolve holds only its own conflict, so review of every other conflict stays open.
-    const setRetry = (kept: Pending | null) => setRetries(({ [pending.conflictId]: _, ...rest }) => kept ? { ...rest, [pending.conflictId]: kept } : rest);
+    // An unconfirmed resolve holds only its own conflict, so review of every other conflict stays open. Once held, only a recorded
+    // resolve releases it: a later refusal does not prove the earlier attempt failed. Held from the send on, so leaving mid-flight keeps it.
+    const hold = (kept: Pending | null) => {
+      const { [pending.conflictId]: _, ...rest } = heldDecisions.get(accountId) ?? {}, next = kept ? { ...rest, [pending.conflictId]: kept } : rest;
+      heldDecisions.set(accountId, next); return next;
+    };
+    const wasHeld = heldDecisions.get(accountId)?.[pending.conflictId] === pending; hold(pending);
+    const setRetry = (kept: Pending | null) => setRetries(hold(kept));
     try {
       const reply = await syncCall(accountId, `/conflicts/${encodeURIComponent(pending.conflictId)}/resolve`, { method: "POST", body: pending.body, signal: controller.current?.signal });
       if (reply.kind === "stale") return;
       if (reply.kind === "denied") { setItems(null); setRetry(null); setError("Your session cannot save this decision. Sign in again."); return; }
       if (reply.kind === "unconfirmed") { setRetry(pending); setNotice(reply.error); return; }
-      setRetry(null);
+      setRetry(reply.kind === "refused" && wasHeld ? pending : null);
       if (reply.kind === "refused") {
         setConnection(reply.code === "connection_unavailable");
         setNotice(reply.error); await read(); return;
