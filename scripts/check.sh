@@ -12,7 +12,7 @@
 # Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
 #   *PUBLISHABLE*) in our env or the repo's .env* files.
 # live refuses before its first request unless the process listening on CHECK_BASE_URL's port provably targets a loopback Supabase:
-#   every *SUPABASE*URL* in its env (ps -E; next dev's retitled next-server hides it, so its `next dev` parent's, which it inherits)
+#   every *SUPABASE*URL* in its env (as ps -E; next dev's retitled next-server hides it, so its `next dev` parent's, which it inherits)
 #   is loopback and none names prod, else RED (env unreadable: RED too); then every (NEXT_PUBLIC_)SUPABASE_URL line in its .env files
 #   is loopback and some line or env var names one, else refused. It never POSTs or calls an API route: public/admin 401s write
 #   system_logs, a login writes a session. curl -q (no ~/.curlrc). CHECK_BASE_URL: http://localhost|127.0.0.1 only.
@@ -185,16 +185,24 @@ envguard() {
 }
 # okbase: okurl, plus http only (curl gets --proto =http) and no path (live appends its own)
 okbase() { okurl "$1" && [[ $1 =~ ^http://[^/]+/?$ ]]; }
-# penv <pid>: its environment as ps -E shows it (macOS), or nothing when hidden (a retitled process: next-server, sleep...)
-penv() {
-  local c e
-  c=$(ps -ww -o command= -p "$1") && e=$(ps -E -ww -o command= -p "$1") && [ "$e" != "$c" ] && echo "${e#"$c"}"
+# procargs <pid>: its argv (one line) then its exec-time env (a line per var), from sysctl(KERN_PROCARGS2) as ps -E reads them; ps
+#   itself is setuid, which no sandbox may exec. A retitled process (next-server, sleep...) shows no env, as with ps -E.
+procargs() {
+  perl -e 'my $b = "\0" x 1048576; my $l = pack("Q", length $b);
+    syscall(202, pack("i3", 1, 49, $ARGV[0]), 3, $b, $l, 0, 0) == 0 or exit 1; # __sysctl, CTL_KERN, KERN_PROCARGS2
+    my ($n, $c) = (unpack("Q", $l), unpack("i", $b));
+    my $p = index($b, "\0", 4);
+    $p++ while $p < $n && substr($b, $p, 1) eq "\0";
+    my @a;
+    for (1 .. $c) { my $e = index($b, "\0", $p); exit 1 if $e < 0 || $e >= $n; push @a, substr($b, $p, $e - $p); $p = $e + 1 }
+    print "@a\n";
+    while ($p < $n) { my $e = index($b, "\0", $p); last if $e <= $p || $e > $n; print substr($b, $p, $e - $p), "\n"; $p = $e + 1 }' "$1"
 }
 # target: does the process listening on BASE's port provably use a loopback Supabase? If not: WHY, nothing sent yet, and return 2
 #   (RED: its env names a bad target or cannot be read) or 1 (refused). Reads its env's *SUPABASE*URL* and prod names, its .env
 #   files' (NEXT_PUBLIC_)SUPABASE_URL lines, and logs host:port only.
 target() {
-  local port=${BASE##*:} pids pid pp dir f u hp= e NEXTDEV='^([^ ]*/)?node [^ ]*/next dev( |$)'
+  local port=${BASE##*:} pids pid pp dir f u hp= a e NEXTDEV='^([^ ]*/)?node [^ ]*/next dev( |$)'
   [[ $port =~ ^[0-9]+$ ]] || port=80
   pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null)
   if [ -z "$pids" ]; then
@@ -202,10 +210,11 @@ target() {
     return 1
   fi
   for pid in $pids; do
-    e=$(penv "$pid")
+    e=$(procargs "$pid" | sed 1d)
     if [ -z "$e" ]; then # next dev forks next-server with its own initial env (next/dist/cli/next-dev.js), then retitles it
-      pp=$(ps -o ppid= -p "$pid" | tr -d ' ')
-      [[ $(ps -ww -o command= -p "$pp") =~ $NEXTDEV ]] && e=$(penv "$pp")
+      pp=$(lsof -a -p "$pid" -d cwd -R -FR 2>/dev/null | sed -n 's/^R//p')
+      a=$(procargs "$pp")
+      [[ ${a%%$'\n'*} =~ $NEXTDEV ]] && e=$(sed 1d <<<"$a")
     fi
     if [ -z "$e" ]; then
       WHY="cannot read the environment of pid $pid listening on :$port, so its Supabase target cannot be proven"
@@ -215,8 +224,7 @@ target() {
       WHY="pid $pid's environment names a prod Supabase project"
       return 2
     fi
-    read -ra e <<<"$e"
-    for u in "${e[@]}"; do
+    while IFS= read -r u; do
       [[ $u =~ ^[A-Za-z0-9_]*SUPABASE[A-Za-z0-9_]*URL[A-Za-z0-9_]*= ]] || continue
       if ! okurl "${u#*=}"; then
         WHY="pid $pid's environment has a non-loopback ${u%%=*}"
@@ -224,7 +232,7 @@ target() {
       fi
       u=${u#*://}
       hp="$hp ${u%%/*}"
-    done
+    done <<<"$e"
     dir=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
     if [ ! -d "$dir" ]; then
       WHY="refuse: cannot read the cwd of pid $pid listening on :$port"
