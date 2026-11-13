@@ -19,7 +19,11 @@ export type PlanCRequestContext = { actor: string; accountId: string; backend: P
 export async function planCGate(request: NextRequest, rawAccountId: string, write: boolean): Promise<PlanCRequestContext | NextResponse> {
   // `agency: false` keeps every agency identity out; planCOperatorOnly then insists on the internal operator session.
   const ctx = await requireOnlyFansRead({ agency: false, write, pilotIdentity: true });
-  if (ctx instanceof NextResponse) return ctx;
+  // Raised before any upstream call, so nothing was applied: tagged as a Plan C refusal, never left to the client to infer.
+  if (ctx instanceof NextResponse) {
+    const denial = await ctx.json().catch(() => null) as { error?: unknown } | null;
+    return refuse(ctx.status, typeof denial?.error === "string" ? denial.error : "This action was refused.");
+  }
   const operator = planCOperatorOnly(ctx);
   if (!operator.ok) return refuse(operator.status, operator.error);
   const accountId = requestId(rawAccountId);

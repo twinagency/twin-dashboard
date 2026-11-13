@@ -52,7 +52,8 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
       const data: unknown = await response.json();
       if (data && typeof data === "object" && !Array.isArray(data)) {
         const record = data as Record<string, unknown>;
-        if (record.schemaVersion === PLAN_C_SCHEMA && record.ok === true && record.outcome === "recorded")
+        // Success needs a 2xx AND a recorded body; a recorded body on any other status contradicts itself and stays unconfirmed.
+        if (response.ok && record.schemaVersion === PLAN_C_SCHEMA && record.ok === true && record.outcome === "recorded")
           result = { ok: true, replayed: record.replayed === true, recordedVersion: typeof record.recordedVersion === "number" ? record.recordedVersion : null,
             recordedRevision: typeof record.recordedRevision === "number" ? record.recordedRevision : null };
         else if (record.schemaVersion === PLAN_C_SCHEMA && record.ok === false && (record.outcome === "refused" || record.outcome === "conflict" || record.outcome === "unconfirmed") && typeof record.error === "string")
