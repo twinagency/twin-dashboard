@@ -21,7 +21,7 @@ const unresolvedRow = (overrides: Partial<RawUnresolved> = {}): RawUnresolved =>
   summary: "A send left the worker and no provider answer was recorded.", conversationId: `${MOCK_ACCOUNT}:900000000001`, revision: 7, createdAt: new Date().toISOString(), ...overrides });
 function setup(options: Parameters<typeof createPlanCMock>[0] = {}) {
   const mock = createPlanCMock(options), proxy = createPlanCProxy(mock);
-  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl: proxy.fetch });
+  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, operatorScope: "test-operator", fetchImpl: proxy.fetch });
   return { mock, proxy, client };
 }
 async function firstDraft(client: ReturnType<typeof createPlanCClient>): Promise<PlanCDraft> {
@@ -358,7 +358,7 @@ test("there is no auto-approve, bulk or automatic hand back path", () => {
   const files = ["lib/onlyfans/plan-c.ts", "lib/onlyfans/plan-c-client.ts", "lib/onlyfans/plan-c-backend.ts", "lib/onlyfans/plan-c-route.ts", "lib/onlyfans/plan-c-guard.ts", "components/onlyfans-preview/PlanCConsole.tsx", "app/onlyfans/plan-c/page.tsx"];
   const code = (file: string) => read(file).replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
   for (const file of files) assert.ok(!/approve[-_ ]?all|auto[-_ ]?approve|autoApprov|bulk|handback[-_ ]?all|auto[-_ ]?hand|autoHand|selectAll|select[-_ ]all/i.test(code(file)), `${file} names a bulk or automatic path`);
-  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl: createPlanCProxy(createPlanCMock()).fetch });
+  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, operatorScope: "test-operator", fetchImpl: createPlanCProxy(createPlanCMock()).fetch });
   assert.deepEqual(Object.keys(client).sort(), ["approveDraft", "conversationCommand", "editDraft", "listDrafts", "listUnresolved", "rejectDraft", "reconcile"].sort());
   const ui = read("components/onlyfans-preview/PlanCConsole.tsx");
   // No effect, timer or load path may issue a command.

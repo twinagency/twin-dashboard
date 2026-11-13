@@ -3,14 +3,14 @@
  * tests/rules/controls-page.child.ts (same approach as lane 4's core-route.child.ts and lane 1's plan-c-gate-scope.child.ts,
  * copied, not imported across branches). Not a test file (the rules glob is *.test.*).
  * Everything the children drive is REAL code: route handlers, pages, requireOnlyFansRead -> isAuthed -> verifyOwnerSession, the
- * real planCOwnerActor core, agencyScopedFetch and the engine / Plan C / read backends. Replaced by `installWire()`, and only these:
+ * real namedOwnerActor core (reached only by routes that opt in through `pilotIdentity`), agencyScopedFetch and the engine / Plan C / read backends. Replaced by `installWire()`, and only these:
  *  - `next/headers`: no Next request scope offline. cookies() hands back the synthetic operator session cookie or none.
  *  - `lib/view-as-banner.ts` getViewAsBannerInfo: a real view-as needs a signed cookie plus a DB lookup; here always none.
  *  - `lib/onlyfans/plan-c-owner.ts`: its `import "server-only"` line (Next's bundler makes it a no-op); the real core is re-exported.
  *  - `*.css` requires (Next's bundler handles them): empty modules.
  * Agency identity is set with the real `withDashboardAccess` scope that getDashboardAccess reads first (not a mock); the internal
  * operator is `withDashboardAccess(null)` plus a session cookie the fake owner-session RPC verifies.
- * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a UUID or null per `state.owner`)
+ * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a UUID, null or a 429 per `state.owner`)
  * and the OnlyFans backend at https://backend.fixture.invalid (agency preflight of-agency.v2; reads answer the contract fixtures in
  * tests/contracts/fixtures; account of-a is bound to `state.accountCreator`, by default CHAT_AGENCY's clone; writes are recorded and acknowledged; `state.upstream` makes every backend answer an error carrying
  * SENTINEL). Only `*.fixture.invalid` hosts and obviously synthetic credentials. Synthetic values only.
@@ -19,7 +19,7 @@ import { mock } from "node:test";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import React from "react";
-import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 import { LYNQ_MANAGEMENT_AGENCY_ID } from "../../lib/agency-management-policy";
@@ -47,7 +47,7 @@ const OPERATIONS = { schemaVersion: "of-operations.v3", accountId: "of-a", asOf:
   runtime: { registered: true, enabled: true, recoveryRequired: false, lastCompleteSyncAt: null },
   policy: { revision: 2, enabled: true, usedUnits: 2, limitUnits: 5, nextDispatchAt: null } };
 
-export const state: { session?: string; owner: "uuid" | "null"; upstream: UpstreamStatus | null; drafts: "ok" | "502"; scope: "ok" | "502" | "403"; accountCreator: string } =
+export const state: { session?: string; owner: "uuid" | "null" | "429"; upstream: UpstreamStatus | null; drafts: "ok" | "502"; scope: "ok" | "502" | "403"; accountCreator: string } =
   { owner: "uuid", upstream: null, drafts: "ok", scope: "ok", accountCreator: CHAT_AGENCY.cloneIds[0] };
 /** Every backend call (Supabase excluded) and every backend POST body, in order. */
 export const calls: Call[] = [];
@@ -99,12 +99,12 @@ function installWire() {
     headers: async () => new Headers(),
   } });
   mock.module(new URL("../../lib/view-as-banner.ts", import.meta.url).href, { namedExports: { getViewAsBannerInfo: async () => null } });
-  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { planCOwnerActor } });
+  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor } });
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input)), method = init.method ?? "GET";
     if (url.origin === SUPABASE) {
       if (url.pathname.endsWith("/dashboard_owner_session_verify")) return Response.json(true);
-      if (url.pathname.endsWith("/dashboard_plan_c_owner_identity")) return Response.json(state.owner === "uuid" ? NAMED_OWNER : null);
+      if (url.pathname.endsWith("/dashboard_plan_c_owner_identity")) return state.owner === "429" ? Response.json({ message: "slow down" }, { status: 429 }) : Response.json(state.owner === "uuid" ? NAMED_OWNER : null);
       return Response.json(null, { status: 404 });
     }
     if (url.origin !== BACKEND) return Response.json({ ok: false }, { status: 404 });

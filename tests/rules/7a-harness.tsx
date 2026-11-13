@@ -54,7 +54,7 @@ export async function mountConsole(options: ConsoleOptions = {}) {
   const mock = createPlanCMock({ drafts: options.drafts ?? [], unresolved: options.unresolved ?? [] });
   const proxy = createPlanCProxy(options.wire ? { ...mock, fetch: options.wire(mock) } : mock);
   const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
-  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct fetchImpl={proxy.fetch} />);
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} operatorScope="test-operator" canAct fetchImpl={proxy.fetch} />);
   return { mock };
 }
 /** Design-neutral hold check: the draft stays on screen; its approve is absent or disabled, and clicking whatever is there sends no approve command. */

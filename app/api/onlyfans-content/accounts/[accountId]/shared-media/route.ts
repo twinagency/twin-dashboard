@@ -9,7 +9,7 @@ import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { creatorUuid } from "@/lib/staff-creator-scope";
 import { serviceClient } from "@/lib/supabase-service";
 import { isOperatorActor } from "@/lib/onlyfans/upload-permission";
-import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, type SharedTransfer } from "@/lib/shared-media";
+import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, LIVE_SHARED_FILTER, SHARED_CLEANUP_HOLD, type SharedTransfer } from "@/lib/shared-media";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,7 +72,9 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const source = await db.from(command.kind === "photo" ? "photos" : "videos").select("id,clone_id,storage_path").eq("id", command.sourceId).eq("clone_id", cloneId).maybeSingle();
     if (source.error || !source.data) return refuse("That saved media is unavailable.", 404);
-    const lookup = () => db.from("shared_media_transfers").select("*").eq("account_id", accountId).eq("source_kind", command.kind).eq("source_id", command.sourceId).maybeSingle();
+    // Only the live receipt (at most one, by the partial unique index). A receipt whose row proves the provider never received
+    // the file is history and a new one starts; every other terminal receipt is live and held (lib/shared-media.ts).
+    const lookup = () => db.from("shared_media_transfers").select("*").eq("account_id", accountId).eq("source_kind", command.kind).eq("source_id", command.sourceId).or(LIVE_SHARED_FILTER).maybeSingle();
     let existing = await lookup(); if (existing.error) return refuse("Shared upload history is unavailable.", 503);
     let row = existing.data as SharedTransfer | null;
     if (!row) {
@@ -96,7 +98,9 @@ export async function POST(request: NextRequest, context: Context) {
     // Agency actors must match the backend's freshly verified grant. Owner sessions may resume an owner receipt after signing in
     // again, never an agency member's: the backend binds the job to its actor, so relaying it would attribute the write to them.
     if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !isOperatorActor(row.actor)) return refuse("This upload was started by another team member. Ask them to finish it.");
-    if (!active.has(row.status) && row.error_code !== "provider_cleanup_required") return answer({ ok: true, transfer: publicSharedTransfer(row) });
+    // Two holds. A cleanup hold continues into the job flow to observe the same job. Any other live terminal receipt (complete,
+    // or held for review because the file may already be in the vault) is answered from the row: no backend call, no upload.
+    if (!active.has(row.status) && row.error_code !== SHARED_CLEANUP_HOLD) return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
       const result = await db.from("shared_media_transfers").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", row!.id).eq("clone_id", cloneId).select("*").maybeSingle();

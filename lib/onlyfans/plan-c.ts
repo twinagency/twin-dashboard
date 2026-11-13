@@ -208,7 +208,7 @@ export type PlanCCommandResult =
   | { ok: true; replayed: boolean; recordedVersion: number | null; recordedRevision: number | null }
   | { ok: false; outcome: "refused" | "conflict" | "unconfirmed"; error: string; reload: boolean };
 
-export const PLAN_C_CONFLICT_TEXT = "This draft or conversation changed since you loaded it. The list was reloaded. Read the current draft before deciding again.";
+export const PLAN_C_CONFLICT_TEXT = "This draft or conversation changed since you loaded it. Read the current version in the list before deciding again.";
 export const PLAN_C_UNCONFIRMED_TEXT = "The outcome is unconfirmed. Reload before acting again. Retrying the same action is safe: it reuses the same key.";
 export const PLAN_C_REFUSED_TEXT = "The backend did not accept that action.";
 /** 404 and 410: the draft, conversation or the route itself is not there. Not a conflict: nothing says it changed. */

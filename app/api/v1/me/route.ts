@@ -16,7 +16,9 @@ export const GET = withModelKey(async ({ tenant }) => {
 
   let q = supabaseAdmin.from("clones").select("id,slug,name,status,timezone");
   q = fleet ? q.order("created_at", { ascending: true }) : q.eq("id", tenant.cloneId as string);
-  const { data } = await q;
+  const { data, error } = await q;
+  // Never answer ok:true with no model on a database failure: withModelKey turns this into a 500.
+  if (error) throw new Error(`clones read failed: ${error.message}`);
   const rows = (data ?? []) as { id: string; slug: string; name: string; status: string; timezone: string }[];
 
   return publicOk({

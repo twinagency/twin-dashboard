@@ -48,15 +48,15 @@ test("codex final P1: a held key survives a new client for the same account (rem
   const answers = [lost, recorded];
   const { sent, fetchImpl } = recordingFetch(() => answers[i++]());
   const draft = parsedDraft();
-  await createPlanCClient({ accountId: "acc-remount", fetchImpl }).approveDraft(draft);
-  const retry = await createPlanCClient({ accountId: "acc-remount", fetchImpl }).approveDraft(draft);
+  await createPlanCClient({ accountId: "acc-remount", operatorScope: "test-operator", fetchImpl }).approveDraft(draft);
+  const retry = await createPlanCClient({ accountId: "acc-remount", operatorScope: "test-operator", fetchImpl }).approveDraft(draft);
   assert.equal(retry.ok, true, "precondition: the retry was recorded");
   assert.equal(sent[1], sent[0], "the remounted client minted a fresh key for an intent whose first attempt may have committed");
 });
 
 test("control: a held key is per account; another account's same-looking intent gets its own key", async () => {
   const a = recordingFetch(() => lost()), b = recordingFetch(() => lost());
-  await createPlanCClient({ accountId: "acc-iso-a", fetchImpl: a.fetchImpl }).approveDraft(parsedDraft());
-  await createPlanCClient({ accountId: "acc-iso-b", fetchImpl: b.fetchImpl }).approveDraft(parsedDraft());
+  await createPlanCClient({ accountId: "acc-iso-a", operatorScope: "test-operator", fetchImpl: a.fetchImpl }).approveDraft(parsedDraft());
+  await createPlanCClient({ accountId: "acc-iso-b", operatorScope: "test-operator", fetchImpl: b.fetchImpl }).approveDraft(parsedDraft());
   assert.notEqual(a.sent[0], b.sent[0]);
 });

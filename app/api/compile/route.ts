@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { compileClone } from "@/lib/compiler";
-import { getDashboardAccess } from "@/lib/dashboard-access";
 import { requireManagedClone } from "@/lib/agency-management";
 import { trustedFormOrigin } from "@/lib/form-origin";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
-export async function GET(req: NextRequest) {
-  if (await getDashboardAccess()) return NextResponse.json({error:"Use POST"},{status:405});
-  const id=req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({error:"missing id"},{status:400});
-  try { return NextResponse.json(await compileClone(id)); }
-  catch { return NextResponse.json({error:"Compilation failed"},{status:500}); }
-}
+// No GET: a cross-site top-level GET carries the Lax admin cookie and compiling writes live prompts.
 export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) return NextResponse.json({error:"Untrusted request origin"},{status:403});
   try {
