@@ -312,14 +312,14 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     void send(command);
   }
   /** An unconfirmed command may have landed and moved the revision: read it first so the stop is not refused as stale.
-   *  The read is bounded: a hung status read falls back to the last-known revision rather than never sending the stop. */
+   *  The read is bounded: a hung status read falls back to the last-known revision rather than never sending the stop.
+   *  Once clicked the stop is sent even if the editor unmounted meanwhile; send() paints nothing after unmount. */
   async function pause() {
     if (submitting.current || !data) return;
     submitting.current = true; setBusy(true);
     const fresh = await read(false, AbortSignal.timeout(PAUSE_READ_MS));
     submitting.current = false;
-    if (!active.current) return;
-    setBusy(false);
+    if (active.current) setBusy(false);
     if (sessionDenied.current) return;
     void send({ action: "pause", payload: {}, expectedRevision: (fresh ?? data).revision });
   }

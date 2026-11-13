@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-1 F21, REVIEW inv 7): an unconfirmed ACTIVATE (a go) keeps its exact retry, and "Pause outgoing"
 // (the stop) stays enabled beside it. A stop is never harder than the pending go. F23/F24 are not G09.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), real ConnectionEditor + Next contexts. Fake curl only.
-import { ACCOUNT, bodyOf, close, click, http502, json, mount, never, posts, q, routeFailure, serve, settle, submit, type, type Answer } from "../helpers/w3-preview1-dom";
+import { ACCOUNT, bodyOf, close, click, http502, json, mount, never, posts, q, routeFailure, serve, settle, submit, type, unmount, type Answer } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import React from "react";
@@ -130,4 +130,15 @@ test("CF-P1: a Pause whose preflight read hangs still sends the pause, bounded, 
   assert.deepEqual(sent.map(call => bodyOf(call).expectedRevision), [4], "a hung status read blocked the stop");
   assert.equal(server.current().revision, 5, "the pause landed");
   assert.match(notice(), /Pause recorded/);
+});
+
+test("FF1: leaving the editor while Pause reads the status still sends the pause", async () => {
+  const server = landingBackend({ getHangs: [1] });
+  await editor();
+  await click(pause());
+  await unmount();
+  await settle(3_300);
+  assert.deepEqual(posts().filter(call => bodyOf(call).action === "pause").map(call => bodyOf(call).expectedRevision), [4], "unmount dropped the stop");
+  assert.equal(server.current().outgoingEnabled, false);
+  assert.equal(server.current().revision, 5, "the pause landed");
 });
