@@ -130,7 +130,7 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     {accounts.state === "error" ? <BError message={accounts.message} onRetry={() => void loadAccounts()} /> : null}
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
-    {accounts.state === "ok" && accounts.data.length > 0 && !selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} /> : null}
+    {accounts.state === "ok" && accounts.data.length > 0 && !selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} unseen={Boolean(initialAccountId) && !accountId} onChange={chooseAccount} /> : null}
     {accounts.state === "ok" && accounts.data.length > 0 && selectedAccountId && !accountId ? <p role="status" className="text-sm">That account is not available to this session.</p> : null}
     {accounts.state === "ok" && accountId ? <>
       {selectedAccountId && part === "all" ? <p className="min-w-0 break-words text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p> : null}

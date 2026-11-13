@@ -2,12 +2,13 @@
 // known-red W3-ui-onlyfans-launch-stop-gating (finding L2). Emergency stop and its Reason box render whatever the emergency-stop read
 // says (AccountControls.tsx). Every STOP goes without a fingerprint (a stale one is refused by the backend exactly when STOP is needed) and
 // the route (account-controls-route.ts) pins it to the fingerprint it reads now, refusing with 503 and sending nothing when it cannot read
-// one. Pause and resume still carry the fingerprint the operator saw. A pause or resume in flight or unconfirmed never disables STOP.
+// one. Pause and resume still carry the fingerprint the operator saw. A pause or resume in flight or unconfirmed never disables STOP, and
+// STOP and pause/resume report in separate lanes, so neither result hides the other's; pause/resume wait for every command in flight.
 // L1/L3/L4 of the same known-red file are not G07a and stay there.
 // Mounts the real BAutomationPanel inside real Next router contexts; the route half spawns tests/rules/W3-lib-onlyfans-2-route.child.ts.
 // Offline: jsdom, stub fetch, synthetic ids.
 //   node --import tsx --test tests/rules/G07a-stop-gating.test.tsx
-import { button, click, html502, inNextApp, json, mount, stubFetch, typeInto, unmount } from "../helpers/w3-launch-dom";
+import { button, click, html502, inNextApp, json, mount, settle, stubFetch, typeInto, unmount } from "../helpers/w3-launch-dom";
 import { runRoute } from "./W3-lib-onlyfans-2-route.spawn";
 import { accounts, conversations, runtime, stopRead } from "../helpers/w3-launch-fixtures";
 import assert from "node:assert/strict";
@@ -47,7 +48,7 @@ async function pauseThenStop(stub: Awaited<ReturnType<typeof open>>) {
   await typeInto(reasonInput(), "Synthetic stop reason");
   await click(button(/^Pause account$/i));
   await click(button(/^Confirm pause$/i));
-  assert.deepEqual(stop(), { present: true, enabled: true }, "a pause in flight or unconfirmed disables STOP (AccountControls.tsx:140)");
+  assert.deepEqual(stop(), { present: true, enabled: true }, "a pause in flight or unconfirmed disables STOP");
   await click(stopButton());
   await click(button(/^Confirm emergency stop$/i));
   return sentActions(stub);
@@ -69,7 +70,7 @@ test("STOP POST answers 502: reported unconfirmed and offered as 'Send stop agai
   assert.equal(stub.posts(/emergency-stop$/).length, 1, "one STOP POST");
   assert.match(stopNote(), /unconfirmed|not confirmed/i);
   assert.deepEqual({ again: Boolean(button(/^Send stop again$/)), identical: Boolean(button(/identical/i)) }, { again: true, identical: false },
-    "a resent STOP is pinned to a fresh read, so it is not identical (AccountControls.tsx:199)");
+    "a resent STOP is pinned to a fresh read, so it is not identical");
   await click(button(/^Send stop again$/));
   assert.deepEqual(sentActions(stub), ["emergency_stop", "emergency_stop"]);
   await unmount();
@@ -80,7 +81,7 @@ test("a STOP from an ok read carries no fingerprint: the operator's view may be 
   await typeInto(reasonInput(), "Synthetic stop reason");
   await click(stopButton());
   await click(button(/^Confirm emergency stop$/i));
-  assert.deepEqual(sentKeys(stub), ["action,reason"], "STOP sends the fingerprint of the last read (AccountControls.tsx:81-83)");
+  assert.deepEqual(sentKeys(stub), ["action,reason"], "STOP sends the fingerprint of the last read");
   await unmount();
 });
 
@@ -109,6 +110,61 @@ test("a pause still in flight does not disable STOP", async () => {
   await unmount();
 });
 
+/** Each command answered by its own promise, settled by the test; `recorded` is the route's ack for a recorded command. */
+function held() {
+  const gates = new Map<string, (r: Response) => void>();
+  return { post: (raw: string) => new Promise<Response>(resolve => { gates.set(String(JSON.parse(raw).action), resolve); }),
+    answer: async (action: string, r: Response) => { gates.get(action)?.(r); await settle(); await settle(); } };
+}
+const recorded = () => json({ schemaVersion: "of-launch-b.v1", ok: true, accountId: "of-a", command: { recorded: true } });
+const controlNote = () => (document.querySelector("[data-b-control-note]")?.textContent ?? "").trim();
+const enabled = (label: RegExp) => { const b = button(label); return Boolean(b && !b.disabled); };
+
+test("STOP recorded while a pause is still in flight: pause and resume stay blocked, and the pause's later failure is shown with its retry", async () => {
+  const h = held();
+  const stub = await open({ stopPost: h.post });
+  await pauseThenStop(stub);
+  await h.answer("emergency_stop", recorded());
+  assert.deepEqual({ stop: /recorded/i.test(stopNote()), pause: enabled(/^Pause account$/) }, { stop: true, pause: false },
+    "the STOP settling clears 'busy' while the pause is still in flight");
+  await h.answer("pause", html502());
+  assert.deepEqual({ pause: /unconfirmed|not confirmed/i.test(controlNote()), retry: enabled(/^Retry identical account command$/), stop: /recorded/i.test(stopNote()) },
+    { pause: true, retry: true, stop: true }, "the superseded pause's unconfirmed result is dropped");
+  await click(button(/^Retry identical account command$/));
+  assert.deepEqual(sentActions(stub), ["pause", "emergency_stop", "pause"]);
+  await unmount();
+});
+
+test("a pause recorded while a STOP is in flight is reported, and pause and resume wait for the STOP", async () => {
+  const h = held();
+  const stub = await open({ stopPost: h.post });
+  await pauseThenStop(stub);
+  await h.answer("pause", recorded());
+  assert.deepEqual({ pause: /recorded/i.test(controlNote()), pauseEnabled: enabled(/^Pause account$/), stop: stop() },
+    { pause: true, pauseEnabled: false, stop: { present: true, enabled: false } }, "the pause's recorded result is dropped while a STOP is newer");
+  await h.answer("emergency_stop", html502());
+  assert.deepEqual({ pause: /recorded/i.test(controlNote()), stop: /unconfirmed|not confirmed/i.test(stopNote()), again: enabled(/^Send stop again$/) },
+    { pause: true, stop: true, again: true });
+  await unmount();
+});
+
+test("one gate for every control: with no reason nothing can be confirmed; a STOP in flight blocks only another STOP", async () => {
+  const h = held();
+  await open({ stopPost: h.post });
+  await click(button(/^Pause account$/i));
+  assert.equal(button(/^Confirm pause$/i), undefined, "Pause opens a confirm with no reason typed");
+  await typeInto(reasonInput(), "Synthetic stop reason");
+  await click(stopButton());
+  await typeInto(reasonInput(), " ");
+  assert.equal(enabled(/^Confirm emergency stop$/i), false, "Confirm emergency stop is enabled with a blank reason");
+  await typeInto(reasonInput(), "Synthetic stop reason");
+  await click(button(/^Confirm emergency stop$/i));
+  assert.deepEqual({ stop: stop().enabled, pause: enabled(/^Pause account$/), confirm: Boolean(button(/^Confirm/)) }, { stop: false, pause: false, confirm: true });
+  await h.answer("emergency_stop", recorded());
+  assert.deepEqual({ stop: stop().enabled, pause: enabled(/^Pause account$/), confirm: Boolean(button(/^Confirm/)) }, { stop: true, pause: true, confirm: false });
+  await unmount();
+});
+
 test("the route's 503 (state unreadable) is shown as not sent, with no retry button", async () => {
   const stub = await open({ stopPost: NOT_SENT });
   await typeInto(reasonInput(), "Synthetic stop reason");
@@ -116,7 +172,7 @@ test("the route's 503 (state unreadable) is shown as not sent, with no retry but
   await click(button(/^Confirm emergency stop$/i));
   assert.equal(stub.posts(/emergency-stop$/).length, 1);
   assert.match(stopNote(), /not sent/i);
-  const controls = document.querySelector("[data-b-stop-note]")?.parentElement ?? document;
+  const controls = document.querySelector('[data-b-card="account"]') ?? document;
   assert.deepEqual({ again: Boolean(button(/^Send stop again$/)), retry: Boolean(button(/retry/i, controls)), stop: stop() },
     { again: false, retry: false, stop: { present: true, enabled: true } });
   await unmount();
@@ -126,12 +182,11 @@ test("L2: emergency-stop read answers 503, Emergency stop is still usable", asyn
   const stub = await open({ stopGet: () => json({ error: "Readiness is not available." }, 503) });
   const reason = reasonInput();
   if (reason) await typeInto(reason, "Synthetic stop reason");
-  assert.deepEqual(stop(), { present: true, enabled: true }, "STOP disappears when the readiness read is not ok (AccountControls.tsx:103)");
+  assert.deepEqual(stop(), { present: true, enabled: true }, "STOP disappears when the readiness read is not ok");
   await click(stopButton());
   await click(button(/^Confirm emergency stop$/i));
-  const posts = stub.posts(/emergency-stop$/);
-  assert.equal(posts.length, 1, "exactly one STOP POST");
-  assert.equal(String(JSON.parse(String(posts[0].raw)).action), "emergency_stop", "the POST is a STOP (expectedFingerprint deliberately unpinned)");
+  assert.deepEqual({ actions: sentActions(stub), keys: sentKeys(stub) }, { actions: ["emergency_stop"], keys: ["action,reason"] },
+    "exactly one STOP POST, and it carries no fingerprint (the route pins one)");
   await unmount();
 });
 
@@ -151,7 +206,7 @@ test("route: a STOP carrying a stale client fingerprint is pinned to the current
   const run = runRoute("account-stop-stale");
   const sent = run.calls.filter(c => c.method === "POST").map(c => c.body as Record<string, unknown>);
   assert.deepEqual({ status: run.status, reads: run.calls.filter(c => c.method === "GET").length, posts: sent.length, fingerprint: sent[0]?.expectedFingerprint },
-    { status: 200, reads: 1, posts: 1, fingerprint: "e".repeat(64) }, "the route forwards the client's fingerprint on a STOP (account-controls-route.ts:44-59)");
+    { status: 200, reads: 1, posts: 1, fingerprint: "e".repeat(64) }, "the route forwards the client's fingerprint on a STOP");
 });
 
 test("route: a pause keeps the client's fingerprint and reads nothing", () => {
@@ -160,8 +215,8 @@ test("route: a pause keeps the client's fingerprint and reads nothing", () => {
     { status: 200, calls: [`POST ${"f".repeat(64)}`] });
 });
 
-for (const scenario of ["account-pause-bare", "account-resume-bare"] as const)
-  test(`route: only a STOP may be bare, ${scenario.split("-")[1]} without a fingerprint is refused`, () => {
+for (const scenario of ["account-pause-bare", "account-resume-bare", "account-pause-extra", "account-stop-extra"] as const)
+  test(`route: one exact key set per action, ${scenario} is refused before any backend call`, () => {
     const run = runRoute(scenario);
     assert.deepEqual({ status: run.status, calls: run.calls.length }, { status: 400, calls: 0 });
   });

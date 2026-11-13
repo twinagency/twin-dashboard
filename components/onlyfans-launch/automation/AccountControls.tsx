@@ -17,6 +17,12 @@ const parser = (accountId: string) => (v: unknown) =>
     : null;
 type Action = "pause" | "emergency_stop" | "resume";
 type Command = { action: Action; expectedFingerprint?: string; reason: string };
+/** STOP reports in its own lane, pause and resume share the other: one lane's result never hides or replaces the other's. */
+type Lane = "stop" | "control";
+const laneOf = (a: Action): Lane => (a === "emergency_stop" ? "stop" : "control");
+const LABEL: Record<Action, string> = { pause: "Pause", emergency_stop: "Emergency stop", resume: "Resume" };
+type Outcome = { notice: string; pending: Command | null };
+const NONE: Outcome = { notice: "", pending: null };
 export default function AccountControls({
   accountId,
   manage,
@@ -34,28 +40,36 @@ export default function AccountControls({
     ),
     [reason, setReason] = useState(""),
     [action, setAction] = useState<Action | null>(null),
-    [notice, setNotice] = useState(""),
-    // The action in flight. Only a STOP in flight blocks STOP; a pause or resume in flight or unconfirmed never does.
-    [busy, setBusy] = useState<Action | null>(null),
-    [pending, setPending] = useState<Command | null>(null);
+    // Every command in flight (at most one STOP plus one pause or resume).
+    [inFlight, setInFlight] = useState<Action[]>([]),
+    [outcome, setOutcome] = useState<Record<Lane, Outcome>>({ stop: NONE, control: NONE });
   const ready = r.state.kind === "ok" ? r.state.data : null;
-  const mounted = useRef(true),
-    latest = useRef(0);
+  const unconfirmed = outcome.stop.pending !== null || outcome.control.pending !== null;
+  const sending = (a: Action) => inFlight.includes(a);
+  /** The one gate for every control that sends. A STOP is blocked only by a STOP in flight; a pause or resume by no current read,
+   *  anything in flight or anything unconfirmed. `retry` resends a lane's unconfirmed command as it was: its own reason, no state
+   *  precondition. Closing a dialog or dropping an unconfirmed result sends nothing, so it waits only for its own command (`sending`). */
+  function blocked(a: Action, retry = false) {
+    if (!manage) return true;
+    if (a === "emergency_stop") return sending(a) || (!retry && !reason.trim());
+    if (inFlight.length) return true;
+    if (retry) return false;
+    return !reason.trim() || !ready || unconfirmed ||
+      (a === "pause" ? !ready.accountControl.enabled : ready.accountControl.enabled || !ready.readyToEnable);
+  }
+  const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
   async function send(command: Command) {
-    const mine = ++latest.current;
-    setBusy(command.action);
+    setInFlight((f) => [...f, command.action]);
     const q = await bFetch(base, { method: "POST", body: command });
     if (!mounted.current) return;
+    setInFlight((f) => f.filter((a) => a !== command.action));
     setAction((a) => (a === command.action ? null : a));
     r.reload();
     onChanged();
-    // A STOP sent while a pause or resume was in flight supersedes it: only the latest command reports.
-    if (mine !== latest.current) return;
-    setBusy(null);
     const recorded =
       q.kind === "ok" &&
       object(q.data) &&
@@ -64,33 +78,28 @@ export default function AccountControls({
       q.data.accountId === accountId &&
       object(q.data.command) &&
       q.data.command.recorded === true;
-    setPending(
-      q.kind === "unconfirmed" || (q.kind === "ok" && !recorded)
-        ? command
-        : null,
-    );
-    setNotice(
-      recorded
-        ? "Account command recorded. Reading authoritative current state. Already dispatched or unknown operations retain their status."
-        : "error" in q
-          ? q.error
-          : "The account command outcome is unconfirmed. Read current state before retrying.",
-    );
+    setOutcome((o) => ({
+      ...o,
+      [laneOf(command.action)]: {
+        pending: q.kind === "unconfirmed" || (q.kind === "ok" && !recorded) ? command : null,
+        notice: `${LABEL[command.action]}: ${
+          recorded
+            ? "Account command recorded. Reading authoritative current state. Already dispatched or unknown operations retain their status."
+            : "error" in q
+              ? q.error
+              : "The account command outcome is unconfirmed. Read current state before retrying."
+        }`,
+      },
+    }));
   }
   async function submit() {
-    if (!manage || !action || !reason.trim()) return;
+    if (!action || blocked(action)) return;
     // A STOP is a brake: it never carries the fingerprint this view read, which may be stale. The route pins it to the current one.
-    if (action === "emergency_stop") {
-      if (busy !== "emergency_stop")
-        await send({ action, reason: reason.trim() });
-      return;
-    }
-    if (!ready || busy || pending !== null) return;
-    await send({
-      action,
-      expectedFingerprint: ready.accountControl.fingerprint,
-      reason: reason.trim(),
-    });
+    await send(
+      action === "emergency_stop"
+        ? { action, reason: reason.trim() }
+        : { action, expectedFingerprint: ready!.accountControl.fingerprint, reason: reason.trim() },
+    );
   }
 
   return (
@@ -119,7 +128,7 @@ export default function AccountControls({
         Reason
         <input
           className="min-h-11 w-full rounded border border-line px-2"
-          disabled={!manage || busy === "emergency_stop"}
+          disabled={!manage || sending("emergency_stop")}
           maxLength={512}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
@@ -129,13 +138,7 @@ export default function AccountControls({
         {ready ? (
           <button
             className={buttonClass}
-            disabled={
-              !manage ||
-              busy !== null ||
-              pending !== null ||
-              !reason.trim() ||
-              !ready.accountControl.enabled
-            }
+            disabled={blocked("pause")}
             onClick={() => setAction("pause")}
           >
             Pause account
@@ -144,7 +147,7 @@ export default function AccountControls({
         <button
           data-b-emergency
           className={dangerClass}
-          disabled={!manage || busy === "emergency_stop" || !reason.trim()}
+          disabled={blocked("emergency_stop")}
           onClick={() => setAction("emergency_stop")}
         >
           Emergency stop
@@ -152,14 +155,7 @@ export default function AccountControls({
         {ready ? (
           <button
             className={buttonClass}
-            disabled={
-              !manage ||
-              busy !== null ||
-              pending !== null ||
-              !reason.trim() ||
-              ready.accountControl.enabled ||
-              !ready.readyToEnable
-            }
+            disabled={blocked("resume")}
             onClick={() => setAction("resume")}
           >
             Resume with current prerequisites
@@ -179,50 +175,60 @@ export default function AccountControls({
           </p>
           <button
             className={action === "resume" ? buttonClass : dangerClass}
-            disabled={
-              action === "emergency_stop"
-                ? busy === "emergency_stop"
-                : busy !== null
-            }
+            disabled={blocked(action)}
             onClick={() => void submit()}
           >
             Confirm {action.replaceAll("_", " ")}
           </button>
           <button
             className={buttonClass}
-            disabled={busy === action}
+            disabled={sending(action)}
             onClick={() => setAction(null)}
           >
             Cancel
           </button>
         </div>
       ) : null}
-      <p role="status" data-b-stop-note className="text-sm">
-        {notice}
-      </p>
-      {pending !== null ? (
-        <div className="flex flex-wrap gap-2">
-          <button
-            className={buttonClass}
-            disabled={!manage || busy !== null}
-            onClick={() => void send(pending)}
-          >
-            {pending.action === "emergency_stop"
-              ? "Send stop again"
-              : "Retry identical account command"}
-          </button>
-          <button
-            className={buttonClass}
-            disabled={busy !== null}
-            onClick={() => {
-              setPending(null);
-              setNotice("Review current account state before another action.");
-            }}
-          >
-            Use current account view
-          </button>
-        </div>
-      ) : null}
+      {(["control", "stop"] as const).map((lane) => {
+        const { notice, pending } = outcome[lane];
+        return (
+          <div key={lane} className="space-y-2">
+            <p
+              role="status"
+              data-b-stop-note={lane === "stop" ? "" : undefined}
+              data-b-control-note={lane === "control" ? "" : undefined}
+              className="text-sm"
+            >
+              {notice}
+            </p>
+            {pending !== null ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  className={buttonClass}
+                  disabled={blocked(pending.action, true)}
+                  onClick={() => void send(pending)}
+                >
+                  {pending.action === "emergency_stop"
+                    ? "Send stop again"
+                    : "Retry identical account command"}
+                </button>
+                <button
+                  className={buttonClass}
+                  disabled={sending(pending.action)}
+                  onClick={() =>
+                    setOutcome((o) => ({
+                      ...o,
+                      [lane]: { pending: null, notice: "Review current account state before another action." },
+                    }))
+                  }
+                >
+                  Use current account view
+                </button>
+              </div>
+            ) : null}
+          </div>
+        );
+      })}
     </div>
   );
 }

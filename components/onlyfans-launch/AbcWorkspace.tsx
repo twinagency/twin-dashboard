@@ -7,6 +7,7 @@ import ReadinessScreen from "./readiness/ReadinessScreen";
 import PurchasesScreen from "./purchases/PurchasesScreen";
 import PersonalityScreen from "./personality/PersonalityScreen";
 import { StateLine, useJsonResource } from "./a-shared";
+import { UNSEEN_ACCOUNT } from "./b-shared/BShared";
 import { parseAccounts as parseNativeAccounts } from "@/lib/onlyfans/launch/automation/b-automation";
 
 const parseAccounts = (v: unknown) => {
@@ -29,6 +30,8 @@ export default function AbcWorkspace({ initialAccountId = null, initialScreen = 
   useEffect(() => {
     if (state.kind === "ok" && initialAccountId) setAccountId(state.data.some(a => a.accountId === initialAccountId) ? initialAccountId : null);
   }, [initialAccountId, state.kind]);
+  // Only an account the list just answered with is shown or read: a stale ?account= never mounts a screen, nor does any id while the list is not ok.
+  const shown = state.kind === "ok" && accountId && state.data.some(a => a.accountId === accountId) ? accountId : null;
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   useEffect(() => { if (state.kind === "ok" && !initialAccountId && (!accountId || !state.data.some(a => a.accountId === accountId))) setAccountId(state.data[0]?.accountId ?? null); }, [state, accountId, initialAccountId]);
   const onGo = useCallback((s: string) => { if ((SCREENS as string[]).includes(s)) setScreen(s as Screen); }, []);
@@ -42,21 +45,21 @@ export default function AbcWorkspace({ initialAccountId = null, initialScreen = 
       {state.kind === "pending" ? <p data-launch-state="pending" className="text-sm text-muted">Accounts are not available from this dashboard's backend. Nothing can be shown.</p> : null}
       {state.kind === "ok" && !state.data.length ? <p data-launch-state="empty" className="text-sm text-muted">No accounts are available to you.</p> : null}
       {state.kind === "ok" && state.data.length ? <div><label htmlFor="launch-account" className="block text-xs text-muted">Account</label>
-        <select id="launch-account" className="min-h-11 w-full max-w-sm rounded-lg border border-line bg-white px-2 text-sm" value={accountId ?? ""} onChange={e => selectAccount(e.target.value)}>
-          {accountId ? null : <option value="" disabled>Select an account</option>}
+        <select id="launch-account" className="min-h-11 w-full max-w-sm rounded-lg border border-line bg-white px-2 text-sm" value={shown ?? ""} onChange={e => selectAccount(e.target.value)}>
+          {shown ? null : <option value="" disabled>Select an account</option>}
           {state.data.map(a => <option key={a.accountId} value={a.accountId}>{a.label}</option>)}</select></div> : null}
     </header>
-    {state.kind === "ok" && initialAccountId && !accountId ? <p role="status">That account is not available to this session. Select an authorised account.</p> : null}
-    {accountId ? <>
+    {state.kind === "ok" && initialAccountId && !shown ? <p role="status">{UNSEEN_ACCOUNT}</p> : null}
+    {shown ? <>
       <div role="tablist" aria-label="Launch screens" className="flex gap-1 overflow-x-auto">
         {SCREENS.map((s, i) => <button key={s} ref={el => { tabs.current[i] = el; }} role="tab" id={`tab-${s}`} aria-selected={screen === s} aria-controls={`panel-${s}`} tabIndex={screen === s ? 0 : -1}
           onKeyDown={e => onKey(e, i)} onClick={() => setScreen(s)}
           className={`min-h-11 shrink-0 rounded-lg border border-line px-3 text-sm font-semibold focus-visible:outline focus-visible:outline-2 ${screen === s ? "bg-elev text-ink" : "text-accent"}`}>{SCREEN_LABELS[s]}</button>)}</div>
       <p data-wiring={WIRING[screen].wiring} className="text-xs text-muted"><strong>{WIRING_LABEL[WIRING[screen].wiring]}.</strong> {WIRING[screen].note}</p>
       <div role="tabpanel" id={`panel-${screen}`} aria-labelledby={`tab-${screen}`} tabIndex={0}>
-        {screen === "readiness" ? <ReadinessScreen key={accountId} accountId={accountId} onGo={onGo} /> : null}
-        {screen === "purchases" ? <PurchasesScreen key={accountId} accountId={accountId} /> : null}
-        {screen === "personality" ? <PersonalityScreen key={accountId} accountId={accountId} /> : null}
+        {screen === "readiness" ? <ReadinessScreen key={shown} accountId={shown} onGo={onGo} /> : null}
+        {screen === "purchases" ? <PurchasesScreen key={shown} accountId={shown} /> : null}
+        {screen === "personality" ? <PersonalityScreen key={shown} accountId={shown} /> : null}
       </div></> : null}
   </div>;
 }

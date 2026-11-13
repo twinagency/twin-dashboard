@@ -98,7 +98,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
     {accounts.state === "pending" ? <BPending title="Accounts" contract={accounts.contract} /> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
-    {accounts.state === "ok" && accounts.data.length > 0 ? <BAccountSwitcher id="b-auto-acct" accounts={accounts.data} value={account ? accountId : ""} onChange={chooseAccount} /> : null}
+    {accounts.state === "ok" && accounts.data.length > 0 ? <BAccountSwitcher id="b-auto-acct" accounts={accounts.data} value={account ? accountId : ""} unseen={Boolean(initialAccountId) && !account} onChange={chooseAccount} /> : null}
     {accounts.state === "ok" && account ? <>
       <div aria-live="polite" className="min-h-5 text-sm" data-b-notice>{notice}</div>
 

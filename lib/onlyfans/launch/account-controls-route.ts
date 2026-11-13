@@ -8,12 +8,7 @@ import {
 import { hash, object, parseNativeReadiness, readinessFingerprint, text } from "./native";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
-/** The one exact key set each action accepts (after a STOP's client fingerprint is discarded). */
-const KEYS: Record<string, string> = {
-  emergency_stop: "action,reason",
-  pause: "action,expectedFingerprint,reason",
-  resume: "action,expectedFingerprint,reason",
-};
+const ACTIONS: readonly unknown[] = ["pause", "emergency_stop", "resume"];
 export async function accountControls(
   request: NextRequest,
   accountId: string,
@@ -47,15 +42,16 @@ export async function accountControls(
   } catch {
     return bRefuse(400, "Invalid account control request.");
   }
+  if (!object(b) || !ACTIONS.includes(b.action))
+    return bRefuse(400, "Invalid account control request.");
   // A STOP is a brake. A fingerprint the client holds may be stale, and the backend refuses a stale one exactly when STOP is needed,
-  // so any client fingerprint on a STOP is discarded and the route pins the one it reads now (below).
-  if (object(b) && b.action === "emergency_stop") delete b.expectedFingerprint;
-  const keys = object(b) && Object.hasOwn(KEYS, String(b.action)) ? KEYS[String(b.action)] : undefined;
+  // so any client fingerprint on a STOP is discarded and the route pins the one it reads now (below). One exact key set per action.
+  const stop = b.action === "emergency_stop";
+  if (stop) delete b.expectedFingerprint;
   if (
-    !object(b) ||
-    !keys ||
-    Object.keys(b).sort().join(",") !== keys ||
-    (b.action !== "emergency_stop" && !hash(b.expectedFingerprint)) ||
+    Object.keys(b).sort().join(",") !==
+      (stop ? "action,reason" : "action,expectedFingerprint,reason") ||
+    (!stop && !hash(b.expectedFingerprint)) ||
     !text(b.reason, 512) ||
     !b.reason.trim()
   )
@@ -63,7 +59,7 @@ export async function accountControls(
   const call = configuredNativeControlBackend(g.ctx.fetch);
   if (!call)
     return bRefuse(503, "The account control authority is unavailable.");
-  if (b.action === "emergency_stop") {
+  if (stop) {
     const read = configuredNativeReadBackend(g.ctx.fetch),
       now = read ? await read(g.accountId, "readiness") : null,
       fingerprint = now?.ok ? readinessFingerprint(now.data.readiness) : null;
