@@ -5,7 +5,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccount, type BConversation, type BRuntime } from "@/lib/onlyfans/launch/automation/b-automation";
 import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
 import EngagementPanel from "./EngagementPanel";
-import AccountControls from "./AccountControls";
+import AccountControls, { type StopPhase } from "./AccountControls";
+import { readHold, stamp, writeHold } from "./stop-hold";
 import MoxyControls from "./MoxyControls";
 import { bTime, type BReply } from "@/lib/onlyfans/launch/b-common";
 import { BAccountSwitcher, BError, BLoading, BPending, bButton, bDanger } from "../b-shared/BShared";
@@ -23,17 +24,22 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
   }
 }
 
-/** Conversation go controls: an unconfirmed STOP or a refused control holds these, never a brake. */
-const GO = new Set<string>(["resume_automation", "release_takeover"]);
-
 /** Current account controls, conversation handling and native proactive engagement. */
 export default function BAutomationPanel({ canManage = false, initialAccountId }: { canManage?: boolean; initialAccountId?: string }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const manage = canManage;
-  // Conversation go controls held: after a 401/403 on one (never STOP or a brake), and per account while a STOP is unconfirmed.
-  const [goDenied, setGoDenied] = useState(false);
-  const [stopHeld, setStopHeld] = useState<Record<string, boolean>>({});
+  // Go (never STOP or a brake) is held per account: while a STOP there is unconfirmed (stop-hold.ts), and after a 401/403 on a
+  // control there until a later one succeeds.
+  const [denied, setDenied] = useState<Record<string, boolean>>({});
+  const [, setHoldTick] = useState(0);
+  const heldBefore = useRef(new Map<string, boolean>());
+  function stopPhase(id: string, phase: StopPhase) {
+    if (phase === "sent") { heldBefore.current.set(id, readHold(id) !== null); writeHold(id, stamp()); }
+    // A refusal proves this STOP did nothing, so it lifts only the hold it set itself, never an earlier unconfirmed STOP's.
+    else if (phase === "recorded" || phase === "confirmed" || (phase === "refused" && !heldBefore.current.get(id))) writeHold(id, null);
+    setHoldTick(t => t + 1);
+  }
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading);
   const [accountId, setAccountId] = useState("");
   const [convs, setConvs] = useState<Load<{ items: BConversation[]; more: boolean }>>(loading);
@@ -82,13 +88,16 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }, [accountId, loadAccountData]);
 
   async function act(c: BConversation, action: Parameters<typeof sendControl>[2]) {
-    if (busy || !manage || (GO.has(action) && goHold)) return;
+    if (busy || !actionRules(c, manage, goHold).find(r => r.action === action)?.enabled) return;
     const forAccount = accountId; setBusy(c.conversationId); setConfirming(null); setNotice("");
     const r = await sendControl(forAccount, c.conversationId, action, c.revision);
     if (current.current !== forAccount) return; // operator switched account: the reply belongs to another screen
     setBusy(null);
-    if (r.kind === "ok") setNotice(`${c.fanName}: ${AFTER[action]}`);
-    else if (r.kind === "readonly" || r.kind === "denied") { setGoDenied(true); setNotice("Your access does not allow this change. Resume and hand back are held; stops still work."); }
+    if (r.kind === "ok") { setNotice(`${c.fanName}: ${AFTER[action]}`); setDenied(d => ({ ...d, [forAccount]: false })); }
+    else if (r.kind === "readonly" || r.kind === "denied") {
+      setDenied(d => ({ ...d, [forAccount]: true }));
+      setNotice("Your access was refused for this change. Sign in again and reload the page. Resuming is held here; stops still work.");
+    }
     else if (r.kind === "refused") setNotice(r.status === 409 ? `${c.fanName}: the conversation changed or is on hold. The list was refreshed; check it and try again.` : `${c.fanName}: ${r.error}`);
     else if (r.kind === "unconfirmed") setNotice(`${c.fanName}: ${r.error}`);
     else if (r.kind === "unavailable") setNotice(`${c.fanName}: ${r.error}`);
@@ -96,7 +105,9 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }
 
   const account = accounts.state === "ok" ? accounts.data.find(a => a.accountId === accountId) : undefined;
-  const goHold = stopHeld[accountId] ? "Held until the emergency stop is confirmed." : goDenied ? "Your access does not allow this change." : null;
+  const stopSince = accountId ? readHold(accountId) : null;
+  const goHold = stopSince !== null ? "Held until the emergency stop is confirmed." :
+    denied[accountId] ? "Access was refused on this account. Sign in again and reload the page." : null;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-auto-h" data-b-automation>
     <h2 id="b-auto-h" className="text-lg font-semibold">Automation and follow-ups</h2>
     {!manage ? <p className="text-sm" role="note" data-b-readonly>Read-only access: you can view modes but not change them.</p> : null}
@@ -122,7 +133,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {runtime.state === "loading" ? <BLoading label="Loading runtime…" /> : null}
         {runtime.state === "error" ? <BError message={runtime.message} onRetry={() => void loadAccountData(accountId)} /> : null}
         <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)}
-          stopHeld={Boolean(stopHeld[accountId])} onStopHeld={held => setStopHeld(s => ({ ...s, [accountId]: held }))} />
+          goHold={goHold} stopSince={stopSince} onStop={phase => stopPhase(accountId, phase)} />
       </div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="conversations">
@@ -137,7 +148,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
             <p className="text-sm" data-b-mode={c.automationMode}>{MODE_TEXT[c.automationMode]} · {TAKEOVER_TEXT[c.takeoverState]}</p>
             <p className="text-xs text-muted">Last activity {bTime(c.lastActivityAt)}</p>
             <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Actions for ${c.fanName}`}>
-              {actionRules(c, manage).map(r => GO.has(r.action) && goHold ? { ...r, enabled: false, reason: r.reason ?? goHold } : r).map(rule => rule.confirm && confirming === c.conversationId ?
+              {actionRules(c, manage, goHold).map(rule => rule.confirm && confirming === c.conversationId ?
                 <span key={rule.action} role="group" aria-label="Confirm no-contact" className="flex flex-wrap items-center gap-2">
                   <span className="text-sm">Permanently stop contacting {c.fanName}?</span>
                   <button type="button" className={bDanger} autoFocus onClick={() => void act(c, rule.action as never)}>Confirm</button>
@@ -151,9 +162,9 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {convs.state === "ok" && convs.data.more ? <p className="mt-2 text-xs text-muted" data-b-more>Only the most recent conversations are shown. More exist.</p> : null}
       </div>
 
-      <MoxyControls key={accountId} accountId={accountId} manage={manage} onOwnership={setMoxySelected} />
+      <MoxyControls key={accountId} accountId={accountId} manage={manage} goHold={goHold} onOwnership={setMoxySelected} />
       {/* A brake: follow-ups and their cancel render whatever the Moxy read says; only the policy editor waits for a legacy view. */}
-      <EngagementPanel key={accountId} accountId={accountId} manage={manage} editPolicy={moxySelected === false} />
+      <EngagementPanel key={accountId} accountId={accountId} manage={manage} goHold={goHold} editPolicy={moxySelected === false} />
 
     </> : null}
   </section>;

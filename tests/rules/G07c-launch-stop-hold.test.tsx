@@ -1,31 +1,39 @@
 // RULE G07c launch-stop-hold (regression guard; REVIEW.md inv 7: a STOP is never harder than a go, unknown-delivery holds win).
-// Promoted from known-red W3-ui-onlyfans-launch-stop-gating (findings L3, L4; L1/L2 are G07a).
-//   L3 a 401/403 on one conversation control withdrew `manage`, and `manage` gates Emergency stop. Now it holds only the conversation
-//      go controls (resume, hand back); STOP and every brake stay.
-//   L4 an unconfirmed STOP (502) showed the generic "outcome is not confirmed. Refresh before trying again" and left every go live. Now the notice names an unconfirmed stop, and
-//      conversation resume and account resume (including its identical retry) are held until a STOP is recorded or a fresh read shows the
-//      account stopped. Dropping the result ("Use current account view") does not release the hold. STOP itself stays enabled.
-// Mounts the real BAutomationPanel inside real Next router contexts. Offline: jsdom, stub fetch, synthetic ids.
+// Promoted from known-red W3-ui-onlyfans-launch-stop-gating (findings L3, L4; L1/L2 are G07a), widened by the #401 R1 review.
+//   L3 a 401/403 on one conversation control withdrew `manage`, and `manage` gates Emergency stop. Now it holds only the go controls of
+//      that account (conversation resume and hand back, account resume, Moxy On, engagement enabling) until a later control there succeeds.
+//   L4 an unconfirmed STOP (502) showed the generic "outcome is not confirmed. Refresh before trying again" and left every go live. Now a
+//      STOP holds every go of its account from the moment it is sent, until it is recorded, definitively refused, or a read STARTED after it
+//      shows the account stopped. The hold is a per-account sessionStorage marker, so a remount or reload keeps it. STOP, Pause, Take over,
+//      No contact, Moxy Off and engagement disabling stay live in every state.
+// Mounts the real BAutomationPanel (real AccountControls, MoxyControls, EngagementPanel) inside real Next router contexts. Offline: jsdom,
+// stub fetch, synthetic ids.
 //   node --import tsx --test tests/rules/G07c-launch-stop-hold.test.tsx
-import { button, click, html502, inNextApp, json, mount, stubFetch, typeInto, unmount } from "../helpers/w3-launch-dom";
-import { accounts, conversations, runtime, stopRead } from "../helpers/w3-launch-fixtures";
+import { button, click, deferred, html502, inNextApp, json, mount, stubFetch, typeInto, unmount } from "../helpers/w3-launch-dom";
+import { accounts, conversations, followUps, moxyLegacy, moxySelected, runtime, settings, stopRead } from "../helpers/w3-launch-fixtures";
 import { CONTROL_SCHEMA } from "../../lib/onlyfans/controls";
 import assert from "node:assert/strict";
 import test from "node:test";
-import React from "react";
+import React, { act } from "react";
 
-const STOP_URL = "/api/onlyfans-launch/automation/accounts/of-a/emergency-stop";
-type Answers = { stopGet?: (n: number) => Response; stopPost?: (raw: string) => Response; control?: () => Response };
-async function open(a: Answers = {}) {
+const stopUrl = (id: string) => `/api/onlyfans-launch/automation/accounts/${id}/emergency-stop`;
+type Answers = { stopGet?: (n: number) => Response | Promise<Response>; stopPost?: (raw: string) => Response | Promise<Response>; control?: () => Response;
+  ids?: string[]; conv?: Record<string, unknown>; moxy?: () => Response };
+async function open(a: Answers = {}, keepStorage = false) {
+  if (!keepStorage) window.sessionStorage.clear();
+  const ids = a.ids ?? ["of-a"];
   const stub = stubFetch((url, method, n, raw) => {
-    if (url === "/api/onlyfans/accounts") return json(accounts("of-a"));
-    if (url === "/api/onlyfans/accounts/of-a/conversations") return json(conversations());
-    if (url === "/api/onlyfans/accounts/of-a/workspace/settings") return json(runtime());
-    if (url === STOP_URL && method === "GET") return a.stopGet ? a.stopGet(n) : json(stopRead());
-    if (url === STOP_URL && method === "POST") return a.stopPost ? a.stopPost(String(raw)) : html502();
-    if (url.startsWith("/api/onlyfans-controls/accounts/of-a/conversations/") && method === "POST") return a.control ? a.control() : html502();
-    // Moxy ownership and engagement: not under test; the engagement panel stays hidden.
-    if (url.startsWith("/api/onlyfans-configuration/") || url.startsWith("/api/onlyfans-launch/automation/accounts/of-a/")) return json({ error: "Not in this fixture." }, 503);
+    if (url === "/api/onlyfans/accounts") return json(accounts(...ids));
+    const id = /accounts\/(of-[a-z])/.exec(url)?.[1] ?? "";
+    if (url === `/api/onlyfans/accounts/${id}/conversations`) return json(conversations(id, a.conv));
+    if (url === `/api/onlyfans/accounts/${id}/workspace/settings`) return json(runtime(id));
+    if (url === stopUrl(id) && method === "GET") return a.stopGet && id === "of-a" ? a.stopGet(n) : json(stopRead({}, id));
+    if (url === stopUrl(id) && method === "POST") return a.stopPost ? a.stopPost(String(raw)) : html502();
+    if (url.startsWith(`/api/onlyfans-controls/accounts/${id}/conversations/`) && method === "POST") return a.control ? a.control() : html502();
+    if (url === `/api/onlyfans-configuration/accounts/${id}/moxy` && a.moxy) return a.moxy();
+    if (url === `/api/onlyfans-launch/automation/accounts/${id}/settings` && method === "GET") return json(settings(3, id));
+    if (url === `/api/onlyfans-launch/automation/accounts/${id}/follow-ups` && method === "GET") return json(followUps([], null, id));
+    if (url.startsWith("/api/onlyfans-configuration/")) return json({ error: "Not in this fixture." }, 503);
     throw new TypeError(`unexpected fetch ${method} ${url}`);
   });
   const { default: BAutomationPanel } = await import("../../components/onlyfans-launch/automation/BAutomationPanel");
@@ -41,10 +49,18 @@ const enabled = (label: RegExp) => { const b = button(label); return Boolean(b &
 const stopNote = () => (document.querySelector("[data-b-stop-note]")?.textContent ?? "").trim();
 const actions = (stub: Awaited<ReturnType<typeof open>>) => stub.posts(/emergency-stop$/).map(p => String(JSON.parse(String(p.raw)).action));
 const recorded = () => json({ schemaVersion: "of-launch-b.v1", ok: true, accountId: "of-a", command: { recorded: true } });
+const ack = (action: string) => json({ schemaVersion: CONTROL_SCHEMA, ok: true, applied: true, commandKey: "a".repeat(64), accountId: "of-a",
+  conversationId: "c-1", action, recordedRevision: 5 });
 async function sendStop() {
   await typeInto(reasonInput(), "Synthetic stop reason");
   await click(stopButton());
   await click(button(/^Confirm emergency stop$/i));
+}
+async function choose(selector: string, value: string) {
+  const select = document.querySelector<HTMLSelectElement>(selector);
+  assert.ok(select, `${selector} exists`);
+  await act(async () => { select.value = value; select.dispatchEvent(new window.Event("change", { bubbles: true })); });
+  await typeInto(reasonInput(), "Synthetic stop reason"); // settles, and the remounted account controls get a reason again
 }
 
 test("control: readiness read ok and a reason typed, STOP, brakes and conversation resume are live", async () => {
@@ -80,6 +96,21 @@ for (const [status, body] of [[403, ORIGIN_REFUSAL], [401, { error: "Sign in aga
     await unmount();
   });
 
+test("L3 recovery: the refusal holds only its own account, and a later control there that succeeds lifts it", async () => {
+  let n = 0;
+  await open({ ids: ["of-a", "of-b"], control: () => (n++ === 0 ? json(ORIGIN_REFUSAL, 403) : ack("request_takeover")) });
+  await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
+  const hint = document.querySelector("[data-b-notice]")?.textContent ?? "";
+  await choose("select#b-auto-acct", "of-b");
+  assert.equal(conv("resume_automation"), true, "a refusal on of-a holds of-b");
+  await choose("select#b-auto-acct", "of-a");
+  assert.equal(conv("resume_automation"), false, "the refusal is still held on of-a");
+  await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
+  assert.equal(conv("resume_automation"), true, "a successful control on of-a does not lift the refusal");
+  assert.match(hint, /sign in again/i, "the hint says how to recover");
+  await unmount();
+});
+
 test("L4: STOP POST answers 502, the notice names an unconfirmed stop, conversation resume is held and STOP stays enabled", async () => {
   await open();
   await sendStop();
@@ -91,11 +122,54 @@ test("L4: STOP POST answers 502, the notice names an unconfirmed stop, conversat
   await unmount();
 });
 
+test("L4: hand back (release_takeover) is held by an unconfirmed STOP", async () => {
+  await open({ conv: { takeoverState: "requested" } });
+  assert.equal(conv("release_takeover"), true, "control: hand back is live before the STOP");
+  await sendStop();
+  assert.deepEqual({ release: conv("release_takeover"), noContact: conv("mark_no_contact") }, { release: false, noContact: true });
+  await unmount();
+});
+
+test("L4: go is held while the STOP is in flight, and an old stopped read that lands then does not lift it", async () => {
+  const first = deferred(), post = deferred();
+  // The first readiness read was issued before the STOP and shows the account stopped; every later read shows it running.
+  await open({ stopGet: n => (n === 0 ? first.promise : json(stopRead())), stopPost: () => post.promise });
+  await sendStop();
+  assert.equal(conv("resume_automation"), false, "go is live while the STOP is in flight");
+  first.resolve(json(stopRead({ enabled: false, readyToEnable: true })));
+  await typeInto(reasonInput(), "Synthetic stop reason");
+  assert.deepEqual({ resume: conv("resume_automation"), accountResume: enabled(/^Resume with current prerequisites$/) }, { resume: false, accountResume: false },
+    "a read issued before the STOP lifted the hold");
+  post.resolve(html502());
+  await typeInto(reasonInput(), "Synthetic stop reason");
+  assert.equal(conv("resume_automation"), false, "held after the unconfirmed reply");
+  await unmount();
+});
+
+test("L4: a definitive refusal of the STOP lifts the in-flight hold and shows why", async () => {
+  const notSent = () => json({ schemaVersion: "of-launch-b.v1", ok: false, code: "refused", error: "Current account state could not be read, so the stop was not sent. Try again." }, 503);
+  await open({ stopPost: notSent });
+  await sendStop();
+  assert.deepEqual({ notSent: /not sent/i.test(stopNote()), resume: conv("resume_automation"), stop: stop() },
+    { notSent: true, resume: true, stop: { present: true, enabled: true } });
+  await unmount();
+});
+
+test("L4: a refused resend does not lift the hold an earlier unconfirmed STOP set", async () => {
+  let n = 0;
+  await open({ stopPost: () => (n++ === 0 ? html502() : json({ schemaVersion: "of-launch-b.v1", ok: false, code: "refused", error: "Not sent." }, 503)) });
+  await sendStop();
+  await click(button(/^Send stop again$/));
+  assert.equal(conv("resume_automation"), false);
+  await unmount();
+});
+
 test("L4: dropping the unconfirmed STOP result does not release the hold", async () => {
   await open();
   await sendStop();
   await click(button(/^Use current account view$/));
-  assert.deepEqual({ resume: conv("resume_automation"), stop: stop() }, { resume: false, stop: { present: true, enabled: true } });
+  assert.deepEqual({ resume: conv("resume_automation"), stop: stop(), held: Boolean(document.querySelector("[data-b-stop-held]")) },
+    { resume: false, stop: { present: true, enabled: true }, held: true });
   await unmount();
 });
 
@@ -109,14 +183,15 @@ test("L4: a recorded 'Send stop again' releases the hold", async () => {
   await unmount();
 });
 
-test("L4: a fresh read showing the account stopped releases the hold", async () => {
+test("L4: a fresh read showing the account stopped releases the hold and the stop lane, so account resume is live again", async () => {
   await open({ stopGet: n => json(stopRead(n === 0 ? {} : { enabled: false })) });
   await sendStop();
-  assert.equal(conv("resume_automation"), true, "the read after the STOP shows the account stopped");
+  assert.deepEqual({ resume: conv("resume_automation"), accountResume: enabled(/^Resume with current prerequisites$/), again: Boolean(button(/^Send stop again$/)) },
+    { resume: true, accountResume: true, again: false }, "the read after the STOP shows the account stopped");
   await unmount();
 });
 
-test("L4: an unconfirmed resume cannot be retried while a STOP is unconfirmed", async () => {
+test("L4: an unconfirmed resume cannot be retried while a STOP is unconfirmed, even after the stop result is dropped", async () => {
   // First read: stopped and ready, so resume is offered. Every later read: running, so the STOP is never confirmed by a read.
   const stub = await open({ stopGet: n => json(stopRead(n === 0 ? { enabled: false, readyToEnable: true } : {})) });
   await typeInto(reasonInput(), "Synthetic resume reason");
@@ -127,5 +202,63 @@ test("L4: an unconfirmed resume cannot be retried while a STOP is unconfirmed", 
   await click(button(/^Confirm emergency stop$/i));
   assert.deepEqual({ sent: actions(stub), retry: enabled(/^Retry identical account command$/), stop: stop() },
     { sent: ["resume", "emergency_stop"], retry: false, stop: { present: true, enabled: true } }, "a go retry is live under an unconfirmed STOP");
+  const dropStop = [...document.querySelectorAll<HTMLButtonElement>("button")].filter(b => /^Use current account view$/.test(b.textContent ?? "")).at(-1);
+  await click(dropStop);
+  assert.equal(enabled(/^Retry identical account command$/), false, "dropping the stop result released the resume retry");
+  await unmount();
+});
+
+test("L4: the hold survives an account switch and does not leak to another account", async () => {
+  await open({ ids: ["of-a", "of-b"] });
+  await sendStop();
+  await choose("select#b-auto-acct", "of-b");
+  assert.equal(conv("resume_automation"), true, "of-a's STOP holds of-b");
+  await choose("select#b-auto-acct", "of-a");
+  assert.equal(conv("resume_automation"), false, "switching back dropped of-a's hold");
+  await unmount();
+});
+
+test("L4: the hold survives a remount (reload of the panel)", async () => {
+  await open();
+  await sendStop();
+  await unmount();
+  await open({}, true);
+  assert.deepEqual({ resume: conv("resume_automation"), stop: stop().present }, { resume: false, stop: true }, "a remount after a 502 STOP re-enabled resume");
+  await unmount();
+});
+
+test("L4: a malformed stored hold never throws and holds (the safe direction)", async () => {
+  window.sessionStorage.clear();
+  window.sessionStorage.setItem("b-stop-held:of-a", "{not json");
+  await open({}, true);
+  assert.deepEqual({ stop: stop().present, resume: conv("resume_automation") }, { stop: true, resume: false });
+  await unmount();
+});
+
+test("L4: Moxy On is held by an unconfirmed STOP, Moxy Off stays live", async () => {
+  await open({ moxy: () => json(moxySelected("on")) });
+  const save = () => enabled(/^Save mode$/);
+  assert.equal(save(), true, "control: saving mode On is live before the STOP");
+  await sendStop();
+  const onOption = document.querySelector<HTMLOptionElement>('select[aria-label="Mode"] option[value="on"]');
+  assert.deepEqual({ save: save(), on: Boolean(onOption && !onOption.disabled) }, { save: false, on: false }, "Moxy On escapes the STOP hold");
+  await choose('select[aria-label="Mode"]', "off");
+  assert.equal(save(), true, "Moxy Off is held");
+  await unmount();
+});
+
+test("L4: engagement enabling is held by an unconfirmed STOP, disabling stays live", async () => {
+  await open({ moxy: () => json(moxyLegacy()) });
+  const box = (k: string) => [...document.querySelectorAll<HTMLLabelElement>("label")].find(l => l.textContent === k)?.querySelector("input");
+  const save = () => enabled(/^Save engagement settings$/);
+  await click(box("enabled"));
+  assert.equal(save(), true, "control: enabling is live before the STOP");
+  await click(box("enabled"));
+  await sendStop();
+  await click(box("enabled"));
+  assert.equal(save(), false, "engagement enabling escapes the STOP hold");
+  await click(box("enabled"));
+  await click(box("follow ups"));
+  assert.equal(save(), true, "turning follow-ups off is held");
   await unmount();
 });

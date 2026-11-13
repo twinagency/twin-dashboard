@@ -35,13 +35,22 @@ const pageParser = (accountId: string) => (v: unknown) =>
   v.accountId === accountId
     ? parseEngagementPage(v)
     : null;
+const FLAGS = ["enabled", "offers", "follow_ups", "reengagement"] as const;
+/** A brake: every flag off, or only switching flags off. Anything else is a go, held while `goHold` is set. */
+function brakeOnly(next: EngagementPolicy, saved: EngagementPolicy | null) {
+  if (FLAGS.every((f) => !next[f])) return true;
+  return saved !== null && (Object.keys(next) as (keyof EngagementPolicy)[]).every((k) =>
+    next[k] === saved[k] || ((FLAGS as readonly string[]).includes(k) && next[k] === false));
+}
 function Settings({
   data,
   manage,
+  goHold,
   submit,
 }: {
   data: EngagementSettings;
   manage: boolean;
+  goHold: string | null;
   submit: (command: {
     expectedRevision: number;
     settings: EngagementPolicy;
@@ -55,8 +64,9 @@ function Settings({
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  const held = goHold !== null && !brakeOnly(p, data.settings);
   async function save() {
-    if (!manage || busy || !validPolicy(p)) return;
+    if (!manage || busy || !validPolicy(p) || held) return;
     setBusy(true);
     await submit({ expectedRevision: data.revision, settings: p });
     if (mounted.current) setBusy(false);
@@ -126,11 +136,12 @@ function Settings({
         ))}
         <button
           className={buttonClass}
-          disabled={!validPolicy(p)}
+          disabled={!validPolicy(p) || held}
           onClick={() => void save()}
         >
           Save engagement settings
         </button>
+        {held ? <span title={goHold ?? undefined} aria-label="Enabling engagement held" className="ml-2 cursor-help text-blue-700">ⓘ</span> : null}
       </fieldset>
       <p className="text-xs text-muted">
         Saved settings alone do not enable autonomous handling. Account
@@ -221,10 +232,12 @@ function Action({
 export default function EngagementPanel({
   accountId,
   manage,
+  goHold,
   editPolicy,
 }: {
   accountId: string;
   manage: boolean;
+  goHold: string | null;
   editPolicy: boolean;
 }) {
   const [cursor, setCursor] = useState<string | null>(null),
@@ -258,7 +271,8 @@ export default function EngagementPanel({
     expectedRevision: number;
     settings: EngagementPolicy;
   }) {
-    if (!manage || settingsBusy) return;
+    const saved = settings.state.kind === "ok" ? settings.state.data.settings : null;
+    if (!manage || settingsBusy || (goHold !== null && !brakeOnly(command.settings, saved))) return;
     setSettingsBusy(true);
     const r = await bFetch(`${base}/settings`, {
       method: "POST",
@@ -333,6 +347,7 @@ export default function EngagementPanel({
             key={`${accountId}-${settings.state.data.revision}`}
             data={settings.state.data}
             manage={manage && pendingSettings === null && !settingsBusy}
+            goHold={goHold}
             submit={saveSettings}
           />
         ) : null}
@@ -343,7 +358,9 @@ export default function EngagementPanel({
           <div className="flex flex-wrap gap-2">
             <button
               className={buttonClass}
-              disabled={!manage || settingsBusy}
+              disabled={!manage || settingsBusy || (goHold !== null &&
+                !brakeOnly(pendingSettings.settings, settings.state.kind === "ok" ? settings.state.data.settings : null))}
+              title={goHold ?? undefined}
               onClick={() => void saveSettings(pendingSettings)}
             >
               Retry identical engagement settings
