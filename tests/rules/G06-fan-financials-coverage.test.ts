@@ -25,7 +25,8 @@ test("control: incomplete coverage with no stamp parses", () => {
   assert.notEqual(parseFanFinancials(financials({ coverageComplete: false, coverageAt: null })), null);
 });
 
-test("C1C1: complete coverage without a coverage stamp is refused", () => {
+test("C1C1: complete coverage without a coverage stamp is narrowed to incomplete (totals kept, shown unverified)", () => {
   const p = parseFanFinancials(financials({ coverageAt: null }));
-  assert.ok(p === null || p.coverageComplete === false, "fan-financials.ts accepts coverageComplete:true with coverageAt:null");
+  assert.notEqual(p, null, "the totals are kept");
+  assert.equal(p?.coverageComplete, false, "fan-financials.ts accepts coverageComplete:true with coverageAt:null");
 });
