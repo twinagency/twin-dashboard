@@ -11,6 +11,7 @@ import * as pricing from "../../lib/pricing";
 import * as agencyWrite from "../../lib/agency-write";
 import * as settingsFields from "../../app/settings/fields";
 import * as toggleFields from "../../app/clones/toggle-fields";
+import * as factColumns from "../../app/clones/fact-columns";
 
 type Row = Record<string, unknown>;
 const clones = new Map<string, Row>();
@@ -48,7 +49,7 @@ const deps: Record<string, unknown> = {
   "@/lib/query-cache": { invalidateCloneCaches: async () => {} }, "next/cache": { revalidatePath: () => {} },
   "@/lib/intake": { INTAKE_FIELD_KEYS: [], assembleAnswers: () => "" }, "@/lib/vibes": { vibePresetFor: () => null },
   "@/lib/clone-default-policy": policy, "@/lib/pricing": pricing, "@/lib/agency-write": agencyWrite,
-  "./fields": settingsFields, "./toggle-fields": toggleFields,
+  "./fields": settingsFields, "./toggle-fields": toggleFields, "./fact-columns": factColumns,
 };
 function load(path: string): Record<string, (...args: never[]) => Promise<unknown>> {
   const source = readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");

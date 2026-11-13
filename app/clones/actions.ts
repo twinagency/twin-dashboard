@@ -12,7 +12,8 @@ import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
 import { vibePresetFor } from "@/lib/vibes";
 import { CLONE_TOGGLE_FIELDS, type CloneToggleField, CLONE_DIAL_FIELDS, type CloneDialField } from "./toggle-fields";
 import { getCloneDefaults } from "@/app/settings/actions";
-import { checkDefaultNumber } from "@/lib/clone-default-policy";
+import { BUILTIN_CLONE_DEFAULTS, checkDefaultNumber } from "@/lib/clone-default-policy";
+import { PERSONA_FACT_COLUMNS, IDENTITY_CANON_COLUMNS } from "./fact-columns";
 
 // Gather the structured intake_<key> fields into { fields, answers } where
 // `answers` is the labelled blob the AI compiler reads (prose + a structured-
@@ -159,7 +160,12 @@ function num(fd: FormData, key: string, fallback: number): number {
 // value, a create takes CREATE_CREDIT_DEFAULTS); blank is refused, because a
 // fallback would turn a cleared 1-Star price into 199.
 const CREDIT_KEYS = ["starting_credits", "credit_pack_size", "credit_pack_price_stars", "tip_credits_per_100_stars"] as const;
-const CREATE_CREDIT_DEFAULTS = { starting_credits: 50, credit_pack_size: 50, credit_pack_price_stars: 199, tip_credits_per_100_stars: 0 };
+const CREATE_CREDIT_DEFAULTS = {
+  starting_credits: BUILTIN_CLONE_DEFAULTS.starting_credits,
+  credit_pack_size: BUILTIN_CLONE_DEFAULTS.credit_pack_size,
+  credit_pack_price_stars: BUILTIN_CLONE_DEFAULTS.credit_pack_price_stars,
+  tip_credits_per_100_stars: 0,
+};
 function credits(fd: FormData): Partial<Record<(typeof CREDIT_KEYS)[number], number>> {
   const out: Partial<Record<(typeof CREDIT_KEYS)[number], number>> = {};
   for (const key of CREDIT_KEYS) {
@@ -774,32 +780,13 @@ function rowFromForm(fd: FormData) {
 // Pre-migration (columns absent) a write including them fails with PostgREST's
 // missing-column error — writeClone retries without them so a save never
 // crashes; those fields just aren't persisted until the migration is applied.
-// (`ethnicity`/`occupation` aren't in `rowFromForm`'s payload anymore, but are
-// harmless to keep listed here in case anything still references them.)
-const PERSONA_FACT_COLUMNS = [
-  "date_of_birth", "gender", "height", "ethnicity", "sexuality", "hometown",
-  "current_city", "occupation", "socials", "fan_nicknames", "vibe_preset",
-  "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra",
-] as const;
+// PERSONA_FACT_COLUMNS (033) and IDENTITY_CANON_COLUMNS (039) live in
+// ./fact-columns.ts, shared with the admin create route's allowlist.
 // Migrations 037/038 — response length. See db/migrations in the bot repo.
 // target_response_words is migration 091, which is NOT applied yet — listing
 // it here is what stops a save from failing outright against a database that
 // does not have the column, exactly as 037/038 needed when they were new.
 const RESPONSE_LENGTH_COLUMNS = ["max_response_words", "match_user_length", "target_response_words"] as const;
-// Migration 039 — identity canon. See bot/db/migrations/039_identity_canon.sql.
-const IDENTITY_CANON_COLUMNS = [
-  "stage_name", "real_name", "name_shared_with_fans",
-  "creator_type", "known_for", "career_start_year", "career_history", "cover_story",
-  "admits_platforms", "platforms",
-  "hair_color", "hair_length", "eye_color", "body_type", "cup_size", "measurements",
-  "tattoos", "tattoo_details", "piercings", "piercing_details", "enhancements",
-  "ethnicity_tags", "ethnicity_other", "voice_accent", "voice_pace", "voice_texture",
-  "meeting_policy", "love_policy", "relationship_canon", "acknowledges_other_fans",
-  "wake_time", "sleep_time", "daily_blocks",
-  "content_hard_nos", "content_done",
-  "reaction_to_rudeness", "reaction_to_compliments", "burst_style",
-  "uses_lowercase", "drops_punctuation", "makes_typos", "double_texts",
-] as const;
 // Migration 040 — photo vision toggle. See bot/db/migrations/040_photo_vision_toggle.sql.
 const PHOTO_VISION_COLUMNS = ["photo_vision_enabled"] as const;
 // Migration 042 — imperfection profile levels. See bot/db/migrations/042_imperfection_levels.sql.
@@ -1106,8 +1093,10 @@ const DEFAULT_DRIP_STEPS = [
 ] as const;
 
 // Step 1 of the one-page create flow: insert the clone row from settings only
-// (prompts compiled later, media uploaded later by the client). Returns the new id.
-export async function createCloneRow(fd: FormData): Promise<string> {
+// (prompts compiled later, media uploaded later by the client). Returns the new
+// id and `notStored`: columns the insert dropped because their migration has
+// not run, same contract as updateClone, so no caller reports a plain "created".
+export async function createCloneRow(fd: FormData): Promise<{ id: string; notStored: string[] }> {
   await guardDashboardAction("app/clones/actions.ts#createCloneRow", [fd]);
   const name = str(fd, "name");
   const bot_token = str(fd, "bot_token");
@@ -1137,13 +1126,13 @@ export async function createCloneRow(fd: FormData): Promise<string> {
     drip_steps: DEFAULT_DRIP_STEPS,
     category_pricing: cloneDefaults.category_pricing ?? {},
   };
-  const { data, error } = await writeStrippingMissing(row, (r) => supabaseAdmin.from("clones").insert(r).select("id").single());
+  const { data, error, stripped } = await writeStrippingMissing(row, (r) => supabaseAdmin.from("clones").insert(r).select("id").single());
   if (error) throw new Error(error.message);
   if (!data) throw new Error("insert returned no row");
   revalidatePath("/");
   revalidatePath("/clones");
   await invalidateCloneCaches();
-  return data.id;
+  return { id: data.id, notStored: stripped };
 }
 
 // `notStored`: columns the save dropped because their migration has not run;

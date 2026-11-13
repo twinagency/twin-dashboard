@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
 import IntakeFields from "./IntakeFields";
@@ -47,6 +48,15 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
   const [running, setRunning] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const cloneIdRef = useRef<string | null>(null);
+  // Columns the create insert dropped (migration not applied). Non-empty stops
+  // the auto-redirect so the operator sees it, never a plain "created".
+  const [notStored, setNotStored] = useState<string[]>([]);
+  const notStoredRef = useRef<string[]>([]);
+  const created = (r: { id: string; notStored: string[] }) => {
+    cloneIdRef.current = r.id;
+    notStoredRef.current = r.notStored;
+    setNotStored(r.notStored);
+  };
 
   useEffect(() => {
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
@@ -103,7 +113,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
     const ph = effPhotos(), vid = effVideos(), bun = effBundles();
     if (i === 0) {
       const fd = new FormData(formRef.current!);
-      cloneIdRef.current = await createCloneRow(fd);
+      created(await createCloneRow(fd));
       return;
     }
     let idx = i - 1;
@@ -174,7 +184,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
       setStatus(0, "running");
       try {
         const fd = new FormData(formRef.current!);
-        cloneIdRef.current = await createCloneRow(fd);
+        created(await createCloneRow(fd));
         setStatus(0, "done");
       } catch (err) {
         setStatus(0, "error", err instanceof Error ? err.message : "failed");
@@ -191,17 +201,19 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
     if (!formRef.current?.reportValidity()) return;
     setRunning(true);
     cloneIdRef.current = null;
+    notStoredRef.current = [];
+    setNotStored([]);
     const list = buildTasks();
     setTasks(list);
     const ok = await runAll(list.map((_, i) => i));
-    if (ok && cloneIdRef.current) router.push(`/clones/${cloneIdRef.current}`);
+    if (ok && cloneIdRef.current && !notStoredRef.current.length) router.push(`/clones/${cloneIdRef.current}`);
   }
 
   // Retry only the steps that failed.
   async function retryFailed() {
     const indices = tasks.map((t, i) => (t.status === "error" ? i : -1)).filter((i) => i >= 0);
     const ok = await runAll(indices);
-    if (ok && cloneIdRef.current && !tasks.some((t) => t.status === "error")) {
+    if (ok && cloneIdRef.current && !notStoredRef.current.length && !tasks.some((t) => t.status === "error")) {
       router.push(`/clones/${cloneIdRef.current}`);
     }
   }
@@ -327,6 +339,12 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
               </span>
             </div>
           ))}
+          {notStored.length > 0 && cloneIdRef.current && (
+            <p className="mt-3 text-xs font-medium text-warn">
+              Created. Not stored until its migration is applied: {notStored.join(", ")}.{" "}
+              <Link href={`/clones/${cloneIdRef.current}`} className="underline">Open creator</Link>
+            </p>
+          )}
           {hasFailed && (
             <div className="mt-3 flex gap-2">
               <button type="button" onClick={retryFailed}

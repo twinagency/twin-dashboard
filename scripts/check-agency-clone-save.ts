@@ -7,6 +7,7 @@ import { scopeAgencyWrite, AGENCY_PROTECTED_CLONE_FIELDS } from "../lib/agency-w
 import * as agencyWrite from "../lib/agency-write";
 import { TOP_ONLYFANS_AGENCY } from "../lib/partner-portals";
 import * as cloneDefaultPolicy from "../lib/clone-default-policy";
+import * as factColumns from "../app/clones/fact-columns";
 
 const assigned = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const other = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -38,6 +39,7 @@ new Function("require", "exports", output)((name: string) => {
   if (name === "@/lib/vibes") return { vibePresetFor: () => null };
   if (name === "@/app/settings/actions") return { getCloneDefaults: async () => ({}) };
   if (name === "./toggle-fields") return {};
+  if (name === "./fact-columns") return factColumns; // pure column lists, real module
   if (name === "@/lib/clone-default-policy") return cloneDefaultPolicy; // pure bounds, real module
   throw new Error("Unexpected action import: " + name);
 }, exports);

@@ -2,26 +2,20 @@ import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { createCloneRow } from "@/app/clones/actions";
 import { getCloneDefaults } from "@/app/settings/actions";
 import { resolveClone } from "@/lib/api-read";
+import { RETIRED_FACT_COLUMNS, WRITABLE_FACT_COLUMNS } from "@/app/clones/fact-columns";
 
 export const dynamic = "force-dynamic";
 
 // The only keys a caller may send (G16, W4 F4 + Codex final): an allowlist, so
 // a money, tip, paywall or brake column added to rowFromForm later is refused by
-// default instead of forwarded by default. Derived from what create needs (name,
-// bot_token, status) plus what its one caller sends (twin-bot clonify convert.ts:
-// voice_id, intake, and extract.ts FACT_KEYS, the typed persona facts). Every
-// other setting starts at the fleet defaults and is changed in Configure (the
-// switches also via ../write/route.ts). Anything else is a 400 naming the key.
-const CREATE_KEYS = new Set<string>([
-  "name", "bot_token", "status", "voice_id", "intake",
-  "stage_name", "real_name", "name_shared_with_fans", "date_of_birth", "gender", "height",
-  "ethnicity", "sexuality", "hometown", "current_city", "occupation", "creator_type", "known_for",
-  "career_start_year", "career_history", "cover_story", "admits_platforms", "platforms", "hair_color",
-  "hair_length", "eye_color", "body_type", "cup_size", "measurements", "tattoos", "tattoo_details",
-  "piercings", "piercing_details", "enhancements", "voice_accent", "voice_pace", "voice_texture",
-  "fan_nicknames", "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra", "meeting_policy",
-  "love_policy", "relationship_canon", "acknowledges_other_fans", "wake_time", "sleep_time",
-]);
+// default instead of forwarded by default. What create needs (name, bot_token,
+// status), voice_id, intake, and the typed persona facts rowFromForm actually
+// writes (G16c: derived from the shared column lists, not a hand copy of
+// clonify's FACT_KEYS, so a retired column like `ethnicity`/`occupation` is a
+// 400 instead of a 200 that dropped it). Every other setting starts at the
+// fleet defaults and is changed in Configure (the switches also via
+// ../write/route.ts). Anything else is a 400 naming the key.
+const CREATE_KEYS = new Set<string>(["name", "bot_token", "status", "voice_id", "intake", ...WRITABLE_FACT_COLUMNS]);
 
 // Create a new clone.
 //
@@ -51,7 +45,7 @@ export const POST = withAdmin(async (req) => {
   const refused = Object.keys(body).filter((k) => !CREATE_KEYS.has(k));
   if (refused.length) {
     return jsonError(
-      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure`,
+      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure${refused.some((k) => RETIRED_FACT_COLUMNS.includes(k)) ? ". ethnicity and occupation are retired columns nothing writes: send ethnicity_tags/ethnicity_other and cover_story" : ""}`,
       400,
     );
   }
@@ -118,7 +112,7 @@ export const POST = withAdmin(async (req) => {
   fd.set("persona_facts", "1");
 
   try {
-    const id = await createCloneRow(fd);
+    const { id, notStored } = await createCloneRow(fd);
     // The row exists: a failed read-back falls back to `{ id }`, not a 500
     // (a retry would then hit "already exists").
     const created = await resolveClone(id).catch(() => null);
@@ -126,13 +120,17 @@ export const POST = withAdmin(async (req) => {
     logAdminWrite(`clone created "${name}"`, id, {
       name,
       slug: created?.slug ?? null,
+      notStored,
       // The bot token is NEVER logged, here or anywhere.
     });
 
     return ok({
       created: created ?? { id },
+      // G16c: columns the insert dropped because their migration has not run
+      // on this database. Non-empty = those values were NOT stored.
+      notStored,
       note:
-        `Created with status "${String(fd.get("status") ?? "").trim() || "paused"}" (from your payload, default paused). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.`,
+        `${notStored.length ? `NOT STORED until their migration is applied: ${notStored.join(", ")}. ` : ""}Created with status "${String(fd.get("status") ?? "").trim() || "paused"}" (from your payload, default paused). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.`,
       next: [
         "POST /api/admin/v1/clones/write {action:\"compile\"} once intake prose is set, or the persona stays empty and the prompt is thin",
         "GET  /api/admin/v1/config?clone=<slug> to read back everything that was stored",
