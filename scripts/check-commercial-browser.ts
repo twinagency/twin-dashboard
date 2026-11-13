@@ -82,6 +82,11 @@ async function main(){
   await history.getByRole("checkbox").check();await history.getByRole("button",{name:"Save reviewed history limits",exact:true}).click();
   await page.waitForFunction(async path=>(await(await fetch(path)).json()).coverage.configured,cfg+"/history-coverage");
   assert.equal((await fetch(backend+"/fixture/prepare",{method:"POST"})).status,200);
+  const selection=(await ok(vault)).vault.sync;
+  assert.equal(selection.scope.version,3);
+  assert.deepEqual(selection.selectedByKind,{photo:1,video:0});
+  await page.locator(".of-sync-tools summary").click();
+  await page.locator("[data-of-vault-selection]").getByText("1 photos and 0 videos selected. Up to 1,000 photos and 1,000 videos.").waitFor({state:"visible"});
   const coverage=await ok(cfg+"/history-coverage");
   assert.equal(coverage.coverage.fans.complete,1);
   // Agency reviews the selected classification, description and manual category price.

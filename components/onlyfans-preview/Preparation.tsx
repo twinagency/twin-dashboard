@@ -1,6 +1,7 @@
 "use client";
 import {useCallback,useEffect,useRef,useState} from "react";
 import {parsePreparationState,validPreparationCommand,type PreparationCommand,type PreparationState} from "@/lib/onlyfans/preparation";
+import {vaultSelectionLabel} from "@/lib/onlyfans/vault";
 const outcomeLabel:Record<string,string>={transient:"Provider unavailable, retrying",identity_failed:"Provider identity not verified",credential_missing:"Credential missing",
  budget_exhausted:"Read ceiling spent",schema:"Provider response not understood",held:"Held"};
 const stamp=(v:string|null)=>v?v.replace("T"," ").replace(/(:\d\d)?(\.\d+)?Z?$/,"")+" UTC":null;
@@ -18,6 +19,7 @@ export function PreparationStatus({state}:{state:Extract<PreparationState,{confi
    <p>Required action: {state.failure.operatorAction}</p>
   </div>:null}
   <p>{state.vault?("Vault "+state.vault.status+" · "+state.vault.selected+" selected · "+state.vault.pagesRead+" pages recorded"):"Vault sync awaiting preparation worker."}</p>
+  {state.vault?<p data-preparation-vault-selection>{vaultSelectionLabel(state.vault)}</p>:null}
   {state.vault?.error?<p>Sync held: {state.vault.error.replaceAll("_"," ")}. Review the status and budget before resuming.</p>:null}
   <p>{state.providerRequestsUsed} / {config!.limits.provider_requests} requests reserved · {state.providerCreditsReserved} / {config!.limits.provider_credit_budget} credits reserved.</p>
   <p>Reserved credits are a spending ceiling estimate, not a provider charge reconciliation.</p>
@@ -65,7 +67,7 @@ export default function Preparation({accountId,readOnly=false}:{accountId:string
  const unavailable=!state||(!state.configured&&!state.canPrepare);
  return <details className="rounded-xl border border-line p-4" data-commercial-preparation>
   <summary className="cursor-pointer font-semibold">Creator preparation · FansAPI</summary>
-  <p className="mt-2 text-sm">Connect and prepare the latest 1,000 unique photos and videos combined. This preparation keeps automatic replies and sales disabled.</p>
+  <p className="mt-2 text-sm">Connect and prepare the up to 1,000 latest photos and up to 1,000 latest videos. This preparation keeps automatic replies and sales disabled.</p>
   <p className="mt-2 text-sm">Vault metadata only. Conversation history, ownership coverage, AI descriptions and sales approval remain pending.</p>
   {configured?<PreparationStatus state={state}/>:null}
   {unavailable?<p className="my-3 text-sm">Preparation is unavailable for this account. It requires a disabled account and the explicitly selected FansAPI connector.</p>:null}

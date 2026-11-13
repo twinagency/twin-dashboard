@@ -1,3 +1,4 @@
+import { validVaultSelectionProgress, type VaultSelectionProgress } from "./vault";
 /** Account preparation never authorizes sales or automatic replies. */
 export type PreparationConfig={contract_version:"preparation.v1";provider_account:string;creator_id:string;
  qualification:{mode:"fixture"|"production";reference:string};
@@ -5,7 +6,7 @@ export type PreparationConfig={contract_version:"preparation.v1";provider_accoun
 export type PreparationState={configured:false;canPrepare:boolean}|{configured:true;revision:number;status:"configured"|"stopped";
  fingerprint:string;config:PreparationConfig;providerRequestsUsed:number;providerCreditsReserved:number;
  automaticRepliesEnabled:false;salesEnabled:false;historyCoverage:"pending";ownershipCoverage:"pending";connected?:boolean;
- vault?:null|{jobId:string;status:string;pagesRead:number;itemsSeen:number;error:string|null;selected:number;retryAttempts?:number;retryNotBefore?:string|null};
+ vault?:null|(VaultSelectionProgress & {jobId:string;status:string;pagesRead:number;itemsSeen:number;error:string|null;selected:number;retryAttempts?:number;retryNotBefore?:string|null});
  lastAttempt?:PreparationAttempt|null;failure?:PreparationFailure|null;replayed?:boolean};
 export type PreparationOutcome="complete"|"partial"|"transient"|"identity_failed"|"credential_missing"|"budget_exhausted"|"schema"|"held";
 /** Sanitized, fixed-vocabulary result of the worker's latest account attempt. */
@@ -45,7 +46,7 @@ export function parsePreparationState(v:unknown):PreparationState|null{
  ("connected" in v&&typeof v.connected!=="boolean"))return null;
  if(v.vault!==undefined&&v.vault!==null&&(!obj(v.vault)||typeof v.vault.jobId!=="string"||
  !["pending","running","complete","failed","superseded"].includes(String(v.vault.status))||
- !integer(v.vault.pagesRead,0,10000)||!integer(v.vault.itemsSeen,0,1000000)||!integer(v.vault.selected,0,1000)||
+ !integer(v.vault.pagesRead,0,10000)||!integer(v.vault.itemsSeen,0,1000000)||!integer(v.vault.selected,0,2000)||!validVaultSelectionProgress(v.vault,v.vault.selected)||
  !(v.vault.error===null||typeof v.vault.error==="string")||
  ("retryAttempts" in v.vault&&!integer(v.vault.retryAttempts,0,1000))||("retryNotBefore" in v.vault&&!when(v.vault.retryNotBefore))))return null;
  if(v.lastAttempt!==undefined&&v.lastAttempt!==null&&!validAttempt(v.lastAttempt,false))return null;

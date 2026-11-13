@@ -67,7 +67,7 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
     },
     async get(accountId: string, afterMediaId: string | null = null, filters: { query?: string; kind?: string; folderId?: string } = {}) {
       try {
-        const url = base(accountId) + "/vault?limit=24&includeSummary=1" + (afterMediaId ? "&afterMediaId=" + encodeURIComponent(afterMediaId) : "") +
+        const url = base(accountId) + "/vault?limit=24&includeSummary=1&progress=1" + (afterMediaId ? "&afterMediaId=" + encodeURIComponent(afterMediaId) : "") +
           (filters.query ? "&q=" + encodeURIComponent(filters.query) : "") +
           (filters.kind && filters.kind !== "all" ? "&kind=" + encodeURIComponent(filters.kind) : "") +
           (filters.folderId ? "&folderId=" + encodeURIComponent(filters.folderId) : "");
@@ -77,7 +77,7 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
       } catch { return { ok: false as const, status: 503, error: "The recorded vault could not be read." }; }
     },
     async sync(accountId: string, command: { expectedConnectionRevision: number } & Identity) {
-      const result = await post(base(accountId) + "/vault/sync", command); if (!result.ok) return result;
+      const result = await post(base(accountId) + "/vault/sync?progress=1", command); if (!result.ok) return result;
       const sync = parseVaultSyncAck(result.body, { accountId, commandKey: command.commandKey });
       return sync ? { ok: true as const, sync } : { ok: false, status: 502, outcome: "unconfirmed", error: "Vault sync outcome is not confirmed. Refresh or retry the same request." } as ContentFailure;
     },

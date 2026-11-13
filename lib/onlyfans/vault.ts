@@ -1,8 +1,15 @@
 import { CONTENT_SCHEMA, parseContentItem, type ContentItem } from "./content";
 export type VaultItem = { mediaId: string; kind: string; durationSeconds: number | null;
   width: number | null; height: number | null; ready: boolean; reason: string | null; description: string | null };
-export type VaultSync = { commandKey: string; jobId: string; status: "pending" | "running" | "complete" | "failed" | "superseded";
-  pagesRead: number; itemsSeen: number; lastError: string | null; requestedAt: string; updatedAt: string; completedAt: string | null };
+type MediaCounts = { photo: number; video: number };
+export type VaultSelectionProgress = {
+  scope?: { version: 1 | 3; selection: "newest_per_type"; photos: number; videos: number; order: string }
+    | { version: 2; selection: "newest_combined"; combined: number; order: string };
+  kindOffsets?: MediaCounts;
+  selectedByKind?: MediaCounts;
+};
+export type VaultSync = VaultSelectionProgress & { commandKey: string; jobId: string; status: "pending" | "running" | "complete" | "failed" | "superseded";
+  pagesRead: number; itemsSeen: number; lastError: string | null; requestedAt: string; updatedAt: string; completedAt: string | null; pageOffset?: number; retryAt?: string | null; refreshMode?: "window" | "head"; selectedCount?: number };
 export type VaultSummary = { total: number; photos: number; videos: number; other: number; matching: number; folders: number };
 export type VaultRead = { items: VaultItem[]; nextCursor: string | null; sync: VaultSync | null; connectionRevision: number | null; summary?: VaultSummary };
 export type VaultProduct = { label: string; description: string; priceCents: number; enabled: boolean; mediaIds: string[]; previewMediaIds: string[] };
@@ -17,11 +24,46 @@ const hash = (value: unknown): value is string => typeof value === "string" && /
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value);
 const stamp = (value: unknown): value is string => typeof value === "string" && /Z$/.test(value) && Number.isFinite(Date.parse(value));
 const safeCode = (value: unknown) => value === null || (typeof value === "string" && /^[a-z0-9_]{1,80}$/.test(value));
+export function validVaultSelectionProgress(value: Record<string, unknown>, selected?: number): boolean {
+  const counts = (v: unknown, cap: number): v is MediaCounts => object(v) &&
+    exact(v, ["photo", "video"]) && integer(v.photo, 0, cap) && integer(v.video, 0, cap);
+  const scope = value.scope;
+  if (scope !== undefined) {
+    if (!object(scope)) return false;
+    if (scope.version === 2) {
+      if (!exact(scope, ["version", "selection", "combined", "order"]) || scope.selection !== "newest_combined" ||
+          scope.combined !== 1000 || scope.order !== "created_at_desc_id_desc") return false;
+    } else if (!exact(scope, ["version", "selection", "photos", "videos", "order"]) || scope.selection !== "newest_per_type" ||
+      !(scope.version === 1 && scope.photos === 1500 && scope.videos === 700 && scope.order === "recent" ||
+        scope.version === 3 && scope.photos === 1000 && scope.videos === 1000 && scope.order === "created_at_desc_id_desc")) return false;
+  }
+  if (value.kindOffsets !== undefined && (!object(scope) || scope.version === 2 || !counts(value.kindOffsets, 4800))) return false;
+  if (selected !== undefined && !integer(selected, 0, object(scope) && scope.version === 3 ? 2000 : 1000)) return false;
+  return value.selectedByKind === undefined || (object(scope) && scope.version === 3 &&
+    value.status === "complete" && counts(value.selectedByKind, 1000) &&
+    value.selectedByKind.photo + value.selectedByKind.video === selected);
+}
+export function vaultSelectionLabel(progress: VaultSelectionProgress): string | null {
+  const { scope, selectedByKind, kindOffsets } = progress;
+  if (!scope) return null;
+  if (scope.version === 2) return "Up to 1,000 photos and videos combined (version 2).";
+  const limits = `Up to ${scope.photos.toLocaleString()} photos and ${scope.videos.toLocaleString()} videos.`;
+  if (selectedByKind) return `${selectedByKind.photo.toLocaleString()} photos and ${selectedByKind.video.toLocaleString()} videos selected. ${limits}`;
+  if (kindOffsets) return `${kindOffsets.photo.toLocaleString()} photo rows and ${kindOffsets.video.toLocaleString()} video rows checked. ${limits}`;
+  return limits;
+}
 export function parseVaultSync(value: unknown): VaultSync | null {
-  if (!object(value) || !exact(value, ["commandKey", "jobId", "status", "pagesRead", "itemsSeen", "lastError", "requestedAt", "updatedAt", "completedAt"]) ||
+  const progress = ["pageOffset", "retryAt", "scope", "refreshMode", "selectedCount", "kindOffsets", "selectedByKind"];
+  if (!object(value) || !exact(value, ["commandKey", "jobId", "status", "pagesRead", "itemsSeen", "lastError", "requestedAt", "updatedAt", "completedAt",
+      ...progress.filter(key => Object.hasOwn(value, key))]) ||
     !hash(value.commandKey) || !uuid(value.jobId) || !["pending", "running", "complete", "failed", "superseded"].includes(value.status as string) ||
-    !integer(value.pagesRead, 0, 200) || !integer(value.itemsSeen, 0, 4800) || !safeCode(value.lastError) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
-    !(value.completedAt === null || stamp(value.completedAt))) return null;
+    !integer(value.pagesRead, 0, 200) || !integer(value.itemsSeen, 0, 4800) || !(safeCode(value.lastError) || (typeof value.lastError === "string" && /^provider_read_deferred:[a-z0-9_:-]{1,41}$/.test(value.lastError))) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
+    !(value.completedAt === null || stamp(value.completedAt)) ||
+    ("pageOffset" in value && !integer(value.pageOffset, 0, 4800)) ||
+    ("retryAt" in value && value.retryAt !== null && !stamp(value.retryAt)) ||
+    ("refreshMode" in value && value.refreshMode !== "window" && value.refreshMode !== "head") ||
+    ("selectedCount" in value && !integer(value.selectedCount, 0, 2000)) ||
+    !validVaultSelectionProgress(value, value.selectedCount as number | undefined)) return null;
   return value as VaultSync;
 }
 export function parseVault(value: unknown, accountId: string): VaultRead | null {

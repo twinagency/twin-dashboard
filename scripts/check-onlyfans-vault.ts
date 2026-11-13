@@ -45,13 +45,13 @@ async function main() {
   const backend = createVaultBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic-content-only", fetchImpl: async (url, init) => {
     assert.equal(init?.credentials, "omit"); assert.equal(init?.redirect, "error"); assert.equal(init?.cache, "no-store");
     const headers = new Headers(init?.headers); assert.equal(headers.get("authorization"), "Bearer synthetic-content-only"); assert.equal(headers.get("X-OnlyFans-Content-Version"), CONTENT_SCHEMA); assert.equal(headers.get("cookie"), null);
-    if (init?.method === "GET") { assert.equal(String(url), "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault?limit=24&includeSummary=1"); return Response.json(read); }
+    if (init?.method === "GET") { assert.equal(String(url), "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault?limit=24&includeSummary=1&progress=1"); return Response.json(read); }
     posted.push(String(init?.body)); if (posted.length === 1) throw new Error("Synthetic lost reply");
-    return Response.json(String(url).endsWith("/vault/sync") ? syncAck : createAck);
+    return Response.json(String(url).endsWith("/vault/sync?progress=1") ? syncAck : createAck);
   } });
   assert((await backend.get("acc-a")).ok);
   const filtered = createVaultBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: async (url, init) => {
-    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault?limit=24&includeSummary=1&afterMediaId=12&q=100%25%20coast&kind=photo");
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault?limit=24&includeSummary=1&progress=1&afterMediaId=12&q=100%25%20coast&kind=photo");
     assert.equal(init?.method, "GET"); return Response.json(read);
   } });
   assert((await filtered.get("acc-a", "12", { query: "100% coast", kind: "photo" })).ok);

@@ -63,3 +63,17 @@ test("parser keeps older backends valid and rejects malformed or unbounded attem
   assert.equal(parsePreparationState({ ...base, failure: failure(attempt({ outcome: "complete" })) }), null);
   assert.ok(parsePreparationState({ ...base, vault: { jobId: "j", status: "pending", pagesRead: 1, itemsSeen: 24, error: "vault_read_failed", selected: 0, retryAttempts: 2, retryNotBefore: "2026-11-11T05:32:20Z" } }));
 });
+
+test("v3 accepts and renders both limits and preserves v2 status", () => {
+  const vault = { jobId: "j", status: "complete", pagesRead: 90, itemsSeen: 2100, error: null, selected: 2000,
+    scope: { version: 3, selection: "newest_per_type", photos: 1000, videos: 1000, order: "created_at_desc_id_desc" },
+    kindOffsets: { photo: 1060, video: 1040 }, selectedByKind: { photo: 1000, video: 1000 } };
+  const complete = parsePreparationState({ ...base, connected: true, vault });
+  assert.ok(complete?.configured);
+  assert.match(html(complete), /1,000 photos and 1,000 videos selected/);
+  assert.equal(parsePreparationState({ ...base, vault: { ...vault, selectedByKind: { photo: 1001, video: 999 } } }), null);
+  const legacy = parsePreparationState({ ...base, vault: { ...vault, selected: 1000, kindOffsets: undefined,
+    selectedByKind: undefined, scope: { version: 2, selection: "newest_combined", combined: 1000, order: "created_at_desc_id_desc" } } });
+  assert.ok(legacy?.configured);
+  assert.match(html(legacy), /photos and videos combined/);
+});
