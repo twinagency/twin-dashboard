@@ -281,7 +281,9 @@ export default async function FansPage({
       // so an all-digits search matches the id EXACTLY here where the old
       // in-memory version matched a substring of it. Names still match on
       // substring, which is what the box is actually used for.
-      const like = `*${qLower.replace(/[,()*]/g, "")}*`;
+      // `\ % _` are escaped so ILIKE matches them literally, as fanMatches
+      // does; unescaped, "_" matched every fan and the refill loop read the table.
+      const like = `*${qLower.replace(/[,()*]/g, "").replace(/[\\%_]/g, "\\$&")}*`;
       // Every identifier the operator might have in front of him, not just the
       // two names: he is as likely to be pasting a telegram id or a business
       // connection id out of a log as typing a name.
@@ -1614,6 +1616,9 @@ export default async function FansPage({
                     name="credits"
                     type="number"
                     min={0}
+                    max={1000000}
+                    step={1}
+                    required
                     defaultValue={selected.message_credits}
                     className="h-8 w-24 text-sm"
                   />
@@ -1710,7 +1715,8 @@ export default async function FansPage({
                     </button>
                   </MutationForm>
 
-                  <MutationForm action={setBlocked}>
+                  {/* A safety verdict (minor, US location) is lifted by an admin only; setBlocked refuses anyone else. */}
+                  <MutationForm adminOnly={selected.blocked && (!!selected.minor_flagged_at || (selected.blocked_reason != null && selected.blocked_reason !== "operator"))} action={setBlocked}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="blocked" value={selected.blocked ? "false" : "true"} />
                     <ConfirmSubmit
@@ -1763,8 +1769,6 @@ export default async function FansPage({
 
                   <MutationForm adminOnly action={deleteUser}>
                     <input type="hidden" name="userId" value={selected.id} />
-                    <input type="hidden" name="cloneId" value={selected.clone_id} />
-                    <input type="hidden" name="telegramId" value={selected.telegram_id} />
                     <ConfirmSubmit
                       message={`Permanently delete ${displayName(selected)}? This removes the user, their purchase records and entire chat history. This cannot be undone.`}
                       className="w-full rounded-md border border-crit/30 bg-crit/10 px-3 py-1.5 text-left text-xs font-medium text-crit transition hover:bg-crit/20"
