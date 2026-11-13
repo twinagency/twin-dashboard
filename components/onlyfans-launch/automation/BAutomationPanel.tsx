@@ -23,11 +23,17 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
   }
 }
 
+/** Conversation go controls: an unconfirmed STOP or a refused control holds these, never a brake. */
+const GO = new Set<string>(["resume_automation", "release_takeover"]);
+
 /** Current account controls, conversation handling and native proactive engagement. */
 export default function BAutomationPanel({ canManage = false, initialAccountId }: { canManage?: boolean; initialAccountId?: string }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
-  const [manage, setManage] = useState(canManage);
+  const manage = canManage;
+  // Conversation go controls held: after a 401/403 on one (never STOP or a brake), and per account while a STOP is unconfirmed.
+  const [goDenied, setGoDenied] = useState(false);
+  const [stopHeld, setStopHeld] = useState<Record<string, boolean>>({});
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading);
   const [accountId, setAccountId] = useState("");
   const [convs, setConvs] = useState<Load<{ items: BConversation[]; more: boolean }>>(loading);
@@ -76,13 +82,13 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }, [accountId, loadAccountData]);
 
   async function act(c: BConversation, action: Parameters<typeof sendControl>[2]) {
-    if (busy || !manage) return;
+    if (busy || !manage || (GO.has(action) && goHold)) return;
     const forAccount = accountId; setBusy(c.conversationId); setConfirming(null); setNotice("");
     const r = await sendControl(forAccount, c.conversationId, action, c.revision);
     if (current.current !== forAccount) return; // operator switched account: the reply belongs to another screen
     setBusy(null);
     if (r.kind === "ok") setNotice(`${c.fanName}: ${AFTER[action]}`);
-    else if (r.kind === "readonly" || r.kind === "denied") { setManage(false); setNotice("Your access does not allow this change."); }
+    else if (r.kind === "readonly" || r.kind === "denied") { setGoDenied(true); setNotice("Your access does not allow this change. Resume and hand back are held; stops still work."); }
     else if (r.kind === "refused") setNotice(r.status === 409 ? `${c.fanName}: the conversation changed or is on hold. The list was refreshed; check it and try again.` : `${c.fanName}: ${r.error}`);
     else if (r.kind === "unconfirmed") setNotice(`${c.fanName}: ${r.error}`);
     else if (r.kind === "unavailable") setNotice(`${c.fanName}: ${r.error}`);
@@ -90,6 +96,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }
 
   const account = accounts.state === "ok" ? accounts.data.find(a => a.accountId === accountId) : undefined;
+  const goHold = stopHeld[accountId] ? "Held until the emergency stop is confirmed." : goDenied ? "Your access does not allow this change." : null;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-auto-h" data-b-automation>
     <h2 id="b-auto-h" className="text-lg font-semibold">Automation and follow-ups</h2>
     {!manage ? <p className="text-sm" role="note" data-b-readonly>Read-only access: you can view modes but not change them.</p> : null}
@@ -114,7 +121,8 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         </dl>
         {runtime.state === "loading" ? <BLoading label="Loading runtime…" /> : null}
         {runtime.state === "error" ? <BError message={runtime.message} onRetry={() => void loadAccountData(accountId)} /> : null}
-        <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)} />
+        <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)}
+          stopHeld={Boolean(stopHeld[accountId])} onStopHeld={held => setStopHeld(s => ({ ...s, [accountId]: held }))} />
       </div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="conversations">
@@ -129,7 +137,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
             <p className="text-sm" data-b-mode={c.automationMode}>{MODE_TEXT[c.automationMode]} · {TAKEOVER_TEXT[c.takeoverState]}</p>
             <p className="text-xs text-muted">Last activity {bTime(c.lastActivityAt)}</p>
             <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Actions for ${c.fanName}`}>
-              {actionRules(c, manage).map(rule => rule.confirm && confirming === c.conversationId ?
+              {actionRules(c, manage).map(r => GO.has(r.action) && goHold ? { ...r, enabled: false, reason: r.reason ?? goHold } : r).map(rule => rule.confirm && confirming === c.conversationId ?
                 <span key={rule.action} role="group" aria-label="Confirm no-contact" className="flex flex-wrap items-center gap-2">
                   <span className="text-sm">Permanently stop contacting {c.fanName}?</span>
                   <button type="button" className={bDanger} autoFocus onClick={() => void act(c, rule.action as never)}>Confirm</button>

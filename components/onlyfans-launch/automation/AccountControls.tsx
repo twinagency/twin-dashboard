@@ -27,10 +27,15 @@ export default function AccountControls({
   accountId,
   manage,
   onChanged,
+  stopHeld,
+  onStopHeld,
 }: {
   accountId: string;
   manage: boolean;
   onChanged: () => void;
+  /** An unconfirmed STOP holds every resume until a STOP is recorded or a fresh read shows the account stopped. */
+  stopHeld: boolean;
+  onStopHeld: (held: boolean) => void;
 }) {
   const base = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
   const r = useJsonResource(
@@ -52,11 +57,15 @@ export default function AccountControls({
   function blocked(a: Action, retry = false) {
     if (!manage) return true;
     if (a === "emergency_stop") return sending(a) || (!retry && !reason.trim());
-    if (inFlight.length) return true;
+    if (inFlight.length || (a === "resume" && stopHeld)) return true;
     if (retry) return false;
     return !reason.trim() || !ready || unconfirmed ||
       (a === "pause" ? !ready.accountControl.enabled : ready.accountControl.enabled || !ready.readyToEnable);
   }
+  // Every read after the hold was set is fresh: send() reloads (state goes to loading) in the same update that sets it.
+  useEffect(() => {
+    if (stopHeld && ready && !ready.accountControl.enabled) onStopHeld(false);
+  }, [stopHeld, ready, onStopHeld]);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
@@ -65,11 +74,6 @@ export default function AccountControls({
   async function send(command: Command) {
     setInFlight((f) => [...f, command.action]);
     const q = await bFetch(base, { method: "POST", body: command });
-    if (!mounted.current) return;
-    setInFlight((f) => f.filter((a) => a !== command.action));
-    setAction((a) => (a === command.action ? null : a));
-    r.reload();
-    onChanged();
     const recorded =
       q.kind === "ok" &&
       object(q.data) &&
@@ -78,14 +82,25 @@ export default function AccountControls({
       q.data.accountId === accountId &&
       object(q.data.command) &&
       q.data.command.recorded === true;
+    const unconfirmed = q.kind === "unconfirmed" || (q.kind === "ok" && !recorded);
+    const isStop = command.action === "emergency_stop";
+    // Before the unmount check: a STOP answered after the operator switched account still holds (or releases) that account.
+    if (isStop && (recorded || unconfirmed)) onStopHeld(!recorded);
+    if (!mounted.current) return;
+    setInFlight((f) => f.filter((a) => a !== command.action));
+    setAction((a) => (a === command.action ? null : a));
+    r.reload();
+    onChanged();
     setOutcome((o) => ({
       ...o,
       [laneOf(command.action)]: {
-        pending: q.kind === "unconfirmed" || (q.kind === "ok" && !recorded) ? command : null,
+        pending: unconfirmed ? command : null,
         notice: `${LABEL[command.action]}: ${
           recorded
             ? "Account command recorded. Reading authoritative current state. Already dispatched or unknown operations retain their status."
-            : "error" in q
+            : isStop && unconfirmed
+              ? "this stop is not confirmed and may not have applied. Send stop again. Resume is held until a stop is recorded or the account reads as stopped."
+              : "error" in q
               ? q.error
               : "The account command outcome is unconfirmed. Read current state before retrying."
         }`,
@@ -190,6 +205,11 @@ export default function AccountControls({
             Cancel
           </button>
         </div>
+      ) : null}
+      {stopHeld && outcome.stop.pending === null ? (
+        <p role="status" className="text-sm" data-b-stop-held>
+          Emergency stop unconfirmed. Resume is held until a stop is recorded or the account reads as stopped.
+        </p>
       ) : null}
       {(["control", "stop"] as const).map((lane) => {
         const { notice, pending } = outcome[lane];
