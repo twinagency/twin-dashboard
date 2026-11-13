@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createEngineStatusBackend, parseEnginePageQuery } from "../../lib/onlyfans/engine-status-backend";
 import { createEngineOperatorBackend, engineOperatorEvidenceRef, ENGINE_OPERATOR_SCHEMA } from "../../lib/onlyfans/engine-operator";
-import { canReconcile, needsReview, parseEngineUnresolved } from "../../lib/onlyfans/engine-unresolved";
+import { canReconcile, parseEngineUnresolved } from "../../lib/onlyfans/engine-unresolved";
+import { isUnresolvedRequest } from "../../lib/onlyfans/engine-status";
 import { agencyOnlyFansRequest } from "../../lib/onlyfans/agency-scope";
 import { engineControlLabel, orderControls } from "../../lib/onlyfans/engine-controls";
 
@@ -47,9 +48,9 @@ test("the account-wide read uses its own path and parses owner, next step and su
   assert.equal(unknown.owner, "engine"); assert.equal(unknown.nextStep, "reconcile_existing_action");
   assert.equal(canReconcile(unknown), true); assert.equal(canReconcile(access), false); assert.equal(canReconcile(held), false);
   assert.equal(held.supportedActions.length, 0); assert.equal(held.fanLabel, null);
-  assert.equal(needsReview(unknown), true);
-  assert.equal(needsReview({ status: "completed", actionOutcome: "unknown" }), true);
-  assert.equal(needsReview({ status: "completed", actionOutcome: "accepted" }), false);
+  assert.equal(isUnresolvedRequest(unknown), true);
+  assert.equal(isUnresolvedRequest({ status: "completed", actionOutcome: "unknown" }), true);
+  assert.equal(isUnresolvedRequest({ status: "completed", actionOutcome: "accepted" }), false);
 });
 
 test("the account-wide parser refuses another account, a foreign conversation and an unsupported command", () => {
