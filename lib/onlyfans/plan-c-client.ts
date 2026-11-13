@@ -9,11 +9,13 @@
  *    attempt only a recorded ack releases it.
  *  - A 409 (version or revision conflict) is returned as `conflict` with `reload: true`; it is never retried.
  */
-import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newCommandKey, parsePlanCDrafts, parsePlanCUnresolved,
+import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newCommandKey, parsePlanCDrafts, parsePlanCUnresolved, planCStopTargets,
   validateEditedParts, validateEvidenceRef, validateRejectReason,
-  type PlanCCommandResult, type PlanCConversationAction, type PlanCDraft, type PlanCDraftList, type PlanCUnresolvedItem, type PlanCUnresolvedList } from "./plan-c";
+  type PlanCCommandResult, type PlanCConversationAction, type PlanCDraft, type PlanCDraftList, type PlanCStopTarget, type PlanCUnresolvedItem, type PlanCUnresolvedList } from "./plan-c";
 
 export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: string };
+/** `stopTargets`: what a refused draft list can still be stopped on (plan-c.ts planCStopTargets), re-checked here; none when nothing was read. */
+export type PlanCDraftsOutcome = { ok: true; data: PlanCDraftList } | { ok: false; error: string; stopTargets: PlanCStopTarget[] };
 
 /**
  * Stored entries are named by this hash instead of the intent, which can hold a rejection reason, edited text or evidence, so that
@@ -100,13 +102,16 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
   const keys = options.keys ?? accountKeyStore(accountId, options.operatorScope);
   const init = { credentials: "same-origin", cache: "no-store", redirect: "error" } as const;
 
-  async function read<T>(path: string, parse: (value: unknown) => T | null, what: string): Promise<PlanCReadOutcome<T>> {
+  /** One GET: whether it was 2xx and its body (a refusal's is undefined when unreadable). null: no readable answer. */
+  async function get(path: string): Promise<{ ok: boolean; value: unknown } | null> {
     try {
       const response = await fetchImpl(base(accountId) + path, { ...init, method: "GET", signal: AbortSignal.timeout(8000) });
-      const data = response.ok ? parse(await response.json()) : null;
-      if (data) return { ok: true, data };
-      return { ok: false, error: response.ok ? `${what} could not be read.` : `${what} is unavailable.` };
-    } catch { return { ok: false, error: `${what} is unavailable.` }; }
+      return { ok: response.ok, value: response.ok ? await response.json() : await response.json().catch(() => undefined) };
+    } catch { return null; }
+  }
+  function outcome<T>(answer: { ok: boolean; value: unknown } | null, parse: (value: unknown) => T | null, what: string): PlanCReadOutcome<T> {
+    const data = answer?.ok ? parse(answer.value) : null;
+    return data ? { ok: true, data } : { ok: false, error: answer?.ok ? `${what} could not be read.` : `${what} is unavailable.` };
   }
 
   /** `intent` ties the key to this exact action; the key store decides when the outcome releases it. */
@@ -136,8 +141,11 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
   const conversationPath = (conversationId: string, action: PlanCConversationAction) => `/conversations/${encodeURIComponent(conversationId)}/${action}`;
 
   return {
-    listDrafts: (): Promise<PlanCReadOutcome<PlanCDraftList>> => read("/drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval"),
-    listUnresolved: (): Promise<PlanCReadOutcome<PlanCUnresolvedList>> => read("/unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work"),
+    listDrafts: async (): Promise<PlanCDraftsOutcome> => {
+      const answer = await get("/drafts"), result = outcome(answer, value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval");
+      return result.ok ? result : { ...result, stopTargets: planCStopTargets(answer?.value, accountId) };
+    },
+    listUnresolved: async (): Promise<PlanCReadOutcome<PlanCUnresolvedList>> => outcome(await get("/unresolved"), value => parsePlanCUnresolved(value, accountId), "Unresolved work"),
     /** Approve this one draft version. Called only from an operator's click on one draft. */
     approveDraft: (draft: PlanCDraft) => send(draftPath(draft, "approve"), draftIntent(draft, "approve"),
       commandKey => ({ expectedVersion: draft.draftVersion, commandKey })),

@@ -23,11 +23,17 @@ export function BSourceList({ prefix }: { prefix: "automation" | "memory" }) {
       <span className={`font-bold ${c.source === "real" ? "text-good" : "text-warn"}`}>{c.source === "real" ? "CONNECTED" : "FIXTURE-ONLY"}</span>
       <span className="min-w-0 break-words">{c.label}</span></li>)}</ul>;
 }
+/** Shown wherever a `?account=` link names an account this session cannot see. */
+export const UNSEEN_ACCOUNT = "That account is not available to this session. Select an authorised account.";
 /** Account switching. Changing it is the caller's cue to abort in-flight reads and clear stale data. */
-export function BAccountSwitcher({ accounts, value, onChange, id }: { accounts: BAccount[]; value: string; onChange: (id: string) => void; id: string }) {
+/** With no listed account chosen it shows a placeholder; `unseen` (the caller's `?account=` is not listed) also says so. */
+export function BAccountSwitcher({ accounts, value, onChange, id, unseen }: { accounts: BAccount[]; value: string; onChange: (id: string) => void; id: string; unseen: boolean }) {
+  const chosen = accounts.some(a => a.accountId === value);
   return <div className="min-w-0"><label htmlFor={id} className="block text-xs font-semibold uppercase tracking-wide text-muted">Account</label>
     <select id={id} value={value} onChange={e => onChange(e.target.value)} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border border-line bg-transparent px-2 text-sm">
-      {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.handle}</option>)}</select></div>;
+      {chosen ? null : <option value="" disabled>Select an account</option>}
+      {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.handle}</option>)}</select>
+    {unseen ? <p role="status" className="mt-1 text-sm">{UNSEEN_ACCOUNT}</p> : null}</div>;
 }
 export function BLoading({ label }: { label: string }) {
   return <p className="text-sm text-muted" role="status" aria-busy="true" data-b-state="loading">{label}</p>;

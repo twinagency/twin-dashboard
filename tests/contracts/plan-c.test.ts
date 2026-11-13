@@ -232,7 +232,8 @@ test("drafts keep the exact ordered parts, offer terms, context and expiry; a ha
   assert.equal(draft.action, "offer"); assert.equal(draft.draftVersion, 1); assert.equal(draft.expiresAt, raw.expiresAt);
   assert.deepEqual(draft.offer, { productId: "fixture-photo-1", mediaCount: 1, mediaIds: ["m1"], priceCents: 300, currency: "USD" });
   assert.equal(draft.conversationId, `${MOCK_ACCOUNT}:900000000001`); assert.equal(draft.conversationRevision, 7); assert.equal(draft.messages.length, 2);
-  const bad = (mutate: (d: Record<string, unknown>) => void) => { const d = JSON.parse(JSON.stringify(seedDraft())); mutate(d); return parsePlanCDrafts({ schemaVersion: PLAN_C_SCHEMA, ok: true, drafts: [seedDraft(), d] }, MOCK_ACCOUNT); };
+  const bad = (mutate: (d: Record<string, unknown>) => void) => { const d = JSON.parse(JSON.stringify(seedDraft())); mutate(d); return parsePlanCDrafts({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts: [seedDraft(), d] }, MOCK_ACCOUNT); }; // TEST-CHANGE (G03): scoped, so each null is the mutation's
+  assert.ok(bad(() => {}), "control: the unmutated pair parses");
   assert.equal(bad(d => { d.draftHash = "short"; }), null);
   assert.equal(bad(d => { d.draftVersion = 0; }), null);
   assert.equal(bad(d => { d.parts = []; }), null);
@@ -262,9 +263,9 @@ test("receipt list accepts only bounded provider acceptances and distinguishes u
 test("unresolved items carry owner and next step and are refused when out of scope", () => {
   const ok = parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: [unresolvedRow()] }, MOCK_ACCOUNT);
   assert.equal(ok?.items[0].owner, "engine"); assert.equal(ok?.items[0].nextStep, "reconcile_with_provider");
-  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, items: [unresolvedRow({ conversationId: "other:1" })] }, MOCK_ACCOUNT), null);
-  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, items: [unresolvedRow({ owner: "" })] }, MOCK_ACCOUNT), null);
-  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, items: [unresolvedRow(), unresolvedRow()] }, MOCK_ACCOUNT), null, "duplicate ids");
+  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: [unresolvedRow({ conversationId: "other:1" })] }, MOCK_ACCOUNT), null);
+  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: [unresolvedRow({ owner: "" })] }, MOCK_ACCOUNT), null);
+  assert.equal(parsePlanCUnresolved({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, items: [unresolvedRow(), unresolvedRow()] }, MOCK_ACCOUNT), null, "duplicate ids");
 });
 
 test("the reconcile evidence string is the same audit string the existing operator control builds", () => {

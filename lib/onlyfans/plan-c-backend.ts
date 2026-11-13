@@ -6,11 +6,14 @@
  * A write that gets no readable acknowledgement is "unconfirmed", never "failed": the backend may have committed.
  */
 import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
-import { PLAN_C_CONFLICT_TEXT, PLAN_C_GONE_TEXT, PLAN_C_HEADER, PLAN_C_REFUSED_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, parsePlanCDrafts, parsePlanCUnresolved,
-  type PlanCCommandResult, type PlanCConversationAction, type PlanCDraftAction, type PlanCDraftList, type PlanCUnresolvedList } from "./plan-c";
+import { PLAN_C_CONFLICT_TEXT, PLAN_C_GONE_TEXT, PLAN_C_HEADER, PLAN_C_REFUSED_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, parsePlanCDrafts, parsePlanCUnresolved, planCStopTargets,
+  type PlanCCommandResult, type PlanCStopTarget, type PlanCConversationAction, type PlanCDraftAction, type PlanCDraftList, type PlanCUnresolvedList } from "./plan-c";
 
 /** 403: the backend refused this actor (upstream 401/403). 502/503: it could not be read at all, so nothing was established. */
-export type PlanCReadResult<T> = { ok: true; data: T } | { ok: false; status: 403 | 404 | 502 | 503; error: string };
+export type PlanCReadFailure = { ok: false; status: 403 | 404 | 502 | 503; error: string };
+export type PlanCReadResult<T> = { ok: true; data: T } | PlanCReadFailure;
+/** A refused draft list still carries its Stop targets (plan-c.ts planCStopTargets, none when nothing was read), so the brake does not go with it. */
+export type PlanCDraftsResult = { ok: true; data: PlanCDraftList } | PlanCReadFailure & { stopTargets: PlanCStopTarget[] };
 
 export type PlanCDraftCommand = { requestId: string; generation: number; action: PlanCDraftAction; expectedVersion: number; commandKey: string; actor: string;
   reason?: string; parts?: string[] };
@@ -34,16 +37,23 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   const root = (accountId: string) => options.baseUrl.replace(/\/+$/, "") + `/onlyfans/control/v2/accounts/${encodeURIComponent(accountId)}/`;
   const headers = { Authorization: `Bearer ${options.token}`, [PLAN_C_HEADER]: PLAN_C_SCHEMA };
 
-  async function read<T>(url: string, parse: (value: unknown) => T | null, what: string, actor?: string): Promise<PlanCReadResult<T>> {
+  /** One GET: the parsed JSON body of a 2xx, or the failure that answer amounts to. */
+  async function get(url: string, what: string, actor?: string): Promise<{ ok: true; value: unknown } | PlanCReadFailure> {
     try {
       const response = await call(url, { method: "GET", headers: { ...headers, ...(actor ? { "X-Plan-C-Actor": actor } : {}) } });
       if (response.status === 404) { await response.body?.cancel(); return { ok: false, status: 404, error: `${what} is not available.` }; }
       if (response.status === 401 || response.status === 403) { await response.body?.cancel(); return { ok: false, status: 403, error: `${what} is not available to this session.` }; }
-      if (response.ok) { const data = parse(await response.json()); return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` }; }
+      if (response.ok) return { ok: true, value: await response.json() };
       await response.body?.cancel();
     } catch { /* fall through */ }
     return { ok: false, status: 503, error: `${what} is unavailable.` };
   }
+  function outcome<T>(fetched: { ok: true; value: unknown } | PlanCReadFailure, parse: (value: unknown) => T | null, what: string): PlanCReadResult<T> {
+    if (!fetched.ok) return fetched;
+    const data = parse(fetched.value);
+    return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` };
+  }
+  const read = async <T>(url: string, parse: (value: unknown) => T | null, what: string, actor?: string) => outcome(await get(url, what, actor), parse, what);
 
   async function write(url: string, body: Record<string, unknown>, expect: { commandKey: string; accountId: string; action: string; requestId?: string; conversationId?: string; id?: string }): Promise<PlanCCommandResult> {
     try {
@@ -73,8 +83,11 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
         const mode = value.config.authorization_mode;
         return mode === "supervised" || mode === "autonomous" ? { authorizationMode: mode } : null;
       }, "Pilot configuration", actor),
-    drafts: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCDraftList>> =>
-      read(root(accountId) + "drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval", actor),
+    drafts: async (accountId: string, actor?: string): Promise<PlanCDraftsResult> => {
+      const what = "Drafts awaiting approval", fetched = await get(root(accountId) + "drafts", what, actor);
+      const result = outcome(fetched, value => parsePlanCDrafts(value, accountId), what);
+      return result.ok ? result : { ...result, stopTargets: planCStopTargets(fetched.ok ? fetched.value : undefined, accountId) };
+    },
     unresolved: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCUnresolvedList>> =>
       read(root(accountId) + "unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work", actor),
     draft: (accountId: string, command: PlanCDraftCommand) => write(
