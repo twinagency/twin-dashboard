@@ -3,7 +3,8 @@
  * a user retry reuses). memoryFan (lib/onlyfans/launch/b-native-routes.ts) hashes the actor into the commandKey. Before G04 the
  * named-owner lookup returned null on any Supabase non-OK answer or timeout, the route fell back to the session actor, and the same
  * operator retrying the same correction got a different actor AND a different commandKey.
- * Since G04 the lookup lives once, in authorizeOnlyFansRead (lib/onlyfans/route.ts), so ctx.actor IS the named owner; namedOwnerActor
+ * Since G04 memoryFan writes opt in through bGate's namedOwner flag (authorizeOnlyFansRead `pilotIdentity`, lib/onlyfans/route.ts)
+ * and use ctx.pilotActor; ctx.actor stays the session actor. namedOwnerActor
  * (lib/onlyfans/plan-c-owner-core.ts) is null only on a definite miss (404, or a 200 that says null) and "unavailable" on anything a
  * retry could answer differently (408/425/429/5xx, malformed 200, timeout, network), which refuses 503 before any upstream call.
  * Drives the REAL memory fan PATCH route through tests/rules/core-route.child.ts (see its header for what is replaced); the owner

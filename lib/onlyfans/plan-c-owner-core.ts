@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { NamedOwnerActor } from "./upload-permission";
+import type { NamedOwnerActor } from "./actor";
 
 /**
  * Resolve a named active owner, not a shared password-admin session. Only the server sees service credentials.

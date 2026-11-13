@@ -1,12 +1,11 @@
 /**
- * Child process for the W1 lane 4 (lib-onlyfans-core) route tests: tests/known-red/core-d6-chat-mark-reconciled.test.ts (F1),
- * tests/known-red/core-memory-correction-key.test.ts (F2), tests/rules/core-request-command-key.test.ts (CH3) and
- * tests/rules/core-pilot-actor-gate.test.ts (CH2). Spawned by tests/rules/core-fixtures.ts under --experimental-test-module-mocks;
+ * Child process for the route tests that import tests/rules/core-fixtures.ts (G04-core-memory-correction-key, G04-named-owner-gate
+ * and the other coreRouteChild callers). Spawned by tests/rules/core-fixtures.ts under --experimental-test-module-mocks;
  * the rules glob `*.test.*` does not run it.
  * Drives the REAL handlers: app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/requests/[requestId]/route.ts
  * POST, app/api/onlyfans-launch/memory/accounts/[accountId]/fans/[fanId]/route.ts PATCH (memoryFan), and requireOnlyFansRead
  * (lib/onlyfans/route.ts), through the real agency-scope transport, engine-operator / native-configuration backends,
- * isAuthed -> verifyOwnerSession, and the real namedOwnerActor core.
+ * isAuthed -> verifyOwnerSession, and the real namedOwnerActor core (looked up only under `pilotIdentity`).
  * Replaced, and only these:
  *  - `next/headers`: no Next request scope offline. cookies() hands back the synthetic operator session cookie or none.
  *  - `lib/view-as-banner.ts` getViewAsBannerInfo: a real view-as needs a signed cookie plus a DB lookup; here a flag.

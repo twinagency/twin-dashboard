@@ -6,7 +6,8 @@
  * clients in one node process share a store and prove nothing about a reload (measured: tsx ignores a cache-busting `?reload=n`
  * import query). These tests therefore build two separate createCommandKeyStore instances over one seeded Web Storage.
  * Green since G04: a store with `persistAs` (the client names it plan-c-keys:<operator scope>:<account>) mirrors pending keys to
- * sessionStorage under a hash of the intent, a reloaded key is held, and stale or excess entries are pruned.
+ * sessionStorage under a hash of the intent, a reloaded key is held, and day-old entries are pruned (#389 R2 S6: by age only, once,
+ * in memory and storage alike; no count cap, since every entry is in flight or held and dropping one lets a retry act twice).
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -55,7 +56,7 @@ test("malformed storage is an empty store, never a throw", () => {
   }
 });
 
-test("stale entries expire and the store keeps at most 50", () => {
+test("stale entries expire in memory and storage, and no pending or held key is dropped by count", () => {
   store.clear();
   let clock = 0;
   const old = createCommandKeyStore(mint, NAME, () => clock);
@@ -63,11 +64,17 @@ test("stale entries expire and the store keeps at most 50", () => {
   clock = 24 * 3600_000 + 1;
   assert.notEqual(createCommandKeyStore(mint, NAME, () => clock).keyFor(INTENT), key, "a day-old entry was reused");
   store.clear();
-  const many = createCommandKeyStore(mint, NAME, () => clock++);
-  for (let i = 0; i < 60; i++) many.keyFor(`intent ${i}`);
-  assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 50);
-  const reloaded = createCommandKeyStore(mint, NAME, () => clock);
-  assert.equal(reloaded.size(), 50);
+  const many = createCommandKeyStore(mint, NAME, () => clock);
+  const first = many.keyFor("intent 0");
+  many.settle("intent 0", unconfirmed);
+  for (let i = 1; i < 60; i++) many.keyFor(`intent ${i}`);
+  assert.equal(many.keyFor("intent 0"), first, "a held key was dropped");
+  assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 60);
+  assert.equal(createCommandKeyStore(mint, NAME, () => clock).size(), 60);
+  clock += 24 * 3600_000;
+  many.keyFor("intent 60");
+  assert.equal(many.size(), 1, "day-old entries stayed in memory");
+  assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 1);
 });
 
 test("another operator's scope never reuses the key", async () => {

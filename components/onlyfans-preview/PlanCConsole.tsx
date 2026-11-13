@@ -167,7 +167,7 @@ type Load<T> = { kind: "loading" } | { kind: "error"; error: string } | { kind: 
  * Plan C approvals. Reads and writes go through this dashboard's own routes; the backend token never reaches the browser.
  * There is no polling approve, no "approve all" and no automatic hand back: every command is one click on one item.
  */
-export default function PlanCConsole({ accountId, operatorScope, canAct, authorizationMode = "supervised", client: injected, fetchImpl }: { accountId: string; operatorScope?: string; canAct: boolean; authorizationMode?: "supervised" | "autonomous"; client?: PlanCClient; fetchImpl?: typeof fetch }) {
+export default function PlanCConsole({ accountId, operatorScope, canAct, authorizationMode = "supervised", client: injected, fetchImpl }: { accountId: string; operatorScope: string; canAct: boolean; authorizationMode?: "supervised" | "autonomous"; client?: PlanCClient; fetchImpl?: typeof fetch }) {
   const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, operatorScope, fetchImpl }), [injected, accountId, operatorScope, fetchImpl]);
   const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });

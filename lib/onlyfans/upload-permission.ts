@@ -9,13 +9,7 @@ const agencyActor = new RegExp(`^agency-user:(${uuid}):(${uuid})$`);
 /** The internal operator's actor: the owner-session token hash. The one shape every write path admits as "the operator". */
 export const isOperatorActor = (actor: unknown): actor is string => typeof actor === "string" && /^op-session:[a-f0-9]{64}$/.test(actor);
 
-declare const actorKind: unique symbol;
-/** The actor this request's own session proves (owner-token hash or agency grant): revocable per session, the only kind admitted below. */
-export type SessionActor = string & { readonly [actorKind]: "session" };
-/** The stable named-owner actor (lib/onlyfans/plan-c-owner-core.ts). Same op-session shape, but no session verifies it: never an upload actor. */
-export type NamedOwnerActor = string & { readonly [actorKind]: "named-owner" };
-
-export async function currentUploadPermission(actor: SessionActor, creatorId: string, db: SupabaseClient = serviceClient()): Promise<boolean> {
+export async function currentUploadPermission(actor: string, creatorId: string, db: SupabaseClient = serviceClient()): Promise<boolean> {
   if (!creatorUuid(creatorId)) return false;
   try {
     // Owner actors are the existing owner-token hash, so revocation/expiry is

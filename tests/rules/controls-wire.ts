@@ -3,7 +3,7 @@
  * tests/rules/controls-page.child.ts (same approach as lane 4's core-route.child.ts and lane 1's plan-c-gate-scope.child.ts,
  * copied, not imported across branches). Not a test file (the rules glob is *.test.*).
  * Everything the children drive is REAL code: route handlers, pages, requireOnlyFansRead -> isAuthed -> verifyOwnerSession, the
- * real namedOwnerActor core, agencyScopedFetch and the engine / Plan C / read backends. Replaced by `installWire()`, and only these:
+ * real namedOwnerActor core (reached only by routes that opt in through `pilotIdentity`), agencyScopedFetch and the engine / Plan C / read backends. Replaced by `installWire()`, and only these:
  *  - `next/headers`: no Next request scope offline. cookies() hands back the synthetic operator session cookie or none.
  *  - `lib/view-as-banner.ts` getViewAsBannerInfo: a real view-as needs a signed cookie plus a DB lookup; here always none.
  *  - `lib/onlyfans/plan-c-owner.ts`: its `import "server-only"` line (Next's bundler makes it a no-op); the real core is re-exported.

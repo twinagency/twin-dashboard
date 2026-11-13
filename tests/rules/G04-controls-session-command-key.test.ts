@@ -14,7 +14,7 @@
  * two distinct agency grants (different actor) sending the identical command produce DIFFERENT keys, so a fix that simply drops
  * the actor from the hash stays caught.
  * Turns green when the actor (and with it the key) comes from a stable principal (e.g. the named owner) instead of the session token.
- * Green since G04: the route opts in to the named owner (namedOwnerActorFor, lib/onlyfans/route.ts), so the key and the posted actor
+ * Green since G04: the route opts in through authorizeOnlyFansRead `pilotIdentity` (lib/onlyfans/route.ts) and uses ctx.pilotActor, so the key and the posted actor
  * survive a re-sign-in; a lookup a retry could answer differently (here a 429) refuses 503 before upstream. ctx.actor itself stays
  * the session actor (uploads, tests/rules/G04-upload-session-actor.test.ts). A shared-password session (no named owner) keys by session.
  */

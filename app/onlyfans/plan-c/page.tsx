@@ -1,9 +1,8 @@
-import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import PlanCConsole from "@/components/onlyfans-preview/PlanCConsole";
 import { CreatorPlatformEmpty, CreatorPlatformHeading } from "@/components/onlyfans-preview/CreatorPlatformPage";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
-import { planCOperatorOnly } from "@/lib/onlyfans/plan-c-route";
+import { planCKeyScope, planCOperatorOnly } from "@/lib/onlyfans/plan-c-route";
 import { configuredPlanCBackend } from "@/lib/onlyfans/plan-c-backend";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +28,6 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>
-    {/* Scopes this operator's saved command keys in the tab; a hash, so the backend actor never reaches the browser. */}
-    <PlanCConsole accountId={accountId} operatorScope={createHash("sha256").update(`plan-c-keys:${operator.actor}`).digest("hex").slice(0, 16)} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
+    <PlanCConsole accountId={accountId} operatorScope={planCKeyScope(operator.actor)} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
   </div>;
 }

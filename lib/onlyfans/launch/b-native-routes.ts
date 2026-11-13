@@ -5,7 +5,6 @@ import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
 import { bGate, bAnswer, bRefuse } from "./b-route";
 import { internalOperator } from "../reads";
-import { namedOwnerActorFor } from "../route";
 import {
   configuredNativeConfigurationBackend,
   type NativeResult,
@@ -94,7 +93,8 @@ export async function memoryFan(
   fan: string,
   write = false,
 ) {
-  const g = await bGate(request, account, write, "chat");
+  // A correction's key hashes the actor: the named owner keeps it across sign-ins (reads need no lookup).
+  const g = await bGate(request, account, write, "chat", write);
   if (!("ctx" in g)) return g;
   if (!decimalId(fan)) return invalid();
   const call = configuredNativeConfigurationBackend(g.ctx.fetch);
@@ -151,13 +151,12 @@ export async function memoryFan(
       : text(body.value, 600) && !!body.value.trim())
   )
     return invalid();
-  // The key hashes the actor: the named owner keeps it across sign-ins; a lookup that may answer differently refuses before upstream.
-  const actor = await namedOwnerActorFor(g.ctx);
-  if (actor === "unavailable") return unavailable();
+  const actor = g.ctx.pilotActor ?? g.ctx.actor;
+  if (!actor) return bRefuse(403, "Your team access is read-only.", "agency_read_only");
   const r = await call(g.accountId, `${base}/corrections`, "POST", {
     ...body,
     actor,
-    commandKey: identity(actor!, g.accountId, `${base}/corrections`, body),
+    commandKey: identity(actor, g.accountId, `${base}/corrections`, body),
   });
   if (!r.ok) return fail(r);
   const correction = parseCorrectionAck(r.data.correction);

@@ -5,15 +5,17 @@
  * fail permission at the backend (twin-onlyfans-backend content_sync_media.py checks the lease actor).
  * Pins: (1) the REAL content-sync upload route, driven through tests/rules/controls-route.child.ts as an internal operator whose named
  * owner resolves, posts the session actor, not the named owner; (2) currentUploadPermission refuses a named-owner actor and admits
- * the same operator's session actor (fake DB that verifies only the session hash); (3) at type level the upload boundaries take a
- * SessionActor only (the @ts-expect-error lines fail `npm run typecheck` if a NamedOwnerActor becomes assignable).
+ * the same operator's session actor (fake DB that verifies only the session hash); (3) at type level the content-sync call takes a
+ * SessionActor only (lib/onlyfans/actor.ts; the @ts-expect-error line fails `npm run typecheck` if a NamedOwnerActor becomes
+ * assignable). currentUploadPermission takes a plain string: its caller passes a wire value, and (2) checks it at runtime.
  */
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
-import { currentUploadPermission, type SessionActor } from "../../lib/onlyfans/upload-permission";
+import { currentUploadPermission } from "../../lib/onlyfans/upload-permission";
+import type { SessionActor } from "../../lib/onlyfans/actor";
 import type { SyncCall } from "../../lib/onlyfans/content-sync-route";
 import { controlsChild, NAMED_OWNER, SESSION_A } from "./controls-fixtures";
 
@@ -43,7 +45,6 @@ test("upload permission refuses a named-owner actor and admits the same operator
     hashes.push(input.p_session_hash);
     return { data: input.p_session_hash === sha(SESSION_A), error: null };
   } } as unknown as SupabaseClient;
-  // @ts-expect-error a named owner is never an upload actor
   assert.equal(await currentUploadPermission(owner, CREATOR, db), false);
   assert.equal(await currentUploadPermission(SESSION_ACTOR, CREATOR, db), true);
   assert.equal(hashes.length, 2, "both actors reached the live session check");

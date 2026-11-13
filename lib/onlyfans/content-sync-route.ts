@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "./route";
-import type { SessionActor } from "./upload-permission";
+import type { SessionActor } from "./actor";
 import { readCommandJson } from "./command-json";
 import { canonicalContent } from "./content";
 import { configuredContentSyncBackend, type ContentSyncBackend, type SyncFailure } from "./content-sync-backend";

@@ -3,7 +3,7 @@ import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createContentSyncBackend } from "../lib/onlyfans/content-sync-backend";
 import { dispatchSync, isChunkPath, type SyncCall } from "../lib/onlyfans/content-sync-route";
-import type { SessionActor } from "../lib/onlyfans/upload-permission";
+import type { SessionActor } from "../lib/onlyfans/actor";
 import { COVERAGE_LABELS, DRAFT_STATE_LABELS, MAX_SYNC_FILE_BYTES, SYNC_CHUNK_BYTES, SYNC_HEADER, SYNC_SCHEMA, UNPUBLISHED_UPLOAD_UNAVAILABLE,
   chunkIndex, parseChunkResponse, parseCommandResponse, parseConflict, parseConflictsResponse, parseDraft, parseDraftResponse, parseDraftsPage,
   parseFailureCode, parseOperation, parseOperationResponse, parseOperationsPage, parseResolveResponse, parseSettingsResponse, parseStatusResponse,

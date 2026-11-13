@@ -133,9 +133,6 @@ const routeMock = {
   PRIVATE_HEADERS,
   denialResponse,
   authorizeOnlyFansRead,
-  // Not mirrored: the named-owner lookup. This operator is a shared session with no named owner, so the opt-in actor is ctx.actor.
-  namedOwnerActorFor: async (ctx: { actor: string | null }) => ctx.actor,
-  OWNER_UNAVAILABLE: { ok: false, status: 503, state: "error", code: "owner_unavailable", error: "Your sign-in could not be verified just now. Try again." },
   requireOnlyFansRead: async (options: ReadOptions = {}) => {
     const ctx = await authorizeOnlyFansRead(options);
     return "ok" in ctx ? denialResponse(ctx) : ctx;

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { currentUploadPermission, type SessionActor } from "../lib/onlyfans/upload-permission";
+import { currentUploadPermission } from "../lib/onlyfans/upload-permission";
 
 const agency = "11111111-1111-4111-8111-111111111111", user = "22222222-2222-4222-8222-222222222222";
 const creator = "33333333-3333-4333-8333-333333333333", revision = "44444444-4444-4444-8444-444444444444";
-const actor = `agency-user:${agency}:${user}` as SessionActor;
+const actor = `agency-user:${agency}:${user}`;
 const state = { active: true, manage: true, assigned: true, owner: true, failure: false, selected: false };
 let calls = 0;
 const db = {
@@ -44,11 +44,11 @@ async function main() {
   state.failure = true;
   assert.equal(await currentUploadPermission(actor, creator, db), false);
   state.failure = false;
-  assert.equal(await currentUploadPermission(`op-session:${"a".repeat(64)}` as SessionActor, creator, db), true);
+  assert.equal(await currentUploadPermission(`op-session:${"a".repeat(64)}`, creator, db), true);
   state.owner = false;
-  assert.equal(await currentUploadPermission(`op-session:${"a".repeat(64)}` as SessionActor, creator, db), false);
+  assert.equal(await currentUploadPermission(`op-session:${"a".repeat(64)}`, creator, db), false);
   const before = calls;
-  assert.equal(await currentUploadPermission("forged" as SessionActor, creator, db), false);
+  assert.equal(await currentUploadPermission("forged", creator, db), false);
   assert.equal(await currentUploadPermission(actor, "invalid-creator", db), false);
   assert.equal(calls, before);
   console.log("upload permission: 11 checks passed; live lookup required at each boundary");

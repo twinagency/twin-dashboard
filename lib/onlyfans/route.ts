@@ -9,7 +9,7 @@ import { configuredBackendPurpose } from "./backend-transport";
 import type { AgencyIdentity } from "@/lib/agency-identity";
 import { isAuthed } from "@/lib/auth";
 import { namedOwnerActor } from "./plan-c-owner";
-import type { NamedOwnerActor, SessionActor } from "./upload-permission";
+import type { NamedOwnerActor, SessionActor } from "./actor";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import { configuredOnlyFansBackend, type OnlyFansBackend } from "./backend";
@@ -24,8 +24,11 @@ export function denialResponse(denial: ReadDenial): NextResponse {
   return NextResponse.json(denialBody(denial), { status: denial.status, headers: PRIVATE_HEADERS });
 }
 
-export const OWNER_UNAVAILABLE = { ok: false, status: 503, state: "error", code: "owner_unavailable", error: "Your sign-in could not be verified just now. Try again." } as const satisfies ReadDenial;
-
+/**
+ * `pilotIdentity` opts a route in to the internal operator's named owner as `ctx.pilotActor`: a stable actor across sign-ins, for
+ * Plan C and for routes whose backend binds state to the actor (handover requests, memory correction). `ctx.actor` stays the session
+ * actor, the only kind an upload may carry. A lookup a retry could answer differently refuses 503 before any upstream call.
+ */
 type ReadOptions = { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean };
 
 /**
@@ -86,20 +89,10 @@ export async function authorizeOnlyFansRead(options: ReadOptions = {}): Promise<
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   // ctx.actor is always the session's own actor: revocable per session, so the only kind upload permission admits.
   const actor = (grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null)) as SessionActor | null;
-  // Plan C admits only a named owner, never a shared password-admin session.
+  // A named owner only, never a shared password-admin session (no owner identity: null).
   const pilotActor = options.pilotIdentity && internalOperator(auth) ? await namedOwnerActor(token) : null;
-  if (pilotActor === "unavailable") return OWNER_UNAVAILABLE;
+  if (pilotActor === "unavailable") return { ok: false, status: 503, state: "unavailable", code: "owner_unavailable", error: "Your sign-in could not be verified just now. Try again." };
   return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };
-}
-
-/**
- * Opt-in stable actor for a route whose backend binds state to the actor across sign-ins (handover requests, memory correction):
- * the internal operator's named owner when there is one, else ctx.actor. A lookup a retry could answer differently is a 503
- * owner_unavailable refusal (OWNER_UNAVAILABLE), never a fallback that re-keys the same intent. Never for uploads, which stay on ctx.actor.
- */
-export async function namedOwnerActorFor(ctx: ReadContext): Promise<SessionActor | NamedOwnerActor | null | "unavailable"> {
-  if (!internalOperator(ctx.auth)) return ctx.actor;
-  return await namedOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) ?? ctx.actor;
 }
 
 export function readResponse<T>(result: ReadResult<T>): NextResponse {
