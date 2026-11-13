@@ -7,6 +7,7 @@
 import { PLAN_C_MAX_BODY_BYTES, PLAN_C_SCHEMA, isPlanCCommandKey, isPlanCConversationAction, isPlanCDraftAction, isPlanCId, isPlanCRequestId,
   planCEvidenceRef, validateEditTexts, validateEvidenceRef, validateRejectReason, type PlanCDraftAction } from "./plan-c";
 import type { PlanCBackend } from "./plan-c-backend";
+import { isOperatorActor } from "./upload-permission";
 
 export type PlanCHttp = { status: number; body: Record<string, unknown> };
 /** A Plan C refusal: nothing was applied. Shared by the proxy rules here and the route gate in plan-c-guard.ts. */
@@ -20,7 +21,7 @@ const revision = (value: unknown): value is number => typeof value === "number" 
 export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agency: boolean; viewAs: boolean; agencyGrant?: unknown }; actor: string | null; pilotActor?: string | null; canManage: boolean }):
   { ok: true; actor: string } | { ok: false; status: 401 | 403; error: string } {
   if (!ctx.auth.operatorSession) return { ok: false, status: 401, error: "Sign in as the operator to use Plan C approvals." };
-  if (ctx.auth.agency || ctx.auth.agencyGrant || ctx.auth.viewAs || !ctx.canManage || !ctx.pilotActor || !/^op-session:[0-9a-f]{64}$/.test(ctx.pilotActor))
+  if (ctx.auth.agency || ctx.auth.agencyGrant || ctx.auth.viewAs || !ctx.canManage || !isOperatorActor(ctx.pilotActor))
     return { ok: false, status: 403, error: "Plan C approvals are available to the operator only." };
   return { ok: true, actor: ctx.pilotActor };
 }

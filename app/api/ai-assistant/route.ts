@@ -1,11 +1,13 @@
+import { randomUUID } from "node:crypto";
 import { NextRequest } from "next/server";
 import { orChatWithToolsStream } from "@/lib/openrouter";
 import { TOOL_DEFS, executeTool } from "./tools";
 import { WRITE_TOOL_DEFS, WRITE_TOOL_NAMES } from "./write-tools";
 import { NAV_TOOL_DEFS, NAV_TOOL_NAMES, resolveNavTool } from "./nav-tools";
 import { describeProposal, type Proposal } from "./proposals";
-import { createConversation, appendMessage, getConversationMessages } from "./db";
+import { createConversation, appendMessage, getConversationMessages, saveTurn } from "./db";
 import { CLONE_TOGGLE_FIELDS, CLONE_DIAL_FIELDS } from "@/app/clones/toggle-fields";
+import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -130,6 +132,8 @@ function stripEmDashes(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Same-origin only (lib/form-origin.ts): a cross-origin text/plain POST needs no preflight and costs a model call.
+  if (!trustedFormOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
   let body: { conversationId?: string; message?: string };
   try {
     body = await req.json();
@@ -170,6 +174,13 @@ export async function POST(req: NextRequest) {
       const toolsUsed = new Set<string>();
       const writes: { summary: string }[] = [];
       const proposals: Proposal[] = [];
+      // This turn's assistant row: created at the first proposal, so every card the operator sees is stored
+      // (and approvable) even while the turn is still streaming or if it later errors.
+      let turnId: string | null = null;
+      let failed = false;
+      const persistTurn = async () => {
+        turnId = await saveTurn(finalConversationId, turnId, assistantText, { tools: [...toolsUsed], writes, proposals });
+      };
 
       // Per-request so it can push proposals and navigations onto THIS stream.
       //
@@ -180,8 +191,19 @@ export async function POST(req: NextRequest) {
       const dispatchTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
         if (WRITE_TOOL_NAMES.has(name)) {
           const { summary, heavy } = describeProposal(name, args);
-          const proposal: Proposal = { id: `p${proposals.length + 1}`, tool: name, args, summary, heavy };
+          const proposal: Proposal = { id: randomUUID(), tool: name, args, summary, heavy };
           proposals.push(proposal);
+          try {
+            await persistTurn();
+          } catch (e) {
+            proposals.pop();
+            console.error("[ai-assistant] could not store a proposal", e);
+            return {
+              status: "not_queued",
+              applied: false,
+              note: `NOT APPLIED and NOT QUEUED: the proposal for "${summary}" could not be saved, so no approval card was shown. Tell the operator that in one line.`,
+            };
+          }
           send({ type: "proposal", ...proposal });
           // What the MODEL is told. Worded so it cannot reasonably narrate this
           // as a completed change, and so it stops rather than trying again.
@@ -236,17 +258,19 @@ export async function POST(req: NextRequest) {
           assistantText = cleaned;
           send({ type: "correction", text: cleaned });
         }
-
-        if (assistantText.trim()) {
-          await appendMessage(finalConversationId, "assistant", assistantText, {
-            tools: [...toolsUsed],
-            writes,
-            proposals,
-          });
-        }
       } catch (e) {
+        failed = true;
         send({ type: "error", message: e instanceof Error ? e.message : "failed" });
       } finally {
+        // Final text onto the row the first proposal created (even after an error, so it keeps this turn's text and
+        // cards), or a new row for a text-only turn that finished.
+        if (turnId || (!failed && assistantText.trim())) {
+          try {
+            await persistTurn();
+          } catch (e) {
+            send({ type: "error", message: e instanceof Error ? e.message : "failed" });
+          }
+        }
         send({ type: "done" });
         controller.close();
       }

@@ -2,6 +2,7 @@
 # Test harness. Exit 0 GREEN (PLAN/EXEC in those modes), 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
 #   fast  merge gate: premerge.sh, then every promoted test:* leaf.   full  fast plus the NEEDS leaves, each with only its listed env.
 #   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+# macOS only: elsewhere INFRA after the env check, before anything runs.
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
 #   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
@@ -171,6 +172,7 @@ envguard() {
 # ---- modes ----
 echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s (premerge ${PCAP}s)" | tee "$EV/run.log"
 envguard
+[ "$(uname -s)" = Darwin ] || infra preflight "macOS only: steps need /usr/bin/sandbox-exec"
 if [ $MODE = exec ]; then
   [ "$1" = -- ] && shift
   sandbox

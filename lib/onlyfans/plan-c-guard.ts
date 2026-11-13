@@ -13,10 +13,12 @@ const refuse = (status: number, error: string) => planCJson(planCRefused(status,
 export type PlanCRequestContext = { actor: string; accountId: string; backend: PlanCBackend; body?: unknown };
 
 /**
- * Operator only (not agency, not view-as), a configured backend, a valid account id and, for a write, a same-origin JSON body of at most 8 KB.
+ * Operator only (not agency, not view-as), a configured backend, a valid account id, for a write a same-origin JSON body of at most 8 KB,
+ * and the backend's pilot scope for this actor on this account.
  * Returns a response to send when any of that fails, so a route cannot forget a gate.
  */
-export async function planCGate(request: NextRequest, rawAccountId: string, write: boolean): Promise<PlanCRequestContext | NextResponse> {
+export async function planCGate(request: NextRequest, target: string | { accountId: string; action: string }, write: boolean): Promise<PlanCRequestContext | NextResponse> {
+  const { accountId: rawAccountId, action } = typeof target === "string" ? { accountId: target, action: null } : target;
   // `agency: false` keeps every agency identity out; planCOperatorOnly then insists on the internal operator session.
   const ctx = await authorizeOnlyFansRead({ agency: false, write, pilotIdentity: true });
   // Raised before any upstream call, so nothing was applied: tagged as a Plan C refusal, never left to the client to infer.
@@ -27,12 +29,19 @@ export async function planCGate(request: NextRequest, rawAccountId: string, writ
   if (!accountId) return refuse(400, "That account reference is invalid.");
   const backend = configuredPlanCBackend();
   if (!backend) return refuse(503, "Plan C approvals are not configured.");
-  if (!write) return { actor: operator.actor, accountId, backend };
-  if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
-      request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
-    return refuse(403, "This change must be requested from this dashboard.");
   let body: unknown;
-  try { body = await readCommandJson(request, PLAN_C_MAX_BODY_BYTES); }
-  catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request is invalid."); }
-  return { actor: operator.actor, accountId, backend, body };
+  if (write) {
+    if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
+        request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
+      return refuse(403, "This change must be requested from this dashboard.");
+    try { body = await readCommandJson(request, PLAN_C_MAX_BODY_BYTES); }
+    catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request is invalid."); }
+  }
+  // The backend's pilot scope for THIS actor and account, before any read or write is relayed. A refusal (403) or a missing
+  // config (404) refuses everything. An outage (502/503) refuses everything except STOP, a brake: the backend re-checks account
+  // scope and pilot actor on STOP, so an outage here must not make STOP harder to trigger than a go.
+  const scope = await backend.scope(accountId, operator.actor);
+  if (!scope.ok && !(write && action === "stop" && (scope.status === 502 || scope.status === 503)))
+    return refuse(scope.status, scope.status === 502 || scope.status === 503 ? "Pilot configuration is unavailable. Retry." : "This pilot account is not available to this session.");
+  return write ? { actor: operator.actor, accountId, backend, body } : { actor: operator.actor, accountId, backend };
 }
