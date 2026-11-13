@@ -1,5 +1,5 @@
 /**
- * KNOWN RED (W1 lane 5 finding 3; REVIEW.md invariant 7 "Holds and STOP": a STOP is never harder to trigger than a go).
+ * Regression guard, green since G05. Was KNOWN RED (W1 lane 5 finding 3; REVIEW.md invariant 7 "Holds and STOP": a STOP is never harder to trigger than a go).
  * app/onlyfans/plan-c/page.tsx:24-25 reads drafts AND pilot-scope and returns "This pilot account is not available to this
  * session." when either fails, so one failing draft read removes the whole console (STOP, takeover, unresolved) although the
  * scope check succeeded; PlanCConsole (components/onlyfans-preview/PlanCConsole.tsx) loads drafts itself and has its own
@@ -13,9 +13,9 @@
  * STOP assertion is satisfiable); pilot-scope 502 (drafts ok) renders no console, so a fix that opens the console on any failure
  * (fail-open) stays caught. The scope control does not pin the message: finding 3 also asks that an outage stop reading as
  * "not available to this session", so the fix is free to change that text.
- * Turns green when, with drafts failing and scope ok, the mounted console still offers STOP for the conversation known from
+ * Held since G05: with drafts failing and scope ok, the mounted console still offers STOP for the conversation known from
  * unresolved work (page gates on scope only; console shows the draft failure). A fix that renders a console with no STOP stays
- * red. Team's Claude owns the fix.
+ * red.
  */
 import assert from "node:assert/strict";
 import test from "node:test";

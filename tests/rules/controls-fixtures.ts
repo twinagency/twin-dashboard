@@ -56,7 +56,7 @@ export type OpsCase = { canAct: unknown; panel: boolean; rows: number; reconcile
 
 /** What each route-child scenario prints. */
 export type RouteScenarios = {
-  requests: Record<"valid" | "no environment" | "session A" | "session A again" | "session B" | "agency user 1" | "agency user 2"
+  requests: Record<"valid" | "no environment" | "handover no environment" | "session A" | "session A again" | "session B" | "agency user 1" | "agency user 2"
     | "foreign origin" | "cross-site" | "text/plain" | "oversize", RequestCase>;
   agency: Record<EngineRead | "requests", RouteCase>;
   "plan-c-no-owner": Record<"named owner" | "no owner", Record<PlanCRoute, RouteCase>>;

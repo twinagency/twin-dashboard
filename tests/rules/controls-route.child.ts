@@ -20,6 +20,8 @@ const requestUrl = `${DASH}/api/onlyfans-controls/accounts/of-a/conversations/${
 // TEST-CHANGE note: the finding-2 fix that drops the browser field (backend stamps the prefix) changes only this line.
 const VALID_COMMAND = { action: "complete", expectedRevision: 3, note: "checked the vault", environment: "simulation" };
 const { environment: _dropped, ...NO_ENVIRONMENT } = VALID_COMMAND;
+/** A non-resolution action naming no environment: refused like a resolution, never forwarded under a label nobody chose. */
+const HANDOVER_NO_ENVIRONMENT = { action: "request_handover", expectedRevision: 3 };
 const CHAT_NOTE = { ...VALID_COMMAND, note: "checked the chat" };
 
 /** POST the request action through the real route; the raw response plus the backend posts and calls it caused. */
@@ -120,6 +122,7 @@ runChild<RouteScenarios>({
   requests: async () => ({
     valid: await sendRequest(null, SESSION_A, VALID_COMMAND),
     "no environment": await sendRequest(null, SESSION_A, NO_ENVIRONMENT),
+    "handover no environment": await sendRequest(null, SESSION_A, HANDOVER_NO_ENVIRONMENT),
     "session A": await sendRequest(null, SESSION_A, CHAT_NOTE),
     "session A again": await sendRequest(null, SESSION_A, CHAT_NOTE),
     "session B": await sendRequest(null, SESSION_B, CHAT_NOTE),

@@ -1,14 +1,9 @@
 /**
- * KNOWN RED (W1 lane 1 finding 3, structure S5; REVIEW.md invariant 7 "Isolation", "`[accountId]` routes scope-checked").
- * lib/onlyfans/plan-c-guard.ts:19-29 (planCGate) authenticates the named owner but never asks the backend whether that actor may
- * act on THIS account: the page does (`backend.scope(accountId, actor)`, app/onlyfans/plan-c/page.tsx:24-25), the API routes do
- * not, and plan-c-guard.ts:17 claims "a route cannot forget a gate". Measured: with pilot-scope answering 403 for account of-b,
- * POST .../accounts/of-b/plan-c/conversations/of-b:1/stop is relayed upstream with the shared CONTROL token and returns 200.
- * Turns green when a write on an account outside the actor's pilot scope never reaches the backend and is answered as a Plan C
- * refusal (any non-200 status: backend.scope maps an upstream 403 to 503, so the exact status is the fix's choice).
- * Runs the real route in tests/rules/plan-c-gate-scope.child.ts (only next/headers and the server-only line replaced, fake
- * fetch at the wire), via planCRouteChild in tests/rules/plan-c-fixtures.ts.
- * Team's Claude owns the fix. Not wired into npm scripts.
+ * Regression guard (G05, W1 lane 1 finding 3; REVIEW invariant 7 "Isolation", "`[accountId]` routes scope-checked").
+ * lib/onlyfans/plan-c-guard.ts (planCGate) asks the backend's pilot scope for THIS actor on THIS account before relaying any Plan C
+ * read or write. A write on an account outside the actor's scope never reaches the backend and is answered as a Plan C refusal.
+ * Runs the real conversation route via planCRouteChild("scope") in tests/rules/plan-c-fixtures.ts (child: tests/rules/plan-c-route.child.ts;
+ * only next/headers and the server-only line replaced, fake fetch at the wire; pilot-scope answers 403 for any account but MOCK_ACCOUNT).
  */
 import assert from "node:assert/strict";
 import test from "node:test";

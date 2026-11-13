@@ -10,7 +10,7 @@
 //       says it requires a verified session; a grant without an agency identity is incoherent and must be refused.
 // L9-23 operations.ts:63-89 — counters are not reconciled with reasons: delivery.unknown 1 with reasons [] parses, and
 //       section8.ts:109 then shows "No processing hold is recorded." beside unknown deliveries (inv 7 ledger unknown is a hold).
-// Team's Claude owns the fix. Not wired into npm scripts. Run: node --import tsx --test <this file>.
+// Green since G05 (L9-20). Runs in npm run test:rules.
 // Offline: a fake OnlyFansBackend object (the read service's injected seam, as scripts/check-onlyfans-read.ts does).
 // OPERATOR/AGENCY below use the current ReadAuth shape. L9-22's fix changes ReadAuth; update the auth constants with a TEST-CHANGE line.
 import assert from "node:assert/strict";

@@ -24,9 +24,7 @@
 //       and fileId are not asserted).
 //       Declared limit: the new revision (4) is offered ONLY by the mocked configuredVaultBackend().get; the 409 body, the read backend's
 //       account list and the uploads read carry none. A fix that learns the revision anywhere else stays red here and needs a TEST-CHANGE.
-// Team's Claude owns the fixes. Not wired into npm scripts or init.sh. Runs with plain commands:
-//   node --import tsx --test --test-name-pattern='^control' tests/known-red/W3-api-onlyfans-plus7-shared-media.test.ts   (green)
-//   node --import tsx --test --test-skip-pattern='^control' tests/known-red/W3-api-onlyfans-plus7-shared-media.test.ts   (red, ERR_ASSERTION)
+// Green since G05 (the B-C3 tests; B-C2 stays in tests/known-red). Runs in npm run test:rules.
 // Synthetic values only.
 import assert from "node:assert/strict";
 import test, { beforeEach, mock } from "node:test";

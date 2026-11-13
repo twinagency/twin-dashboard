@@ -1,7 +1,8 @@
 /**
- * Known red (rule e, tenant isolation): `applyConversation` (lib/onlyfans-preview/selection.ts:377) caches a detail
- * payload under account A even when the payload says account B. Its sibling `appendOlderConversation` (:471) refuses it.
- * Control: A's own payload applies. Turns green when applyConversation checks result.data.accountId/conversationId.
+ * Regression guard (G05, rule e, tenant isolation): `applyConversation` (lib/onlyfans-preview/selection.ts) never caches a detail
+ * payload under account A when the payload says account B (its sibling `appendOlderConversation` refuses it too). The mismatch is
+ * stored as an error for that thread, so the thread does not stay "loading" forever.
+ * Control: A's own payload applies as ready.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -13,10 +14,14 @@ const detail = (accountId: string) => ({ accountId, conversationId: FAN, message
 
 test("control: account A's own detail applies", () => {
   const r = requestConversation(initialSelectionState(), A, FAN);
-  assert.equal(applyConversation(r.state, A, FAN, r.generation, r.seq, { status: "ready", data: detail(A) }).applied, true);
+  const out = applyConversation(r.state, A, FAN, r.generation, r.seq, { status: "ready", data: detail(A) });
+  assert.equal(out.applied, true);
+  assert.equal(out.state.byAccount[A]?.detail[FAN]?.status, "ready");
 });
 
-test("account B's detail for the same fan id is refused when applied as A's", () => {
+test("account B's detail for the same fan id is never cached as A's; A's thread shows an error, not loading", () => {
   const r = requestConversation(initialSelectionState(), A, FAN);
-  assert.equal(applyConversation(r.state, A, FAN, r.generation, r.seq, { status: "ready", data: detail(B) }).applied, false);
+  const stored = applyConversation(r.state, A, FAN, r.generation, r.seq, { status: "ready", data: detail(B) }).state.byAccount[A]?.detail[FAN];
+  assert.equal(stored?.status, "error");
+  assert.ok(stored && !("data" in stored));
 });

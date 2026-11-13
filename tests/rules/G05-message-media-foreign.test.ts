@@ -13,9 +13,7 @@
 //       mocked (node:test mock.timers), and the fake upstream body errors when its fetch signal aborts, as undici's does. The test ticks
 //       9 s after the headers arrived, then delivers the rest. Fixed looks like the timeout cleared once headers arrive (vault-media-backend
 //       stream() :42,:46 does exactly that), so the whole body is served.
-// Team's Claude owns the fixes. Not wired into npm scripts or init.sh. Runs with plain commands:
-//   node --import tsx --test --test-name-pattern='^control' tests/known-red/W3-api-onlyfans-plus7-message-media.test.ts   (green)
-//   node --import tsx --test --test-skip-pattern='^control' tests/known-red/W3-api-onlyfans-plus7-message-media.test.ts   (red, ERR_ASSERTION)
+// Green since G05 (the B-C5 tests; B-C4 stays in tests/known-red). Runs in npm run test:rules.
 // Synthetic values only.
 import assert from "node:assert/strict";
 import test, { beforeEach, type TestContext } from "node:test";

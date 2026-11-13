@@ -1,5 +1,5 @@
 /**
- * KNOWN RED (W1 lane 5 finding 1, page half of RISKS D6; REVIEW.md invariant 7 "Capability": block a diff that loosens who may
+ * Regression guard, green since G05. Was KNOWN RED (W1 lane 5 finding 1, page half of RISKS D6; REVIEW.md invariant 7 "Capability": block a diff that loosens who may
  * `mark_reconciled`). app/onlyfans/operations/page.tsx:26 passes `canAct={ctx.canChat}` to OperationsView, which hands it to
  * EngineUnresolvedPanel; components/onlyfans-preview/EngineUnresolved.tsx:27 shows "Mark reconciled" when
  * `canReconcile(item) && canAct` and :84-85 posts `mark_reconciled`. A chat-only agency user (canChat true, canManage false) gets it.
@@ -7,9 +7,9 @@
  * requireOnlyFansRead + agencyScopedFetch + read backend over a fake wire), then renders the returned element in jsdom; the
  * client panel's browser fetch serves tests/contracts/fixtures/engine-unresolved-live.json (one row declares mark_reconciled).
  * Replaced: next/headers, lib/view-as-banner.ts, the server-only line of plan-c-owner.ts, *.css (see the child header).
- * Turns green when a chat-only session is not offered the reconcile control on this page (page passes the manage capability for
+ * Held since G05: a chat-only session is not offered the reconcile control on this page (page passes the manage capability for
  * reconcile, or per-action capabilities, lane 2 f14). Route half is lane 4 F1 (core-d6-chat-mark-reconciled), cited not repeated.
- * Latent until the backend serves mark_reconciled (lib/onlyfans/engine-operator.ts:6). Team's Claude owns the fix.
+ * Latent until the backend serves mark_reconciled (lib/onlyfans/engine-operator.ts:6).
  */
 import assert from "node:assert/strict";
 import test from "node:test";

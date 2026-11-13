@@ -8,6 +8,7 @@ import { trustedFormOrigin } from "@/lib/form-origin";
 import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { creatorUuid } from "@/lib/staff-creator-scope";
 import { serviceClient } from "@/lib/supabase-service";
+import { isOperatorActor } from "@/lib/onlyfans/upload-permission";
 import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, type SharedTransfer } from "@/lib/shared-media";
 
 export const dynamic = "force-dynamic";
@@ -90,7 +91,7 @@ export async function POST(request: NextRequest, context: Context) {
     if (row.clone_id !== cloneId || row.storage_path !== source.data.storage_path) return refuse("The source file changed. Review it before sharing.");
     // Agency actors must match the backend's freshly verified grant. Owner sessions may resume an owner receipt after signing in
     // again, never an agency member's: the backend binds the job to its actor, so relaying it would attribute the write to them.
-    if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !row.actor.startsWith("op-session:")) return refuse("This upload was started by another team member. Ask them to finish it.");
+    if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !isOperatorActor(row.actor)) return refuse("This upload was started by another team member. Ask them to finish it.");
     if (!active.has(row.status) && row.error_code !== "provider_cleanup_required") return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
