@@ -1,27 +1,33 @@
 #!/usr/bin/env bash
-# Test harness runner. Exit 0 EXEC, 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
-#   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+# Test harness. Exit 0 GREEN (PLAN/EXEC in those modes), 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
+#   fast  merge gate: premerge.sh, then every promoted test:* leaf.   full  fast plus the NEEDS leaves, each with only its listed env.
+#   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
 # macOS only: elsewhere INFRA after the env check, before anything runs.
-# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED).
+# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
+#   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
 #   process group; leaving processes behind fails. Detached (setsid) descendants are unsupported: the sandbox limits the network
 #   only, and the harness trusts test code not to rewrite $EV.
 #   INFRA if a *SUPABASE*URL* var is not loopback or any var names prod. CHECK_INHERITED_SANDBOX=1: see sandbox() below.
 # Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
 #   *PUBLISHABLE*) in our env or the repo's .env* files.
-# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
+# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,rows.txt,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
 [ -n "$CHECK_NICED" ] || exec env CHECK_NICED=1 nice -n 10 bash "$0" "$@"
 set -o pipefail
 cd "$(dirname "$0")/.." || exit 2
 MODE=$1
 shift
-case $MODE in # BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed
-  exec) BUDGET=0   CAP=600 OK=EXEC;;
-  *) echo "usage: scripts/check.sh exec [-- cmd...]"; exit 2;;
+case $MODE in # BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed  PRE: preflight (sandbox, deps, clean tree)
+  fast) BUDGET=900 CAP=300 OK=GREEN PRE=1;;
+  full) BUDGET=0   CAP=600 OK=GREEN PRE=1;;
+  plan) BUDGET=0   CAP=0   OK=PLAN  PRE=0;;
+  exec) BUDGET=0   CAP=600 OK=EXEC  PRE=0;;
+  *) echo "usage: scripts/check.sh fast|full|plan|exec [-- cmd...]"; exit 2;;
 esac
 lower() { [[ $1 =~ ^[0-9]+$ ]] && (( $1 > 0 && ($2 == 0 || $1 < $2) )) && echo "$1" || echo "$2"; }
 BUDGET=$(lower "$CHECK_BUDGET_SECS" $BUDGET)
 CAP=$(lower "$CHECK_STEP_SECS" $CAP)
+PCAP=$(lower "$CHECK_STEP_SECS" "$([ $MODE = fast ] && echo 600 || echo $CAP)") # the premerge step's cap: it runs every premerge suite
 T0=$(date +%s)
 SHA=$(git rev-parse --short=8 HEAD 2>/dev/null || echo nogit)
 EV=${CHECK_EVIDENCE_DIR:-.check-evidence}/$(date -u +%Y%m%dT%H%M%SZ)-$SHA
@@ -86,6 +92,7 @@ finish() {
   i=$(cnt infra)
   if (( i )); then v=INFRA; code=2; fi
   if (( f )); then v=RED; code=1; fi
+  if [ $v = GREEN ] && (( p == 0 )); then v=RED; code=1; fi # nothing passed is not GREEN
   env -i PATH="$PATH" node -e 'const [mode, sha, verdict, w, b] = process.argv.slice(1);
     const steps = require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean).map((l) => {
       const [name, status, secs, note] = l.split("\t");
@@ -129,6 +136,7 @@ tmo() {
 # step <name> cmd...: run cmd under the step cap (or what is left of the budget, if less) and record pass/fail
 step() {
   local n=$1 t s=$CAP src=cap l why rc
+  [ "$n" = premerge ] && s=$PCAP
   shift
   CUR=$n
   t=$(date +%s)
@@ -162,7 +170,7 @@ envguard() {
   return 0
 }
 # ---- modes ----
-echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s" | tee "$EV/run.log"
+echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s (premerge ${PCAP}s)" | tee "$EV/run.log"
 envguard
 [ "$(uname -s)" = Darwin ] || infra preflight "macOS only: steps need /usr/bin/sandbox-exec"
 if [ $MODE = exec ]; then
@@ -171,3 +179,25 @@ if [ $MODE = exec ]; then
   step exec "${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} "$@"
   finish
 fi
+sandbox
+if (( PRE )); then
+  [ -x node_modules/.bin/tsx ] || infra preflight "node_modules missing (deps not installed or symlink broken)"
+  [ -f next-env.d.ts ] || infra preflight "next-env.d.ts missing (run next dev/build once)"
+  [ -z "$(git status --porcelain)" ] || infra preflight "dirty tree: commit first"
+fi
+# the planner runs node: scrubbed (no NODE_OPTIONS preload, BASH_ENV...) and sandboxed like a step
+"${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} node --import tsx scripts/check-plan.ts "$MODE" >"$EV/rows.txt" 2>"$EV/logs/plan.log" ||
+  infra preflight "scripts/check-plan.ts failed: $(head -c 300 "$EV/logs/plan.log")"
+while IFS=$'\x1f' read -r n a why envs c; do
+  pe=() # the row's own env, from ours, only if set
+  for e in $envs; do
+    [ -n "${!e+x}" ] && pe+=("$e=${!e}")
+  done
+  case $MODE:$a in
+    fast:run | full:run) step "$n" "${CLEAN[@]}" ${pe[@]+"${pe[@]}"} ${BOX[@]+"${BOX[@]}"} sh -c "$c";;
+    *:skip | plan:plan) rec "$n" "$a" 0 "$why";;
+    *) rec "$n" fail 0 "unknown plan action '$a' in $MODE";;
+  esac
+done <"$EV/rows.txt"
+[ $OK != GREEN ] || grep -q $'^premerge\tpass\t' "$EV/timings.tsv" || rec premerge fail 0 "premerge did not pass: no GREEN without it"
+finish

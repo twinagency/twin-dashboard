@@ -1,5 +1,5 @@
 /**
- * Rule (F0): scripts/check.sh exec runs one step; RED beats INFRA; a step cap or blown budget is RED
+ * Rule (F0): scripts/check.sh records exactly check-plan.ts's rows for the mode; RED beats INFRA; a step cap or blown budget is RED
  * and kills the step, as does leaving processes behind or an interrupt; steps run in the loopback-only network sandbox, /usr/bin's
  * (refused without, unless opted in to an inherited one the kernel confirms); steps get a scrubbed env (premerge.sh children:
  * F0-premerge-env.test.ts); a prod Supabase name in our env is refused; no KEY/TOKEN/SECRET/PASSWORD value reaches the evidence.
@@ -8,11 +8,12 @@
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/F0-check-harness.test.ts
  */
 import assert from "node:assert/strict";
-import { execFile, spawnSync, type ChildProcess, type ExecFileException } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { execFile, execFileSync, spawnSync, type ChildProcess, type ExecFileException } from "node:child_process";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import test from "node:test";
+import { NEEDS, OWNER, plan, premergeSuites, rows } from "../../scripts/check-plan";
 
 type Verdict = { mode: string; verdict: string; sha: string; wallSecs: number; steps: { name: string; status: string; note: string }[] };
 type Done = { code: number; out: string; root: string; secs: number };
@@ -74,13 +75,35 @@ function repoCopy(extra: Record<string, string> = {}) {
   return d;
 }
 
-test("control: exec true is EXEC", MAC, async () => {
+/** A committed git repo for a real `fast` run: check.sh, check-plan.ts (or `planner`), our node_modules, a premerge.sh stub (covers
+ *  test:p, fails if the repo has PREMERGE_FAILS) and test:* scripts keeping every NEEDS/OWNER entry live, plus `scripts`. */
+function fastRepo(scripts: Record<string, string>, { planner = readFileSync("scripts/check-plan.ts", "utf8"), fails = false } = {}) {
+  const held = [...Object.keys(NEEDS), ...OWNER].map((f) => `node ${f}`).join(" && ");
+  const d = repoCopy({
+    "package.json": JSON.stringify({ scripts: { "test:p": "node ok.mjs", "test:held": held, ...scripts } }),
+    "ok.mjs": "", "bad.mjs": "process.exit(1)", "next-env.d.ts": "", ".gitignore": "node_modules\n", ...(fails ? { PREMERGE_FAILS: "" } : {}),
+  });
+  writeFileSync(join(d, "scripts/check-plan.ts"), planner);
+  writeFileSync(join(d, "scripts/premerge.sh"), '[ "$1" = --list ] && { echo test:p; exit 0; }\n[ ! -e PREMERGE_FAILS ]\n');
+  chmodSync(join(d, "scripts/premerge.sh"), 0o755);
+  symlinkSync(resolve("node_modules"), join(d, "node_modules"));
+  const commit = ["-c", "user.name=f0", "-c", "user.email=f0@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "f0"];
+  for (const a of [["init", "-q"], ["add", "."], commit]) execFileSync("git", a, { cwd: d });
+  return d;
+}
+
+test("control: exec true is EXEC; plan records exactly check-plan.ts's plan rows (name, status = action, note), never GREEN", MAC, async () => {
   const r = await run(["exec", "true"]);
   const v = verdict(r.root);
   assert.equal(r.code, 0, r.out);
   assert.deepEqual([v.mode, v.verdict, typeof v.sha, typeof v.wallSecs], ["exec", "EXEC", "string", "number"]);
   assert.deepEqual(Object.keys(v.steps[0]).slice(0, 3), ["name", "status", "secs"]);
   assert.match(r.out, /^EXEC exec @ \S+ pass=1 fail=0 skip=0 infra=0/m);
+  const p = verdict((await run(["plan"])).root);
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  const expected = rows("plan", plan(scripts, premergeSuites())).map((x) => [x.name, x.action, x.note]);
+  assert.equal(p.verdict, "PLAN");
+  assert.deepEqual(p.steps.map((s) => [s.name, s.status, s.note]), expected);
 });
 
 test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", MAC, async () => {
@@ -114,6 +137,39 @@ test("TERM to the harness kills the running step's process group", MAC, async ()
   assert.equal(r.code, 2, r.out);
   assert.ok(r.secs < 15, `took ${r.secs}s`);
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "step outlived the harness");
+});
+
+test("fast refuses (INFRA) without the loopback-only network sandbox", MAC, async () => {
+  const r = await run(["fast"], { CHECK_INHERITED_SANDBOX: "" }, { outer: LOOP });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /sandbox/);
+});
+
+test("fast is GREEN only when premerge and every run row pass: a failing leaf or premerge, an unknown action, premerge not run: RED", MAC, async () => {
+  const ok = await run(["fast"], {}, { cwd: fastRepo({ "test:ok": "node ok.mjs --x" }) });
+  assert.equal(ok.code, 0, ok.out);
+  assert.match(ok.out, /^GREEN fast @/m);
+  assert.deepEqual(verdict(ok.root).steps.filter((s) => s.status === "pass").map((s) => s.name), ["premerge", "test:ok/ok"]);
+  const plannerSrc = readFileSync("scripts/check-plan.ts", "utf8");
+  const bad = [
+    fastRepo({ "test:bad": "node bad.mjs" }),
+    fastRepo({ "test:ok": "node ok.mjs --x" }, { fails: true }),
+    fastRepo({ "test:ok": "node ok.mjs --x" }, { planner: plannerSrc.replace('action: "skip", note', 'action: "maybe", note') }),
+    fastRepo({ "test:ok": "node ok.mjs --x" }, { planner: plannerSrc.replace('kind: "run", why: "", env: ["PREMERGE_BASE"]', 'kind: "owner", why: "", env: ["PREMERGE_BASE"]') }),
+  ];
+  for (const cwd of bad) {
+    const r = await run(["fast"], {}, { cwd });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /^RED fast @/m);
+  }
+});
+
+test("the planner and the verdict writer get a scrubbed env: a NODE_OPTIONS preload never runs", MAC, async () => {
+  const d = tmp("f0-preload-");
+  writeFileSync(join(d, "pre.cjs"), `require("fs").appendFileSync(${JSON.stringify(join(d, "ran"))}, "x")`);
+  const r = await run(["plan"], { NODE_OPTIONS: `--require=${join(d, "pre.cjs")}` });
+  assert.equal(r.code, 0, r.out);
+  assert.ok(!existsSync(join(d, "ran")), "preload ran");
 });
 
 test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never a PATH shadow, and refuses (INFRA) without one", MAC, async () => {

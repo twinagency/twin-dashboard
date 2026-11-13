@@ -87,6 +87,8 @@ To typecheck everything use `npm run typecheck`. Engine UI checks: `npm run test
 
 `npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.
 
+**Merge gate: `scripts/check.sh fast` GREEN.** Modes, budgets and caps live in the script's header and mode table; which `test:*` leaves each mode runs or skips, and why, comes from `scripts/check-plan.ts`, which takes what premerge covers from `scripts/premerge.sh --list`. Exit 0 GREEN, 1 RED, 2 INFRA; evidence in `.check-evidence/`. Every `test:*` leaf is promoted by default; one that cannot run on a dev box moves to `NEEDS` in `scripts/check-plan.ts` with a reason (still runs in `full`). A fix PR adds its regression test to `tests/rules/` or a `test:*` script.
+
 ## Deploys
 
 Push to `main` builds the image in GitHub Actions and the box pulls it by digest. A push that touches only `.md`, `.txt` or `archive/` does NOT deploy — see `paths-ignore` in `.github/workflows/deploy.yml` and `ci.yml` — neither deploy nor CI runs on one. Docs live on disk and on the home server; only these `CLAUDE.md`/`README.md` files are in the repo.
