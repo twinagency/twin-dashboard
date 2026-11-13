@@ -9,7 +9,7 @@ import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { creatorUuid } from "@/lib/staff-creator-scope";
 import { serviceClient } from "@/lib/supabase-service";
 import { isOperatorActor } from "@/lib/onlyfans/upload-permission";
-import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, type SharedTransfer } from "@/lib/shared-media";
+import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, LIVE_SHARED_FILTER, type SharedTransfer } from "@/lib/shared-media";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -72,7 +72,8 @@ export async function POST(request: NextRequest, context: Context) {
   try {
     const source = await db.from(command.kind === "photo" ? "photos" : "videos").select("id,clone_id,storage_path").eq("id", command.sourceId).eq("clone_id", cloneId).maybeSingle();
     if (source.error || !source.data) return refuse("That saved media is unavailable.", 404);
-    const lookup = () => db.from("shared_media_transfers").select("*").eq("account_id", accountId).eq("source_kind", command.kind).eq("source_id", command.sourceId).maybeSingle();
+    // Only the live receipt (at most one, by the partial unique index); retryable terminal receipts stay as history and a new one starts.
+    const lookup = () => db.from("shared_media_transfers").select("*").eq("account_id", accountId).eq("source_kind", command.kind).eq("source_id", command.sourceId).or(LIVE_SHARED_FILTER).maybeSingle();
     let existing = await lookup(); if (existing.error) return refuse("Shared upload history is unavailable.", 503);
     let row = existing.data as SharedTransfer | null;
     if (!row) {

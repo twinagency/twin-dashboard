@@ -73,7 +73,8 @@ function fakeDb() {
         return { data: hit.map(row => ({ ...row })), error: null };
       };
       const q: Record<string, unknown> = {
-        select: () => q, eq: (k: string, v: unknown) => { filters.push([k, v]); return q; }, order: () => q, limit: () => q,
+        // or(): the route's live-receipt filter. Every receipt here is live (prepared), so it selects it; G30b evaluates the filter.
+        select: () => q, eq: (k: string, v: unknown) => { filters.push([k, v]); return q; }, or: () => q, order: () => q, limit: () => q,
         insert: (v: Row | Row[]) => { op = { kind: "insert", values: [v].flat() }; return q; },
         upsert: (v: Row | Row[]) => { op = { kind: "upsert", values: [v].flat() }; return q; },
         update: (patch: Row) => { op = { kind: "update", patch }; return q; },

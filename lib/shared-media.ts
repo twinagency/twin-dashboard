@@ -33,6 +33,14 @@ export type SharedTransfer = {
   file_id: string; connection_revision: number; actor: string; job_id: string | null; media_id: string | null;
   status: string; processing: boolean; received_bytes: number; error_code: string | null;
 };
+// A receipt is history once it reaches one of these statuses: the same file may then be shared to the account again. Every
+// other receipt is live and blocks a new one; so does a retryable one held for provider cleanup. "complete" stays live, so a
+// repeated click never uploads a finished file twice. Mirrored exactly by the partial unique index in
+// supabase/migrations/20261113100300_shared_media_retry_after_failure.sql (tests/rules/G30b-shared-media-retry-index.test.mjs).
+export const RETRYABLE_SHARED_STATUSES = ["failed", "interrupted", "superseded", "expired"] as const;
+export const SHARED_CLEANUP_HOLD = "provider_cleanup_required";
+/** The live predicate as a PostgREST `.or()` filter. */
+export const LIVE_SHARED_FILTER = `status.not.in.(${RETRYABLE_SHARED_STATUSES.join(",")}),error_code.eq.${SHARED_CLEANUP_HOLD}`;
 export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
   if (row.job_id && row.job_id !== job.jobId || job.files.length !== 1) throw Error("upload_mismatch");
   const file = job.files[0];
