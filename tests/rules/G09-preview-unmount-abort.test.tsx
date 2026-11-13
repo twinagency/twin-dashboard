@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-2 P20): MessageAssetPreview's load effect cleans up. Unmount aborts every request it issued and
 // revokes every blob URL it created, so a conversation switch neither leaks a buffered video nor lets a late response paint.
 // Offline: jsdom, fetch stubbed, URL.createObjectURL / revokeObjectURL stubbed, synthetic ids.
-import { click, close, dom, mount, never, resetDom, stubFetch, unmount } from "../helpers/w3-preview1-dom";
+import { calls, click, close, dom, mount, never, resetDom, serve, unmount } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after, afterEach, beforeEach, mock } from "node:test";
 import MessageAssetPreview from "../../components/onlyfans-preview/MessageAssetPreview";
@@ -20,31 +20,31 @@ afterEach(async () => { mock.restoreAll(); await resetDom(); });
 after(close);
 
 test("control: the preview loads through the stubbed route and renders the object URL", async () => {
-  const fetchStub = stubFetch(() => image());
+  serve(() => image());
   await mount(<MessageAssetPreview {...props} />);
-  assert.match(fetchStub.calls[0]?.url ?? "", /\/message-media\/fan-9\/msg-1\/701\/preview$/);
+  assert.match(calls[0]?.url ?? "", /\/message-media\/fan-9\/msg-1\/701\/preview$/);
   assert.equal(document.querySelector("[data-of-message-asset] img")?.getAttribute("src"), "blob:fixture/1");
   assert.deepEqual(created, ["blob:fixture/1"]);
 });
 
 // The reds assert outcomes only: a fix that stops using fetch or blobs passes vacuously (the control proves today's path does).
 test("P20: unmount aborts every preview request it issued", async () => {
-  const fetchStub = stubFetch(() => never());
+  serve(() => never());
   await mount(<MessageAssetPreview {...props} />);
   await unmount();
-  const aborted = fetchStub.calls.map(call => call.signal?.aborted ?? "no signal");
+  const aborted = calls.map(call => call.signal?.aborted ?? "no signal");
   assert.ok(aborted.every(state => state === true), `preview requests left running after unmount: ${JSON.stringify(aborted)}`);
 });
 
 test("P20: unmount revokes every blob URL it created", async () => {
-  stubFetch(() => image());
+  serve(() => image());
   await mount(<MessageAssetPreview {...props} />);
   await unmount();
   assert.deepEqual([...revoked].sort(), [...created].sort(), "object URLs created for the preview are never revoked");
 });
 
 test("FL2: a photo URL handed to window.open is not revoked at unmount, only a minute later", async () => {
-  stubFetch(() => image());
+  serve(() => image());
   const opened: string[] = [];
   dom.window.open = ((url: string) => { opened.push(url); return null; }) as typeof dom.window.open;
   await mount(<MessageAssetPreview {...props} />);

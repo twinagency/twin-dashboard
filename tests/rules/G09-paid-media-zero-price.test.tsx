@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-2 P7): paid media priced 0 is not sendable. A paid intent needs a price inside the backend's
 // paid bound (USD 3.00 to 200.00, twin-onlyfans-backend service/onlyfans_runtime/text_delivery.py:385); 0 means free there, so
 // sending it would deliver the paid intent as free. P8/P9 are not G09. Offline: jsdom, fetch stubbed, synthetic ids.
-import { close, json, mount, resetDom, stubFetch } from "../helpers/w3-preview1-dom";
+import { close, json, mount, resetDom, serve } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after, afterEach, beforeEach } from "node:test";
 import { clearDrafts, draftKey, writeDraft } from "../../lib/onlyfans/inbox-drafts";
@@ -16,7 +16,7 @@ const offer = (itemId: string, readiness = "terms_checked") => ({ itemId, label:
 const contentPage = (items: unknown[], nextCursor: string | null = null) => json({ workspace: { schemaVersion: "of-workspace.v2", section: "content", accountId: A.accountId,
   asOf: "2026-10-17T09:00:00.000Z", lastCompleteSyncAt: null, historyRecoveryRequired: false, providerConnectionVerified: true, items, nextCursor } });
 function serveCatalogue(page: () => Response) {
-  stubFetch(url => /\/workspace\/content/.test(url) ? page() : json({ ok: false }, 404));
+  serve(call => /\/workspace\/content/.test(call.url) ? page() : json({ ok: false }, 404));
 }
 
 const send = () => document.querySelector<HTMLButtonElement>("[data-of-send]");

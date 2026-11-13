@@ -11,59 +11,59 @@ const HELD = "Enable is off: the last pause was not confirmed. Pause again befor
 export default function AllFansControl({ account, viewer, source, onChanged }: {
   account: OfAccount; viewer: PreviewViewer; source: OnlyFansDataSource; onChanged: () => void;
 }) {
-  const [busy, setBusy] = useState(false), [notice, setNotice] = useState("");
-  const [progress, setProgress] = useState<BulkProgress | null>(null);
+  const [notice, setNotice] = useState(""), [progress, setProgress] = useState<BulkProgress | null>(null);
   // A pause that was not confirmed holds the go until a pause is confirmed: a STOP whose outcome is unknown never re-arms enable.
   const [pauseUnconfirmed, setPauseUnconfirmed] = useState(false);
-  const [pausing, setPausing] = useState(false);
-  // `stopped` halts the running enable; `gone` (unmount) halts everything. Pause has its own lock so a go never holds the brake.
-  const lock = useRef(false), stopped = useRef(false), gone = useRef(false), pauseLock = useRef(false);
-  useEffect(() => { gone.current = false; return () => { gone.current = stopped.current = true; }; }, []);
+  // One AbortController per operation. Pause, Stop and unmount abort the enable's; unmount aborts the pause's. An op whose
+  // controller is no longer current neither paints nor clears the lock, so a hung request never holds the next one.
+  const op = useRef<Record<"enable" | "pause", AbortController | null>>({ enable: null, pause: null });
+  const [current, setCurrent] = useState(op.current), busy = current.enable !== null, pausing = current.pause !== null;
+  const set = (kind: "enable" | "pause", value: AbortController | null) => { op.current = { ...op.current, [kind]: value }; setCurrent(op.current); };
+  const end = (kind: "enable" | "pause", controller: AbortController) => { const mine = op.current[kind] === controller; if (mine) set(kind, null); return mine; };
+  const stopEnable = () => { op.current.enable?.abort(); set("enable", null); };
+  useEffect(() => () => { op.current.enable?.abort(); op.current.pause?.abort(); op.current = { enable: null, pause: null }; }, []);
   const accountId = account.accountId;
   const configurationUrl = `/api/onlyfans-configuration/accounts/${encodeURIComponent(accountId)}`;
   const controlUrl = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
-  async function request(url: string, body?: unknown, halted = () => stopped.current) {
-    if (halted()) throw Error("Stopped. Changes already recorded remain in place.");
-    const response = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "error",
+  async function request(url: string, signal: AbortSignal, body?: unknown) {
+    const response = await fetch(url, { credentials: "same-origin", cache: "no-store", redirect: "error", signal,
       ...(body === undefined ? {} : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }) });
     if (!response.ok) throw Error("The change could not be confirmed. Refresh the inbox and check current settings.");
     return response.json() as Promise<unknown>;
   }
-  async function readControl(halted?: () => boolean) {
-    const body = await request(controlUrl, undefined, halted);
+  async function readControl(signal: AbortSignal) {
+    const body = await request(controlUrl, signal);
     const value = object(body) && body.schemaVersion === "of-launch-b.v1" && body.ok === true && body.accountId === accountId
       ? parseNativeReadiness(body.readiness) : null;
     if (!value) throw Error("Current account controls could not be verified. Refresh and try again.");
     return value;
   }
-  async function changeAccount(action: "pause" | "resume", halted?: () => boolean) {
-    const state = await readControl(halted);
+  async function changeAccount(action: "pause" | "resume", signal: AbortSignal) {
+    const state = await readControl(signal);
     if (action === "resume" && !state.readyToEnable) throw Error("This account needs attention before AI can resume. Open account readiness in Settings.");
-    const body = await request(controlUrl, { action, expectedFingerprint: state.accountControl.fingerprint,
-      reason: action === "pause" ? "Paused AI from the inbox account controls" : "Enabled eligible existing conversations from the inbox" }, halted);
+    const body = await request(controlUrl, signal, { action, expectedFingerprint: state.accountControl.fingerprint,
+      reason: action === "pause" ? "Paused AI from the inbox account controls" : "Enabled eligible existing conversations from the inbox" });
     if (!object(body) || body.schemaVersion !== "of-launch-b.v1" || body.ok !== true || body.accountId !== accountId ||
         !object(body.command) || body.command.recorded !== true) throw Error("Account change unconfirmed. Refresh before trying again.");
   }
   async function pause() {
-    if (pauseLock.current || !viewer.canManage) return;
-    pauseLock.current = true; stopped.current = true; setBusy(false); setPausing(true); setPauseUnconfirmed(true); setNotice("Pausing account...");
+    if (op.current.pause || !viewer.canManage) return;
+    const controller = new AbortController(), { signal } = controller;
+    stopEnable(); set("pause", controller); setPauseUnconfirmed(true); setNotice("Pausing account...");
     try {
-      await changeAccount("pause", () => gone.current);
-      setPauseUnconfirmed(false);
-      if (!gone.current) setNotice("Account paused. Messages already being sent may still complete.");
+      await changeAccount("pause", signal);
+      if (!signal.aborted) { setPauseUnconfirmed(false); setNotice("Account paused. Messages already being sent may still complete."); }
     } catch (error) {
-      if (!gone.current) setNotice(error instanceof Error ? error.message : "Pause unconfirmed. Pause again.");
-    } finally {
-      pauseLock.current = false;
-      if (!gone.current) { setPausing(false); onChanged(); }
-    }
+      if (!signal.aborted) setNotice(error instanceof Error ? error.message : "Pause unconfirmed. Pause again.");
+    } finally { if (end("pause", controller)) onChanged(); }
   }
   async function run() {
-    if (lock.current || !viewer.canManage) return;
-    lock.current = true; stopped.current = false; setBusy(true); setProgress(null); setNotice("Checking current account settings...");
+    if (op.current.enable || !viewer.canManage) return;
+    const controller = new AbortController(), { signal } = controller;
+    set("enable", controller); setProgress(null); setNotice("Checking current account settings...");
     try {
-      const config = parseConfiguration(await request(configurationUrl), accountId);
-      const state = await readControl();
+      const config = parseConfiguration(await request(configurationUrl, signal), accountId);
+      const state = await readControl(signal);
       if (!config?.activation?.allFansAllowed || !config.activation.selectionValid || !config.activation.modelCredentialReady)
         throw Error("This account is not ready for eligible existing chats. Review its AI settings first.");
       if (!state.autonomy.deliveryEnabled)
@@ -73,19 +73,16 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
       if (config.activation.selection?.mode !== "all") {
         const command: ConfigurationRequest = { expectedRevision: config.configurationRevision, expectedFingerprint: config.fingerprint,
           patch: { fasttScope: { mode: "all", fans: [] } } };
-        if (!parseConfigurationAck(await request(configurationUrl, command), { ...command, accountId }))
+        if (!parseConfigurationAck(await request(configurationUrl, signal, command), { ...command, accountId }))
           throw Error("All-fan setting unconfirmed. Refresh before continuing.");
       }
-      if (!state.accountControl.enabled) await changeAccount("resume");
-      const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => stopped.current,
-        progress: value => { if (!stopped.current) setProgress(value); } });
-      if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
+      if (!state.accountControl.enabled) await changeAccount("resume", signal);
+      const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => signal.aborted,
+        progress: value => { if (!signal.aborted) setProgress(value); } });
+      if (!signal.aborted) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
     } catch (error) {
-      if (!stopped.current) setNotice(error instanceof Error ? error.message : "Stopped. Refresh to check which changes were recorded.");
-    } finally {
-      lock.current = false;
-      if (!stopped.current) { setBusy(false); onChanged(); }
-    }
+      if (!signal.aborted) setNotice(error instanceof Error ? error.message : "Stopped. Refresh to check which changes were recorded.");
+    } finally { if (end("enable", controller)) onChanged(); }
   }
   return <section className="mb-3 rounded-xl border border-line bg-white px-3 py-2" aria-label="Account AI controls" data-of-all-fans-controls>
     <div className="flex flex-wrap items-center gap-2">
@@ -95,7 +92,7 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         title={pauseUnconfirmed ? HELD : "Enable AI replies for existing chats and use all-fan scope. Manually paused chats, human takeovers and no-contact fans stay protected."}>Enable AI replies for existing chats</button>
       <button type="button" className="min-h-10 rounded-lg border border-line px-3 py-2 text-sm font-semibold disabled:opacity-50"
         disabled={pausing || !viewer.canManage} onClick={() => { if (window.confirm("Pause all outgoing activity for " + account.binding.creatorName + "? Queued sends will be cancelled and scheduled campaigns paused. Messages already being sent may finish.")) void pause(); }}>Pause account</button>
-      {busy ? <button type="button" className="text-sm underline" onClick={() => { stopped.current = true; setBusy(false); setNotice("Stopped after the current request. Refresh to check recorded changes."); onChanged(); }}>Stop changes</button> : null}
+      {busy ? <button type="button" className="text-sm underline" onClick={() => { stopEnable(); setNotice("Stopped. Refresh to check which changes were recorded."); onChanged(); }}>Stop changes</button> : null}
     </div>
     <p className="mt-2 text-xs text-muted">New fans stay off until individually enabled. Human takeovers, paused and no-contact conversations stay protected.</p>
     {notice || pauseUnconfirmed && !pausing ? <p role="status" className="mt-2 text-xs">{[notice, pauseUnconfirmed && !pausing ? HELD : ""].filter(Boolean).join(" ")}</p> : null}

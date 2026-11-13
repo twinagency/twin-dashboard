@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-2 P29): scrolled up, the FIRST message that arrives is counted in the new-messages pill. The
 // unseen delta is taken before previousLength is overwritten, not inside a lazy state updater. P2/P3/P12 are not G09.
 // Offline: jsdom with a prototype scroll box on [data-of-thread], fetch stubbed.
-import { close, dom, json, mount, rerender, resetDom, settle, stubFetch, stubScrollBox } from "../helpers/w3-preview1-dom";
+import { close, dom, json, mount, rerender, resetDom, serve, settle, stubScrollBox } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after, afterEach, beforeEach } from "node:test";
 import { act } from "react";
@@ -25,7 +25,7 @@ async function scrollAwayFromBottom() {
   await settle();
 }
 
-beforeEach(() => { clearInboxViewMemory(); stubFetch(() => json({ ok: false }, 404)); stubScrollBox("[data-of-thread]", { scrollHeight: 2000, clientHeight: 400 }); });
+beforeEach(() => { clearInboxViewMemory(); serve(() => json({ ok: false }, 404)); stubScrollBox("[data-of-thread]", { scrollHeight: 2000, clientHeight: 400 }); });
 afterEach(resetDom);
 after(close);
 

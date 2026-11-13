@@ -291,8 +291,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     } catch { /* Keep the exact retry in memory only, with no persistent browser storage. */ }
     finally {
       if (active.current && !sessionLost) {
-        // A refused pause changed nothing, so an earlier unconfirmed command keeps its retry and the forms stay held.
-        if (!(refused && command.action === "pause")) { retry.current = uncertain ? command : null; setRetryAction(uncertain ? command.action : null); }
+        // A refused command changed nothing: an earlier unconfirmed command keeps its retry unless this was that retry.
+        if (!refused || retry.current === command) { retry.current = uncertain ? command : null; setRetryAction(uncertain ? command.action : null); }
         if (expired) { setCaptureRef(null); setCaptureReady(false); } else clearSecrets(); // expiry keeps the typed proxy and model key
         const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed || (expired && !sessionDenied.current)) setNotice(message); setBusy(false); router.refresh(); }
       }
@@ -312,8 +312,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   /** An unconfirmed command may have landed and moved the revision: read it first so the stop is not refused as stale. */
   async function pause() {
     if (submitting.current || !data) return;
-    setBusy(true);
+    submitting.current = true; setBusy(true);
     const fresh = await read(false);
+    submitting.current = false;
     if (!active.current) return;
     setBusy(false);
     if (sessionDenied.current) return;
@@ -417,8 +418,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           </fieldset>
         </form>
       </> : null}
-      {hasRetry && !denied ? <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className={buttonClass} disabled={busy} data-of-connection-retry onClick={() => { if (retry.current) void send(retry.current); }}>{RETRY_LABELS[retryAction!]}</button>
+      {retryAction && !denied ? <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className={buttonClass} disabled={busy} data-of-connection-retry onClick={() => { if (retry.current) void send(retry.current); }}>{RETRY_LABELS[retryAction]}</button>
         <button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { dropRetry(); setNotice("Review the recorded status before entering another command."); }}>Discard retry</button>
       </div> : null}
       {!data && !denied ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()}>Refresh connection</button> : null}

@@ -29,8 +29,9 @@ export function NextShell({ pathname = "/onlyfans/accounts", children }: { pathn
     <SearchParamsContext.Provider value={new URLSearchParams(query)}>{children}</SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>;
 }
 
-/** One recorded request. `body` is the parsed JSON body of a write, or null; read fields through `bodyOf`. */
-export type Call = { method: string; url: string; body: unknown };
+/** One recorded request. `body` is the parsed JSON body of a write, or null; read fields through `bodyOf`. `raw` is the body
+ * string as sent, `signal` the request's abort signal. */
+export type Call = { method: string; url: string; body: unknown; raw: string | undefined; signal: AbortSignal | undefined };
 /** The recorded JSON body as a field map. Throws when the call is missing or sent no JSON object, so a body assertion
  * can never pass vacuously (undefined === undefined). */
 export const bodyOf = (call: Call | undefined): Record<string, unknown> => {
@@ -42,15 +43,24 @@ export const bodyOf = (call: Call | undefined): Record<string, unknown> => {
 export const calls: Call[] = [];
 export const posts = () => calls.filter(call => call.method !== "GET");
 type Handler = (call: Call) => Response | Promise<Response>;
-/** Installs the fetch stub. Every request is recorded; the handler answers it. Anything not under fixture.invalid fails the test. */
+/**
+ * Installs the fetch stub. Every request is recorded; the handler answers it. Anything not under fixture.invalid fails the test.
+ * Aborts behave like fetch: an already-aborted signal sends (and records) nothing, and aborting rejects a pending answer.
+ */
 export function serve(handler: Handler) {
   calls.length = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://fixture.invalid");
     assert.equal(url.host, "fixture.invalid", "no request leaves the fixture origin");
-    const call: Call = { method: init?.method ?? "GET", url: url.pathname + url.search, body: typeof init?.body === "string" ? JSON.parse(init.body) : null };
+    const signal = init?.signal ?? undefined, aborted = () => new DOMException("aborted", "AbortError");
+    if (signal?.aborted) throw aborted();
+    const raw = typeof init?.body === "string" ? init.body : undefined;
+    const call: Call = { method: init?.method ?? "GET", url: url.pathname + url.search, body: raw === undefined ? null : JSON.parse(raw), raw, signal };
     calls.push(call);
-    return handler(call);
+    return new Promise<Response>((resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(aborted()), { once: true });
+      resolve(handler(call));
+    });
   }) as typeof fetch;
 }
 export const json = (value: unknown, status = 200) => Response.json(value, { status });
@@ -178,21 +188,5 @@ export function hiddenAt(element: Element, width: number): boolean {
   return false;
 }
 
-/** One request seen by `stubFetch`, with its raw body and abort signal. */
-export type RawCall = { url: string; method: string; raw: string | undefined; signal: AbortSignal | undefined };
-/**
- * Installs globalThis.fetch. `answer(url, method, n, raw)` gets every request (n = 0-based count of earlier calls to the same
- * method+path, query ignored). Unlike `serve`, the body is not parsed and the abort signal is kept.
- */
-export function stubFetch(answer: (url: string, method: string, n: number, raw: string | undefined) => Response | Promise<Response>) {
-  const seen: RawCall[] = [];
-  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input), method = init?.method ?? "GET", raw = init?.body === undefined ? undefined : String(init.body);
-    const n = seen.filter(c => c.method === method && c.url.split("?")[0] === url.split("?")[0]).length;
-    seen.push({ url, method, raw, signal: init?.signal ?? undefined });
-    return answer(url, method, n, raw);
-  }) as typeof globalThis.fetch;
-  return { calls: seen };
-}
 /** A request that stays in flight for the rest of the test. */
 export const never = () => new Promise<Response>(() => {});

@@ -653,6 +653,21 @@ function ActionColumn({
   );
 }
 
+/** The brakes beside Send while the fan panel is closed (G09): one row, so the thread keeps its room. Go controls stay in the panel. */
+function ChatBrakes({ actionSet, incident, engineAware, pending, pendingAction, onCommand }: { actionSet: ActionSet; incident: boolean; engineAware: boolean;
+  pending: boolean; pendingAction?: string | null; onCommand: (action: AvailableAction, payload: CommandPayload) => void }) {
+  const brakes = actionSet.available.filter(entry => entry.action === "pause_automation" || entry.action === "mark_no_contact");
+  if (!brakes.length && !incident) return null;
+  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-1" data-of-chat-brakes>
+    {incident ? <p className="of-filter-note" role="status">Delivery held. Resolve it in fan details.</p> : null}
+    {brakes.map(entry => <button key={entry.action} type="button" data-of-action={entry.action} disabled={pending} onClick={() => onCommand(entry.action, NO_PAYLOAD)}
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold text-[#356c96] disabled:opacity-50">
+      {entry.action === "pause_automation" ? <Pause size={14} aria-hidden="true" /> : null}
+      {pending && pendingAction === entry.action ? isEngineControlAction(entry.action) ? engineControlPendingLabel(entry.action) : "Saving…"
+        : entry.action === "mark_no_contact" ? "Stop further contact" : isEngineControlAction(entry.action) ? engineControlLabel(entry.action, engineAware) : entry.label}</button>)}
+  </div>;
+}
+
 function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId: string; canCorrect: boolean }) {
   const [opened, setOpened] = useState(false);
   return <details onToggle={event => { if (event.currentTarget.open) setOpened(true); }}><summary className="of-section-heading">Edit fan notes and facts</summary>{opened ? <BMemoryPanel part="facts" canManage={canCorrect} selectedAccountId={accountId} selectedFanId={fanId} /> : null}</details>;
@@ -837,8 +852,8 @@ export default function InboxView({
     return () => query.removeEventListener("change", sync);
   }, []);
   const sheetOpen = narrow && mobilePanel === "controls";
-  // The Reply control (Pause, Stop further contact, hold copy) renders once: in the fan panel or sheet while that shows,
-  // otherwise in the chat column under the thread, so a brake is displayed whenever Send is (G09).
+  // While the fan panel or sheet is not showing, its brakes (Pause, Stop further contact) and the hold line sit under the
+  // thread, so a brake is displayed whenever Send is (G09). The Reply control itself stays mounted in the panel.
   const panelShowsReplyControl = narrow ? sheetOpen : profileOpen;
   useEffect(() => {
     if (!sheetOpen) return;
@@ -873,32 +888,6 @@ export default function InboxView({
   const syncNotice = inboxSyncNotice(activeAccount,
     conversations.status === "stale" ? conversations.freshness : null,
     detailState?.status === "stale" ? detailState.freshness : null);
-
-  const replyControl = activeAccount && detail && actionSet ? (
-    <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
-    {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
-    {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
-    <ActionColumn
-      engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
-      actionSet={actionSet}
-      viewer={viewer}
-      result={commandResult}
-      pending={commandPending}
-      pendingAction={pendingAction}
-      onRetry={onRetryCommand}
-      incident={detail.deliveryIncident}
-      onCommand={onCommand}
-      onResolve={(attemptId, decision, providerMessageId) =>
-        onCommand("resolve_delivery_evidence", {
-          kind: "delivery_resolution",
-          providerMessageId,
-          attemptId,
-          decision,
-        })
-      }
-    />
-    </section>
-  ) : null;
 
   return (
     <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
@@ -977,7 +966,8 @@ export default function InboxView({
 
               <Thread detail={detail} principal={draftPrincipal} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
-              {!panelShowsReplyControl && replyControl ? <div className="of-chat-reply-control max-h-[40%] shrink-0 overflow-y-auto border-t border-line p-2" data-of-chat-reply-control>{replyControl}</div> : null}
+              {!panelShowsReplyControl && actionSet ? <ChatBrakes actionSet={actionSet} incident={!!detail.deliveryIncident} pending={commandPending} pendingAction={pendingAction} onCommand={onCommand}
+                engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"} /> : null}
               {actionSet ? (
                 <Composer
                   key={draftKey(draftPrincipal, activeAccount.accountId, detail.conversationId)}
@@ -1029,7 +1019,29 @@ export default function InboxView({
               </div>
 
               <FanRelationship detail={detail} />
-              {panelShowsReplyControl ? replyControl : null}
+              <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
+              {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
+              {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
+              <ActionColumn
+                engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
+                actionSet={actionSet}
+                viewer={viewer}
+                result={commandResult}
+                pending={commandPending}
+                  pendingAction={pendingAction}
+                onRetry={onRetryCommand}
+                incident={detail.deliveryIncident}
+                onCommand={onCommand}
+                onResolve={(attemptId, decision, providerMessageId) =>
+                  onCommand("resolve_delivery_evidence", {
+                    kind: "delivery_resolution",
+                    providerMessageId,
+                    attemptId,
+                    decision,
+                  })
+                }
+              />
+              </section>
 
               <EngineStatus key={detail.conversationId} value={detail.engineStatus} accountId={detail.accountId} conversationId={detail.conversationId} onAction={onEngineAction} onLoadMore={onEngineLoadMore}
                 onTakeover={canSubmitCommand(viewer, actionSet, "request_takeover") ? () => onCommand("request_takeover", NO_PAYLOAD) : undefined} takeoverPending={commandPending} />

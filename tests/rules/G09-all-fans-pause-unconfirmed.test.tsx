@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-1 F8, REVIEW inv 7): a Pause whose outcome is unconfirmed keeps "Enable AI replies" disabled;
 // only a confirmed Pause gives the go back. The Pause itself stays available, including while an enable runs (FB1).
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), window.confirm stubbed to true.
-import { dom, bodyOf, button, calls, click, close, http502, json, mount, posts, q, serve, settle, type Call } from "../helpers/w3-preview1-dom";
+import { dom, bodyOf, button, calls, click, close, http502, json, mount, never, posts, q, serve, settle, type Call } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import React from "react";
@@ -88,3 +88,18 @@ test("FB1: Pause after 'Stop changes' while the enable's request is still in fli
   assert.match(status(), /Account paused/);
   hung.release(); await settle();
 });
+
+// R2-2: a confirmed brake ends the hung enable outright, so the go is usable at once; it is not left locked behind a request
+// that never returns (the old request is aborted, not waited on).
+for (const [label, brake] of [["a confirmed Pause", () => click(pause())], ["Stop changes", () => click(button(/^Stop changes$/))]] as const) {
+  test(`R2-2: Enable works right after ${label} while the old enable's request hangs`, async () => {
+    let configReads = 0;
+    await control(call => call.method === "GET" && call.url === CONFIG ? (++configReads === 1 ? never() : json({}))
+      : call.method === "GET" ? controlRead() : pauseAck());
+    await click(enable());
+    await brake();
+    assert.equal(enable()?.disabled, false, "the go looks available");
+    await click(enable());
+    assert.equal(configReads, 2, "the second Enable sent nothing: the hung enable still held its lock");
+  });
+}
