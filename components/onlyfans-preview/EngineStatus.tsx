@@ -5,7 +5,7 @@ import { appendEnginePage, engineEnvironmentIsReal, engineEnvironmentLabel, engi
 import { engineActionNeedsNote, type EngineOperatorAction, type EngineOperatorResult } from "@/lib/onlyfans/engine-operator-core";
 import { engineControlLabel } from "@/lib/onlyfans/engine-controls";
 
-export type EngineActionHandler = (requestId: string, action: EngineOperatorAction, revision: number, note?: string, environment?: EngineEnvironment) => Promise<EngineOperatorResult>;
+export type EngineActionHandler = (requestId: string, action: EngineOperatorAction, revision: number, note: string | undefined, environment: EngineEnvironment) => Promise<EngineOperatorResult>;
 /** Fetches the next page for a cursor. Returns the raw backend view; it is parsed here and nothing else is trusted. */
 export type EnginePageLoader = (cursor: string) => Promise<unknown>;
 
