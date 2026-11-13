@@ -12,11 +12,13 @@ export default function SettingsView({
   globalLiveArm,
   connRows,
   limits,
+  limitsError,
 }: {
   globalStop: boolean | null;
   globalLiveArm: boolean | null;
   connRows: SettingsConnRow[];
-  limits: MtprotoLimits;
+  limits: MtprotoLimits | null;
+  limitsError: string | null;
 }) {
   return (
     <div className="space-y-5">
@@ -28,7 +30,13 @@ export default function SettingsView({
       </Panel>
 
       <Panel title="Limits" tip="The fleet-wide send limits, read fresh by the worker on every pass. Every field is clamped to the same safe maximum the worker itself enforces, so nothing typed here can go past what it would already refuse.">
-        <MtprotoLimitsPanel limits={limits} />
+        {limits ? (
+          <MtprotoLimitsPanel limits={limits} />
+        ) : (
+          <div role="alert" className="rounded-lg border border-crit/40 bg-crit/10 px-3 py-2 text-xs font-medium text-crit">
+            Limits could not be read ({limitsError}). Saving is off until they load, so nothing overwrites the stored caps. Reload to try again.
+          </div>
+        )}
       </Panel>
 
       <Panel title="Per-creator controls" tip="LIVE/DRY, daily cap and pause/resume for each creator's own Telegram account. Every gate here is checked again on the server.">

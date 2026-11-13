@@ -1,7 +1,7 @@
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
 import { goLivePhraseFor, resumePhraseFor, shortId } from "@/lib/mtproto/halt";
 import { autoHaltsFor } from "@/lib/mtproto/halt-server";
-import { getMtprotoLimits } from "@/lib/mtproto/limits";
+import { readMtprotoLimits } from "@/lib/mtproto/limits";
 import SettingsView from "@/components/mtproto/SettingsView";
 import { getCreators, getGlobalLiveArm, getGlobalStop, getSafety } from "@/components/mtproto/data";
 import type { SettingsConnRow } from "@/components/mtproto/SettingsConnectionsTable";
@@ -18,7 +18,12 @@ export default async function MtprotoSettingsPage() {
     getSafety(),
     getGlobalStop(),
     getGlobalLiveArm(),
-    getMtprotoLimits(),
+    // A failed read is shown as an error, never as defaults: saving defaults
+    // would switch warm-up, min gap and the day-one cap off.
+    readMtprotoLimits().then(
+      (l) => ({ limits: l, error: null }),
+      (e: unknown) => ({ limits: null, error: e instanceof Error ? e.message : "unreadable" }),
+    ),
   ]);
   const halts = await autoHaltsFor(connections);
   const sentToday = new Map(safety.snapshots.map((s) => [s.cloneId, s.sentToday]));
@@ -31,5 +36,5 @@ export default async function MtprotoSettingsPage() {
     sentToday: safety.error ? null : (sentToday.get(c.id) ?? 0),
   }));
 
-  return <SettingsView globalStop={stopped} globalLiveArm={armed} connRows={connRows} limits={limits} />;
+  return <SettingsView globalStop={stopped} globalLiveArm={armed} connRows={connRows} limits={limits.limits} limitsError={limits.error} />;
 }

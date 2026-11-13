@@ -14,10 +14,10 @@
 // on the way OUT (getMtprotoLimits), so a row written by hand or by an older
 // version of this code can never be shown or handed to the worker unclamped.
 //
-// An unreadable row (network error, missing row, bad JSON) falls back to the
-// SAFE side, the built-in defaults, never to "no limit" or a thrown error
-// that would make the settings page unusable while the migration is not yet
-// applied.
+// getMtprotoLimits shows a missing row or bad JSON as the built-in defaults.
+// A failed READ is different: readMtprotoLimits throws, and setMtprotoLimits
+// refuses to save on it, because the defaults turn warm-up, min gap and the
+// day-one cap OFF and a save would write them over the real values.
 
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
@@ -73,25 +73,24 @@ export function clampMtprotoLimits(raw: unknown): MtprotoLimits {
   return { hourlyCap, defaultDailyCap, jitterMinMs, jitterMaxMs, minSilenceHours, floodWaitMultiplier, warmupHours, minSendGapMinutes, firstDayMaxSends };
 }
 
-/** Reads the current limits, clamped. Never throws: an unreadable row (missing
- *  table/column, network error, bad JSON) reads as the built-in defaults, the
- *  same safe fallback the worker itself applies, so the Settings page is
- *  usable before migration 169/171 lands. */
-export async function getMtprotoLimits(): Promise<MtprotoLimits> {
+/** Reads the current limits, clamped. A missing row or bad JSON reads as the
+ *  built-in defaults; a failed read THROWS (never "defaults" for a row that
+ *  may hold real caps). */
+export async function readMtprotoLimits(): Promise<MtprotoLimits> {
+  const { data, error } = await mtDb().from("app_settings").select("value").eq("key", MTPROTO_LIMITS_KEY).maybeSingle();
+  if (error) throw new Error(`could not read the current limits: ${error.message}`);
+  if (!data?.value) return { ...MTPROTO_LIMITS_DEFAULTS };
   try {
-    const { data, error } = await mtDb().from("app_settings").select("value").eq("key", MTPROTO_LIMITS_KEY).maybeSingle();
-    if (error) throw error;
-    if (!data?.value) return { ...MTPROTO_LIMITS_DEFAULTS };
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(data.value as string);
-    } catch {
-      return { ...MTPROTO_LIMITS_DEFAULTS };
-    }
-    return clampMtprotoLimits(parsed);
+    return clampMtprotoLimits(JSON.parse(data.value as string));
   } catch {
     return { ...MTPROTO_LIMITS_DEFAULTS };
   }
+}
+
+/** Display-only variant: never throws, a failed read shows the defaults. Never
+ *  feed it into a save; setMtprotoLimits uses readMtprotoLimits. */
+export async function getMtprotoLimits(): Promise<MtprotoLimits> {
+  return readMtprotoLimits().catch(() => ({ ...MTPROTO_LIMITS_DEFAULTS }));
 }
 
 /** Validates each field is a finite number, clamps into range (never silently
@@ -100,7 +99,12 @@ export async function getMtprotoLimits(): Promise<MtprotoLimits> {
  *  stop/arm this needs no typed confirmation: every field is already bounded
  *  by a hard safety rail the worker enforces regardless of this write. */
 export async function setMtprotoLimits(input: Partial<MtprotoLimits>, actor: string): Promise<MtprotoLimits> {
-  const before = await getMtprotoLimits();
+  let before: MtprotoLimits;
+  try {
+    before = await readMtprotoLimits();
+  } catch (e) {
+    throw new Error(`${e instanceof Error ? e.message : e}. Nothing was saved, so the stored limits are unchanged; reload and try again`);
+  }
   const merged: Record<string, unknown> = { ...before, ...input };
   for (const [key, min, max] of [
     ["hourlyCap", HARD_MIN_HOURLY_CAP, HARD_MAX_HOURLY_CAP],

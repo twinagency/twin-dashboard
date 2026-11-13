@@ -8,15 +8,16 @@
 // Storage: no schema change. A review is a reengage_events row of type
 // control_action with detail { kind: "dry_run_reviewed", run_id,
 // would_send_count, holdout_count, episode_count, excluded_total,
-// audience_size }. reviewed_at is the event's ts, reviewed_by its actor. The
+// audience_size, audience_digest }. reviewed_at is the event's ts, reviewed_by its actor. The
 // table is append-only; the LATEST review event wins.
 //
 // Every read here is strict: an unreadable table throws (the gate then
 // refuses), it never degrades to "0 rows, nothing changed".
 
+import { hash } from "node:crypto";
 import { mediaCampaignReviewKey } from "./media-campaign";
 import { mtDb } from "./db";
-import { computeAudiencePreview } from "./audience";
+import { computeAudience } from "./audience";
 import { listEvents } from "./events";
 import { listConnections } from "./connections";
 import { selectAllRowsMtproto } from "./paging";
@@ -163,16 +164,21 @@ export function countsOf(s: DryRunCounts): DryRunCounts {
   return { wouldSendCount: s.wouldSendCount, holdoutCount: s.holdoutCount, episodeCount: s.episodeCount, excludedTotal: s.excludedTotal };
 }
 
-/** Size of the audience that passes every filter right now (before hold-out
- *  and caps). "Never larger than reviewed" compares this number. Throws when
- *  the read is incomplete. */
-export async function currentAudienceSize(run: ReengageRun): Promise<number> {
-  const p = await computeAudiencePreview(
+/** The audience that passes every filter right now (before hold-out and
+ *  caps): its size and a digest of WHO is in it (sorted clone:user keys), so
+ *  an equal-size swap reads as changed. Throws when the read is incomplete. */
+export async function currentAudience(run: ReengageRun): Promise<{ size: number; digest: string }> {
+  const { preview: p, members } = await computeAudience(
     { ...run.filters, cloneIds: run.cloneIds },
     { dailyCap: run.dailyCap, runCap: run.runCap, holdoutPct: run.holdoutPct, allowRecontact: run.allowRecontact },
   );
   if (p.truncated) throw new Error("audience read was incomplete (row ceiling); cannot compare it to the reviewed dry run");
-  return p.eligible + p.holdout + p.excluded.cap_reached;
+  const digest = hash("sha256", [...members].sort().join("\n"), "hex"); // one-shot: no .update( (check K11 scans this file)
+  return { size: p.eligible + p.holdout + p.excluded.cap_reached, digest };
+}
+
+export async function currentAudienceSize(run: ReengageRun): Promise<number> {
+  return (await currentAudience(run)).size;
 }
 
 export type ReviewRecord = {
@@ -182,6 +188,8 @@ export type ReviewRecord = {
   reviewedBy: string;
   counts: DryRunCounts;
   audienceSize: number;
+  /** Absent on a review recorded before the digest existed: the gate refuses it. */
+  audienceDigest?: string;
 };
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -198,7 +206,7 @@ export async function latestReview(runId: string): Promise<ReviewRecord | null> 
     const x = num(d.excluded_total);
     const a = num(d.audience_size);
     if (w === null || h === null || n === null || x === null || a === null) continue; // malformed: not a valid review
-    return { ...(typeof d.media_campaign_key === "string" ? { mediaCampaignKey: d.media_campaign_key } : {}), eventId: e.id, reviewedAt: e.ts, reviewedBy: e.actor, counts: { wouldSendCount: w, holdoutCount: h, episodeCount: n, excludedTotal: x }, audienceSize: a };
+    return { ...(typeof d.media_campaign_key === "string" ? { mediaCampaignKey: d.media_campaign_key } : {}), ...(typeof d.audience_digest === "string" ? { audienceDigest: d.audience_digest } : {}), eventId: e.id, reviewedAt: e.ts, reviewedBy: e.actor, counts: { wouldSendCount: w, holdoutCount: h, episodeCount: n, excludedTotal: x }, audienceSize: a };
   }
   return null;
 }
@@ -206,7 +214,7 @@ export async function latestReview(runId: string): Promise<ReviewRecord | null> 
 export type ReviewVerdict = { ok: true; review: ReviewRecord } | { ok: false; reason: string };
 
 /** The gate itself: a review exists, the dry-run counts are identical to what
- *  was reviewed, and the audience is not larger than what was reviewed. */
+ *  was reviewed, and the audience is the same fans that were reviewed. */
 export async function checkReviewGate(run: ReengageRun): Promise<ReviewVerdict> {
   let review: ReviewRecord | null;
   try {
@@ -237,14 +245,17 @@ export async function checkReviewGate(run: ReengageRun): Promise<ReviewVerdict> 
     };
   }
 
-  let size: number;
+  let audience: { size: number; digest: string };
   try {
-    size = await currentAudienceSize(run);
+    audience = await currentAudience(run);
   } catch (e) {
     return { ok: false, reason: `cannot confirm live: audience unreadable (${e instanceof Error ? e.message : e})` };
   }
-  if (size > review.audienceSize) {
-    return { ok: false, reason: `the audience grew since the review (${review.audienceSize} -> ${size}). A live run may never be larger than what was reviewed; review again` };
+  if (audience.size > review.audienceSize) {
+    return { ok: false, reason: `the audience grew since the review (${review.audienceSize} -> ${audience.size}). A live run may never be larger than what was reviewed; review again` };
+  }
+  if (audience.digest !== review.audienceDigest) {
+    return { ok: false, reason: "the fans in the audience changed since the review (someone joined or left). Review it again" };
   }
   return { ok: true, review };
 }

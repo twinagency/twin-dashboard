@@ -24,8 +24,10 @@ export async function getGlobalStop(): Promise<boolean> {
 /** Sets or lifts the fleet-wide stop. STOP needs nothing (the safe direction
  *  must always be one call). LIFTING requires the typed phrase, checked here
  *  server-side. The write is read back to prove it landed, and a control_action
- *  event with before/after is recorded; any failure is thrown, never swallowed. */
-export async function setGlobalStop(stopped: boolean, actor: string, reason?: string, typed?: string | null): Promise<void> {
+ *  event with before/after is recorded; any failure is thrown, never swallowed.
+ *  A write that landed but could not be read back says "state unknown".
+ *  Returns the read-back value. */
+export async function setGlobalStop(stopped: boolean, actor: string, reason?: string, typed?: string | null): Promise<boolean> {
   if (!stopped && (typed ?? "").trim().toUpperCase() !== RESUME_PHRASE) {
     throw new RunValidationError(`type ${RESUME_PHRASE} to lift the global stop`);
   }
@@ -40,7 +42,12 @@ export async function setGlobalStop(stopped: boolean, actor: string, reason?: st
     .from("app_settings")
     .upsert({ key: GLOBAL_STOP_KEY, value: stopped ? "true" : "false", updated_at: now });
   if (error) throw new Error(`global ${stopped ? "stop" : "resume"} failed: ${error.message}`);
-  const after = await getGlobalStop();
+  let after: boolean;
+  try {
+    after = await getGlobalStop();
+  } catch (e) {
+    throw new Error(`global ${stopped ? "stop" : "resume"} was written but could not be read back, state unknown (${e instanceof Error ? e.message : e}). Treat sending as possibly active`);
+  }
   if (after !== stopped) throw new Error(`global ${stopped ? "stop" : "resume"} did not take effect (flag reads ${after}); try again`);
   try {
     await insertEvent({
@@ -55,4 +62,5 @@ export async function setGlobalStop(stopped: boolean, actor: string, reason?: st
   } catch (e) {
     throw new Error(`global ${stopped ? "stop" : "resume"} WAS applied, but the audit event failed: ${e instanceof Error ? e.message : e}`);
   }
+  return after;
 }

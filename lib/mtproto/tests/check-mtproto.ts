@@ -490,7 +490,14 @@ async function finishedDryRun(db: FakeDb): Promise<string> {
     { id: "e4", run_id: run.id, clone_id: CLONE_A, user_id: uid(4), telegram_id: 1004, episode_start_inbound_at: start, state: "holdout", dry_run: true, tg_message_id: null, sent_at: null, prepared_text: null, acked_text: null, skip_reason: null, error_code: null, created_at: T(2) },
   ]);
   await insertEvent({ runId: run.id, cloneId: CLONE_A, userId: uid(9), episodeId: null, eventType: "scan_excluded", actor: "system", detail: { reason: "blocked" } });
+  openLiveGates(db);
   return run.id;
+}
+// G50a F2: confirmLive needs the fleet arm AND the creator's live_enabled. Open both so these checks test what they name.
+const ARM_ON = { key: "mtproto_global_live_arm", value: "true" };
+function openLiveGates(db: FakeDb): void {
+  db.rows("app_settings").push(ARM_ON);
+  db.rows("userbot_connections").push({ clone_id: CLONE_A, status: "active", paused: false, paused_reason: null, daily_cap: 30, live_enabled: true, tg_user_id: null, dc_id: null, last_seen_at: null, session_ref: null, created_at: T(5), updated_at: T(5) });
 }
 
 acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no global stop; then sets confirm_live_at once", async () => {
@@ -511,12 +518,12 @@ acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no 
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /stopped/);
   setStatus("done", { stop_requested: false });
 
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }, ARM_ON]);
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /GLOBAL STOP/);
   db.fail("app_settings", "select", { message: "boom" });
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /unreadable/);
   db.fail("app_settings", "select", null);
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }, ARM_ON]);
   eq(db.rows("reengage_runs")[0].dry_run, true, "every refusal left the run dry");
 
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /nobody has reviewed/);
@@ -1167,7 +1174,7 @@ acheck("K3 review gate: REFUSED with the wrong phrase even when reviewed and eve
   eq(db.rows("reengage_runs")[0].dry_run, true, "still dry after wrong phrases");
 });
 
-acheck("K4 review gate: the live audience may be identical or smaller than reviewed, NEVER larger", async () => {
+acheck("K4 review gate: the live audience must be the reviewed one; larger, smaller or swapped re-requires review", async () => {
   const db = freshDb();
   const id = await finishedDryRun(db);
   await recordDryRunReview(id, "operator");
@@ -1175,17 +1182,21 @@ acheck("K4 review gate: the live audience may be identical or smaller than revie
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /audience grew/);
   eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
   db.tables["users"] = db.rows("users").filter((u) => u.id !== uid(50) && u.id !== uid(2)); // and one fan left
+  // G50a F3: the gate compares WHO, not just how many, so a smaller audience is a different one too (stricter).
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /audience changed/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry after a fan left");
+  await recordDryRunReview(id, "operator");
   const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
-  eq(live.dryRun, false, "smaller audience is allowed");
+  eq(live.dryRun, false, "re-reviewed smaller audience is allowed");
 });
 
 acheck("K5 review gate: allowed ONLY when review + unchanged counts + phrase + no global stop + not stopped + audience not larger all hold", async () => {
   const db = freshDb();
   const id = await finishedDryRun(db);
   await recordDryRunReview(id, "operator");
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }, ARM_ON]);
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /GLOBAL STOP/);
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }, ARM_ON]);
   Object.assign(db.rows("reengage_runs")[0], { stop_requested: true });
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /stopped/);
   Object.assign(db.rows("reengage_runs")[0], { stop_requested: false });
