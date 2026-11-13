@@ -104,10 +104,11 @@ export function availableActions(input: {
   viewer: PreviewViewer;
   /** Present when the detail read found a structured delivery incident. */
   deliveryIncident?: ConversationDetail["deliveryIncident"];
-  /** Why go is held on this account by an unconfirmed STOP (stop-hold.ts stopHoldReason). Withdraws resume and hand back only. */
-  goHold?: string | null;
+  /** Why go is held on this account by an unconfirmed STOP (stop-hold.ts stopHoldReason), or null. Withdraws resume and hand back only.
+   *  Required: a caller that forgot it would skip the STOP hold silently (G07d r1). */
+  goHold: string | null;
 }): ActionSet {
-  const { account, summary, viewer, deliveryIncident = null, goHold = null } = input;
+  const { account, summary, viewer, deliveryIncident = null, goHold } = input;
   const held = isDeliveryHeld(summary.delivery, deliveryIncident);
   const hasIncident = deliveryIncident !== null;
   const available: ActionAvailability[] = [];

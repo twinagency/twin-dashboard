@@ -60,7 +60,7 @@ async function main() {
   assert.equal(handoverForViewer(raw, "acc-a", "acc-a:101", grant.actor, false, true)?.canActAsOwner, false);
   const detail = Object.values(conversationDetails)[0];
   const account = { ...accounts[0], health: "connected" as const, capabilities: { ...accounts[0].capabilities, sendManualMessage: "available" as const, requestTakeover: "available" as const } };
-  const actions = availableActions({ account, summary: { ...detail.summary, automationMode: "human_controlled", takeoverState: "effective", delivery: "sent" },
+  const actions = availableActions({ goHold: null, account, summary: { ...detail.summary, automationMode: "human_controlled", takeoverState: "effective", delivery: "sent" },
     viewer: { kind: "operator", label: "Team member", canManage: true, scopedAccountIds: [], canActAsOwner: false } });
   assert(!actions.available.some(item => ["send_manual_message", "release_takeover"].includes(item.action)));
   console.log("PASS OnlyFans agency scope, rollout version, read-only actions and staff ownership");

@@ -28,7 +28,7 @@ export const incident = (outcome: DeliveryOutcome): DeliveryIncident =>
  */
 export function offered(input: { delivery: DeliveryOutcome; shape: ThreadShape; incident?: DeliveryIncident }): AvailableAction[] {
   const summary = { ...conversationDetails["of-conv-ava-1003"].summary, ...input.shape, delivery: input.delivery };
-  return availableActions({ account: AVA_ACCOUNT, summary, viewer: operatorViewer(), deliveryIncident: input.incident })
+  return availableActions({ goHold: null, account: AVA_ACCOUNT, summary, viewer: operatorViewer(), deliveryIncident: input.incident })
     .available.map(a => a.action);
 }
 

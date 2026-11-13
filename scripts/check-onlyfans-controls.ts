@@ -102,7 +102,7 @@ async function main() {
   const account = { ...accounts[0], health: "disconnected" as const, capabilities: { ...accounts[0].capabilities,
     pauseAutomation: "available" as const, requestTakeover: "available" as const } };
   const allowed = (mode: typeof detail.summary.automationMode, takeover: typeof detail.summary.takeoverState,
-    delivery: typeof detail.summary.delivery) => availableActions({ account, viewer: operatorViewer(),
+    delivery: typeof detail.summary.delivery) => availableActions({ goHold: null, account, viewer: operatorViewer(),
       summary: { ...detail.summary, automationMode: mode, takeoverState: takeover, delivery } }).available.map(x => x.action);
   assert(allowed("automated", "none", "unknown").includes("pause_automation"));
   assert(allowed("automated", "none", "unknown").includes("mark_no_contact"));
@@ -112,7 +112,7 @@ async function main() {
   assert.equal(allowed("no_contact", "none", "sent").length, 0);
   const manualAccount = { ...account, health: "connected" as const, capabilities: { ...account.capabilities, sendManualMessage: "available" as const } };
   const manualAllowed = (mode: typeof detail.summary.automationMode, takeover: typeof detail.summary.takeoverState) =>
-    availableActions({ account: manualAccount, viewer: operatorViewer(), summary: { ...detail.summary, automationMode: mode, takeoverState: takeover, delivery: "sent" } }).available.some(entry => entry.action === "send_manual_message");
+    availableActions({ goHold: null, account: manualAccount, viewer: operatorViewer(), summary: { ...detail.summary, automationMode: mode, takeoverState: takeover, delivery: "sent" } }).available.some(entry => entry.action === "send_manual_message");
   assert.equal(manualAllowed("automated", "none"), false); assert.equal(manualAllowed("paused", "none"), false);
   assert.equal(manualAllowed("human_controlled", "requested"), false); assert.equal(manualAllowed("human_controlled", "effective"), true);
   console.log("PASS controls: exact acknowledgement, separate credential, no redirect/cookie forwarding, refusals versus uncertainty, identical retry, disconnected stop controls, unresolved hand-back hold, no-contact exclusion");

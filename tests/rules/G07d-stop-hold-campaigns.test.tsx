@@ -15,11 +15,11 @@ const require = createRequire(import.meta.url);
 after(close);
 const real = dom.window.sessionStorage;
 Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: real });
-beforeEach(async () => { await reloadPage(); real.clear(); });
+beforeEach(async () => { await reloadPage(); real.clear(); dom.window.localStorage.clear(); });
 
 const HELD = /held until the emergency stop is confirmed/i;
 /** The marker the launch panel writes when a STOP is sent and keeps until it is recorded, refused or read as applied. */
-const holdStop = (accountId: string) => real.setItem(`b-stop-held:${accountId}`, JSON.stringify({ accountId, since: 1, attempt: 1, carried: false }));
+const holdStop = (accountId: string) => dom.window.localStorage.setItem(`b-stop-held:${accountId}`, JSON.stringify({ accountId, since: 1, attempt: 1, carried: false }));
 const posts = () => calls.filter(call => call.method === "POST");
 const SENDER = { creatorName: "Fixture Creator", handle: "fixture" };
 const PAUSED = "0a1b2c3d-1111-4222-8333-444455556688";

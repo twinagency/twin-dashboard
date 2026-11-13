@@ -5,12 +5,15 @@ import type { OfAccount, PreviewViewer } from "@/lib/onlyfans-preview/types";
 import { parseConfiguration, parseConfigurationAck, type ConfigurationRequest } from "@/lib/onlyfans/configuration";
 import { object, parseNativeReadiness } from "@/lib/onlyfans/launch/native";
 import { enableExistingFanChats, type BulkProgress } from "@/lib/onlyfans/bulk-ai";
+import { Info } from "@/components/clone/fields";
+import { stopHoldReason, useStopHolds } from "@/components/onlyfans-launch/automation/stop-hold";
 
 const HELD = "Enable is off: the last pause was not confirmed. Pause again before enabling AI.";
 
 export default function AllFansControl({ account, viewer, source, onChanged }: {
   account: OfAccount; viewer: PreviewViewer; source: OnlyFansDataSource; onChanged: () => void;
 }) {
+  useStopHolds();
   const [notice, setNotice] = useState(""), [progress, setProgress] = useState<BulkProgress | null>(null);
   // A pause that was not confirmed holds the go until a pause is confirmed: a STOP whose outcome is unknown never re-arms enable.
   const [pauseUnconfirmed, setPauseUnconfirmed] = useState(false);
@@ -59,8 +62,13 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
       if (mounted.current) setNotice(error instanceof Error ? error.message : "Pause unconfirmed. Pause again.");
     } finally { if (end("pause", controller) && mounted.current) onChanged(); }
   }
+  // An unconfirmed STOP on the account (stop-hold.ts) holds the whole rollout: read at render, when run() starts, before the account
+  // resume and before every chat. Pause account never reads it.
+  const stopHeld = stopHoldReason(accountId);
   async function run() {
     if (op.current.enable || !viewer.canManage) return;
+    const heldAtStart = stopHoldReason(accountId);
+    if (heldAtStart) { setNotice(heldAtStart); return; }
     const controller = new AbortController(), { signal } = controller;
     set("enable", controller); setProgress(null); setNotice("Checking current account settings...");
     try {
@@ -78,9 +86,11 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         if (!parseConfigurationAck(await request(configurationUrl, signal, command), { ...command, accountId }))
           throw Error("All-fan setting unconfirmed. Refresh before continuing.");
       }
+      const held = stopHoldReason(accountId);
+      if (held) throw Error(held);
       if (!state.accountControl.enabled) await changeAccount("resume", signal);
       const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => signal.aborted,
-        progress: value => { if (!signal.aborted) setProgress(value); } });
+        progress: value => { if (!signal.aborted) setProgress(value); }, stopHold: () => stopHoldReason(accountId) });
       if (!signal.aborted) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
     } catch (error) {
       if (!signal.aborted) setNotice(error instanceof Error ? error.message : "Stopped. Refresh to check which changes were recorded.");
@@ -90,8 +100,9 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
     <div className="flex flex-wrap items-center gap-2">
       <span className="mr-auto text-sm font-semibold">{account.binding.creatorName}: AI replies</span>
       <button type="button" className="min-h-10 rounded-lg bg-[#1764c0] px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        disabled={busy || pauseUnconfirmed || !viewer.canManage} onClick={() => void run()}
-        title={pauseUnconfirmed ? HELD : "Enable AI replies for existing chats and use all-fan scope. Manually paused chats, human takeovers and no-contact fans stay protected."}>Enable AI replies for existing chats</button>
+        disabled={busy || pauseUnconfirmed || !!stopHeld || !viewer.canManage} onClick={() => void run()}
+        title={pauseUnconfirmed ? HELD : stopHeld ?? "Enable AI replies for existing chats and use all-fan scope. Manually paused chats, human takeovers and no-contact fans stay protected."}>Enable AI replies for existing chats</button>
+      {stopHeld ? <span className="flex items-center gap-1 text-xs" data-of-all-fans-stop-held>{stopHeld}<Info text="Pause account stays available. Enable comes back once the emergency stop's outcome is known." /></span> : null}
       <button type="button" className="min-h-10 rounded-lg border border-line px-3 py-2 text-sm font-semibold disabled:opacity-50"
         disabled={pausing || !viewer.canManage} onClick={() => { if (window.confirm("Pause all outgoing activity for " + account.binding.creatorName + "? Queued sends will be cancelled and scheduled campaigns paused. Messages already being sent may finish.")) void pause(); }}>Pause account</button>
       {busy ? <button type="button" className="text-sm underline" onClick={() => { stopEnable(); setNotice("Stopped. Refresh to check which changes were recorded."); onChanged(); }}>Stop changes</button> : null}

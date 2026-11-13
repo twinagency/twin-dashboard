@@ -4,12 +4,13 @@ import type { OfAccount, PreviewViewer, ConversationSummary } from "../onlyfans-
 
 export type BulkProgress = { checked: number; enabled: number; alreadyOn: number; protected: number };
 
-/** Uses existing revision-checked commands. Never guesses that an uncertain write failed. */
+/** Uses existing revision-checked commands. Never guesses that an uncertain write failed. `stopHold` (stop-hold.ts stopHoldReason) is read
+ *  before every chat: an unconfirmed STOP on the account stops the rollout there, and nothing more is resumed. */
 export async function enableExistingFanChats(options: {
   account: OfAccount; viewer: PreviewViewer; source: OnlyFansDataSource;
-  cancelled: () => boolean; progress: (value: BulkProgress) => void;
+  cancelled: () => boolean; progress: (value: BulkProgress) => void; stopHold: () => string | null;
 }): Promise<BulkProgress> {
-  const { account, viewer, source, cancelled, progress } = options;
+  const { account, viewer, source, cancelled, progress, stopHold } = options;
   if (!viewer.canManage || source.kind !== "live") throw Error("This session cannot enable chats.");
   const result: BulkProgress = { checked: 0, enabled: 0, alreadyOn: 0, protected: 0 };
   const seen = new Set<string>(), cursors = new Set<string>();
@@ -31,6 +32,8 @@ export async function enableExistingFanChats(options: {
   } while (cursor);
   for (const summary of candidates) {
     if (cancelled()) throw Error("Stopped. Changes already recorded remain in place.");
+    const held = stopHold();
+    if (held) throw Error(held);
     result.checked++;
     if (summary.automationMode === "automated" && summary.takeoverState === "none") result.alreadyOn++;
     else if (summary.revision !== 0 || summary.automationMode !== "paused" || summary.takeoverState !== "none") result.protected++;
@@ -40,7 +43,7 @@ export async function enableExistingFanChats(options: {
       const detail = read.data, current = detail.summary;
       if (detail.accountId !== account.accountId || detail.conversationId !== summary.conversationId ||
           current.accountId !== account.accountId || current.conversationId !== summary.conversationId) throw Error("A chat changed account. Refresh before continuing.");
-      const actions = availableActions({ account, summary: current, viewer, deliveryIncident: detail.deliveryIncident });
+      const actions = availableActions({ account, summary: current, viewer, deliveryIncident: detail.deliveryIncident, goHold: stopHold() });
       if (current.revision !== 0 || !actions.available.some(a => a.action === "resume_automation")) result.protected++;
       else {
         if (cancelled()) throw Error("Stopped. Changes already recorded remain in place.");

@@ -26,13 +26,13 @@ const real = dom.window.sessionStorage;
 const useStorage = (value: unknown) => Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value });
 const fullStorage = { getItem: (name: string) => real.getItem(name), removeItem: (name: string) => real.removeItem(name), key: (i: number) => real.key(i),
   get length() { return real.length; }, setItem: () => { throw new dom.window.DOMException("The quota has been exceeded.", "QuotaExceededError"); } };
-beforeEach(async () => { await reloadPage(); useStorage(real); real.clear(); });
+beforeEach(async () => { await reloadPage(); useStorage(real); real.clear(); dom.window.localStorage.clear(); });
 
 const AVA = "of-acc-ava-001", HUMAN = "of-conv-ava-1003", PAUSED_CONV = "of-conv-ava-1001"; // 1003: takeover effective; 1001 made paused below
 const PRINCIPAL = "op-session:fixture";
 const HELD = /held until the emergency stop is confirmed/i;
 /** The marker the launch panel writes when a STOP is sent and keeps until it is recorded, refused or read as applied. */
-const holdStop = (accountId: string) => real.setItem(`b-stop-held:${accountId}`, JSON.stringify({ accountId, since: 1, attempt: 1, carried: false }));
+const holdStop = (accountId: string) => dom.window.localStorage.setItem(`b-stop-held:${accountId}`, JSON.stringify({ accountId, since: 1, attempt: 1, carried: false }));
 const posts = () => calls.filter(call => call.method === "POST");
 const controlAck = (call: Call): Response => {
   const [, accountId, conversationId] = call.url.match(/accounts\/([^/]+)\/conversations\/([^/?]+)/)!;
@@ -97,7 +97,7 @@ test("B1 inbox: a STOP held after render blocks hand back at submit, and blocks 
   await click(q("[data-of-retry-control]"));
   assert.equal(posts().length, 1, "the retry of a hand back went out while the account's STOP is unconfirmed");
   assert.match(resultText(), HELD, "the held retry does not say why");
-  real.removeItem(`b-stop-held:${AVA}`);
+  dom.window.localStorage.removeItem(`b-stop-held:${AVA}`);
   await reloadPage();
   await inbox("op-g07d-b1s", controlAck);
   await open(HUMAN);

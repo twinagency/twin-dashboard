@@ -22,7 +22,7 @@ const REFUSAL = { schemaVersion: "of-controls.v1", ok: false, outcome: "refused"
 for (const command of ["pause_automation", "mark_no_contact"] as const) {
   test(`${command} on a degraded session: offered, and a backend refusal never reads as a saved change`, async () => {
     assert.equal(NOVA.capabilities.pauseAutomation, "unavailable", "fixture: the degraded capability");
-    const offered = availableActions({ account: NOVA, summary: detail.summary, viewer: operatorViewer() }).available.map(a => a.action);
+    const offered = availableActions({ goHold: null, account: NOVA, summary: detail.summary, viewer: operatorViewer() }).available.map(a => a.action);
     assert.ok(offered.includes(command), `the stop stays offered: ${offered}`);
     const transport = createFetchOnlyFansTransport((async () => Response.json(REFUSAL, { status: 409 })) as typeof fetch);
     const result = await transport.submitControl!(createCommandRequest({ command, accountId: NOVA.accountId, conversationId: detail.conversationId,

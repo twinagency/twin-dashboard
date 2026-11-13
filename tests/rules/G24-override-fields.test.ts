@@ -34,7 +34,7 @@ for (const key of Object.keys(VALUE) as Override[]) {
     const row = dataOf(await source.listConversations(ACCOUNT_AVA))!.items.find(item => item.conversationId === THREAD)!;
     const read = key === "health" ? [account.health, listed.health] : [detail.summary[key], row[key]];
     assert.deepEqual(read, [VALUE[key], VALUE[key]], "a read does not carry the override");
-    const offered = availableActions({ account, summary: detail.summary, viewer, deliveryIncident: detail.deliveryIncident }).available.map(a => a.action);
+    const offered = availableActions({ goHold: null, account, summary: detail.summary, viewer, deliveryIncident: detail.deliveryIncident }).available.map(a => a.action);
     for (const action of ACTIONS) {
       const payload: CommandPayload = action === "send_manual_message" ? { kind: "manual_message", body: "hello" }
         : action === "resolve_delivery_evidence" ? { kind: "delivery_resolution", attemptId: detail.deliveryIncident?.attemptId ?? "none", decision: "delivered", providerMessageId: "123" }

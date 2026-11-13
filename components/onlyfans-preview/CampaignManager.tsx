@@ -14,7 +14,7 @@ import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATI
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
 import { heldKeyStore } from "@/lib/onlyfans/plan-c-client";
 import { uuidRequestKey } from "@/lib/onlyfans-preview/actions";
-import { stopHoldReason } from "@/components/onlyfans-launch/automation/stop-hold";
+import { stopHoldReason, useStopHolds } from "@/components/onlyfans-launch/automation/stop-hold";
 
 type Write = { kind: "create"; body: CampaignPayload } | { kind: "change"; campaignId: string; body: CampaignChange };
 const inputClass = `${inputCls} disabled:opacity-50`;
@@ -59,6 +59,7 @@ export default function CampaignManager({ accountId, sender = null, readOnly = f
 }
 
 function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope }: { accountId: string; sender: Sender | null; readOnly: boolean; operatorScope?: string }) {
+  useStopHolds();
   // A write in flight or unconfirmed, on an earlier page load or mount too, is the only action offered until its outcome is known.
   const keys = heldKeyStore("of-campaign-keys", accountId, operatorScope), held = useRef(keys.pending().find(heldWrite) ?? null).current;
   const heldNotice = (write: Write) => keys.needsReview().includes(write) ? REVIEW_TEXT : UNCONFIRMED_TEXT;

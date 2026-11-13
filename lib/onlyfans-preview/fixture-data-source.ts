@@ -234,7 +234,7 @@ export function simulateCommand(request: CommandRequest, viewer: PreviewViewer, 
   // The same gate the controls use, so the pretend backend refuses what the UI would not offer: a held send, a send to
   // a no-contact fan, a resume during an unknown delivery.
   const actions = availableActions({ account: binding, summary: conversation.summary, viewer,
-    deliveryIncident: conversation.deliveryIncident });
+    deliveryIncident: conversation.deliveryIncident, goHold: null }); // the pretend backend holds no browser STOP; the UI and executeCommand do
   if (!actions.available.some((entry) => entry.action === request.command)) {
     return refuse(actions.blocked.find((entry) => entry.action === request.command)?.reason ?? "That action is not offered here.");
   }

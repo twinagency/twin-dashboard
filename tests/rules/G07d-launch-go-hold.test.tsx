@@ -19,7 +19,7 @@ const stopUrl = (id: string) => `/api/onlyfans-launch/automation/accounts/${id}/
 type Answers = { stopGet?: () => Response; stopPost?: (action: string) => Response | Promise<Response>; control?: () => Response | Promise<Response>;
   moxy?: (method: string) => Response; settingsPost?: () => Response };
 async function open(a: Answers = {}) {
-  window.sessionStorage.clear();
+  window.sessionStorage.clear(); window.localStorage.clear();
   const stub = stubFetch((url, method, _n, raw) => {
     if (url === "/api/onlyfans/accounts") return json(accounts("of-a"));
     if (url === "/api/onlyfans/accounts/of-a/conversations") return json(conversations("of-a"));

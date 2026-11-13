@@ -746,6 +746,7 @@ function WorkspaceForScope({
         summary: detail.summary,
         viewer: actionViewer,
         deliveryIncident: detail.deliveryIncident,
+        goHold: stopHoldReason(account.accountId),
       });
       const request = createCommandRequest({
         command: commandForAction(action),

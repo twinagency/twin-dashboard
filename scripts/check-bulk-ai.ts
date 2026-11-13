@@ -21,7 +21,7 @@ async function main() {
     sends.push(request.conversationId);
     return { simulated: false, applied: !fail, accepted: !fail, outcome: fail ? "unconfirmed" : "recorded", request, note: "" };
   } } as unknown as OnlyFansDataSource;
-  const options = { account, viewer, source, cancelled: () => false, progress: () => {} };
+  const options = { account, viewer, source, cancelled: () => false, progress: () => {}, stopHold: () => null };
   const result = await enableExistingFanChats(options);
   assert.equal(result.enabled, 2); assert.equal(result.protected, 3); assert.equal(result.alreadyOn, 1);
   assert.deepEqual(sends, [base.conversationId, "later"]);

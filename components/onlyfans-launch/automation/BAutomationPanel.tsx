@@ -6,7 +6,7 @@ import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccoun
 import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
 import EngagementPanel from "./EngagementPanel";
 import AccountControls, { type StopPhase } from "./AccountControls";
-import { STOP_HELD_TEXT, readHold, stamp, writeHold } from "./stop-hold";
+import { STOP_HELD_TEXT, readHold, stamp, useStopHolds, writeHold } from "./stop-hold";
 import MoxyControls from "./MoxyControls";
 import { bTime, type BReply } from "@/lib/onlyfans/launch/b-common";
 import { BAccountSwitcher, BError, BLoading, BPending, bButton, bDanger } from "../b-shared/BShared";
@@ -27,6 +27,7 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
 /** Current account controls, conversation handling and native proactive engagement. */
 export default function BAutomationPanel({ canManage = false, initialAccountId }: { canManage?: boolean; initialAccountId?: string }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
+  useStopHolds();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const manage = canManage;
   // Go (never STOP or a brake) is held per account: while a STOP there is unconfirmed (stop-hold.ts), and after a 401/403 from any of
