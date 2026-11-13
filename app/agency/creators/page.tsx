@@ -6,21 +6,9 @@ import { redirect } from "next/navigation";
 import { serviceClient } from "@/lib/supabase-service";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
-import { isMoxy } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Agency Accounts · Twin" };
-
-// Moxy requested a two-creator display on this onboarding screen. This only
-// narrows existing assignments for presentation; accounts and access stay intact.
-const MOXY_VISIBLE_ACCOUNT_IDS = new Set([
-  "c3f3b398-44f7-4031-af41-2c5925d48bc4", // Riley Mae
-  "268bdb4d-299b-43e1-9836-38414f24dc12", // Kyla Yesenosky
-]);
-const MOXY_VISIBLE_CLONE_IDS = new Set([
-  "20ef9407-83f2-4351-8d3c-48cc0ed54e0b", // Riley Mae Lewis
-  "d2678dce-6a4e-4f1c-b54a-86057bba427c", // Kyla Yesenosky
-]);
 
 type Assignment = { creator_account_id: string; agency_id: string | null };
 type Creator = { id: string; display_name: string | null; email: string | null; account_status: string; created_at: string };
@@ -39,12 +27,9 @@ export default async function AgencyCreatorsPage() {
     .from("creator_agency_assignments")
     .select("creator_account_id,agency_id")
     .eq("agency_id", access.id);
-  const moxy = isMoxy(access.name);
-  const assignments = ((assignmentRows ?? []) as Assignment[]).filter(
-    (row) => !moxy || MOXY_VISIBLE_ACCOUNT_IDS.has(row.creator_account_id),
-  );
+  const assignments = (assignmentRows ?? []) as Assignment[];
   const ids = assignments.map((row) => row.creator_account_id);
-  const visibleCloneIds = access.cloneIds.filter((id) => !moxy || MOXY_VISIBLE_CLONE_IDS.has(id));
+  const visibleCloneIds = access.cloneIds;
 
   if (!ids.length) {
     return <div className="dashboard-page text-ink"><h1 className="text-2xl font-semibold">Accounts</h1><p className="mt-2 text-sm text-muted">No creator accounts are assigned to {access.name} yet.</p></div>;

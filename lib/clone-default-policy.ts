@@ -177,6 +177,14 @@ function validNumber(value: unknown, rule: NumberRule): value is number {
     && value <= rule.max;
 }
 
+// One field against its canonical bound, or a refusal the operator sees. Shared
+// with the per-clone save (app/clones/actions.ts) so it refuses what Settings does.
+export function checkDefaultNumber(key: (typeof OPERATIONAL_DEFAULT_NUMBERS)[number], value: unknown): number {
+  const rule = NUMBER_RULES[key];
+  if (!validNumber(value, rule)) throw new Error(`${key} must be ${rule.integer ? "a whole number" : "a number"} from ${rule.min} to ${rule.max}`);
+  return value;
+}
+
 function validModelId(value: unknown): value is string {
   return typeof value === "string" && MODEL_ID.test(value.trim());
 }
@@ -252,11 +260,7 @@ export function validateCloneDefaultsForWrite(raw: unknown): Partial<Clone> {
   }
   for (const key of OPERATIONAL_DEFAULT_NUMBERS) {
     if (!(key in source)) continue;
-    if (!validNumber(source[key], NUMBER_RULES[key])) {
-      const rule = NUMBER_RULES[key];
-      throw new Error(`${key} must be ${rule.integer ? "a whole number" : "a number"} from ${rule.min} to ${rule.max}`);
-    }
-    clean[key] = source[key];
+    clean[key] = checkDefaultNumber(key, source[key]);
   }
 
   if (!("category_pricing" in source)) throw new Error("category_pricing is required");
