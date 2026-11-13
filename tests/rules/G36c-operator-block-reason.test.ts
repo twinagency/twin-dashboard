@@ -49,6 +49,32 @@ test("agency manager blocks a fan, then unblocks him (the dashboard block is an 
   assert.ok(typeof row.blocked_at === "string" && !Number.isNaN(Date.parse(row.blocked_at)), "blocked_at recorded");
   assert.equal(await submit(manager, "false"), "resolved", "agency manager could not lift his own block");
   assert.equal(row.blocked, false);
+  // r1 F2: the unblock clears the stamp, so a later reason-less block (e.g. the bot's, reason written second) is not
+  // read as this operator block.
+  assert.equal(row.blocked_reason, null, "the operator stamp survived the unblock");
+  assert.equal(row.blocked_at, null);
+  row.blocked = true; // a later reason-less block lands
+  assert.match(await submit(manager, "false"), /^rejected/, "agency manager lifted a later reason-less block via a stale operator stamp");
+  assert.equal(row.blocked, true);
+});
+
+// r1 F3 (decision: stamp only for an agency caller). Admin and AI-assistant blocks stay reason-less: admin-only to lift.
+test("an admin block records no reason, so an agency manager cannot lift it", async () => {
+  row = fan();
+  assert.equal(await submit(null, "true"), "resolved");
+  assert.equal(row.blocked, true);
+  assert.equal(row.blocked_reason, null, "an admin block was stamped operator");
+  assert.match(await submit(manager, "false"), /^rejected/, "agency manager lifted an admin block");
+  assert.equal(row.blocked, true);
+});
+
+test("admin unblock clears an operator stamp but never a safety reason", async () => {
+  row = fan({ blocked: true, blocked_reason: "operator", blocked_at: "2026-11-01T00:00:00Z" });
+  assert.equal(await submit(null, "false"), "resolved");
+  assert.deepEqual([row.blocked, row.blocked_reason, row.blocked_at], [false, null, null]);
+  row = fan({ blocked: true, blocked_reason: "minor", minor_flagged_at: "2026-11-01T00:00:00Z", blocked_at: "2026-11-01T00:00:00Z" });
+  assert.equal(await submit(null, "false"), "resolved");
+  assert.deepEqual([row.blocked, row.blocked_reason, row.minor_flagged_at], [false, "minor", "2026-11-01T00:00:00Z"]);
 });
 
 for (const [label, over] of [
@@ -87,17 +113,32 @@ test("a failed block write rejects, never reports success", async () => {
   assert.equal(row.blocked, false);
 });
 
-test("the agency write scope admits only the conditional operator stamp, no other block reason write", async () => {
+// TEST-CHANGE (r1 F1/F2): the admitted stamp is now one statement {blocked:true, blocked_reason, blocked_at} with a
+// blocked=eq.false filter (was a separate {blocked_reason, blocked_at} PATCH), plus the unblock clear; the old
+// stamp-only body is now refused.
+test("the agency write scope admits only the exact conditional stamp and clear, no other block reason write", async () => {
   const at = "2026-11-13T00:00:00Z";
   const url = (q: string) => new URL(`${process.env.SUPABASE_URL}/rest/v1/users?id=eq.${FAN}${q}`);
-  const guarded = "&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null";
-  await scopeAgencyWrite(url(guarded), "PATCH", { blocked_reason: "operator", blocked_at: at }, manager);
+  const stampQ = "&blocked=eq.false&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null";
+  const clearQ = "&blocked_reason=eq.operator&minor_flagged_at=is.null";
+  const stamp = { blocked: true, blocked_reason: "operator", blocked_at: at };
+  const clear = { blocked: false, blocked_reason: null, blocked_at: null };
+  await scopeAgencyWrite(url(stampQ), "PATCH", stamp, manager);
+  await scopeAgencyWrite(url(clearQ), "PATCH", clear, manager);
   for (const [label, q, body] of [
-    ["a safety reason", guarded, { blocked_reason: "minor", blocked_at: at }],
-    ["clearing the reason", guarded, { blocked_reason: null, blocked_at: null }],
-    ["the stamp without the reason condition", "&minor_flagged_at=is.null", { blocked_reason: "operator", blocked_at: at }],
-    ["the stamp without the minor condition", "&or=(blocked_reason.is.null,blocked_reason.eq.operator)", { blocked_reason: "operator", blocked_at: at }],
-    ["blocked_at alone", guarded, { blocked_at: at }],
+    ["a safety reason", stampQ, { ...stamp, blocked_reason: "minor" }],
+    ["the stamp on an unblock body", stampQ, { ...stamp, blocked: false }],
+    ["the stamp without blocked", stampQ, { blocked_reason: "operator", blocked_at: at }],
+    ["the stamp with an extra column", stampQ, { ...stamp, paused: true }],
+    ["the stamp on an already-blocked row (no blocked=eq.false)", "&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null", stamp],
+    ["the stamp without the reason condition", "&blocked=eq.false&minor_flagged_at=is.null", stamp],
+    ["the stamp without the minor condition", "&blocked=eq.false&or=(blocked_reason.is.null,blocked_reason.eq.operator)", stamp],
+    ["a non-string blocked_at", stampQ, { ...stamp, blocked_at: null }],
+    ["clearing the reason while blocking", clearQ, { ...clear, blocked: true }],
+    ["clearing a reason that is not operator", "&minor_flagged_at=is.null", clear],
+    ["clearing without the minor condition", "&blocked_reason=eq.operator", clear],
+    ["clearing the reason alone", clearQ, { blocked_reason: null }],
+    ["blocked_at alone", stampQ, { blocked_at: at }],
   ] as const) {
     await assert.rejects(scopeAgencyWrite(url(q), "PATCH", body, manager), /operator block reason/, label);
   }

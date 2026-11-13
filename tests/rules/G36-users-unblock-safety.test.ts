@@ -107,7 +107,8 @@ test("control: agency manager blocks a fan, then his unblock writes blocked:fals
   assert.equal(row.blocked_reason, "operator");
   writes.length = 0;
   await withDashboardAccess(manager, () => actions.setBlocked(unblock()));
-  assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
+  // TEST-CHANGE (G36c r1 F2): the agency unblock also clears its operator stamp, in the same conditional update.
+  assert.deepEqual(writes, [{ table: "users", patch: { blocked: false, blocked_reason: null, blocked_at: null } }]);
 });
 
 test("agency manager cannot lift a minor safety block", async () => {

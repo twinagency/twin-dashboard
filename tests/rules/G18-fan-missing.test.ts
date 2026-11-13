@@ -42,8 +42,7 @@ test("control: every fan write tool on an existing fan returns ok:true", async (
     pg.seed("users", [{ id: FAN_ID, clone_id: CLONE.id, stated_name: "Sam", name: "Sam", telegram_id: 1001, message_credits: 3, blocked: false, is_active: true }]);
     const r = await run(tool, args);
     assert.equal(r?.ok, true, `${tool}: ${JSON.stringify(r)}`);
-    // TEST-CHANGE (G36c): a block is two PATCHes, the block then its "operator" reason stamp (app/users/actions.ts).
-    assert.equal(pg.writes("PATCH", "users").length, tool === "setFanBlocked" ? 2 : 1, `${tool}: the write must reach the existing fan row`);
+    assert.equal(pg.writes("PATCH", "users").length, 1, `${tool}: the write must reach the existing fan row`);
   }
 });
 
