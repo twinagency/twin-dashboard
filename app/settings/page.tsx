@@ -2,6 +2,7 @@ import CloneDefaultsForm from "@/components/CloneDefaultsForm";
 import CloneDefaultSyncTable from "@/components/CloneDefaultSyncTable";
 import { saveApiKeys, getApiKeyStatus, getCloneDefaults, getModelsInUse, getCloneDefaultStatuses } from "./actions";
 import { API_KEY_FIELDS } from "./fields";
+import { effectiveCloneDefaults } from "@/lib/clone-default-policy";
 import { OPENROUTER_FIELD_NOTES } from "@/lib/openrouter-fields";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const [status, cloneDefaults, modelsInUse, cloneStatuses] = await Promise.all([
     getApiKeyStatus(),
-    getCloneDefaults(),
+    getCloneDefaults().then(effectiveCloneDefaults),
     getModelsInUse(),
     getCloneDefaultStatuses(),
   ]);
@@ -105,7 +106,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Fleet config defaults
-            <Info text="One operational template for timing, monetization, safety, media capabilities and models. Identity, personality, explicitness, warmth, customer-facing paywall copy and promised media stay per creator. A new creator inherits this automatically. Saving also pushes operational fields to every creator marked 'Following default'. The pricing guide seeds new creators only; existing PPVs use the guarded preview on each creator's PPVs page." />
+            <Info text="One operational template for timing, monetization, safety, media capabilities and models. Identity, personality, explicitness, warmth, customer-facing paywall copy and promised media stay per creator. A new creator inherits this automatically. Saving also pushes the operational fields you changed to every creator marked 'Following default'. The pricing guide seeds new creators only; existing PPVs use the guarded preview on each creator's PPVs page." />
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -113,7 +114,7 @@ export default async function SettingsPage() {
           <div className="border-t border-line pt-5">
             <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
               Which creators are on this default
-              <Info text="Following default: this template's values apply to her automatically on the next Save above, or immediately via Push. Custom: she's been detached and keeps her own values until switched back." />
+              <Info text="Following default: switching her to it applies this template's operational fields and prices to her at once, then each Save above pushes the fields you changed. Custom: she keeps her own values until switched back. Push to selected overwrites a creator's own values and prices with the whole template." />
             </div>
             <CloneDefaultSyncTable clones={cloneStatuses} />
           </div>

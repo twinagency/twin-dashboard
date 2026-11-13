@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appendEnginePage, engineEnvironmentIsReal, engineEnvironmentLabel, engineNextStepText, engineRequestLabel, engineRequestPurchase,
   isUnresolvedRequest, parseEngineStatus, type EngineEnvironment, type EngineRequestView } from "@/lib/onlyfans/engine-status";
 import { engineActionNeedsNote, type EngineOperatorAction, type EngineOperatorResult } from "@/lib/onlyfans/engine-operator";
@@ -51,7 +51,7 @@ function RequestRow({ request, accountId, environment, humanControl, onAction, o
     {editable && request.status === "handover_pending" ? <>
       {humanControl ? null : <p className="text-muted">Take over the conversation first, then accept this request.</p>}
       {humanControl || !onTakeover ? null : <button type="button" data-engine-takeover className="of-control-button of-secondary" disabled={takeoverPending} onClick={onTakeover}>{engineControlLabel("request_takeover", true)}</button>}
-      <button type="button" className="of-control-button of-secondary" disabled={pending} onClick={() => void run("accept_handover")}>Accept responsibility</button>
+      <button type="button" className="of-control-button of-secondary" disabled={pending || !humanControl} onClick={() => void run("accept_handover")}>Accept responsibility</button>
     </> : null}
     {editable && request.status === "handover_accepted" ? <>
       <label>Review evidence <input className="w-full text-base" aria-label="Review evidence" value={note} maxLength={108} onChange={event => setNote(event.target.value)} placeholder="What did you check?" /></label>
@@ -69,9 +69,10 @@ export function EngineStatus({ value, accountId, conversationId, onAction, onLoa
   const status = useMemo(() => value === undefined ? undefined : parseEngineStatus(value, accountId, conversationId), [value, accountId, conversationId]);
   const [loaded, setLoaded] = useState<{ requests: EngineRequestView[]; cursor: string | null } | null>(null);
   const [busy, setBusy] = useState(false), [loadError, setLoadError] = useState<string | null>(null);
-  // Any change to the first page (a new request, a new revision) invalidates later pages: they could be stale or skip rows.
-  const signature = status?.state === "current" ? status.requests.map(request => `${request.requestId}:${request.revision ?? "r"}`).join(",") + "|" + (status.nextCursor ?? "") : "";
-  useEffect(() => { setLoaded(null); setLoadError(null); }, [signature]);
+  // Any change to the first page (another conversation, a new request, revision or outcome) invalidates later pages: they could be stale or skip rows.
+  const signature = status?.state === "current" ? `${accountId}|${conversationId}|` + status.requests.map(request => `${request.requestId}:${request.revision ?? "r"}:${request.actionOutcome}`).join(",") + "|" + (status.nextCursor ?? "") : "";
+  const current = useRef(signature);
+  useEffect(() => { current.current = signature; setLoaded(null); setLoadError(null); }, [signature]);
   if (value === undefined) return null;
   if (!status || status.state === "unavailable") return <section aria-label="Conversation requests" role="status">
     <h2 className="of-section-heading">Conversation requests</h2>
@@ -84,11 +85,15 @@ export function EngineStatus({ value, accountId, conversationId, onAction, onLoa
   const loadMore = async () => {
     if (!onLoadMore || !nextCursor || busy) return;
     setBusy(true); setLoadError(null);
+    const requested = signature;
     try {
-      const page = parseEngineStatus(await onLoadMore(nextCursor), accountId, conversationId);
+      const raw = await onLoadMore(nextCursor);
+      // The first page changed while this page was in flight: its cursor is invalid, so the page is dropped.
+      if (current.current !== requested) return;
+      const page = parseEngineStatus(raw, accountId, conversationId);
       if (!page || page.state !== "current") throw new Error("unreadable");
       setLoaded({ requests: appendEnginePage(loaded?.requests ?? [], page.requests), cursor: page.nextCursor });
-    } catch { setLoadError("More requests could not be loaded. Try again."); }
+    } catch { if (current.current === requested) setLoadError("More requests could not be loaded. Try again."); }
     finally { setBusy(false); }
   };
   const list = (items: EngineRequestView[], label: string, kind: string) => items.length ? <>

@@ -30,7 +30,7 @@ test("accepted handover is not presented as a completed request", () => {
 
 
 test("offer, purchase and access are not conflated", () => {
-  assert.equal(engineRequestLabel({ ...request, status: "waiting_fan", nextStep: "await_purchase_or_question", actionOutcome: "accepted" }), "Offer sent; purchase is not confirmed");
+  assert.equal(engineRequestLabel({ ...request, status: "waiting_fan", nextStep: "await_purchase_or_question", actionOutcome: "accepted", actionType: "offer" }), "Offer sent; purchase is not confirmed");
   assert.equal(engineRequestLabel({ ...request, status: "waiting_provider", nextStep: "verify_access", actionOutcome: "accepted", actionType: "offer" }), "Purchase recorded; access is not yet confirmed");
   assert.equal(engineRequestLabel({ ...request, status: "completed", actionOutcome: "accepted", actionType: "offer" }), "Purchase and access confirmed");
   assert.equal(engineRequestLabel({ ...request, status: "open", nextStep: "review_access_revocation", actionOutcome: "accepted", actionType: "offer" }), "Access revoked; review required");

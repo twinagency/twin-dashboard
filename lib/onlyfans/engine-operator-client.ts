@@ -10,8 +10,9 @@ export async function submitEngineOperatorCommand(args: { accountId: string; con
       method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action, expectedRevision, ...(engineActionNeedsNote(action) ? { note } : {}), ...(environment && environment !== "simulation" ? { environment } : {}) }) });
     const data = await response.json() as Record<string, unknown>;
-    if (data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === true && data.outcome === "recorded") return { ok: true };
-    if (data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === false && data.outcome === "refused" && typeof data.error === "string") return { ok: false, outcome: "refused", error: data.error };
+    // Success needs a 2xx AND a recorded body; a refusal needs a non-2xx. Anything else proves nothing.
+    if (response.ok && data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === true && data.outcome === "recorded") return { ok: true };
+    if (!response.ok && data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === false && data.outcome === "refused" && typeof data.error === "string") return { ok: false, outcome: "refused", error: data.error };
   } catch { /* A failed connection does not prove the action failed. */ }
   return { ok: false, outcome: "unconfirmed", error: "The outcome is unconfirmed. Refresh the request before taking another action." };
 }
