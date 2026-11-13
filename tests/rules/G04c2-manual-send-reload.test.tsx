@@ -5,7 +5,7 @@
 // scope and account and keyed by a hash of the full canonical intent (conversation, revision, payload), so after a reload the conversation offers
 // the exact held retry again. The guarantee is per tab and operator scope, at one conversation revision: a changed revision is a new
 // intent and a new key. Hold rule (G02a): after an unconfirmed outcome only a recorded ack releases the key; a refusal does not (#11 below
-// is the one allowlisted exception). A session loss forgets the scope's held sends (#14): the guarantee survives a reload, not a re-sign-in.
+// is the one allowlisted exception). A session loss keeps the scope's held sends (#14, G04c3h B12); another operator scope opening the tab forgets them (G04c3h B5).
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), the real workspace over the real server data source. A reload is
 // reloadPage(): unmount and drop every product module (the in-memory composer draft goes with it), keep sessionStorage.
 import { bodyOf, calls, click, close, dom, json, lostReply, mount, q, reloadPage, routeFailure, serve, type, type Call, type Answer } from "../helpers/w3-preview1-dom";
@@ -224,16 +224,24 @@ test("G04c2 #11: a held send stays held through a key conflict, an account hold 
   assert.equal(dom.window.sessionStorage.length, 0, "the released send stayed in storage");
 });
 
-test("G04c2 #14: a session loss (401) forgets this scope's held sends in storage: the key could not dedupe under a new sign-in", async () => {
+// TEST-CHANGE (G04c3h B12): #14 reversed. A 401 proves the request was unauthorised, not that an earlier unknown attempt did not commit,
+// so the held send stays in storage (was: storage length 0) and after signing in again its exact retry is offered.
+test("G04c2 #14 (G04c3h B12): a session loss (401) keeps this scope's held send; after signing in again the exact send is offered", async () => {
   await load("op-401", lostReply);
   await send("hello fan");
+  const [sent] = posts().map(bodyOf);
   assert.ok(dom.window.sessionStorage.length > 0, "control: the held send is in storage");
   await reloadPage();
   await load("op-401", () => new Response(null, { status: 401 }));
   await open();
   await retry();
   assert.equal(posts().length, 1, "control: the retry reached the route");
-  assert.equal(dom.window.sessionStorage.length, 0, "the session loss left the held send (and its message text) in storage");
+  assert.equal(dom.window.sessionStorage.length, 1, "the session loss forgot the held send, though it may have committed");
+  await reloadPage();
+  await load("op-401", ack);
+  await open();
+  await retry();
+  assert.deepEqual(posts().map(bodyOf), [sent], "the retry after signing in again was not the exact send");
 });
 
 test("G04c2 #16: a held send is stored once, under a hash of its intent: the message text is not also the entry's name", async () => {

@@ -10,9 +10,9 @@ import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, campaignObject, parseCampaignAck,
 import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
 import OnlyFansAvatar from "./OnlyFansAvatar";
 import { inboxSearchParams } from "@/lib/onlyfans/inbox-search";
-import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
+import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearDrafts, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
-import { forgetHeldKeys, heldKeyStore } from "@/lib/onlyfans/plan-c-client";
+import { heldKeyStore } from "@/lib/onlyfans/plan-c-client";
 import { uuidRequestKey } from "@/lib/onlyfans-preview/actions";
 
 type Write = { kind: "create"; body: CampaignPayload } | { kind: "change"; campaignId: string; body: CampaignChange };
@@ -43,19 +43,25 @@ const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request 
 /** A held create pending for a day or more (plan-c-client.ts needsReview, G04c3h B2): still held, never dropped for its age. */
 const REVIEW_TEXT = "Held, needs review. This campaign has not been confirmed for over a day.";
 const REVIEW_HINT = "It stays held so it cannot go out twice. Check Saved campaigns for it, then retry this same request: a create that already went out is replayed, not sent again.";
+/** A new create whose key could not be saved in this tab is refused before dispatch: a reload would rebuild it under a new key (G04c3h r1). */
+const NOT_SAVED_TEXT = "This campaign could not be saved in this browser, so it was not queued. Resolve the held sends and campaigns in this tab, then try again.";
+/** The operator scope the module drafts were written under; null until the first mount in this document. */
+let draftScope: string | undefined | null = null;
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
 
 /** The sender is always explicit. Without exactly one chosen account nothing can be queued. */
 export default function CampaignManager({ accountId, sender = null, readOnly = false, operatorScope }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean; operatorScope?: string }) {
   if (!accountId) return <div className="space-y-5" data-of-campaign-manager><Card className="p-4"><h2 className="font-semibold">New campaign</h2><p role="status" data-of-campaign-sender className="mt-2 text-sm font-medium">{NO_SENDER_TEXT}</p></Card></div>;
-  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} operatorScope={operatorScope} />;
+  // Keyed by scope too: another operator in this tab gets fresh state, never the earlier one's text or Retry (G04c3h r1).
+  return <CampaignManagerForAccount key={`${operatorScope ?? ""}:${accountId}`} accountId={accountId} sender={sender} readOnly={readOnly} operatorScope={operatorScope} />;
 }
 
 function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope }: { accountId: string; sender: Sender | null; readOnly: boolean; operatorScope?: string }) {
   // A write in flight or unconfirmed, on an earlier page load or mount too, is the only action offered until its outcome is known.
   const keys = heldKeyStore("of-campaign-keys", accountId, operatorScope), held = useRef(keys.pending().find(heldWrite) ?? null).current;
   const heldNotice = (write: Write) => keys.needsReview().includes(write) ? REVIEW_TEXT : UNCONFIRMED_TEXT;
+  if (operatorScope !== draftScope) { if (draftScope !== null) clearDrafts(); draftScope = operatorScope; }
   const initialDraft = useRef(recallDraft(accountId)).current;
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
@@ -81,14 +87,13 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
   const sessionLost = useCallback((status: number) => {
-    // Even when unmounted: a held write must not outlive the session (codex final). Only a 401 is a session loss; a 403 (read-only,
-    // permission, origin) proves nothing about the earlier attempt, so the held create stays (#19).
-    if (status === 401) forgetHeldKeys(operatorScope);
+    // The held create stays in storage on a 401 too (G04c3h B12): a 401 proves the request was unauthorised, not that an earlier unknown
+    // attempt did not commit, so signing in again offers its exact retry. Another scope opening the tab forgets it (heldKeyStore).
     if (!active.current) return;
     sessionDenied.current = true;
     setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
-  }, [router, accountId, operatorScope]);
+  }, [router, accountId]);
   const read = useCallback(async (id?: string | null) => {
     try {
       const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
@@ -133,10 +138,14 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   useEffect(() => { selection.current = selected; setDetail(null); if (selected) void read(selected); }, [selected, read]);
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
   async function write(request: Write) {
-    if (sending.current || denied || readOnly) return; sending.current = true; setBusy(true); setNotice("");
+    if (sending.current || denied || readOnly) return;
     // The exact create is held with its requestKey; once any attempt went unconfirmed only a recorded ack releases it (keys.settle). The
     // backend refusal code is not forwarded by the campaign routes (campaigns-backend.ts), so no refusal can prove a create did not commit.
-    const create = request.kind === "create", intent = JSON.stringify(request), requestKey = create ? uuidRequestKey(keys.keyFor(intent, request)) : null;
+    // A change takes no key, so Pause and Cancel never meet the storage gate (REVIEW.md inv 7).
+    const create = request.kind === "create", intent = JSON.stringify(request);
+    let requestKey: string | null = null;
+    if (create) try { requestKey = uuidRequestKey(keys.keyFor(intent, request)); } catch { setNotice(NOT_SAVED_TEXT); return; }
+    sending.current = true; setBusy(true); setNotice("");
     let outcome: "ack" | "refused" | null = null;
     try {
       const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(create ? { requestKey, ...request.body } : request.body) });

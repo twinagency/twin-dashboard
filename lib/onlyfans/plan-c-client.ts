@@ -54,23 +54,30 @@ export type Settled = "ack" | "unconfirmed" | "refused" | "stale";
  * under the intent's hash, with the request it was taken for (null for Plan C), so a reload by the same operator keeps both.
  * Nothing expires and there is no count cap (G04c3h B2): every entry is an attempt in flight or a held key (an ack, or a refusal of an
  * attempt never unconfirmed, deletes it at once), and dropping either would let a rebuilt send or create act twice. Over-holding is the
- * safe direction. A day-old entry is listed by needsReview so the surface can say so; it is still held.
+ * safe direction. A day-old entry is listed by needsReview so the surface can say so; it is still held. With `failClosed` (a fan-visible
+ * write's store), a new key that cannot be saved (quota, storage blocked) is refused, not handed out: a reload would drop it (G04c3h r1).
  */
-export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now) {
+export const NOT_SAVED_TEXT = "This send could not be saved in this browser, so it was not sent. Resolve the held sends and campaigns in this tab, then try again.";
+export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now, failClosed = false) {
   // A key read back from an earlier page load had an unknown outcome there, so it is held.
   const keys = new Map(storedKeys(persistAs));
+  /** Whether storage now matches memory. Unless failClosed, a failure leaves the in-memory key covering this page load. */
   const save = () => {
     if (persistAs) try {
       if (keys.size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([name, entry]) => [name, [entry.key, entry.at, entry.request, entry.stale ? 1 : 0]]))));
       else globalThis.sessionStorage.removeItem(persistAs);
-    } catch { /* No storage: the in-memory key still covers this page load. */ }
+    } catch { return false; }
+    return true;
   };
   const oldestFirst = () => [...keys.values()].sort((a, b) => a.at - b.at);
   return {
-    /** `request` is kept with the key until the outcome releases both. */
+    /** `request` is kept with the key until the outcome releases both. Throws NOT_SAVED_TEXT, before any dispatch, if failClosed and unsaved. */
     keyFor(intent: string, request: unknown = null): string {
       let entry = keys.get(intentHash(intent));
-      if (!entry) { keys.set(intentHash(intent), entry = { key: random(), held: false, at: now(), request }); save(); }
+      if (!entry) {
+        keys.set(intentHash(intent), entry = { key: random(), held: false, at: now(), request });
+        if (!save() && failClosed) { keys.delete(intentHash(intent)); throw new Error(NOT_SAVED_TEXT); }
+      }
       return entry.key;
     },
     /**
@@ -102,23 +109,30 @@ export function createCommandKeyStore(random: () => string = newCommandKey, pers
  * reload in the same tab by the same operator does too; another operator signing in on that tab never sees it.
  */
 const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
-function sharedStore(name: string, persist: boolean) {
+function sharedStore(name: string, persist: boolean, failClosed = false) {
   let store = accountStores.get(name);
-  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, persist ? name : undefined));
+  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, persist ? name : undefined, Date.now, failClosed));
   return store;
 }
+/** Never fail-closed: a Plan C STOP is never harder than a go (REVIEW.md inv 7). */
 const accountKeyStore = (accountId: string, operatorScope: string) => sharedStore(`plan-c-keys:${operatorScope}:${accountId}`, true);
 /**
  * The same store for a write whose double could reach a fan (G04c2: a manual send, a campaign create), one per kind, operator scope and
  * account, keeping each pending request with its key. Persisted only with an operator scope; without one it covers a remount, not a reload.
- * It survives a reload, not a re-sign-in: see forgetHeldKeys. The first held store opened under a new operator scope forgets every other
- * scope's held writes (G04c3h B5): another scope is another sign-in on this tab (planCKeyScope of the session actor), and the earlier
- * one's message and campaign text must not outlive it. Its own holds stay. No scope (no actor) forgets nothing.
+ * It survives a reload and a 401 (G04c3h B12), and fails closed when it cannot be saved (createCommandKeyStore). Opening it runs enterHeldScope.
+ */
+export function heldKeyStore(kind: HeldKind, accountId: string, operatorScope?: string) {
+  enterHeldScope(operatorScope);
+  return sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope, !!operatorScope);
+}
+/**
+ * The first entry under a new session scope (planCKeyScope of the session actor, never the Plan C owner's) forgets every other scope's
+ * held writes (G04c3h B5): another scope is another sign-in on this tab, and the earlier one's message and campaign text must not outlive
+ * it. Its own holds stay. No scope (no actor) forgets nothing. Run by every held store and by the Plan C console (G04c3h r1).
  */
 let currentScope: string | undefined;
-export function heldKeyStore(kind: HeldKind, accountId: string, operatorScope?: string) {
+export function enterHeldScope(operatorScope?: string) {
   if (operatorScope && operatorScope !== currentScope) { currentScope = operatorScope; forget(scope => !!scope && scope !== operatorScope); }
-  return sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope);
 }
 const HELD_KINDS = ["of-send-keys", "of-campaign-keys"] as const;
 type HeldKind = typeof HELD_KINDS[number];
@@ -137,19 +151,21 @@ function forget(drop: (scope: string) => boolean) {
   } catch { /* No storage: nothing was persisted. */ }
 }
 /**
- * On a session loss (401; a 403 is not one, #19) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
- * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
+ * On a session loss (401) nothing of this scope is forgotten (G04c3h B12, was G04c2 #14): a 401 proves the request was unauthorised, not
+ * that an earlier unknown attempt did not commit, so the same operator signing in again gets the exact retry. Only other scopes go.
  */
-export const forgetHeldKeys = (operatorScope?: string) => forget(scope => scope === (operatorScope ?? ""));
+export const forgetHeldKeys = (operatorScope?: string) => { if (operatorScope) forget(scope => !!scope && scope !== operatorScope); };
 
 const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c`;
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });
 const invalid = (error: string): PlanCCommandResult => ({ ok: false, outcome: "refused", reload: false, error });
 
 /** Either the operator scope (the shared, persisted store) or an injected store; never neither. */
-export function createPlanCClient(options: { accountId: string; fetchImpl?: typeof fetch }
+/** `sessionScope`: planCKeyScope of the session actor; opening Plan C under it runs enterHeldScope, as a held store would. */
+export function createPlanCClient(options: { accountId: string; fetchImpl?: typeof fetch; sessionScope?: string }
   & ({ operatorScope: string; keys?: undefined } | { keys: ReturnType<typeof createCommandKeyStore>; operatorScope?: undefined })) {
   const { accountId } = options, fetchImpl = options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
+  enterHeldScope(options.sessionScope);
   const keys = options.keys ?? accountKeyStore(accountId, options.operatorScope);
   const init = { credentials: "same-origin", cache: "no-store", redirect: "error" } as const;
 

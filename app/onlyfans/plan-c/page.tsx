@@ -28,6 +28,7 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>
-    <PlanCConsole accountId={accountId} operatorScope={planCKeyScope(operator.actor)} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
+    <PlanCConsole accountId={accountId} operatorScope={planCKeyScope(operator.actor)} sessionScope={ctx.actor ? planCKeyScope(ctx.actor) : undefined}
+      canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
   </div>;
 }
