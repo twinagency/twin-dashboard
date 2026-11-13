@@ -312,6 +312,52 @@ check("B9 the write allowlists are the dashboard's, not a second copy", () => {
   assert(!/CLONE_TOGGLE_FIELDS\s*=/.test(src), "a second toggle allowlist would drift from the first");
 });
 
+// G16 (W4 api-admin-plus1 F1/F4/F5/F6/F8). Behaviour is driven over a faked wire
+// in tests/rules/G16-*.test.ts; these pin the shape so a refactor cannot drop it.
+const adminSrc = (rel: string) => sourceCode(new URL(`../app/api/admin/v1/${rel}`, import.meta.url));
+
+check("B10 meta lists every route and verb, and does not claim readOnly while writers exist", () => {
+  const meta = adminSrc("meta/route.ts");
+  assert(!/readOnly:\s*true/.test(meta), "meta says readOnly:true but POST routes write");
+  const root = fileURLToPath(new URL("../app/api/admin/v1/", import.meta.url)).replace(/\\/g, "/");
+  for (const p of adminRouteFiles()) {
+    const path = "/api/admin/v1/" + p.replace(/\\/g, "/").slice(root.length).replace(/\/?route\.ts$/, "");
+    for (const verb of ["GET", "POST", "PUT", "PATCH", "DELETE"]) {
+      if (!sourceCode(p).includes(`export const ${verb} =`)) continue;
+      assert(new RegExp(`"${verb} ${path}[?" ]`).test(meta), `meta endpoints omit ${verb} ${path}`);
+    }
+  }
+});
+
+check("B11 clones/create refuses money, the price brake and paywall text before building the form", () => {
+  const src = adminSrc("clones/create/route.ts");
+  for (const k of ["credit_pack_price_stars", "starting_credits", "spoil_options", "category_pricing", "price_guard_mode", "paywall_instruction", "welcome_instruction"]) {
+    assert(src.includes(`"${k}"`), `${k} is no longer refused by clones/create`);
+  }
+  const refuse = src.indexOf("NOT_SETTABLE.has(");
+  assert(refuse !== -1 && refuse < src.indexOf("Object.entries(body)"), "the refusal must run before the body is copied into the form");
+});
+
+check("B12 posting/write deletes refuse dryRun before reaching Telegram", () => {
+  const src = adminSrc("posting/write/route.ts");
+  for (const [action, call] of [["delete_story", "deleteStory("], ["delete_channel_post", "deleteChannelPost("]]) {
+    const at = src.indexOf(`case "${action}"`);
+    const guard = src.indexOf("asksDryRun(", at);
+    assert(at !== -1 && guard !== -1 && guard < src.indexOf(call, at), `${action} calls ${call} without refusing dryRun first`);
+  }
+});
+
+check("B13 media answers an all-failed upload with ok:false and a non-2xx status", () => {
+  const src = adminSrc("media/route.ts");
+  assert(/if \(uploaded\.length === 0\)[\s\S]*?ok: false[\s\S]*?status: 4\d\d/.test(src), "an upload that saved nothing must not be answered 200 ok:true");
+});
+
+check("B14 agency act-as nets in agency mode (platform cut only), not a clone key's creator mode", () => {
+  const src = adminSrc("act-as/revenue/route.ts");
+  const agencyBranch = src.slice(src.indexOf("agencyIdentityById("));
+  assert(agencyBranch.includes("agencyCloneRevenue(") && !agencyBranch.includes("publicRevenue("), "the agency branch must use agencyCloneRevenue");
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // C. THE NETWORK GATE
 // ─────────────────────────────────────────────────────────────────────────────

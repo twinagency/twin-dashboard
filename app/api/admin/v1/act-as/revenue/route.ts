@@ -2,14 +2,16 @@ import { withAdmin, ok, jsonError, fromQueryError, logActAs } from "@/lib/api-ro
 import { parseRevenueWindow, isQueryError, resolveClone } from "@/lib/api-read";
 import type { Period } from "@/lib/dashboard-data";
 import { parseActAs } from "@/lib/api-auth";
-import { publicRevenue } from "@/lib/api-public";
+import { publicRevenue, agencyCloneRevenue } from "@/lib/api-public";
 import { agencyIdentityById } from "@/lib/agency-identity";
 
 export const dynamic = "force-dynamic";
 
 // "act as" for the admin API: x-twin-act-as: clone:<uuid> | agency:<uuid>.
-// Returns the exact PUBLIC-shaped response (same projection as /api/v1, our
-// cost/margin never included) that account's own key would get. This is an
+// clone: the exact response that clone's own /api/v1 key would get (creator
+// net, both cuts). agency: no agency key scope exists, so this is the agency's
+// own view instead, platform cut only, summed over the clones it owns. Same
+// projection either way, our cost/margin never included. This is an
 // admin-API-only feature: withAdmin() below is the SAME gate every other
 // route in app/api/admin/v1 uses (admin key + network), so acting-as never
 // widens who can call this, only what shape they get back. Never mount this
@@ -40,13 +42,13 @@ export const GET = withAdmin(async (req) => {
   // No fleet-scoped-to-a-subset-of-clones projection exists yet (the fleet key
   // shape in lib/api-public.ts is whole-fleet only), so this builds the same
   // PublicFleetModel[] shape by calling the per-clone projection once per
-  // assigned clone and summing. Same allowlist projection either way: our
-  // cost/margin are never computed for this path (publicRevenue always runs
-  // getAnalytics with includeCost:false).
+  // assigned clone and summing. Agency mode, not publicRevenue's creator mode:
+  // the agency-creator cut is what the agency keeps, not a cost to it (G16).
+  // Cost/margin are never computed (includeCost:false).
   const perClone = await Promise.all(
     agency.cloneIds.map(async (id) => {
       const clone = await resolveClone(id);
-      const revenue = await publicRevenue(id, period, window.range);
+      const revenue = await agencyCloneRevenue(id, period, window.range);
       return { id, name: clone?.name ?? id, revenue };
     }),
   );

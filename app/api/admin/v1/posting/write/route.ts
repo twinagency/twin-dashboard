@@ -29,8 +29,10 @@ export const maxDuration = 300;
 // Named actions, each one Telegram call through the girl's OWN clone bot. No
 // database writes at all: nothing here changes a row, it only posts. Every
 // action that reaches Telegram is audited via logAdminWrite (system_logs).
-// Every action takes dryRun=true, which runs every check (live rights, media
-// size, story crop, caption rules) and returns what would be sent.
+// story and channel_post take dryRun=true, which runs every check (live rights,
+// media size, story crop, caption rules) and returns what would be sent. The two
+// deletes are irreversible and cannot be previewed, so any dryRun other than an
+// explicit false is refused with 400 before Telegram is touched (G16, W4 F1).
 //
 // Body: multipart/form-data (to upload files as `file`, repeatable) or JSON
 // (media by `mediaUrl` / `mediaUrls`, https only).
@@ -102,6 +104,13 @@ async function cloneIdOf(b: Body, required: boolean): Promise<string | null> {
 
 class NotFound extends Error {}
 
+// Fails closed: "True", "yes" or {} read as false by parseBool, and a delete must
+// never run on a request that asked for a dry run in a form we did not expect.
+function asksDryRun(raw: unknown): boolean {
+  return raw !== undefined && raw !== null && raw !== false && !["", "false", "0"].includes(String(raw).trim());
+}
+const DELETE_DRY_RUN = "a delete cannot be dry run: it is irreversible and is not previewed. Omit dryRun to delete";
+
 function numberList(raw: unknown, field: string): number[] {
   let v: unknown = raw;
   if (typeof raw === "string") v = raw.trim().startsWith("[") ? JSON.parse(raw) : raw.split(",");
@@ -144,6 +153,7 @@ export const POST = withAdmin(async (req) => {
       }
 
       case "delete_story": {
+        if (asksDryRun(b.get("dryRun"))) return jsonError(DELETE_DRY_RUN, 400);
         const cloneId = (await cloneIdOf(b, true)) as string;
         const storyId = Number(b.get("storyId"));
         if (!Number.isInteger(storyId) || storyId <= 0) return jsonError("storyId is required", 400);
@@ -173,6 +183,7 @@ export const POST = withAdmin(async (req) => {
       }
 
       case "delete_channel_post": {
+        if (asksDryRun(b.get("dryRun"))) return jsonError(DELETE_DRY_RUN, 400);
         const cloneId = await cloneIdOf(b, false);
         const result = await deleteChannelPost(
           cloneId,

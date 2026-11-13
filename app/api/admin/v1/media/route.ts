@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { uploadPhoto, uploadVideo } from "@/app/media/actions";
 import { resolveClone } from "@/lib/api-read";
@@ -78,11 +79,21 @@ export const POST = withAdmin(async (req) => {
 
   logAdminWrite(`media upload (${uploaded.length} ${type}s)`, clone.id, { uploaded: uploaded.length, failed: failed.length });
 
+  // Nothing saved is a failure, not a 200 (G16, W4 F5). A partial set stays 200
+  // so the saved items are not retried, but says partial:true beside `failed`.
+  if (uploaded.length === 0) {
+    return NextResponse.json(
+      { ok: false, error: `none of the ${failed.length} file(s) was saved; see failed`, clone, type, uploaded, failed },
+      { status: 422 },
+    );
+  }
+
   return ok({
     clone,
     type,
     uploaded,
     failed,
+    partial: failed.length > 0,
     note:
       failed.length > 0
         ? `${uploaded.length} uploaded. Could not confirm saving ${failed.length} file(s); review the failed items before retrying.`

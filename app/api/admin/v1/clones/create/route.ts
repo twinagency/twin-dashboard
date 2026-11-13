@@ -2,8 +2,25 @@ import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { createCloneRow } from "@/app/clones/actions";
 import { getCloneDefaults } from "@/app/settings/actions";
 import { resolveClone } from "@/lib/api-read";
+import { OPERATIONAL_DEFAULT_NUMBERS } from "@/lib/clone-default-policy";
 
 export const dynamic = "force-dynamic";
+
+// Keys a caller may NOT send (G16, W4 F4). Money, the price brake and fan-facing
+// paywall text start at the fleet defaults and are changed in Configure, same
+// policy as ../write/route.ts. Refused outright rather than range-checked:
+// validateCloneDefaultsForWrite accepts price_guard_mode "off" and never reads
+// paywall text, and createCloneRow's rowFromForm (app/clones/actions.ts) does
+// not range-check money at all.
+const NOT_SETTABLE = new Set<string>([
+  "starting_credits", "credit_pack_size", "credit_pack_price_stars",
+  "tip_credits_per_100_stars", "tip_max_stars", "spoil_options", "category_pricing", "subscription_tiers",
+  "spend_tier_mid_stars", "spend_tier_high_stars", "spend_tier_whale_stars",
+  ...OPERATIONAL_DEFAULT_NUMBERS.filter((k) => k.startsWith("discount_")),
+  "price_guard_mode",
+  "welcome_instruction", "paywall_instruction", "paywall_default_message", "paywall_button_label",
+  "paywall_prime_instruction", "paywall_resume_instruction",
+]);
 
 // Create a new clone.
 //
@@ -30,6 +47,13 @@ export const POST = withAdmin(async (req) => {
   const name = String(body.name ?? "").trim();
   const botToken = String(body.bot_token ?? "").trim();
   if (!name) return jsonError("name is required", 400);
+  const refused = Object.keys(body).filter((k) => NOT_SETTABLE.has(k));
+  if (refused.length) {
+    return jsonError(
+      `${refused.join(", ")} cannot be set through this API: money, the price brake and fan-facing paywall text start at the fleet defaults and are changed in Configure`,
+      400,
+    );
+  }
   if (!botToken) {
     return jsonError(
       "bot_token is required: a clone with no Telegram token cannot be launched, and the slug/token uniqueness checks run against it",
@@ -55,7 +79,7 @@ export const POST = withAdmin(async (req) => {
     if (v === null || v === undefined) continue;
     fd.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
   }
-  // Anything else the caller passes is forwarded verbatim to the same
+  // Anything else the caller passes (NOT_SETTABLE was refused above) is forwarded verbatim to the same
   // rowFromForm() the UI uses, so the API cannot drift from the form's own
   // field handling. Unknown keys are simply ignored by it. Set AFTER the
   // defaults above so an explicit caller value always wins.
