@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-1 F8, REVIEW inv 7): a Pause whose outcome is unconfirmed keeps "Enable AI replies" disabled;
-// only a confirmed Pause gives the go back. The Pause itself stays available. F7 (stop dropped while a go hangs) is not G09.
+// only a confirmed Pause gives the go back. The Pause itself stays available, including while an enable runs (FB1).
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), window.confirm stubbed to true.
-import { dom, bodyOf, button, click, close, http502, json, mount, posts, q, serve } from "../helpers/w3-preview1-dom";
+import { dom, bodyOf, button, calls, click, close, http502, json, mount, posts, q, serve, settle, type Call } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import React from "react";
@@ -54,4 +54,37 @@ test("FA6: after an unconfirmed pause the notice line says why Enable is off and
   await click(pause());
   assert.match(status(), /Enable is off: the last pause was not confirmed\. Pause again/);
   assert.doesNotMatch(enable()?.title ?? "", /refresh/i, "the hold names a refresh that does not clear it");
+});
+
+// FB1: a brake outranks a go. Pause stays live through a running enable, stops it, and goes out on its own path.
+const CONFIG = `/api/onlyfans-configuration/accounts/${encodeURIComponent(ACCOUNT)}`;
+const controlReads = () => calls.filter(call => call.method === "GET" && call.url === CONTROL);
+/** The enable's first read hangs until `release`, so the go is in flight when the brake is pressed. */
+function hungEnable() {
+  let release!: () => void;
+  const held = new Promise<Response>(resolve => { release = () => resolve(json({})); });
+  return { release, handler: (call: Call) => call.method === "GET" && call.url === CONFIG ? held : call.method === "GET" ? controlRead() : pauseAck() };
+}
+
+test("FB1: Pause during an in-flight enable sends the pause and stops the enable", async () => {
+  const hung = hungEnable();
+  await control(hung.handler);
+  await click(enable());
+  assert.equal(pause()?.disabled, false, "Pause stays enabled while an enable runs");
+  await click(pause());
+  assert.equal(pauses().length, 1, "the pause went out while the enable was still in flight");
+  assert.match(status(), /Account paused/);
+  hung.release(); await settle();
+  assert.equal(controlReads().length, 1, "the stopped enable made no further request once its read returned");
+});
+
+test("FB1: Pause after 'Stop changes' while the enable's request is still in flight is not dropped", async () => {
+  const hung = hungEnable();
+  await control(hung.handler);
+  await click(enable());
+  await click(button(/^Stop changes$/));
+  await click(pause());
+  assert.equal(pauses().length, 1, "the pause was sent, not silently dropped by the enable's lock");
+  assert.match(status(), /Account paused/);
+  hung.release(); await settle();
 });
