@@ -66,15 +66,15 @@ s.listen(0, "127.0.0.1", () => console.log("PORT " + s.address().port));`;
 // next dev's shape: a `node .../next dev` parent forks the server, which inherits its env and retitles itself
 const NEXT = `const c = require("child_process").fork(__dirname + "/server.js", { stdio: ["inherit", "inherit", "inherit", "ipc"] });
 process.on("SIGTERM", () => { c.kill(); process.exit(0); });`;
-type DashOpts = { procEnv?: Record<string, string>; title?: string; viaNext?: boolean };
-async function dashboard(env: Record<string, string>, mode = "ok", { procEnv = {}, title, viaNext = false }: DashOpts = {}) {
+type DashOpts = { procEnv?: Record<string, string>; title?: string; viaNext?: boolean; noPath?: boolean };
+async function dashboard(env: Record<string, string>, mode = "ok", { procEnv = {}, title, viaNext = false, noPath = false }: DashOpts = {}) {
   const cwd = tmp("f0-dash-");
   for (const [f, text] of Object.entries(env)) writeFileSync(join(cwd, f), text);
   writeFileSync(join(cwd, "server.js"), FAKE);
   writeFileSync(join(cwd, "next"), NEXT);
   const t = title ?? (viaNext ? "next-server (v0)" : undefined);
   const args = viaNext ? [join(cwd, "next"), "dev"] : [join(cwd, "server.js")];
-  const child = spawn(process.execPath, args, { cwd, env: { NODE_ENV: "test" as const, PATH: process.env.PATH, FAKE_MODE: mode, ...(t ? { FAKE_TITLE: t } : {}), ...procEnv } });
+  const child = spawn(process.execPath, args, { cwd, env: { NODE_ENV: "test" as const, ...(noPath ? {} : { PATH: process.env.PATH }), FAKE_MODE: mode, ...(t ? { FAKE_TITLE: t } : {}), ...procEnv } });
   const hits: { method: string; url: string }[] = [];
   let port = 0;
   child.stdout.on("data", (b) => {
@@ -384,6 +384,7 @@ test("live reads the listening process's own env (next dev's server: its parent'
     [{ procEnv: { SUPABASE_URL: "https://example.com" } }, /live:target .*non-loopback/],
     [{ procEnv: { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1", X: "aouaenqayfltoqrmpitg" } }, /live:target .*prod/],
     [{ title: "next-server (v0)" }, /live:target .*cannot read the environment/],
+    [{ noPath: true }, /live:target .*cannot read the environment/], // read but partial: no PATH= entry
     [{ viaNext: true, procEnv: { SUPABASE_URL: "https://example.com" } }, /live:target .*non-loopback/],
   ] as const;
   for (const [o, why] of bad) {

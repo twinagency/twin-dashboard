@@ -15,7 +15,8 @@
 # live refuses before its first request unless the process listening on CHECK_BASE_URL's port provably targets a loopback Supabase:
 #   every *SUPABASE*URL* in its env (as ps -E; next dev's retitled next-server hides it, so its `next dev` parent's, which it inherits)
 #   is loopback and none names prod, else RED (env unreadable: RED too); then every (NEXT_PUBLIC_)SUPABASE_URL line in its .env files
-#   is loopback and some line or env var names one, else refused. It never POSTs or calls an API route: public/admin 401s write
+#   is loopback and some line or env var names one, else refused. target() checks the exec-time env (unreadable unless it has a
+#   PATH= entry), not later process.env changes. It never POSTs or calls an API route: public/admin 401s write
 #   system_logs, a login writes a session. curl -q (no ~/.curlrc). CHECK_BASE_URL: http://localhost|127.0.0.1 only.
 # LIVE  req (live mode): anything live cannot check is INFRA. opt (fast/full): the stack down, auth on (seen from one GET /overview)
 #   or a refused target is a skip with a named note, and nothing more is sent. Both: a non-local CHECK_BASE_URL, a prod name in a
@@ -214,12 +215,12 @@ target() {
   fi
   for pid in $pids; do
     e=$(procargs "$pid" | sed 1d)
-    if [ -z "$e" ]; then # next dev forks next-server with its own initial env (next/dist/cli/next-dev.js), then retitles it
+    if ! grep -q '^PATH=' <<<"$e"; then # next dev forks next-server with its own initial env (next/dist/cli/next-dev.js), then retitles it
       pp=$(lsof -a -p "$pid" -d cwd -R -FR 2>/dev/null | sed -n 's/^R//p')
       a=$(procargs "$pp")
       [[ ${a%%$'\n'*} =~ $NEXTDEV ]] && e=$(sed 1d <<<"$a")
     fi
-    if [ -z "$e" ]; then
+    if ! grep -q '^PATH=' <<<"$e"; then # none, or partly read: no PATH= entry
       WHY="cannot read the environment of pid $pid listening on :$port, so its Supabase target cannot be proven"
       return 2
     fi
