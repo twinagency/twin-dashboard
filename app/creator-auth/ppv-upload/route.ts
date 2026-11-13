@@ -64,6 +64,19 @@ async function storeUpload(accountId: string, cloneId: string, kind: "photo" | "
     await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "warn", source: "creator-ppv-upload", message: `Creator PPV upload kept in inbox: ${objectPath} (${catalogueError})` }).then(() => undefined, () => undefined);
 }
 
+// At most two whole-file ingests at once: each reads the file into memory and
+// compresses it in the one process that also serves the operator UI and the
+// public API. Later files wait staged on disk, in arrival order.
+const MAX_INGESTS = 2;
+let ingests = 0;
+const ingestQueue: Array<() => void> = [];
+async function ingestSlot(run: () => Promise<void>) {
+  if (ingests < MAX_INGESTS) ingests++;
+  else await new Promise<void>(resolve => ingestQueue.push(resolve));
+  try { await run(); }
+  finally { const next = ingestQueue.shift(); if (next) next(); else ingests--; }
+}
+
 export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) return reply({ ok: false, error: "Forbidden" }, 403);
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
@@ -71,21 +84,28 @@ export async function POST(req: NextRequest) {
   const cloneId = creator.cloneIds[0];
   if (!cloneId || creator.cloneIds.length !== 1) return reply({ ok: false, error: "Your profile is not connected yet." }, 403);
 
+  // The creator page shows every file as uploaded (CreatorPpvUploads.tsx), so a
+  // refused file must leave a system_logs row or it is lost without a trace.
+  const refuse = async (error: string, status: number, detail: string) => {
+    await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "error", source: "creator-ppv-upload", message: `Creator PPV upload REFUSED (${detail}): ${error}` }).then(() => undefined, () => undefined);
+    return reply({ ok: false, error }, status);
+  };
   let staged: Awaited<ReturnType<typeof boundedFormData>> | undefined;
   try {
     staged = await boundedFormData(req, { timeoutMs: 15 * 60_000 });
     const kind = staged.fields.get("kind");
     const file = staged.files[0];
-    if (staged.files.length !== 1 || !file || (kind !== "photo" && kind !== "video")) return reply({ ok: false, error: "Upload one file at a time." }, 400);
+    if (staged.files.length !== 1 || !file || (kind !== "photo" && kind !== "video"))
+      return await refuse("Upload one file at a time.", 400, `${staged.files.length} files, kind ${String(kind)}`);
     if (file.size > (kind === "photo" ? MAX_CREATOR_IMAGE_BYTES : MAX_CREATOR_VIDEO_BYTES))
-      return reply({ ok: false, error: kind === "photo" ? "Photos can be up to 75 MB each." : "Videos can be up to 512 MB each." }, 413);
+      return await refuse(kind === "photo" ? "Photos can be up to 75 MB each." : "Videos can be up to 512 MB each.", 413, `${file.name}, ${file.size} bytes`);
     // Reply as soon as the file is staged; compression and pricing run after
     // the response, so a long iPhone video never trips the proxy timeout and
     // the page never retries (and duplicates) a file that is still processing.
     const job = staged;
     staged = undefined;
     after(async () => {
-      try { await storeUpload(creator.accountId, cloneId, kind, file); }
+      try { await ingestSlot(() => storeUpload(creator.accountId, cloneId, kind, file)); }
       catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.error("[ppv-upload] failed", { cloneId, error: message });

@@ -34,7 +34,8 @@ export function validCategoryDraft(v:unknown):v is CategoryDraft {
  for(const p of v.products) {
   if(!object(p)||!exact(p,["label","description","mediaIds","previewMediaIds",...(Object.hasOwn(p,"approvedTotalCents")?["approvedTotalCents"]:[])]))return false;
   const {approvedTotalCents:_total,...fields}=p;const product={...fields,priceCents:p.approvedTotalCents??v.priceCents,enabled:false};
-  if(!validVaultProduct(product)||product.mediaIds.length>1&&!Object.hasOwn(p,"approvedTotalCents"))return false;
+  // Manual prices only: a product never sells below its singles at the approved category price (no invented discount).
+  if(!validVaultProduct(product)||product.mediaIds.length>1&&!Object.hasOwn(p,"approvedTotalCents")||product.priceCents<v.priceCents*product.mediaIds.length)return false;
   product.mediaIds.forEach(id=>ids.add(id));
  }
  return [...ids].sort().join(",")===Object.keys(v.reviewedState.assets).sort().join(",");

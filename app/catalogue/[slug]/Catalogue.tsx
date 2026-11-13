@@ -2,7 +2,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, X } from "lucide-react";
-import { TonConnectUI } from "@tonconnect/ui-react";
+import { TonConnectUI, UserRejectsError } from "@tonconnect/ui-react";
 import { beginCell } from "@ton/core";
 import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
@@ -138,6 +138,16 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const contentRequest = useRef(0);
   const checkoutOrders = useRef(new Map<string, { orderId: string; invoiceUrl: string }>());
   const [paymentWaiting, setPaymentWaiting] = useState<Set<string>>(() => new Set());
+  // One unconfirmed payment per item across both rails: the other rail stays shut
+  // until our server settles or expires it, so a fan is never asked to pay twice.
+  const [railLock, setRailLock] = useState<Record<string, 'stars' | 'ton'>>({});
+  const tonOrders = useRef(new Map<string, string>());
+  const lockRail = (key: string, rail: 'stars' | 'ton' | null) => setRailLock(previous => {
+    const next = { ...previous }; if (rail) next[key] = rail; else delete next[key]; return next;
+  });
+  const dropWaiting = (key: string) => {
+    setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; }); lockRail(key, null);
+  };
   const [checkoutPhase, setCheckoutPhase] = useState<'opening' | 'confirming' | null>(null);
   const [selectedBundle, setSelectedBundle] = useState<CatalogueBundle | null>(null);
   const detailTrigger = useRef<HTMLElement | null>(null);
@@ -266,7 +276,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } finally { if (mounted.current && attempt === contentRequest.current) setContentBusy(false); }
   }
   async function finishCheckout(type: 'photo' | 'video' | 'bundle', id: string) {
-    setPaymentWaiting(previous => { const next = new Set(previous); next.delete(`${type}:${id}`); return next; });
+    dropWaiting(`${type}:${id}`); tonOrders.current.delete(`${type}:${id}`);
     // Delivery goes to the chat, so leave the app first; a failed catalogue refresh must not block it.
     // If Telegram keeps the app open, offer the chat link.
     setSelected(null); setSelectedBundle(null);
@@ -279,6 +289,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
     if (!app()?.openInvoice) { setNotice('Open this catalogue inside Telegram to pay with Stars.'); return; }
     const key = `${type}:${id}`;
+    if (railLock[key] === 'ton') { setNotice('A TON payment for this item is still being confirmed. Tap Pay with TON to check it.'); return; }
     logEvent('tap_pay_stars', { mediaType: type, mediaId: id, rail: 'stars' });
     sending.current = true; setBusy(true); setCommerceBusy(true); setCheckoutPhase('opening'); setNotice('');
     try {
@@ -291,7 +302,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         else if (status.status === 'checkout' && status.retryAfterSeconds === 0) resumePending = false;
         if (['expired', 'refunded'].includes(status.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`); order = undefined; resumePending = false;
-          setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
+          dropWaiting(key);
         }
       }
       for (let recovery = 0; !order && recovery < 2; recovery++) {
@@ -300,7 +311,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         if (result.status === 'paid') { await finishCheckout(type, id); return; }
         if (['expired', 'refunded'].includes(result.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`);
-          setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
+          dropWaiting(key);
           if (result.status === 'refunded') { setNotice('This payment was refunded.'); await load(); return; }
           // Recover a lost response/expired key inside this click. Never reopen
           // the terminal invoice or ask the fan to tap Unlock a second time.
@@ -324,7 +335,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       });
       if (!mounted.current) return;
       setCheckoutPhase('confirming');
-      if (callbackStatus === 'paid' || callbackStatus === 'pending') setPaymentWaiting(previous => new Set(previous).add(key));
+      if (callbackStatus === 'paid' || callbackStatus === 'pending') { setPaymentWaiting(previous => new Set(previous).add(key)); lockRail(key, 'stars'); }
       // Telegram's callback is only a hint. Only our server's settled payment grants access.
       let canRetry = false;
       for (let attempt = 0; attempt < (callbackStatus === 'paid' || callbackStatus === 'pending' ? 32 : 1); attempt++) {
@@ -333,7 +344,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         if (result.status === 'paid') { await finishCheckout(type, id); return; }
         if (['expired', 'refunded'].includes(result.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`);
-          setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
+          dropWaiting(key);
           setNotice(result.status === 'refunded' ? 'This payment was refunded.' : 'This payment expired. You can try again.'); return;
         }
         if (attempt < 31 && callbackStatus !== 'cancelled' && callbackStatus !== 'failed') await new Promise(resolve => window.setTimeout(resolve, 2000));
@@ -357,37 +368,50 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   async function payWithTon(type: 'photo' | 'video' | 'bundle', id: string) {
     if (sending.current) return;
     if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
+    const key = `${type}:${id}`;
+    if (railLock[key] === 'stars') { setNotice('A Stars payment for this item is still being confirmed. Tap Check payment first.'); return; }
     logEvent('tap_pay_ton', { mediaType: type, mediaId: id, rail: 'ton' });
     sending.current = true; setBusy(true); setCommerceBusy(true); setTonPhase('opening'); setNotice('');
     try {
-      const begin = await read('ton_checkout', { type, id });
-      const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
-      try {
-        const ui = tonConnect();
-        // sendTransaction throws if no wallet is connected; open the wallet picker first.
-        const alreadyConnected = ui.connected;
-        if (!alreadyConnected) await ui.connectWallet();
-        if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
-        await ui.sendTransaction({
-          validUntil: Math.floor(Date.now() / 1000) + 300,
-          messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
-        });
-      } catch {
-        // A wallet rejection or cancel never unlocks anything. The order stays
-        // pending in the database until it expires; the fan can just retry.
-        logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'ton' });
-        setNotice('Payment cancelled. You have not unlocked this item.'); return;
+      // A transfer already handed to the wallet is only ever re-checked, never re-sent.
+      let orderId = tonOrders.current.get(key);
+      if (!orderId) {
+        const begin = await read('ton_checkout', { type, id });
+        const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
+        let handed = false;
+        try {
+          const ui = tonConnect();
+          // sendTransaction throws if no wallet is connected; open the wallet picker first.
+          const alreadyConnected = ui.connected;
+          if (!alreadyConnected) await ui.connectWallet();
+          if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
+          handed = true;
+          await ui.sendTransaction({
+            validUntil: Math.floor(Date.now() / 1000) + 300,
+            messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
+          });
+        } catch (e) {
+          // Only a wallet rejection, or a failure before the wallet saw the
+          // transfer, is a cancel. Any other error may follow a broadcast, so the
+          // order is kept and checked below, never shown as refused.
+          if (!handed || e instanceof UserRejectsError) {
+            logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'ton' });
+            setNotice('Payment cancelled. You have not unlocked this item.'); return;
+          }
+        }
+        orderId = String(begin.orderId);
+        tonOrders.current.set(key, orderId); lockRail(key, 'ton');
       }
       if (!mounted.current) return;
       setTonPhase('confirming');
       const deadline = Date.now() + 5 * 60_000;
       while (Date.now() < deadline) {
         if (!mounted.current) return;
-        const status = await read('ton_status', { orderId: begin.orderId });
+        const status = await read('ton_status', { orderId });
         // Only a confirmed status from our server unlocks anything, never the
         // sendTransaction promise resolving.
         if (status.status === 'confirmed' || status.status === 'delivered') { await finishCheckout(type, id); return; }
-        if (status.status === 'expired') { setNotice('This payment expired. You can try again.'); return; }
+        if (status.status === 'expired') { tonOrders.current.delete(key); lockRail(key, null); setNotice('This payment expired. You can try again.'); return; }
         await new Promise(resolve => window.setTimeout(resolve, 3000));
         if (!mounted.current) return;
       }
@@ -721,8 +745,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-bundle-included cat-bundle-grid">{(selectedBundle.kind === 'video' ? selectedBundle.videoIds : selectedBundle.photoIds).map(id => { const item = data?.items.find(p => p.type === selectedBundle.kind && p.id === id); return item && <button key={id} className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included item: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         <div className="cat-pay-row">
-        {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary cat-pay-stars" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
-        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary cat-pay-ton" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonButtonLabel stars={selectedBundle.stars} nanotonPerStar={data?.tonNanotonPerStar} phase={tonPhase} discountPercent={data?.tonDiscountPercent} /></button>}
+        {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary cat-pay-stars" disabled={commerceBusy || selectedBundle.partial || data?.admin || railLock[`bundle:${selectedBundle.id}`] === 'ton'} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
+        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary cat-pay-ton" disabled={busy || commerceBusy || railLock[`bundle:${selectedBundle.id}`] === 'stars'} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonButtonLabel stars={selectedBundle.stars} nanotonPerStar={data?.tonNanotonPerStar} phase={tonPhase} discountPercent={data?.tonDiscountPercent} /></button>}
         </div>
         {data?.checkoutMode !== 'invoice' && !data?.admin && !data?.canSend && <p className="cat-window">Send a message in the creator's chat first to receive this bundle.</p>}
         {notice && <p role="status" className="cat-payment-status">{notice}</p>}
@@ -735,8 +759,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>
           <div className="cat-pay-row">
-          {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary cat-pay-stars" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
-          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary cat-pay-ton" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}><TonButtonLabel stars={selected.stars} nanotonPerStar={data.tonNanotonPerStar} phase={tonPhase} discountPercent={data.tonDiscountPercent} /></button>}
+          {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary cat-pay-stars" disabled={busy || data.admin || railLock[`${selected.type}:${selected.id}`] === 'ton'} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
+          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary cat-pay-ton" disabled={busy || railLock[`${selected.type}:${selected.id}`] === 'stars'} onClick={() => void payWithTon(selected.type, selected.id)}><TonButtonLabel stars={selected.stars} nanotonPerStar={data.tonNanotonPerStar} phase={tonPhase} discountPercent={data.tonDiscountPercent} /></button>}
           </div>
           {ownedMedia && <p className="cat-owned-message"><Check size={16}/> Unlocked</p>}
           {notice && <p role="status" className="cat-payment-status">{notice}</p>}
