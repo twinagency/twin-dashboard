@@ -65,16 +65,33 @@ test("C3: every typed fact rowFromForm writes is accepted and stored with the ca
 });
 
 for (const retired of ["ethnicity", "occupation"]) {
-  test(`C3: retired ${retired} (rowFromForm never writes it) is refused 400 by name, nothing inserted`, async () => {
+  test(`C3: retired ${retired} (rowFromForm never writes it, clonify still sends it) is created 200, never written, reported notStored with the replacement named`, async () => {
     const w = wire();
     try {
       const { status, body } = await create({ hometown: "Austin", [retired]: "kept?" });
-      assert.equal(status, 400, `${retired}: status ${status}, stored ${JSON.stringify(inserted(w)[0]?.[retired])}`);
-      assert.match(String(body.error), new RegExp(retired));
-      assert.equal(inserted(w).length, 0);
+      assert.equal(status, 200, JSON.stringify(body));
+      const rows = inserted(w);
+      assert.equal(rows.length, 1);
+      assert.equal(retired in rows[0], false, `${retired} reached the insert: ${JSON.stringify(rows[0][retired])}`);
+      assert.equal(rows[0].hometown, "Austin");
+      assert.deepEqual(body.notStored, [retired]);
+      assert.match(String(body.note), new RegExp(`NOT STORED: ${retired}.*ethnicity_tags.*cover_story`));
+      await w.idle();
+      const log = w.rest("system_logs", "POST").map((c) => c.body as { detail?: { notStored?: unknown } });
+      assert.ok(log.some((l) => JSON.stringify(l.detail?.notStored) === JSON.stringify([retired])), `audit log: ${JSON.stringify(log)}`);
     } finally { w.restore(); }
   });
 }
+
+test("C3 control: a money key is still refused 400 by name, nothing inserted", async () => {
+  const w = wire();
+  try {
+    const { status, body } = await create({ hometown: "Austin", starting_credits: 9999 });
+    assert.equal(status, 400, JSON.stringify(body));
+    assert.match(String(body.error), /starting_credits/);
+    assert.equal(inserted(w).length, 0);
+  } finally { w.restore(); }
+});
 
 test("C11: a caller fact stripped by the missing-column retry is reported as notStored and logged, never a plain created", async () => {
   const w = wire(missingColumn("hometown"));

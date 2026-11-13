@@ -31,7 +31,7 @@ export const IDENTITY_CANON_COLUMNS = [
 // Still listed above so the retry path can strip them if anything sends one.
 export const RETIRED_FACT_COLUMNS: readonly string[] = ["ethnicity", "occupation"];
 // The facts rowFromForm writes under the persona_facts marker from 033 + 039.
-// None is a money value. The admin create route accepts exactly these, so a
-// fact it would not persist is a 400, never a 200 that dropped it.
+// None is a money value. The admin create route writes exactly these; the
+// retired two are accepted there only to be reported in `notStored`.
 export const WRITABLE_FACT_COLUMNS: readonly string[] = [...PERSONA_FACT_COLUMNS, ...IDENTITY_CANON_COLUMNS]
   .filter((c) => !RETIRED_FACT_COLUMNS.includes(c));

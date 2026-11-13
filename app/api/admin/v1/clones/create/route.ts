@@ -11,11 +11,14 @@ export const dynamic = "force-dynamic";
 // default instead of forwarded by default. What create needs (name, bot_token,
 // status), voice_id, intake, and the typed persona facts rowFromForm actually
 // writes (G16c: derived from the shared column lists, not a hand copy of
-// clonify's FACT_KEYS, so a retired column like `ethnicity`/`occupation` is a
-// 400 instead of a 200 that dropped it). Every other setting starts at the
-// fleet defaults and is changed in Configure (the switches also via
-// ../write/route.ts). Anything else is a 400 naming the key.
-const CREATE_KEYS = new Set<string>(["name", "bot_token", "status", "voice_id", "intake", ...WRITABLE_FACT_COLUMNS]);
+// clonify's FACT_KEYS). The retired `ethnicity`/`occupation` columns are still
+// ACCEPTED, because twin-bot clonify sends them whenever it extracts them, but
+// never written: they come back in `notStored` with the replacement columns
+// named, so the create is never a plain 200 that dropped them. Every other
+// setting starts at the fleet defaults and is changed in Configure (the
+// switches also via ../write/route.ts). Anything else is a 400 naming the key.
+const CREATE_KEYS = new Set<string>(["name", "bot_token", "status", "voice_id", "intake", ...WRITABLE_FACT_COLUMNS, ...RETIRED_FACT_COLUMNS]);
+const RETIRED_HINT = "ethnicity and occupation are retired columns nothing writes: send ethnicity_tags/ethnicity_other and cover_story";
 
 // Create a new clone.
 //
@@ -45,7 +48,7 @@ export const POST = withAdmin(async (req) => {
   const refused = Object.keys(body).filter((k) => !CREATE_KEYS.has(k));
   if (refused.length) {
     return jsonError(
-      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure${refused.some((k) => RETIRED_FACT_COLUMNS.includes(k)) ? ". ethnicity and occupation are retired columns nothing writes: send ethnicity_tags/ethnicity_other and cover_story" : ""}`,
+      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure`,
       400,
     );
   }
@@ -78,8 +81,14 @@ export const POST = withAdmin(async (req) => {
   // verbatim to the same rowFromForm() the UI uses, so the API cannot drift from
   // the form's own field handling. Set AFTER the
   // defaults above so an explicit caller value always wins.
+  const retiredSent: string[] = [];
   for (const [k, v] of Object.entries(body)) {
     if (v === null || v === undefined) continue;
+    // Retired: never forwarded (rowFromForm would not write it anyway), reported.
+    if (RETIRED_FACT_COLUMNS.includes(k)) {
+      if (v !== "") retiredSent.push(k);
+      continue;
+    }
     if (k === "intake" && typeof v === "object") {
       // intakeFromForm() (app/clones/actions.ts) reads per-field `intake_<key>`
       // entries and a legacy `intake_answers` fallback — never a single nested
@@ -112,7 +121,8 @@ export const POST = withAdmin(async (req) => {
   fd.set("persona_facts", "1");
 
   try {
-    const { id, notStored } = await createCloneRow(fd);
+    const { id, notStored: stripped } = await createCloneRow(fd);
+    const notStored = [...retiredSent, ...stripped];
     // The row exists: a failed read-back falls back to `{ id }`, not a 500
     // (a retry would then hit "already exists").
     const created = await resolveClone(id).catch(() => null);
@@ -130,7 +140,7 @@ export const POST = withAdmin(async (req) => {
       // on this database. Non-empty = those values were NOT stored.
       notStored,
       note:
-        `${notStored.length ? `NOT STORED until their migration is applied: ${notStored.join(", ")}. ` : ""}Created with status "${String(fd.get("status") ?? "").trim() || "paused"}" (from your payload, default paused). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.`,
+        `${retiredSent.length ? `NOT STORED: ${retiredSent.join(", ")} (${RETIRED_HINT}). ` : ""}${stripped.length ? `NOT STORED until their migration is applied: ${stripped.join(", ")}. ` : ""}Created with status "${String(fd.get("status") ?? "").trim() || "paused"}" (from your payload, default paused). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.`,
       next: [
         "POST /api/admin/v1/clones/write {action:\"compile\"} once intake prose is set, or the persona stays empty and the prompt is thin",
         "GET  /api/admin/v1/config?clone=<slug> to read back everything that was stored",
