@@ -3,7 +3,10 @@
 #   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED).
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
-#   process group; leaving processes behind fails (setsid escapes). INFRA if a *SUPABASE*URL* var is not loopback or any var names prod.
+#   process group; leaving processes behind fails (setsid escapes, but stays in the sandbox and cannot change the verdict).
+#   INFRA if a *SUPABASE*URL* var is not loopback or any var names prod. CHECK_INHERITED_SANDBOX=1: see sandbox() below.
+# Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
+#   *PUBLISHABLE*) in our env or the repo's .env* files.
 # Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
 [ -n "$CHECK_NICED" ] || exec env CHECK_NICED=1 nice -n 10 bash "$0" "$@"
 set -o pipefail
@@ -26,13 +29,41 @@ TMPD=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/twin-check.XXXXXX") || exit 2
 trap 'rm -rf "$TMPD"' EXIT
 trap stop INT TERM HUP
 PROD='aouaenqayfltoqrmpitg|cnnsllgzskqkvdovyiiv'
-SANDBOX=(sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip))(allow network-outbound (remote ip "localhost:*"))')
+SANDBOX=(/usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip))(allow network-outbound (remote ip "localhost:*"))')
 CLEAN=(env -i "PATH=$PWD/node_modules/.bin:$PATH" "HOME=$HOME" "TMPDIR=$TMPD/" DOTENV_CONFIG_PATH=/dev/null NODE_ENV=test)
-# confined: is outbound network already loopback-only (inside one of our own sandboxed steps, where sandbox-exec cannot nest)?
-#   A UDP connect to TEST-NET-1 (RFC 5737) sends no packet: the sandbox refuses it, an open network accepts it.
-confined() { perl -MSocket -e 'socket(my $s, PF_INET, SOCK_DGRAM, 0) or exit 2; exit(connect($s, pack_sockaddr_in(9, inet_aton("192.0.2.1"))) ? 1 : 0)'; }
+# confined: does the kernel refuse (EPERM, the sandbox's answer; no route is ENETUNREACH) UDP to TEST-NET-1 and -2 and the IPv6
+#   documentation prefix, then a non-blocking TCP connect to TEST-NET-1? UDP connects send no packet; the TCP one only if open.
+confined() {
+  perl -e 'use Socket qw(:all); use Fcntl;
+    for (["192.0.2.1", PF_INET, SOCK_DGRAM], ["198.51.100.1", PF_INET, SOCK_DGRAM], ["2001:db8::1", AF_INET6, SOCK_DGRAM], ["192.0.2.1", PF_INET, SOCK_STREAM]) {
+      my ($h, $f, $t) = @$_;
+      socket(my $s, $f, $t, 0) or exit 2;
+      fcntl($s, F_SETFL, O_NONBLOCK);
+      my $a = inet_pton($f, $h);
+      exit 1 if connect($s, $f == PF_INET ? pack_sockaddr_in(9, $a) : pack_sockaddr_in6(9, $a)) || !$!{EPERM};
+    }'
+}
+# sandbox: BOX = how steps get the loopback-only network sandbox, or INFRA. /usr/bin/sandbox-exec by absolute path (no PATH entry
+#   can shadow it). It cannot nest, so inside a sandbox (our own step's, codex's) steps run as they are only when the caller opts in
+#   with CHECK_INHERITED_SANDBOX=1 AND confined() holds.
+sandbox() {
+  if "${SANDBOX[@]}" /usr/bin/true 2>/dev/null; then
+    BOX=("${SANDBOX[@]}")
+  elif [ "$CHECK_INHERITED_SANDBOX" = 1 ] && confined; then
+    BOX=()
+  else
+    infra preflight "no loopback-only network sandbox (sandbox-exec: macOS only, not nestable; inside one: CHECK_INHERITED_SANDBOX=1)"
+  fi
+}
 redact() {
-  perl -pe 'BEGIN { @s = grep { length >= 6 } map { $ENV{$_} // "" } qw(DASHBOARD_PASSWORD TWIN_ADMIN_API_KEY SUPABASE_SERVICE_KEY SUPABASE_ANON_KEY) }
+  perl -pe 'BEGIN {
+      my @v = map { [$_, $ENV{$_}] } keys %ENV;
+      for my $f (grep { -f } glob(".env .env.*")) {
+        open my $h, "<", $f or next;
+        while (<$h>) { push @v, [$1, $2] if /^\s*(?:export\s+)?(\w+)\s*=\s*["\x27]?(.*?)["\x27]?\s*$/ }
+      }
+      @s = sort { length $b <=> length $a } grep { length >= 6 }
+        map { $_->[1] } grep { $_->[0] =~ /KEY|TOKEN|SECRET|PASSWORD/i && $_->[0] !~ /^NEXT_PUBLIC_|PUBLISHABLE/i } @v }
     for my $s (@s) { s/\Q$s\E/[REDACTED]/g }
     s/eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]+/[REDACTED-JWT]/g;
     s/(bearer\s+)\S+/$1\[REDACTED]/gi'
@@ -53,7 +84,7 @@ finish() {
   i=$(cnt infra)
   if (( i )); then v=INFRA; code=2; fi
   if (( f )); then v=RED; code=1; fi
-  node -e 'const [mode, sha, verdict, w, b] = process.argv.slice(1);
+  env -i PATH="$PATH" node -e 'const [mode, sha, verdict, w, b] = process.argv.slice(1);
     const steps = require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean).map((l) => {
       const [name, status, secs, note] = l.split("\t");
       return { name, status, secs: +secs, note };
@@ -133,12 +164,7 @@ echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s" | tee "$EV/run.lo
 envguard
 if [ $MODE = exec ]; then
   [ "$1" = -- ] && shift
-  if "${SANDBOX[@]}" true 2>/dev/null; then
-    step exec "${CLEAN[@]}" "${SANDBOX[@]}" "$@"
-  elif confined; then
-    step exec "${CLEAN[@]}" "$@" # already in a loopback-only sandbox: our own step's (sandbox-exec does not nest)
-  else
-    infra preflight "no loopback-only network sandbox (sandbox-exec: macOS only)"
-  fi
+  sandbox
+  step exec "${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} "$@"
   finish
 fi
