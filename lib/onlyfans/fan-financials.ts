@@ -13,5 +13,6 @@ export function parseFanFinancials(v: unknown): FanFinancials | null {
         !(row.netCents === null || money(row.netCents)) || !stamp(row.lastTransactionAt)) return null;
     const key = `${row.currency}:${row.status}`; if (keys.has(key)) return null; keys.add(key);
   }
-  return v as FanFinancials;
+  // A completeness claim with no cutoff behind it is narrowed to incomplete; the totals still show, as unverified.
+  return (v.coverageComplete && v.coverageAt === null ? { ...v, coverageComplete: false } : v) as FanFinancials;
 }

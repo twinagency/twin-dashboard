@@ -5,7 +5,7 @@ import { isSendableOffer, offerMediaSummary } from "../components/onlyfans-previ
 const msg = (id: string, direction: "inbound" | "outbound", media: string[], cents: number) => ({ messageId: id, conversationId: "c", direction, origin: "human" as const, body: "", occurredAt: "2026-10-29T00:00:00Z",
   delivery: "delivered" as never, evidenceRef: null, attachments: { count: media.length, media: media.map(mediaId => ({ mediaId, kind: "photo" as const })), price: { currency: "USD" as const, minorUnits: cents }, purchaseStatus: cents ? "not_purchased" as const : "not_applicable" as const } });
 const owned = [{ mediaId: "1", label: "x", purchasedAt: "2026-10-01T00:00:00Z", price: { currency: "USD" as const, minorUnits: 500 } }];
-const complete = { version: "of-fan-financials.v1", totals: [], coverageComplete: true, coverageAt: null, commerceHeld: false };
+const complete = { version: "of-fan-financials.v1", totals: [], coverageComplete: true, coverageAt: "2026-10-30T00:00:00Z", commerceHeld: false };
 const base = { ownedMedia: owned as never, messages: [msg("m1", "outbound", ["2"], 0), msg("m2", "outbound", ["3"], 900), msg("m3", "inbound", ["4"], 0)] as never };
 
 const full = fanContentHistory({ ...base, financials: complete });

@@ -220,6 +220,13 @@ jobs:
       - name: Behavioural checks
         run: npm run test:offline
 
+      # Regression rules plus the admin/public API guards; offline fixtures only.
+      - name: Rules and API guards
+        run: |
+          npm run test:rules
+          npm run test:api
+          npm run test:public
+
       - name: Production login routing smoke
         run: node scripts/check-login-pages.mjs
 

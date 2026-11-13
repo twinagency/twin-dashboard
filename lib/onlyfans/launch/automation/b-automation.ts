@@ -1,6 +1,7 @@
 /** Section E types, parsers and pure action rules. */
-import type { AutomationMode, TakeoverState } from "@/lib/onlyfans-preview/types";
+import { ONLYFANS_PREVIEW_SCHEMA_VERSION, type AutomationMode, type TakeoverState } from "@/lib/onlyfans-preview/types";
 import type { ControlAction } from "@/lib/onlyfans/controls";
+import { parseWorkspace } from "@/lib/onlyfans/workspace";
 import { bId } from "../b-common";
 
 export const MODES: readonly AutomationMode[] = ["automated", "human_controlled", "paused", "no_contact"];
@@ -37,18 +38,22 @@ export function parseConversations(value: unknown, accountId: string): { items: 
       !MODES.includes(row.automationMode as AutomationMode) || !TAKEOVERS.includes(row.takeoverState as TakeoverState) || !rec(row.fan) || !str(row.fan.displayName, 160)) return null;
     items.push({ conversationId: row.conversationId, revision: row.revision as number, fanName: (row.fan.displayName as string) || String(row.fan.shortRef ?? "Fan"),
       automationMode: row.automationMode as AutomationMode, takeoverState: row.takeoverState as TakeoverState,
-      lastActivityAt: str(row.lastActivityAt, 40) ? String(row.lastActivityAt) : "", requiresAttention: row.requiresAttention === true });
+      lastActivityAt: str(row.lastActivityAt, 40) ? String(row.lastActivityAt) : "",
+      // Fail closed: a missing or malformed flag is shown as needing attention, never hidden.
+      requiresAttention: row.requiresAttention !== false });
   }
   if (new Set(items.map(i => i.conversationId)).size !== items.length) return null;
   return { items, more: value.page.nextCursor !== null && value.page.nextCursor !== undefined };
 }
 
+/** Reads the workspace settings route's envelope, {schemaVersion, workspace: <of-workspace.v2 settings>}, with the same strict parser the backend uses. */
 export function parseRuntime(value: unknown, accountId: string): BRuntime | null {
-  if (!rec(value) || value.accountId !== accountId || value.section !== "settings" || typeof value.runtimeEnabled !== "boolean") return null;
-  const p = rec(value.deliveryPolicy) ? value.deliveryPolicy : null;
-  return { runtimeEnabled: value.runtimeEnabled, deliveryEnabled: p ? p.enabled === true : null, mediaEnabled: p ? p.mediaEnabled === true : null,
-    usedUnits: p && Number.isInteger(p.usedUnits) ? p.usedUnits as number : null, limitUnits: p && Number.isInteger(p.limitUnits) ? p.limitUnits as number : null,
-    historyRecoveryRequired: value.historyRecoveryRequired === true, providerConnectionVerified: value.providerConnectionVerified === true };
+  const s = rec(value) && value.schemaVersion === ONLYFANS_PREVIEW_SCHEMA_VERSION ? parseWorkspace(value.workspace, accountId, "settings") : null;
+  if (s?.section !== "settings") return null;
+  const p = s.deliveryPolicy;
+  return { runtimeEnabled: s.runtimeEnabled, deliveryEnabled: p ? p.enabled : null, mediaEnabled: p ? p.mediaEnabled : null,
+    usedUnits: p ? p.usedUnits : null, limitUnits: p ? p.limitUnits : null,
+    historyRecoveryRequired: s.historyRecoveryRequired, providerConnectionVerified: s.providerConnectionVerified };
 }
 
 export type ActionRule = { action: Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">; label: string; enabled: boolean; reason: string | null; confirm: boolean };

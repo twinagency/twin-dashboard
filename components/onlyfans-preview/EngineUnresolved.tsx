@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { engineNextStepText, engineRequestLabel } from "@/lib/onlyfans/engine-status";
 import { canReconcile, parseEngineUnresolved, type EngineUnresolvedItem, type EngineUnresolvedPage } from "@/lib/onlyfans/engine-unresolved";
 import { submitEngineOperatorCommand } from "@/lib/onlyfans/engine-operator-client";
-import type { EngineOperatorResult } from "@/lib/onlyfans/engine-operator";
+import type { EngineOperatorResult } from "@/lib/onlyfans/engine-operator-core";
 import { EnvironmentBadge, PurchaseEvidenceChip } from "./EngineStatus";
 
 type Current = Extract<EngineUnresolvedPage, { state: "current" }>;
