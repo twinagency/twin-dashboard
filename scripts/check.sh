@@ -3,6 +3,7 @@
 #   fast  merge gate: premerge.sh, every promoted test:* leaf, then live (LIVE=opt).   full  fast plus the NEEDS leaves, each with
 #     only its listed env, then live (LIVE=opt).   live  read-only smoke of the local stack: anonymous page GETs + one read-only psql.
 #   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+#   stage  fast's live stage alone (LIVE=opt), verdict STAGE, never GREEN (self-test hook).
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
 #   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
@@ -10,12 +11,14 @@
 #   INFRA if a *SUPABASE*URL* var is not loopback or any var names prod. CHECK_INHERITED_SANDBOX=1: see sandbox() below.
 # Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
 #   *PUBLISHABLE*) in our env or the repo's .env* files.
-# live refuses before its first request unless every (NEXT_PUBLIC_)SUPABASE_URL line in the .env files of the process listening on
-#   CHECK_BASE_URL's port is loopback. Gap: that process's own env is invisible, so the files must name a target. It never POSTs or
-#   calls an API route: public/admin 401s write system_logs, a login writes a session. CHECK_BASE_URL: http://localhost|127.0.0.1 only.
+# live refuses before its first request unless the process listening on CHECK_BASE_URL's port provably targets a loopback Supabase:
+#   every *SUPABASE*URL* in its env (ps -E; next dev's retitled next-server hides it, so its `next dev` parent's, which it inherits)
+#   is loopback and none names prod, else RED (env unreadable: RED too); then every (NEXT_PUBLIC_)SUPABASE_URL line in its .env files
+#   is loopback and some line or env var names one, else refused. It never POSTs or calls an API route: public/admin 401s write
+#   system_logs, a login writes a session. curl -q (no ~/.curlrc). CHECK_BASE_URL: http://localhost|127.0.0.1 only.
 # LIVE  req (live mode): anything live cannot check is INFRA. opt (fast/full): the stack down, auth on (seen from one GET /overview)
 #   or a refused target is a skip with a named note, and nothing more is sent. Both: a non-local CHECK_BASE_URL, a prod name in a
-#   response or psql failing is INFRA. CHECK_LIVE_ONLY=1 (self-test hook): only the live stage, with the mode's LIVE; verdict STAGE.
+#   response or psql failing is INFRA. psql gets what is left of the budget (30s at most); a run that ends past its budget is RED.
 # Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,rows.txt,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
 [ -n "$CHECK_NICED" ] || exec env CHECK_NICED=1 nice -n 10 bash "$0" "$@"
 set -o pipefail
@@ -27,9 +30,10 @@ case $MODE in
   fast) BUDGET=900 CAP=300 OK=GREEN PRE=1 LIVE=opt;;
   full) BUDGET=0   CAP=600 OK=GREEN PRE=1 LIVE=opt;;
   live) BUDGET=180 CAP=0   OK=GREEN PRE=0 LIVE=req;;
+  stage) BUDGET=180 CAP=0  OK=STAGE PRE=0 LIVE=opt;;
   plan) BUDGET=0   CAP=0   OK=PLAN  PRE=0 LIVE=list;;
   exec) BUDGET=0   CAP=600 OK=EXEC  PRE=0 LIVE=no;;
-  *) echo "usage: scripts/check.sh fast|full|live|plan|exec [-- cmd...]"; exit 2;;
+  *) echo "usage: scripts/check.sh fast|full|live|stage|plan|exec [-- cmd...]"; exit 2;;
 esac
 lower() { [[ $1 =~ ^[0-9]+$ ]] && (( $1 > 0 && ($2 == 0 || $1 < $2) )) && echo "$1" || echo "$2"; }
 BUDGET=$(lower "$CHECK_BUDGET_SECS" $BUDGET)
@@ -120,6 +124,8 @@ budget() {
   rec "$1" fail "${2:-0}" "budget: ${BUDGET}s run budget exceeded${3:+, $3}"
   finish
 }
+# late: a run that ends past its budget is RED, whatever its last command did (a slow lsof, ps...)
+late() { (( BUDGET && $(left) < 0 )) && budget run 0 "finished late"; }
 stop() {
   [ -n "$TP" ] && kill -TERM "$TP" 2>/dev/null && wait "$TP"
   infra "${CUR:-run}" "interrupted; step process group killed"
@@ -179,10 +185,16 @@ envguard() {
 }
 # okbase: okurl, plus http only (curl gets --proto =http) and no path (live appends its own)
 okbase() { okurl "$1" && [[ $1 =~ ^http://[^/]+/?$ ]]; }
-# target: does the process listening on BASE's port provably use a loopback Supabase? If not: WHY, return 1, nothing sent yet.
-#   Reads only the (NEXT_PUBLIC_)SUPABASE_URL lines of its .env files and logs host:port only.
+# penv <pid>: its environment as ps -E shows it (macOS), or nothing when hidden (a retitled process: next-server, sleep...)
+penv() {
+  local c e
+  c=$(ps -ww -o command= -p "$1") && e=$(ps -E -ww -o command= -p "$1") && [ "$e" != "$c" ] && echo "${e#"$c"}"
+}
+# target: does the process listening on BASE's port provably use a loopback Supabase? If not: WHY, nothing sent yet, and return 2
+#   (RED: its env names a bad target or cannot be read) or 1 (refused). Reads its env's *SUPABASE*URL* and prod names, its .env
+#   files' (NEXT_PUBLIC_)SUPABASE_URL lines, and logs host:port only.
 target() {
-  local port=${BASE##*:} pids pid dir f u hp=
+  local port=${BASE##*:} pids pid pp dir f u hp= e NEXTDEV='^([^ ]*/)?node [^ ]*/next dev( |$)'
   [[ $port =~ ^[0-9]+$ ]] || port=80
   pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null)
   if [ -z "$pids" ]; then
@@ -190,6 +202,29 @@ target() {
     return 1
   fi
   for pid in $pids; do
+    e=$(penv "$pid")
+    if [ -z "$e" ]; then # next dev forks next-server with its own initial env (next/dist/cli/next-dev.js), then retitles it
+      pp=$(ps -o ppid= -p "$pid" | tr -d ' ')
+      [[ $(ps -ww -o command= -p "$pp") =~ $NEXTDEV ]] && e=$(penv "$pp")
+    fi
+    if [ -z "$e" ]; then
+      WHY="cannot read the environment of pid $pid listening on :$port, so its Supabase target cannot be proven"
+      return 2
+    fi
+    if [[ $e =~ $PROD ]]; then
+      WHY="pid $pid's environment names a prod Supabase project"
+      return 2
+    fi
+    read -ra e <<<"$e"
+    for u in "${e[@]}"; do
+      [[ $u =~ ^[A-Za-z0-9_]*SUPABASE[A-Za-z0-9_]*URL[A-Za-z0-9_]*= ]] || continue
+      if ! okurl "${u#*=}"; then
+        WHY="pid $pid's environment has a non-loopback ${u%%=*}"
+        return 2
+      fi
+      u=${u#*://}
+      hp="$hp ${u%%/*}"
+    done
     dir=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
     if [ ! -d "$dir" ]; then
       WHY="refuse: cannot read the cwd of pid $pid listening on :$port"
@@ -212,7 +247,7 @@ target() {
     done
   done
   if [ -z "$hp" ]; then
-    WHY="refuse: the .env files of pid $pids name no SUPABASE_URL, so its target cannot be proven"
+    WHY="refuse: neither the env nor the .env files of pid $pids name a SUPABASE_URL, so its target cannot be proven"
     return 1
   fi
   note "dashboard pid $pids targets Supabase$(tr ' ' '\n' <<<"$hp" | sort -u | tr '\n' ' ')"
@@ -228,7 +263,7 @@ get() {
   l=$(left)
   (( BUDGET && l <= 0 )) && budget live
   (( BUDGET && l < m )) && m=$l
-  CODE=$(curl -s -m "$m" --noproxy '*' --proto =http -o "$TMPD/b" -D "$TMPD/h" -w '%{http_code}' "$1")
+  CODE=$(curl -q -s -m "$m" --noproxy '*' --proto =http -o "$TMPD/b" -D "$TMPD/h" -w '%{http_code}' "$1")
   if grep -qE "$PROD" "$TMPD/b" "$TMPD/h"; then infra refuse "a response names a prod Supabase project"; fi
 }
 # ck <name> cmd...: one live:<name> row, pass if cmd succeeds
@@ -245,11 +280,24 @@ page() {
   [ "$CODE" = "http 200" ] && grep -q "<title>$2" "$TMPD/b" && grep -q 'data-brand-theme=' "$TMPD/b" && ! grep -q '__next_error__' "$TMPD/b"
 }
 # db: local default creds on loopback, read-only session, SELECT only; never a credential from .env
+#   under what is left of the budget (30s at most)
 db() {
   local q="select current_setting('transaction_read_only'), (select count(*) from public.clones), (select count(*) from (select 1 from public.system_logs limit 1) s)"
-  CODE=$(env -i PATH="$PATH" PGPASSWORD=postgres PGCONNECT_TIMEOUT=5 PGOPTIONS='-c default_transaction_read_only=on' \
-    psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -XAtq -v ON_ERROR_STOP=1 -c "$q" 2>"$TMPD/e") ||
-    infra live:db "psql 127.0.0.1:54322 failed: $(head -c 200 "$TMPD/e")"
+  local s=30 l rc src=cap
+  l=$(left)
+  (( BUDGET && l <= 0 )) && budget live:db 0 "not started"
+  if (( BUDGET && l < s )); then s=$l; src=budget; fi
+  rm -f "$TMPD/mark"
+  tmo "$s" "$TMPD/mark" env -i PATH="$PATH" PGPASSWORD=postgres PGCONNECT_TIMEOUT=5 PGOPTIONS='-c default_transaction_read_only=on' \
+    psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -XAtq -v ON_ERROR_STOP=1 -c "$q" >"$TMPD/o" 2>"$TMPD/e" </dev/null &
+  TP=$!
+  wait $TP
+  rc=$?
+  TP=
+  [ "$(cat "$TMPD/mark" 2>/dev/null)" = deadline ] && [ $src = budget ] && budget live:db 0 "psql killed"
+  [ -s "$TMPD/mark" ] && infra live:db "psql 127.0.0.1:54322 killed: $(cat "$TMPD/mark")"
+  (( rc )) && infra live:db "psql 127.0.0.1:54322 failed: $(head -c 200 "$TMPD/e")"
+  CODE=$(cat "$TMPD/o")
   [[ $CODE =~ ^on\|[1-9][0-9]*\|[01]$ ]]
 }
 live() {
@@ -258,10 +306,11 @@ live() {
     list) rec live plan 0 "runs if listening"; return;;
   esac
   okbase "$BASE" || infra refuse "CHECK_BASE_URL is not http://localhost or 127.0.0.1 without a path"
-  if ! target; then
-    unavailable "$WHY"
-    return
-  fi
+  target
+  case $? in
+    1) unavailable "$WHY"; return;;
+    2) rec live:target fail 0 "$WHY"; return;;
+  esac
   get "$BASE/overview" # the auth probe
   if [[ $CODE == 3* || $CODE == 401 ]] || grep -q '<title>Admin sign in' "$TMPD/b"; then
     unavailable "auth on: pages demand a login, live only checks anonymous pages"
@@ -282,9 +331,9 @@ if [ $MODE = exec ]; then
   step exec "${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} "$@"
   finish
 fi
-if [ $MODE = live ] || [ -n "$CHECK_LIVE_ONLY" ]; then
-  [ -n "$CHECK_LIVE_ONLY" ] && OK=STAGE
+if [ $MODE = live ] || [ $MODE = stage ]; then
   live
+  late
   finish
 fi
 sandbox
@@ -309,4 +358,5 @@ while IFS=$'\x1f' read -r n a why envs c; do
 done <"$EV/rows.txt"
 [ $OK != GREEN ] || grep -q $'^premerge\tpass\t' "$EV/timings.tsv" || rec premerge fail 0 "premerge did not pass: no GREEN without it"
 live
+late
 finish

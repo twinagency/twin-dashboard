@@ -3,9 +3,10 @@
  * and kills the step, as does leaving processes behind or an interrupt; steps run in the loopback-only network sandbox, /usr/bin's
  * (refused without, unless opted in to an inherited one the kernel confirms); steps get a scrubbed env (premerge.sh children:
  * F0-premerge-env.test.ts); a prod Supabase name in our env is refused; no KEY/TOKEN/SECRET/PASSWORD value reaches the evidence.
- * live refuses (zero requests) unless the dashboard process on the port provably targets a loopback Supabase; it only sends anonymous
- * page GETs and reads the DB read-only. Required (live mode): stack down, auth on or a refused target is INFRA. Optional (fast, run
- * alone via CHECK_LIVE_ONLY=1, verdict STAGE): the same three are a named skip. Fakes: a child-process dashboard, a fake psql.
+ * live refuses (zero requests) unless the dashboard process on the port provably targets a loopback Supabase (its env, or next dev's
+ * parent's, bad or unreadable: RED); it only sends anonymous page GETs (curl -q) and reads the DB read-only, within the budget.
+ * Required (live mode): stack down, auth on or a refused target is INFRA. Optional (fast's stage, alone as mode `stage`, verdict
+ * STAGE): the same three are a named skip. Fakes: a child-process dashboard (optionally retitled, or under a fake next dev), a fake psql.
  * Drives the real scripts offline; sentinels are synthetic. Control: `exec true` is EXEC.
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/F0-check-harness.test.ts
  */
@@ -42,14 +43,16 @@ async function until(ok: () => boolean, ms = 5000) {
 const bin = tmp("f0-bin-");
 const PSQL = `#!/bin/sh
 echo "$PGOPTIONS $*" >>"${bin}/psql.log"
+[ -e "${bin}/slow" ] && sleep 60
 [ -e "${bin}/fail" ] && { echo "connection refused" >&2; exit 2; }
 echo 'on|3|1'
 `;
 writeFileSync(join(bin, "psql"), PSQL);
 chmodSync(join(bin, "psql"), 0o755);
 
-// The fake dashboard is a child process so the harness has to find it by port and read ITS cwd's .env files.
+// The fake dashboard is a child process so the harness has to find it by port and read ITS env and cwd's .env files.
 const FAKE = `
+if (process.env.FAKE_TITLE) process.title = process.env.FAKE_TITLE; // hides its env from ps -E, as next-server's does
 const s = require("http").createServer((q, r) => {
   console.log(JSON.stringify({ method: q.method, url: q.url }));
   const m = process.env.FAKE_MODE;
@@ -60,10 +63,18 @@ const s = require("http").createServer((q, r) => {
   r.end('<html data-brand-theme="t"><title>' + title + "</title>" + (m === "prod" ? "aouaenqayfltoqrmpitg" : "") + "</html>");
 });
 s.listen(0, "127.0.0.1", () => console.log("PORT " + s.address().port));`;
-async function dashboard(env: Record<string, string>, mode = "ok") {
+// next dev's shape: a `node .../next dev` parent forks the server, which inherits its env and retitles itself
+const NEXT = `const c = require("child_process").fork(__dirname + "/server.js", { stdio: ["inherit", "inherit", "inherit", "ipc"] });
+process.on("SIGTERM", () => { c.kill(); process.exit(0); });`;
+type DashOpts = { procEnv?: Record<string, string>; title?: string; viaNext?: boolean };
+async function dashboard(env: Record<string, string>, mode = "ok", { procEnv = {}, title, viaNext = false }: DashOpts = {}) {
   const cwd = tmp("f0-dash-");
   for (const [f, text] of Object.entries(env)) writeFileSync(join(cwd, f), text);
-  const child = spawn(process.execPath, ["-e", FAKE], { cwd, env: { NODE_ENV: "test" as const, PATH: process.env.PATH, FAKE_MODE: mode } });
+  writeFileSync(join(cwd, "server.js"), FAKE);
+  writeFileSync(join(cwd, "next"), NEXT);
+  const t = title ?? (viaNext ? "next-server (v0)" : undefined);
+  const args = viaNext ? [join(cwd, "next"), "dev"] : [join(cwd, "server.js")];
+  const child = spawn(process.execPath, args, { cwd, env: { NODE_ENV: "test" as const, PATH: process.env.PATH, FAKE_MODE: mode, ...(t ? { FAKE_TITLE: t } : {}), ...procEnv } });
   const hits: { method: string; url: string }[] = [];
   let port = 0;
   child.stdout.on("data", (b) => {
@@ -103,8 +114,8 @@ function start(args: string[], env: Record<string, string> = {}, { outer, cwd = 
   return { child, done };
 }
 const run = (args: string[], env: Record<string, string> = {}, o: Opts = {}) => start(args, env, o).done;
-/** fast's live stage alone (LIVE=opt), via the CHECK_LIVE_ONLY hook. */
-const stage = (base: string) => run(["fast"], { CHECK_LIVE_ONLY: "1", CHECK_BASE_URL: base });
+/** fast's live stage alone (LIVE=opt): the stage mode. */
+const stage = (base: string, env: Record<string, string> = {}) => run(["stage"], { CHECK_BASE_URL: base, ...env });
 const verdict = (root: string): Verdict => JSON.parse(readFileSync(join(root, readdirSync(root)[0], "verdict.json"), "utf8"));
 const files = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? files(join(d, f)) : [join(d, f)]));
 const evidence = (root: string) => files(root).map((f) => readFileSync(f, "utf8")).join("\n");
@@ -204,8 +215,8 @@ test("fast is GREEN only when premerge and every run row pass: a failing leaf or
     fastRepo({ "test:ok": "node ok.mjs --x" }, { planner: plannerSrc.replace('action: "skip", note', 'action: "maybe", note') }),
     fastRepo({ "test:ok": "node ok.mjs --x" }, { planner: plannerSrc.replace('kind: "run", why: "", env: ["PREMERGE_BASE"]', 'kind: "owner", why: "", env: ["PREMERGE_BASE"]') }),
   ];
-  for (const cwd of bad) {
-    const r = await run(["fast"], {}, { cwd });
+  for (const [cwd, env] of [...bad.map((d) => [d, {}] as const), [bad[0], { CHECK_LIVE_ONLY: "1" }] as const]) {
+    const r = await run(["fast"], env, { cwd });
     assert.equal(r.code, 1, r.out);
     assert.match(r.out, /^RED fast @/m);
   }
@@ -313,7 +324,9 @@ test("live refuses before any request unless the dashboard's .env files name onl
 test("live is GREEN on a well-formed stack (fast's stage: STAGE, never GREEN), anonymous page GETs only, DB read-only, no leaks", async () => {
   const d = await dashboard(GOOD);
   try {
-    const r = await run(["live"], { CHECK_BASE_URL: d.url, DASHBOARD_PASSWORD: PW });
+    const home = tmp("f0-home-"); // curl -q: a ~/.curlrc cannot turn the GETs into anything else
+    writeFileSync(join(home, ".curlrc"), "request = POST\n");
+    const r = await run(["live"], { CHECK_BASE_URL: d.url, DASHBOARD_PASSWORD: PW, HOME: home });
     assert.equal(r.code, 0, r.out);
     const v = verdict(r.root);
     assert.deepEqual(v.steps.filter((s) => s.status !== "pass"), []);
@@ -326,7 +339,7 @@ test("live is GREEN on a well-formed stack (fast's stage: STAGE, never GREEN), a
     assert.match(r.out, /127\.0\.0\.1:54321/);
     const opt = await stage(d.url);
     assert.equal(opt.code, 0, opt.out);
-    assert.match(opt.out, /^STAGE fast @/m);
+    assert.match(opt.out, /^STAGE stage @/m);
     assert.deepEqual(verdict(opt.root).steps.map((s) => s.name), v.steps.map((s) => s.name));
     assert.ok(verdict(opt.root).steps.every((s) => s.name.startsWith("live:") && s.status === "pass"));
   } finally {
@@ -364,4 +377,53 @@ test("nothing listening: live is INFRA, fast's live stage is a 'stack down' skip
   const opt = await stage("http://127.0.0.1:9");
   assert.equal(opt.code, 0, opt.out);
   assert.deepEqual(verdict(opt.root).steps.map((s) => [s.name, s.status, s.note]), [["live", "skip", "stack down: nothing listening on http://127.0.0.1:9"]]);
+});
+
+test("live reads the listening process's own env (next dev's server: its parent's): non-loopback, prod or unreadable is RED, nothing sent", async () => {
+  const bad = [
+    [{ procEnv: { SUPABASE_URL: "https://example.com" } }, /live:target .*non-loopback/],
+    [{ procEnv: { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1", X: "aouaenqayfltoqrmpitg" } }, /live:target .*prod/],
+    [{ title: "next-server (v0)" }, /live:target .*cannot read the environment/],
+    [{ viaNext: true, procEnv: { SUPABASE_URL: "https://example.com" } }, /live:target .*non-loopback/],
+  ] as const;
+  for (const [o, why] of bad) {
+    const d = await dashboard(GOOD, "ok", o);
+    try {
+      for (const r of [await run(["live"], { CHECK_BASE_URL: d.url }), await stage(d.url)]) {
+        assert.equal(r.code, 1, `${JSON.stringify(o)}: ${r.out}`);
+        assert.match(r.out, why);
+      }
+      assert.deepEqual(d.hits, []);
+    } finally {
+      d.stop();
+    }
+  }
+  const d = await dashboard(GOOD, "ok", { viaNext: true, procEnv: { SUPABASE_URL: "http://127.0.0.1:54329" } });
+  try {
+    const r = await run(["live"], { CHECK_BASE_URL: d.url });
+    assert.equal(r.code, 0, r.out);
+    assert.match(r.out, /127\.0\.0\.1:54329/);
+  } finally {
+    d.stop();
+  }
+});
+
+test("live is held to its budget: a hung psql is killed and RED 'budget'; a stage that ends late is RED 'budget'", async () => {
+  const d = await dashboard(GOOD);
+  writeFileSync(join(bin, "slow"), "");
+  try {
+    const r = await run(["live"], { CHECK_BASE_URL: d.url, CHECK_BUDGET_SECS: "4" });
+    assert.equal(r.code, 1, r.out);
+    assert.match(r.out, /fail  live:db .*budget/);
+    assert.ok(r.secs < 15, `took ${r.secs}s`);
+  } finally {
+    d.stop();
+    rmSync(join(bin, "slow"), { force: true });
+  }
+  const slow = tmp("f0-slow-"); // lsof outlasting the budget: the stage ends in a 'stack down' skip, past its budget
+  writeFileSync(join(slow, "lsof"), '#!/bin/sh\nsleep 3\nexec /usr/sbin/lsof "$@"\n');
+  chmodSync(join(slow, "lsof"), 0o755);
+  const late = await stage("http://127.0.0.1:9", { CHECK_BUDGET_SECS: "1", PATH: `${slow}:${bin}:${process.env.PATH}` });
+  assert.equal(late.code, 1, late.out);
+  assert.match(late.out, /budget/);
 });
