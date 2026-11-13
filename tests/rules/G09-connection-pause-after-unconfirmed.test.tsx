@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-1 F21, REVIEW inv 7): an unconfirmed ACTIVATE (a go) keeps its exact retry, and "Pause outgoing"
 // (the stop) stays enabled beside it. A stop is never harder than the pending go. F23/F24 are not G09.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), real ConnectionEditor + Next contexts. Fake curl only.
-import { ACCOUNT, bodyOf, close, click, http502, json, mount, posts, q, routeFailure, serve, submit, type, type Answer } from "../helpers/w3-preview1-dom";
+import { ACCOUNT, bodyOf, close, click, http502, json, mount, never, posts, q, routeFailure, serve, settle, submit, type, type Answer } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import React from "react";
@@ -73,9 +73,10 @@ test("F21: after an unconfirmed activate, Pause outgoing stays enabled", async (
  * A backend that applies commands to a revisioned connection: a write carrying the current revision lands and bumps it, a stale
  * one is refused with 409. `lostActivate` lands the activate but loses its reply (502); `getFails` lists which GETs (0-based) fail.
  */
-function landingBackend(opts: { lostActivate?: boolean; getFails?: number[]; pauseRefused?: boolean }) {
+function landingBackend(opts: { lostActivate?: boolean; getFails?: number[]; getHangs?: number[]; pauseRefused?: boolean }) {
   let current = { ...connection }, gets = 0;
   serve(call => {
+    if (call.method === "GET" && (opts.getHangs ?? []).includes(gets)) { gets++; return never(); }
     if (call.method === "GET") return (opts.getFails ?? []).includes(gets++) ? http502() : json({ schemaVersion: CONNECTION_SCHEMA, ok: true, connection: current });
     const body = bodyOf(call), action = body.action as string;
     if (body.expectedRevision !== current.revision || action === "pause" && opts.pauseRefused) return refused(409);
@@ -118,4 +119,15 @@ test("C1: a refused pause keeps the pending activate's unconfirmed state and its
   assert.match(notice(), /Command refused/);
   assert.ok(q("[data-of-connection-retry]"), "the refusal of the stop dropped the go's uncertain state");
   assert.equal(q<HTMLFieldSetElement>("[data-of-connection-activate]")?.closest("fieldset")?.disabled, true, "the go stays held");
+});
+
+test("CF-P1: a Pause whose preflight read hangs still sends the pause, bounded, at the last-known revision", async () => {
+  const server = landingBackend({ getHangs: [1] });
+  await editor();
+  await click(pause());
+  await settle(3_300);
+  const sent = posts().filter(call => bodyOf(call).action === "pause");
+  assert.deepEqual(sent.map(call => bodyOf(call).expectedRevision), [4], "a hung status read blocked the stop");
+  assert.equal(server.current().revision, 5, "the pause landed");
+  assert.match(notice(), /Pause recorded/);
 });

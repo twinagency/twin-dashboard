@@ -20,6 +20,8 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const primaryClass = "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const BROWSERBASE_POLL_MS = 2000, BROWSERBASE_POLL_FAILURES = 5, BROWSERBASE_DEADLINE_MS = 11 * 60_000;
+/** How long Pause waits for its preflight status read before sending at the last-known revision. */
+const PAUSE_READ_MS = 3000;
 const BROWSERBASE_STATUS: Record<BrowserbaseState, string> = {
   starting: "Starting the Browserbase browser…", waiting_login: "Sign in to OnlyFans in the hosted browser. The session is captured automatically after login.",
   capturing: "Logged in. Capturing the session…", done: "Session captured.", failed: "Browserbase login failed.",
@@ -104,9 +106,9 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     window.addEventListener("pagehide", onHide); return () => window.removeEventListener("pagehide", onHide);
   }, [endpoint]);
   /** The refreshed connection, or null. A transient failure keeps the last-known connection and revision, so Pause stays. */
-  const read = useCallback(async (updateForm = true): Promise<Connection | null> => {
+  const read = useCallback(async (updateForm = true, signal?: AbortSignal): Promise<Connection | null> => {
     try {
-      const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error" });
+      const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal });
       if (!active.current) return null;
       if ([401, 403].includes(response.status)) {
         sessionDenied.current = true; clearSecrets(); dropRetry(); setOwner(""); setModelId(""); setData(null); setDenied(true);
@@ -309,11 +311,12 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     if (!validConnectionRefSave(command) && !validConnectionRequest(command)) { setNotice("Review the owner, capture, hash, proxy and selected model details."); return; }
     void send(command);
   }
-  /** An unconfirmed command may have landed and moved the revision: read it first so the stop is not refused as stale. */
+  /** An unconfirmed command may have landed and moved the revision: read it first so the stop is not refused as stale.
+   *  The read is bounded: a hung status read falls back to the last-known revision rather than never sending the stop. */
   async function pause() {
     if (submitting.current || !data) return;
     submitting.current = true; setBusy(true);
-    const fresh = await read(false);
+    const fresh = await read(false, AbortSignal.timeout(PAUSE_READ_MS));
     submitting.current = false;
     if (!active.current) return;
     setBusy(false);
