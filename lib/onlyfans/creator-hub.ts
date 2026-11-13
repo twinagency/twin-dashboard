@@ -2,6 +2,7 @@ import type { OnlyFansBackend } from "./backend";
 import { EARNINGS_REASONS, type NativeEarnings } from "./earnings";
 import type { OverviewPeriod } from "./overview";
 import type { OfAccount } from "../onlyfans-preview/types";
+import { accountBlocker, senderBlocker } from "./ai-visibility";
 
 export const HUB_PERIOD_LABEL: Record<OverviewPeriod, string> = { "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days", all: "All time" };
 export const hubPeriod = (value: unknown): OverviewPeriod => typeof value === "string" && Object.hasOwn(HUB_PERIOD_LABEL, value) ? value as OverviewPeriod : "30d";
@@ -56,10 +57,17 @@ export function paymentArea(earnings: NativeEarnings | null, accountId: string):
   return entry ? { state: `${PAYMENT_STATE[entry.status]}, ${entry.importedPayments.toLocaleString("en-US")} payments`, checkedAt: entry.lastSuccessfulSyncAt } : null;
 }
 
+const AI_BLOCKED = { runtime: "Status unavailable", paused: "Off", connection: "On, connection unavailable, replies are not going out",
+  sender_disabled: "On, outgoing replies off", sender: "On, sender not running, replies are not going out",
+  sender_status: "On, sender status unknown, replies are not confirmed" } as const;
+
 /** Whether AI replies are running, stated from the runtime the backend reported and nothing else. */
 export function aiArea(account: OfAccount): HubArea | null {
   const runtime = account.runtime;
   if (!runtime) return null;
   const sender = runtime.sender.reason ? `. ${runtime.sender.reason}` : "";
-  return { state: (runtime.enabled ? runtime.deliveryEnabled ? "On, outgoing replies enabled" : "On, outgoing replies off" : "Off") + sender, checkedAt: runtime.sender.observedAt };
+  // Same account and sender checks as the per-conversation label (ai-visibility.ts): "enabled" needs a connected account,
+  // delivery on, and a running sender observed in the last 180s.
+  const blocked = accountBlocker(account) ?? senderBlocker(runtime);
+  return { state: (blocked ? AI_BLOCKED[blocked] : "On, outgoing replies enabled") + sender, checkedAt: runtime.sender.observedAt };
 }

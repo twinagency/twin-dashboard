@@ -85,8 +85,9 @@ export const ACTION_ID = "0a1b2c3d-1111-4222-8333-444455556661";
 export function automationReads(accountId = "of-a") {
   const accounts = { accounts: [{ accountId, health: "connected", automationMode: "automated" }] };
   const conversations = { accountId, page: { items: [], nextCursor: null } };
-  const runtime = { accountId, section: "settings", runtimeEnabled: false };
   const stamp = "2026-11-12T10:00:00Z";
+  const runtime = { schemaVersion: "of-preview.v2", workspace: { schemaVersion: "of-workspace.v2", section: "settings", accountId, asOf: stamp, lastCompleteSyncAt: null,
+    historyRecoveryRequired: false, providerConnectionVerified: true, runtimeEnabled: false, deliveryPolicy: null, configuration: null } };
   const emergency = { schemaVersion: "of-launch-b.v1", ok: true, accountId, readiness: { readinessVersion: "of-launch-readiness.v1", observedAt: stamp,
     schemaRevision: "synthetic", readyToEnable: true, checks: [{ key: "memory", status: "ready", blocking: false, observedAt: stamp, blocker: null, action: null }],
     accountControl: { enabled: true, bindingId: "synthetic-binding", revision: 1, unresolvedOutgoing: 0, fingerprint: "a".repeat(64) },
