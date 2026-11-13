@@ -438,3 +438,6 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - Flash psql tests used own initdb cluster on random loopback port (measured from code); stack/prod untouched.
 - Incident: F0 fixer pkill'd other sessions' premerge runs (pid 30666 /tmp/fix-f4, 41350, 56250, 57577). Owners rerun.
 - #375 G01 merged 720751aa (rwl full R1+R2 Sonnet APPROVE; codex final P2 hand-back stale revision fixed red-first; premerge PASS c304bbb3; CI billing-locked). 21 merged. Fable consult sent.
+- #376 G47 merged 574f956b (rwl full R1 Opus+codex+da, R2 Sonnet APPROVE; codex final P2: explicit purchase evidence overridden to held → evidence authoritative (NEEDS-BACKEND §6), red-first; rules 32/32, engine-contracts 36/0, premerge PASS 9ea0c272; CI billing-locked). Root ff'd. 22 merged.
+- Queue adds (from G47): engine-operator.ts:36 every upstream 503 → refused (maj); backend refusal of stop on degraded session (blk, backend lane); no_contact outranks not_accepted/refused (min); /settings "Which creators are on this default" ⓘ + grey paragraph (min, UI convention).
+- G44b fixer done 36155633 (+base 67cbb71d): rwl full R1 running. G48 implementer started (fix-g48 off 574f956b).
