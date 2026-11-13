@@ -82,3 +82,9 @@ export function inRequest<T>(requestHeaders: Record<string, string>, fn: () => T
   const unit = { type: "request", phase: "render", headers: new Headers(requestHeaders) } as any;
   return workAsyncStorage.run(workStore, () => workUnitAsyncStorage.run(unit, fn));
 }
+/** Run fn as if inside a server action, so revalidatePath/revalidateTag record their tags instead of throwing
+ *  (they need a work store with an incrementalCache and no render-phase unit store). Framework internals only. */
+export function inServerAction<T>(fn: () => T): T {
+  const workStore = { route: "/test", incrementalCache: {}, forceStatic: false, dynamicShouldError: false, isStaticGeneration: false } as any;
+  return workAsyncStorage.run(workStore, fn);
+}

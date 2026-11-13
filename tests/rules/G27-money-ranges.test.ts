@@ -38,20 +38,49 @@ test("control: valid credit economy is stored as typed", async () => {
   assert.equal(row?.credit_pack_price_stars, 299);
 });
 
-test("negative / zero / fractional credit values are never written", async () => {
-  for (const money of [
-    { starting_credits: "-5", credit_pack_size: "-50", credit_pack_price_stars: "0" },
-    { starting_credits: "20", credit_pack_size: "2.5", credit_pack_price_stars: "299" },
-  ]) {
-  const { threw, row } = await save(money);
-  if (row === undefined) { assert.ok(threw, "no PATCH and no error"); continue; } // refused before the write: fixed
-  assert.ok(!(row.starting_credits < 0), `starting_credits stored as ${row.starting_credits}`);
-  assert.ok(row.credit_pack_size > 0 && Number.isInteger(row.credit_pack_size), `credit_pack_size stored as ${row.credit_pack_size}`);
-  assert.ok(row.credit_pack_price_stars > 0, `credit_pack_price_stars stored as ${row.credit_pack_price_stars}`);
+// TEST-CHANGE (G27 Flash minor): the cases bundled three invalid fields, so only the first one checked was
+// exercised. Now one invalid field per case, each refused by name with no PATCH.
+test("negative / zero / fractional credit values are never written (one field per case, refused by name)", async () => {
+  for (const [key, value] of [
+    ["starting_credits", "-5"], ["starting_credits", "1.5"],
+    ["credit_pack_size", "-50"], ["credit_pack_size", "0"], ["credit_pack_size", "2.5"],
+    ["credit_pack_price_stars", "0"], ["credit_pack_price_stars", "-1"], ["credit_pack_price_stars", "9.5"],
+  ] as const) {
+    const { threw, row } = await save({ [key]: value });
+    assert.equal(row, undefined, `${key}=${value} reached the PATCH as ${row?.[key]}`);
+    assert.match(String((threw as Error | undefined)?.message), new RegExp(key), `${key}=${value} not refused by name`);
   }
+});
+
+test("tip_credits_per_100_stars: non-numeric, negative, fractional or over-max refused by name; blank refused; absent omitted", async () => {
+  for (const value of ["abc", "-1", "2.5", "100001", ""]) {
+    const { threw, row } = await save({ tip_credits_per_100_stars: value });
+    assert.equal(row, undefined, `tip_credits_per_100_stars=${JSON.stringify(value)} reached the PATCH as ${row?.tip_credits_per_100_stars}`);
+    assert.match(String((threw as Error | undefined)?.message), /tip_credits_per_100_stars/);
+  }
+  const ok = await save({ tip_credits_per_100_stars: "5" });
+  assert.equal(ok.row?.tip_credits_per_100_stars, 5);
+  const absent = await save({});
+  assert.equal("tip_credits_per_100_stars" in (absent.row ?? {}), false, "absent tip rate was written with a fallback");
 });
 
 test("a non-numeric pack price is refused, not silently replaced by the 199 fallback", async () => {
   const { threw, row } = await save({ credit_pack_price_stars: "abc" });
   assert.ok(threw && row === undefined, `save succeeded with credit_pack_price_stars=${row?.credit_pack_price_stars}`);
+});
+
+// Codex final P1 on #404: a cleared field used to save the hardcoded fallback (a 1-Star price became 199).
+const MONEY_KEYS = ["starting_credits", "credit_pack_size", "credit_pack_price_stars"] as const;
+
+test("a credit field submitted blank refuses the save before any write", async () => {
+  for (const key of MONEY_KEYS) {
+    const { threw, row } = await save({ [key]: "" });
+    assert.ok(threw && row === undefined, `blank ${key} saved as ${row?.[key]}`);
+  }
+});
+
+test("a credit field absent from the update form is left out of the PATCH (stored value kept)", async () => {
+  const { row } = await save({});
+  assert.ok(row, "updateClone never reached the PATCH");
+  assert.deepEqual(MONEY_KEYS.filter((k) => k in row), [], "absent credit fields were written with a fallback");
 });

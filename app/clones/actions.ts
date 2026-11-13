@@ -155,11 +155,20 @@ function num(fd: FormData, key: string, fallback: number): number {
 }
 // Credit economy: refused outside the canonical bounds, never clamped or
 // defaulted. The bot grants these straight through, so a -5 balance or a 2.5
-// pack would reach fans. Blank or absent keeps the fallback.
-function credits(fd: FormData, key: "starting_credits" | "credit_pack_size" | "credit_pack_price_stars", fallback: number): number {
-  const v = fd.get(key);
-  if (v === null || String(v).trim() === "") return fallback;
-  return checkDefaultNumber(key, Number(v));
+// pack would reach fans. Absent = not in the row (an update keeps the stored
+// value, a create takes CREATE_CREDIT_DEFAULTS); blank is refused, because a
+// fallback would turn a cleared 1-Star price into 199.
+const CREDIT_KEYS = ["starting_credits", "credit_pack_size", "credit_pack_price_stars", "tip_credits_per_100_stars"] as const;
+const CREATE_CREDIT_DEFAULTS = { starting_credits: 50, credit_pack_size: 50, credit_pack_price_stars: 199, tip_credits_per_100_stars: 0 };
+function credits(fd: FormData): Partial<Record<(typeof CREDIT_KEYS)[number], number>> {
+  const out: Partial<Record<(typeof CREDIT_KEYS)[number], number>> = {};
+  for (const key of CREDIT_KEYS) {
+    const v = fd.get(key);
+    if (v === null) continue;
+    if (String(v).trim() === "") throw new Error(`Enter a value for ${key}`);
+    out[key] = checkDefaultNumber(key, Number(v));
+  }
+  return out;
 }
 function numOrNull(fd: FormData, key: string): number | null {
   const v = fd.get(key);
@@ -533,13 +542,10 @@ function rowFromForm(fd: FormData) {
     voice_speaker_boost: fd.get("voice_speaker_boost") === "true",
     voice_speed: num(fd, "voice_speed", 0.95),
 
-    starting_credits: credits(fd, "starting_credits", 50),
-    credit_pack_size: credits(fd, "credit_pack_size", 50),
-    credit_pack_price_stars: credits(fd, "credit_pack_price_stars", 199),
-    // Migration 088. Default 0 = tips grant no credits, which is exactly the
-    // pre-088 live behaviour, so a save from an untouched form changes nothing.
-    // Clamped at 0 because a negative rate would mean a tip DEDUCTS credits.
-    tip_credits_per_100_stars: Math.max(0, num(fd, "tip_credits_per_100_stars", 0)),
+    ...credits(fd),
+    // Migration 088 tip_credits_per_100_stars is in credits() above: create
+    // default 0 = tips grant no credits; a negative rate (a tip DEDUCTS
+    // credits), fraction or over-max value is refused.
     // Migration 090. Anything unrecognised falls back to 'block', which is both
     // the column default and mapClone's fallback, so a save can never quietly
     // DISARM the guard: switching it off has to be a deliberate pick.
@@ -1020,8 +1026,9 @@ const OPTIONAL_COLUMNS = [
 async function writeStrippingMissing<T extends { error: { message: string } | null }>(
   row: Record<string, unknown>,
   write: (row: Record<string, unknown>) => PromiseLike<T>,
-): Promise<T> {
+): Promise<T & { stripped: string[] }> {
   const payload = { ...row };
+  const stripped: string[] = [];
   let res = await write(payload);
   while (res.error && isMissingColumnError(res.error.message)) {
     const col = /could not find the '([^']+)' column/i.exec(res.error.message)?.[1];
@@ -1029,9 +1036,10 @@ async function writeStrippingMissing<T extends { error: { message: string } | nu
       throw new Error(`Save refused: the database has no "${col ?? "unknown"}" column yet. Apply its migration first.`);
     }
     delete payload[col];
+    stripped.push(col);
     res = await write(payload);
   }
-  return res;
+  return { ...res, stripped };
 }
 
 // A genuine PostgREST "this column doesn't exist yet" error reads
@@ -1123,6 +1131,7 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   // hidden input used to carry through ConfigSections in "create" mode.
   const cloneDefaults = await getCloneDefaults();
   const row = {
+    ...CREATE_CREDIT_DEFAULTS,
     ...rowFromForm(fd),
     slug,
     drip_steps: DEFAULT_DRIP_STEPS,
@@ -1137,7 +1146,9 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   return data.id;
 }
 
-export async function updateClone(id: string, fd: FormData) {
+// `notStored`: columns the save dropped because their migration has not run;
+// the form reports them and keeps them unsaved, never a plain "Saved".
+export async function updateClone(id: string, fd: FormData): Promise<{ notStored: string[] }> {
   await guardDashboardAction("app/clones/actions.ts#updateClone", [id, fd]);
   const image = fd.get("dashboard_profile_image");
   const previousImagePath = str(fd, "dashboard_profile_image_path");
@@ -1174,8 +1185,9 @@ export async function updateClone(id: string, fd: FormData) {
   if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
   let error: { message: string } | null;
+  let notStored: string[] = [];
   try {
-    ({ error } = await writeStrippingMissing({ ...row, updated_at: new Date().toISOString() }, (r) => supabaseAdmin.from("clones").update(r).eq("id", id)));
+    ({ error, stripped: notStored } = await writeStrippingMissing({ ...row, updated_at: new Date().toISOString() }, (r) => supabaseAdmin.from("clones").update(r).eq("id", id)));
   } catch (e) {
     error = { message: e instanceof Error ? e.message : String(e) };
   }
@@ -1199,6 +1211,7 @@ export async function updateClone(id: string, fd: FormData) {
   revalidatePath("/clones");
   revalidatePath(`/clones/${id}`);
   await invalidateCloneCaches();
+  return { notStored };
 }
 
 export async function deleteClone(id: string) {

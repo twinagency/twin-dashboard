@@ -10,7 +10,7 @@
  * PostgREST named. (The "saved, X not persisted" notice the finding asks for is UI and not asserted here.)
  * Fakes only at the wire (tests/rules/G27-harness.ts); identity = admin via withDashboardAccess(null).
  */
-import { startFakePostgrest } from "./G27-harness";
+import { inServerAction, startFakePostgrest } from "./G27-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withDashboardAccess } from "../../lib/dashboard-access";
@@ -31,16 +31,18 @@ async function saveWithOneMissingColumn() {
       if (first) { first = false; return missing; }
       return { status: 204, body: null };
     }
+    // compileClone reads the row back after the write.
+    if (c.method === "GET" && c.path.endsWith("/clones")) return { body: [{ id: CLONE, name: "Test Clone" }] };
     return undefined;
   });
   const fd = new FormData();
   fd.set("name", "Test Clone");
   fd.set("price_guard_mode", "block");
   fd.set("account_phone", "+10000000000");
-  // compileClone/revalidatePath run after the write; the wire bodies are what is asserted.
   let threw: unknown;
-  await withDashboardAccess(null, () => updateClone(CLONE, fd)).catch((e) => { threw = e; });
-  return { threw, bodies: pg.calls.filter((c) => c.method === "PATCH" && c.path.endsWith("/clones")).map((c) => c.body) };
+  const result = await inServerAction(() => withDashboardAccess(null, () => updateClone(CLONE, fd))).catch((e) => { threw = e; });
+  // The save's own PATCHes carry the form row (`name`); compileClone's later persona PATCH does not.
+  return { threw, result, bodies: pg.calls.filter((c) => c.method === "PATCH" && c.path.endsWith("/clones") && "name" in (c.body ?? {})).map((c) => c.body) };
 }
 
 test("control: the first PATCH carries the operator's edits", async () => {
@@ -50,10 +52,20 @@ test("control: the first PATCH carries the operator's edits", async () => {
   assert.equal(bodies[0].price_guard_mode, "block");
 });
 
-test("one missing column: refuse the save, or retry keeping every other column", async () => {
-  const { threw, bodies } = await saveWithOneMissingColumn();
-  if (bodies.length === 1) { assert.ok(threw, "no retry and no error: silent drop"); return; }
+// TEST-CHANGE (G27 Flash minor): the either/or "refuse or retry" branch passed with the retry deleted. The
+// chosen behaviour is pinned instead: exactly one retry, which omits only the named column and keeps every other value.
+test("one missing optional column: exactly one retry, omitting only that column and keeping every other value", async () => {
+  const { bodies } = await saveWithOneMissingColumn();
+  assert.equal(bodies.length, 2, "expected the failed PATCH plus exactly one retry");
+  assert.equal("account_phone" in bodies[1], false, "the retry still sent the column PostgREST named");
   const lost = Object.keys(bodies[0]).filter((k) => k !== "account_phone" && k !== "updated_at"
     && JSON.stringify(bodies[1][k]) !== JSON.stringify(bodies[0][k]));
   assert.deepEqual(lost, [], `retry PATCH dropped ${lost.length} columns PostgREST did not name (e.g. ${lost.slice(0, 5).join(", ")})`);
+  assert.deepEqual(Object.keys(bodies[1]).filter((k) => !(k in bodies[0])), [], "the retry added columns");
+});
+
+test("the save result names the column that was not stored (partial save is never reported as a full save)", async () => {
+  const { threw, result } = await saveWithOneMissingColumn();
+  assert.equal(threw, undefined, `save threw: ${threw}`);
+  assert.deepEqual((result as { notStored?: string[] } | undefined)?.notStored, ["account_phone"]);
 });
