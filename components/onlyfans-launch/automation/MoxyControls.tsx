@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { moxyAck, parseMoxy, record, starterSettings, type MoxyMode, type MoxyView } from "@/lib/onlyfans/moxy";
+import { moxyAck, parseMoxy, record, type MoxyMode, type MoxyView } from "@/lib/onlyfans/moxy";
 import { buttonClass, dangerClass } from "../a-shared";
 
 const words = (value: string) => value.replaceAll("_", " ").replaceAll(":", ": ");
@@ -34,7 +34,7 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
   const [value, setValue] = useState<MoxyView | null>(null), [error, setError] = useState("");
   const [notice, setNotice] = useState(""), [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [serverManage, setServerManage] = useState(false), [nextMode, setNextMode] = useState<MoxyMode>("off");
-  const [creator, setCreator] = useState(""), [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [fileName, setFileName] = useState("");
   const epoch = useRef(0), mounted = useRef(true);
   const load = useCallback(async () => {
@@ -52,10 +52,10 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
       if (mounted.current && mine === epoch.current) { setValue(null); setServerManage(false); setError(e instanceof Error ? e.message : "Moxy controls are unavailable."); }
     } finally { if (mounted.current && mine === epoch.current) setLoading(false); }
   }, [base, accountId, onOwnership]);
-  useEffect(() => { mounted.current = true; setDraft(null); setCreator(""); setFileName(""); setNotice(""); setBusy(false);
+  useEffect(() => { mounted.current = true; setDraft(null); setFileName(""); setNotice(""); setBusy(false);
     void load(); return () => { mounted.current = false; epoch.current++; }; }, [load]);
   const editable = manage && serverManage && !loading && !busy;
-  const settings = draft ?? (value?.engine === "moxy" ? value.settings : creator ? starterSettings(creator) : null);
+  const settings = draft ?? (value?.engine === "moxy" ? value.settings : null);
   const onReady = value?.engine === "moxy" && value.readiness.ready && draft === null;
 
   async function importSetup(file: File | undefined) {
@@ -93,10 +93,6 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
     {value && !loading ? <>
       <MoxyStateSummary value={value} />
       {!manage || !serverManage ? <p className="text-sm">Read-only access.</p> : null}
-      {value.engine === "legacy" && !draft ? <label className="grid gap-1 text-sm">Creator setup
-        <select className="min-h-11 rounded-lg border border-line bg-white px-2" value={creator} disabled={!editable} onChange={e => setCreator(e.target.value)}>
-          <option value="">Select a creator setup</option><option value="amelia">Amelia</option><option value="cristina">Cristina</option>
-        </select></label> : null}
       <div className="flex flex-wrap items-end gap-3"><label className="grid gap-1 text-sm">Mode
         <select aria-label="Mode" className="min-h-11 rounded-lg border border-line bg-white px-3" value={nextMode} disabled={!editable} onChange={e => setNextMode(e.target.value as MoxyMode)}>
           <option value="off">Off</option><option value="preview">Preview</option><option value="on" disabled={!onReady}>On</option>

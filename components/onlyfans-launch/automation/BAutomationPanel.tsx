@@ -142,7 +142,8 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
       </div>
 
       <MoxyControls key={accountId} accountId={accountId} manage={manage} onOwnership={setMoxySelected} />
-      {moxySelected === false ? <EngagementPanel key={accountId} accountId={accountId} manage={manage} /> : null}
+      {/* A brake: follow-ups and their cancel render whatever the Moxy read says; only the policy editor waits for a legacy view. */}
+      <EngagementPanel key={accountId} accountId={accountId} manage={manage} editPolicy={moxySelected === false} />
 
     </> : null}
   </section>;
