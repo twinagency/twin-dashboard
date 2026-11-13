@@ -9,7 +9,7 @@ export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_a
 export const AGENCY_WRITABLE_CLONE_FIELDS = AGENCY_COLUMNS.clones.filter(c => !(AGENCY_PROTECTED_CLONE_FIELDS as readonly string[]).includes(c));
 const WRITABLE: Record<string, {methods:string[];fields:readonly string[]}> = {
   clones: {methods:["PATCH"],fields:AGENCY_WRITABLE_CLONE_FIELDS},
-  users: {methods:["PATCH"],fields:["message_credits","total_messages_sent","total_messages_purchased","is_active","blocked","paused"]},
+  users: {methods:["PATCH"],fields:["message_credits","total_messages_sent","total_messages_purchased","is_active","blocked","paused","blocked_reason","blocked_at"]},
   photos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","image_name","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
   videos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
   photo_bundles: {methods:["POST","PATCH","DELETE"],fields:["clone_id","name","caption","star_price","is_onboarding"]},
@@ -52,6 +52,11 @@ export async function scopeAgencyWrite(input: URL, method: string, body: unknown
   for (const row of rows) {
     if (!row || typeof row!=="object" || Array.isArray(row) || Object.keys(row).some(key=>!rule.fields.includes(key))) throw new Error("Unsupported agency field");
     if (method === "PATCH" && ("clone_id" in row || "storage_path" in row || "bundle_id" in row)) throw new Error("Ownership and storage paths cannot be reassigned");
+    // setBlocked's operator stamp only: never another reason, never over a safety reason or a minor flag (G36c).
+    if (table === "users" && ("blocked_reason" in row || "blocked_at" in row) && (row.blocked_reason !== "operator" || typeof row.blocked_at !== "string"
+      || url.searchParams.get("or") !== "(blocked_reason.is.null,blocked_reason.eq.operator)" || url.searchParams.get("minor_flagged_at") !== "is.null")) {
+      throw new Error("Only an operator block reason may be recorded");
+    }
     if (table === "clones") {
       const target=url.searchParams.get("id");
       if (!target?.startsWith("eq.")) throw new Error("A single creator must be selected");

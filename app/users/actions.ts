@@ -101,6 +101,29 @@ export async function setBlocked(fd: FormData) {
     revalidatePath("/users");
     return;
   }
+  if (blocked) {
+    // Block first, alone, like the bot's blockUserWithReason: the block must land even if the reason cannot be
+    // recorded. Only a fan this call flipped gets reason "operator" (so the agency can lift it), and never over a
+    // safety reason or minor flag; a legacy reason-less block re-submitted from a stale form stays admin-only.
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .update({ blocked })
+      .eq("id", userId)
+      .eq("blocked", false)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (data?.length) {
+      const { error: metaError } = await supabaseAdmin
+        .from("users")
+        .update({ blocked_reason: "operator", blocked_at: new Date().toISOString() })
+        .eq("id", userId)
+        .or("blocked_reason.is.null,blocked_reason.eq.operator")
+        .is("minor_flagged_at", null);
+      if (metaError) throw new Error(`Fan blocked, but the reason was not recorded, so only an administrator can unblock: ${metaError.message}`);
+    }
+    revalidatePath("/users");
+    return;
+  }
   const { error } = await supabaseAdmin
     .from("users")
     .update({ blocked })

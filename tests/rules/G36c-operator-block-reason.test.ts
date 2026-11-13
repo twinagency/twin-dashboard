@@ -1,14 +1,16 @@
+import "../support/admin-route-env";
 // G36c (batch review 3): setBlocked(true) wrote only `blocked`, while a non-admin unblock needs blocked_reason
 // "operator" (G36). So every dashboard-made block was admin-only to unblock: agency managers had a block switch with
 // no way back (dead switch). A dashboard block now records reason "operator" + blocked_at, but only on a fan it
-// actually flipped, and only where no reason and no minor flag are recorded: a safety reason is never overwritten and a
-// legacy reason-less block stays admin-only. The block write lands first and its failure rejects.
-// Harness: tests/rules/G27-harness.ts (real actions, real supabase-js, fake PostgREST on the wire); the fake below
-// applies eq/is/in filters to GET and PATCH like PostgREST, so a conditional update that no longer matches writes nothing.
-import { inServerAction, startFakePostgrest, type WireCall } from "./G27-harness";
+// actually flipped, and never over a safety reason or a minor flag: a legacy reason-less block stays admin-only.
+// The block write lands first and its failure rejects.
+// Harness: tests/support/admin-wire.ts (real actions, real supabase-js and agency fetch scoping, PostgREST faked at
+// the wire with eq/is/in/or/and filters on GET and PATCH, so a conditional update that no longer matches writes nothing).
 import assert from "node:assert/strict";
 import test from "node:test";
+import { inNextRoute, installWire } from "../support/admin-wire";
 import { setBlocked } from "../../app/users/actions";
+import { scopeAgencyWrite } from "../../lib/agency-write";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 import { TOP_ONLYFANS_AGENCY } from "../../lib/partner-portals";
 
@@ -21,61 +23,22 @@ const fan = (over: Row = {}): Row => ({
   blocked: false, blocked_reason: null, blocked_at: null, minor_flagged_at: null, ...over,
 });
 
-let pg!: Awaited<ReturnType<typeof startFakePostgrest>>;
 let row: Row;
 let failBlockWrite = false;
-test.before(async () => { pg = await startFakePostgrest(); });
-test.after(() => pg.close());
-
-// Top-level comma split of a PostgREST logic list: "a.eq.1,or(b.is.null,b.eq.x)" -> ["a.eq.1", "or(b.is.null,b.eq.x)"].
-function split(list: string): string[] {
-  const out: string[] = []; let depth = 0, cur = "";
-  for (const ch of list) {
-    if (ch === "," && depth === 0) { out.push(cur); cur = ""; continue; }
-    if (ch === "(") depth++; else if (ch === ")") depth--;
-    cur += ch;
-  }
-  return cur ? [...out, cur] : out;
-}
-function cond(r: Row, key: string, expr: string): boolean {
-  if (key === "and" || key === "or") {
-    const parts = split(expr.replace(/^\(|\)$/g, "")).map((p) => {
-      const m = p.match(/^(and|or)(\(.*\))$/);
-      if (m) return cond(r, m[1], m[2]);
-      const [col, ...rest] = p.split(".");
-      return cond(r, col, rest.join("."));
-    });
-    return key === "and" ? parts.every(Boolean) : parts.some(Boolean);
-  }
-  const [op, ...rest] = expr.split(".");
-  const v = rest.join(".");
-  if (op === "eq") return r[key] !== null && String(r[key]) === v;
-  if (op === "is" && v === "null") return r[key] === null;
-  if (op === "in") return v.replace(/^\(|\)$/g, "").split(",").map((s) => s.replace(/"/g, "")).includes(String(r[key]));
-  throw new Error(`fake PostgREST: unsupported filter ${key}=${expr}`);
-}
-const matches = (r: Row, q: URLSearchParams) =>
-  [...q].filter(([k]) => !["select", "columns", "limit", "order"].includes(k)).every(([k, e]) => cond(r, k, e));
-function serve(c: WireCall) {
-  // The agency response path reads the viewer's cut terms; none recorded (as W4-payments-paging serves them).
-  if (c.method === "GET" && ["platform_cuts", "agency_creators", "agency_creator_cuts"].some((t) => c.path === `/rest/v1/${t}`)) return { status: 200, body: [] };
-  if (c.path !== "/rest/v1/users" || !["GET", "PATCH"].includes(c.method)) return { status: 400, body: { message: `fake PostgREST: unexpected ${c.method} ${c.path}` } };
-  let hit: Row[];
-  try { hit = matches(row, c.query) ? [row] : []; } catch (e) { return { status: 400, body: { message: (e as Error).message } }; }
-  if (c.method === "PATCH") {
-    if (failBlockWrite && "blocked" in c.body) return { status: 500, body: { message: "block write failed", code: "XX000" } };
-    for (const r of hit) Object.assign(r, c.body);
-  }
-  return { status: 200, body: hit.map((r) => ({ ...r })) };
-}
+// One wire per test file; `row` is the users table's only row (reassigned per test, so the store is reseeded).
+const wire = installWire({
+  override: (c) => failBlockWrite && c.method === "PATCH" && c.table === "users" && typeof c.body === "object" && c.body !== null && "blocked" in c.body
+    ? new Response(JSON.stringify({ message: "block write failed", code: "XX000" }), { status: 500, headers: { "content-type": "application/json" } })
+    : undefined,
+});
+test.after(() => wire.restore());
 
 async function submit(who: typeof manager | null, blocked: "true" | "false") {
-  pg.reset();
-  pg.respond(serve);
+  wire.tables.users = [row];
   const fd = new FormData();
   fd.set("userId", FAN);
   fd.set("blocked", blocked);
-  return inServerAction(() => withDashboardAccess(who, () => setBlocked(fd))).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
+  return inNextRoute("/users", () => withDashboardAccess(who, () => setBlocked(fd))).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
 }
 
 test("agency manager blocks a fan, then unblocks him (the dashboard block is an operator block)", async () => {
@@ -122,4 +85,20 @@ test("a failed block write rejects, never reports success", async () => {
     assert.match(await submit(manager, "true"), /^rejected/);
   } finally { failBlockWrite = false; }
   assert.equal(row.blocked, false);
+});
+
+test("the agency write scope admits only the conditional operator stamp, no other block reason write", async () => {
+  const at = "2026-11-13T00:00:00Z";
+  const url = (q: string) => new URL(`${process.env.SUPABASE_URL}/rest/v1/users?id=eq.${FAN}${q}`);
+  const guarded = "&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null";
+  await scopeAgencyWrite(url(guarded), "PATCH", { blocked_reason: "operator", blocked_at: at }, manager);
+  for (const [label, q, body] of [
+    ["a safety reason", guarded, { blocked_reason: "minor", blocked_at: at }],
+    ["clearing the reason", guarded, { blocked_reason: null, blocked_at: null }],
+    ["the stamp without the reason condition", "&minor_flagged_at=is.null", { blocked_reason: "operator", blocked_at: at }],
+    ["the stamp without the minor condition", "&or=(blocked_reason.is.null,blocked_reason.eq.operator)", { blocked_reason: "operator", blocked_at: at }],
+    ["blocked_at alone", guarded, { blocked_at: at }],
+  ] as const) {
+    await assert.rejects(scopeAgencyWrite(url(q), "PATCH", body, manager), /operator block reason/, label);
+  }
 });

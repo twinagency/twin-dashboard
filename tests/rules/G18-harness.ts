@@ -15,8 +15,8 @@
  *   `select`; POST inserts (fills `id` + `created_at` if absent; merge-duplicates upsert on `on_conflict`/id);
  *   PATCH/DELETE apply the same filters to the matched rows. `Prefer: return=representation` returns the
  *   affected rows, `count=exact` sets Content-Range, vnd.pgrst.object needs exactly one row (else 406).
- *   Not emulated, answered LOUDLY (HTTP 400 PGRST100 / 404 PGRST202, never a silent []): `or`/`and`/`not.`
- *   filters, other ops, RPC calls, embedded resources in `select` (embeds are dropped from the row).
+ *   `or=(...)`/`and=(...)` logic trees (nested and()/or()) are emulated too. Not emulated, answered LOUDLY (HTTP 400
+ *   PGRST100 / 404 PGRST202, never a silent []): `not.` filters, other ops, RPC calls, embedded resources in `select` (embeds are dropped from the row).
  * - OpenRouter: `stubOpenRouter` layers openrouter.ai (SSE replies scripted per turn) over the deny-all stub.
  * DECLARED BYPASS: Next's workAsyncStorage is entered with a minimal fake store so revalidatePath /
  * revalidateTag work outside a request (framework internals, not service code). Outside a request
@@ -143,19 +143,35 @@ function matchOne(v: unknown, op: string, arg: string): boolean {
     default: throw new Unsupported(`filter op "${op}"`);
   }
 }
-function filtersOf(q: URLSearchParams): [string, string, string][] {
-  const out: [string, string, string][] = [];
+type Filter = (row: Row) => boolean;
+function leaf(col: string, expr: string): Filter {
+  const dot = expr.indexOf(".");
+  const op = dot < 0 ? expr : expr.slice(0, dot);
+  if (op === "not") throw new Unsupported("not. filter");
+  const arg = dot < 0 ? "" : expr.slice(dot + 1);
+  return (row) => matchOne(getPath(row, col), op, arg);
+}
+/** or=(a.eq.1,b.is.null) / and=(...), nested and(...)/or(...) terms; not. stays unsupported. */
+function logic(kind: string, list: string): Filter {
+  const terms = topLevelTokens(list.replace(/^\(/, "").replace(/\)$/, "")).map((t): Filter => {
+    const m = t.match(/^(and|or)(\(.*\))$/);
+    if (m) return logic(m[1], m[2]);
+    const dot = t.indexOf(".");
+    if (dot < 0 || t.startsWith("not.")) throw new Unsupported(`${kind} term ${t}`);
+    return leaf(t.slice(0, dot), t.slice(dot + 1));
+  });
+  return kind === "and" ? (row) => terms.every((f) => f(row)) : (row) => terms.some((f) => f(row));
+}
+function filtersOf(q: URLSearchParams): Filter[] {
+  const out: Filter[] = [];
   for (const [k, v] of q) {
     if (RESERVED.has(k)) continue;
-    if (k === "or" || k === "and" || k.startsWith("not.")) throw new Unsupported(`${k} filter`);
-    const dot = v.indexOf(".");
-    const op = dot < 0 ? v : v.slice(0, dot);
-    if (op === "not") throw new Unsupported("not. filter");
-    out.push([k, op, dot < 0 ? "" : v.slice(dot + 1)]);
+    if (k.startsWith("not.")) throw new Unsupported(`${k} filter`);
+    out.push(k === "or" || k === "and" ? logic(k, v) : leaf(k, v));
   }
   return out;
 }
-const matches = (row: Row, f: [string, string, string][]) => f.every(([c, op, arg]) => matchOne(getPath(row, c), op, arg));
+const matches = (row: Row, f: Filter[]) => f.every((p) => p(row));
 
 function sortRows(rows: Row[], order: string | null): Row[] {
   if (!order) return rows;
