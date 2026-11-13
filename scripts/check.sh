@@ -25,6 +25,7 @@ esac
 lower() { [[ $1 =~ ^[0-9]+$ ]] && (( $1 > 0 && ($2 == 0 || $1 < $2) )) && echo "$1" || echo "$2"; }
 BUDGET=$(lower "$CHECK_BUDGET_SECS" $BUDGET)
 CAP=$(lower "$CHECK_STEP_SECS" $CAP)
+PCAP=$(lower "$CHECK_STEP_SECS" "$([ $MODE = fast ] && echo 600 || echo $CAP)") # the premerge step's cap: it runs every premerge suite
 T0=$(date +%s)
 SHA=$(git rev-parse --short=8 HEAD 2>/dev/null || echo nogit)
 EV=${CHECK_EVIDENCE_DIR:-.check-evidence}/$(date -u +%Y%m%dT%H%M%SZ)-$SHA
@@ -133,6 +134,7 @@ tmo() {
 # step <name> cmd...: run cmd under the step cap (or what is left of the budget, if less) and record pass/fail
 step() {
   local n=$1 t s=$CAP src=cap l why rc
+  [ "$n" = premerge ] && s=$PCAP
   shift
   CUR=$n
   t=$(date +%s)
@@ -166,7 +168,7 @@ envguard() {
   return 0
 }
 # ---- modes ----
-echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s" | tee "$EV/run.log"
+echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s (premerge ${PCAP}s)" | tee "$EV/run.log"
 envguard
 if [ $MODE = exec ]; then
   [ "$1" = -- ] && shift
