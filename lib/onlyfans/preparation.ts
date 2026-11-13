@@ -3,9 +3,11 @@ import { validVaultSelectionProgress, type VaultSelectionProgress } from "./vaul
 export type PreparationConfig={contract_version:"preparation.v1";provider_account:string;creator_id:string;
  qualification:{mode:"fixture"|"production";reference:string};
  limits:{provider_requests:number;provider_credit_budget:number;provider_credits_per_request:number}};
+type CoverageState = "pending" | "unknown" | "partial" | "complete";
+const coverageStates = new Set<unknown>(["pending", "unknown", "partial", "complete"]);
 export type PreparationState={configured:false;canPrepare:boolean}|{configured:true;revision:number;status:"configured"|"stopped";
  fingerprint:string;config:PreparationConfig;providerRequestsUsed:number;providerCreditsReserved:number;
- automaticRepliesEnabled:false;salesEnabled:false;historyCoverage:"pending";ownershipCoverage:"pending";connected?:boolean;
+ automaticRepliesEnabled:false;salesEnabled:false;historyCoverage:CoverageState;ownershipCoverage:CoverageState;connected?:boolean;
  vault?:null|(VaultSelectionProgress & {jobId:string;status:string;pagesRead:number;itemsSeen:number;error:string|null;selected:number;retryAttempts?:number;retryNotBefore?:string|null});
  lastAttempt?:PreparationAttempt|null;failure?:PreparationFailure|null;replayed?:boolean};
 export type PreparationOutcome="complete"|"partial"|"transient"|"identity_failed"|"credential_missing"|"budget_exhausted"|"schema"|"held";
@@ -42,7 +44,7 @@ export function parsePreparationState(v:unknown):PreparationState|null{
  if(!v.configured)return exact(v,["configured","canPrepare"])&&typeof v.canPrepare==="boolean"?v as PreparationState:null;
  if(!integer(v.revision,1,2147483647)||!["configured","stopped"].includes(String(v.status))||typeof v.fingerprint!=="string"||!(/^[0-9a-f]{64}$/).test(v.fingerprint)||
  !validPreparationConfig(v.config)||!integer(v.providerRequestsUsed,0,Number.MAX_SAFE_INTEGER)||!integer(v.providerCreditsReserved,0,Number.MAX_SAFE_INTEGER)||
- v.automaticRepliesEnabled!==false||v.salesEnabled!==false||v.historyCoverage!=="pending"||v.ownershipCoverage!=="pending"||
+ v.automaticRepliesEnabled!==false||v.salesEnabled!==false||!coverageStates.has(v.historyCoverage)||!coverageStates.has(v.ownershipCoverage)||
  ("connected" in v&&typeof v.connected!=="boolean"))return null;
  if(v.vault!==undefined&&v.vault!==null&&(!obj(v.vault)||typeof v.vault.jobId!=="string"||
  !["pending","running","complete","failed","superseded"].includes(String(v.vault.status))||

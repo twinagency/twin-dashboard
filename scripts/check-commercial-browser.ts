@@ -86,7 +86,7 @@ async function main(){
   assert.equal(selection.scope.version,3);
   assert.deepEqual(selection.selectedByKind,{photo:1,video:0});
   await page.locator(".of-sync-tools summary").click();
-  await page.locator("[data-of-vault-selection]").getByText("1 photos and 0 videos selected. Up to 1,000 photos and 1,000 videos.").waitFor({state:"visible"});
+  await page.locator("[data-of-vault-selection]").getByText("1 photo and 0 videos selected. Up to 1,000 photos and 1,000 videos.").waitFor({state:"visible"});
   const coverage=await ok(cfg+"/history-coverage");
   assert.equal(coverage.coverage.fans.complete,1);
   // Agency reviews the selected classification, description and manual category price.
@@ -139,6 +139,22 @@ async function main(){
   await page.waitForFunction(async path=>(await(await fetch(path)).json()).scope.status==="active",lifecycle);
   assert.equal((await request(lifecycle,{action:"activate",expectedRevision:before.scope.revision-1,commandKey:"f".repeat(64),reason:"stale refused"})).status,409);
   await page.screenshot({path:output+"-active.png",fullPage:true});
+  assert.equal((await fetch(backend+"/fixture/vault-refresh-data",{method:"POST"})).status,200);
+  await page.goto(base+"/onlyfans/content?account="+account);
+  await page.locator(".of-sync-tools summary").click();
+  const [syncResponse]=await Promise.all([
+   page.waitForResponse(response=>response.url().endsWith(vault+"/sync")&&response.request().method()==="POST"),
+   page.getByRole("button",{name:"Sync vault",exact:true}).click()
+  ]);
+  assert.equal(syncResponse.status(),200);
+  const refresh=(await syncResponse.json()).sync;
+  assert.equal(refresh.scope.version,3);
+  await page.waitForFunction(async ({path,jobId})=>{
+   const result=await (await fetch(path,{cache:"no-store"})).json();
+   return result.vault?.sync?.jobId===jobId&&result.vault.sync.status==="complete";
+  },{path:vault,jobId:refresh.jobId});
+  await page.getByRole("button",{name:"Refresh vault",exact:true}).click();
+  await page.locator("[data-of-vault-selection]").getByText("1 photo and 1 video selected. Up to 1,000 photos and 1,000 videos.").waitFor({state:"visible"});
   // Provider inbound stimuli; the actual autonomous worker creates all grants and cards.
   const say=async(text:string)=>await(await fetch(backend+"/fixture/fan-message",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({text})})).json() as Json;
   let result=await say("where are you from?");assert.equal(result.posts.at(-1).text,"I am from Brisbane.");

@@ -48,7 +48,10 @@ export function vaultSelectionLabel(progress: VaultSelectionProgress): string | 
   if (!scope) return null;
   if (scope.version === 2) return "Up to 1,000 photos and videos combined (version 2).";
   const limits = `Up to ${scope.photos.toLocaleString()} photos and ${scope.videos.toLocaleString()} videos.`;
-  if (selectedByKind) return `${selectedByKind.photo.toLocaleString()} photos and ${selectedByKind.video.toLocaleString()} videos selected. ${limits}`;
+  if (selectedByKind) {
+    const { photo, video } = selectedByKind;
+    return `${photo.toLocaleString()} ${photo === 1 ? "photo" : "photos"} and ${video.toLocaleString()} ${video === 1 ? "video" : "videos"} selected. ${limits}`;
+  }
   if (kindOffsets) return `${kindOffsets.photo.toLocaleString()} photo rows and ${kindOffsets.video.toLocaleString()} video rows checked. ${limits}`;
   return limits;
 }
