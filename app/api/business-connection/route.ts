@@ -74,7 +74,13 @@ async function read(req: NextRequest) {
       body: JSON.stringify({ business_connection_id: resolved.bcid }),
     });
     const j = await res.json();
-    if (!j.ok) throw new Error(j.description ?? `getBusinessConnection failed (${res.status})`);
+    if (!j.ok) {
+      const error = j.description ?? `getBusinessConnection failed (${res.status})`;
+      // Only a 400 is Telegram saying the connection is gone. A 5xx, 429 or
+      // auth failure is Telegram being unreachable, not her disconnecting.
+      if (res.status === 400) return NextResponse.json({ connected: false, error, clone: resolved.clone }, { status: 200 });
+      throw new Error(error);
+    }
     const conn = j.result;
     return NextResponse.json({
       connected: true,
@@ -91,7 +97,7 @@ async function read(req: NextRequest) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ connected: false, error: msg, clone: resolved.clone }, { status: 200 });
+    return NextResponse.json({ connected: false, unavailable: true, error: msg, clone: resolved.clone }, { status: 502 });
   }
 }
 

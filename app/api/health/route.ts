@@ -38,7 +38,7 @@ export async function GET() {
   if (error) {
     return NextResponse.json(
       { supabase: { ok: false, ms: supabaseMs }, clones: [] },
-      { status: 200 },
+      { status: 503 },
     );
   }
 
@@ -57,8 +57,9 @@ export async function GET() {
     }),
   );
 
+  // A status-code monitor must see a dead bot as unhealthy, not just the body.
   return NextResponse.json({
     supabase: { ok: true, ms: supabaseMs },
     clones: results,
-  });
+  }, { status: results.every((r) => r.telegram.ok) ? 200 : 503 });
 }

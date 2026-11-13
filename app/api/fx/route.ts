@@ -13,7 +13,9 @@ export async function GET() {
       const r = await fetch("https://open.er-api.com/v6/latest/USD");
       const j = await r.json();
       const rate = Number(j?.rates?.AUD);
-      cache = { at: Date.now(), rate: Number.isFinite(rate) && rate > 0 ? rate : AUD_PER_USD };
+      // Fall back uncached, so the first request after the API recovers gets the live rate.
+      if (!r.ok || !Number.isFinite(rate) || rate <= 0) return NextResponse.json({ usd_to_aud: AUD_PER_USD });
+      cache = { at: Date.now(), rate };
     }
     return NextResponse.json({ usd_to_aud: cache.rate });
   } catch {

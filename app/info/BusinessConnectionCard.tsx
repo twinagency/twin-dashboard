@@ -16,7 +16,7 @@ type Rights = Record<string, boolean>;
 type CloneInfo = { id: string; name: string; slug: string };
 type Status =
   | { loading: true }
-  | { loading: false; connected: false; error: string; clone: CloneInfo | null }
+  | { loading: false; connected: false; unavailable?: boolean; error: string; clone: CloneInfo | null }
   | {
       loading: false;
       connected: true;
@@ -120,7 +120,7 @@ export default function BusinessConnectionCard({ cloneId }: { cloneId: string })
           <Info text="Her connected Telegram Business account, if any. Shows here as soon as she connects this bot as her chatbot and it receives at least one message through it." />
         </div>
         {status.clone && <div className="creator-name mb-1 text-xs text-muted">{status.clone.name} / {status.clone.slug}</div>}
-        <div className="text-sm text-warn">Not connected. {status.error}</div>
+        <div className="text-sm text-warn">{status.unavailable ? "Telegram unreachable, connection unknown." : "Not connected."} {status.error}</div>
       </Card>
     );
   }
