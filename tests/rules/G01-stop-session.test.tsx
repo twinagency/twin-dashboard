@@ -54,3 +54,17 @@ test("a re-stop whose outcome is unconfirmed does not downgrade a recorded stop"
   assert.equal(posts(mock, /\/stop$/).length, 2, "fixture: the re-stop was attempted");
   assert.ok(q("[data-plan-c-stop-state='recorded']"), "the stop still reads as recorded");
 });
+
+test("a stop after a hand back sends the revision the hand back recorded, not the draft's older one", async () => {
+  const { mock } = await mountConsole({ drafts: [seedDraft()] });
+  await click(control("stop"));
+  await click(control("handback"));
+  await click(q("[data-plan-c-conversation-confirm='handback']"));
+  assert.equal(mock.state.commits.filter(c => c.action === "handback").length, 1, "fixture: the hand back was recorded");
+  const afterHandback = mock.state.conversations[CONVERSATION].revision;
+  await click(control("stop"));
+  const stops = posts(mock, /\/stop$/);
+  assert.equal(stops.length, 2);
+  assert.equal(stops[1].body?.expectedRevision, afterHandback, "the next stop carries the hand back's revision");
+  assert.equal(mock.state.commits.filter(c => c.action === "stop").length, 2, "the second stop is recorded, not a 409");
+});

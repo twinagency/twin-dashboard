@@ -22,7 +22,8 @@ const STOP_STATE: Record<StopState, string> = {
   recorded: "Stop recorded. Approve and edit are off for this fan in this view." };
 const STOP_HINT = "Kept in this page only. Reloading the page clears it.";
 /** This page's record of a conversation: the newest revision a command recorded, and any stop. Cleared once, by a hand back. */
-type SessionRecord = { revision: number | null; stop?: StopState };
+/** `floor` (after a hand back): only a revision floor for a conversation still listed elsewhere; it does not keep the conversation listed. */
+type SessionRecord = { revision: number | null; stop?: StopState; floor?: true };
 
 /**
  * Stop is one click with no revision gate in the UI. Take over and hand back need the button, then an explicit confirmation.
@@ -208,7 +209,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
       else if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; };
     if (drafts.kind === "ready") for (const draft of drafts.value) add(draft.conversationId, draft.conversationRevision);
     if (unresolved.kind === "ready") for (const item of unresolved.value) if (item.conversationId) add(item.conversationId, item.conversationRevision);
-    for (const [conversationId, record] of Object.entries(session)) add(conversationId, record.revision);
+    for (const [conversationId, record] of Object.entries(session)) if (!record.floor || byId.has(conversationId)) add(conversationId, record.revision);
     return [...byId.values()];
   }, [drafts, unresolved, session, accountId]);
 
@@ -236,10 +237,11 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
       return { ok: false, outcome: "refused", reload: false, error: "Stop not sent: the backend did not report this conversation's revision. Reload, then stop again." } as PlanCCommandResult;
     }
     const result = await settle(await client.conversationCommand(conversation.conversationId, action, conversation.revision), `${CONVERSATION_COPY[action].label} recorded for ${conversation.conversationId}`);
-    // A stop or takeover may leave no draft carrying the new revision, so this page keeps the one the backend recorded. A hand back clears it.
+    // A command may leave no draft carrying the new revision, so this page keeps the one the backend recorded. A hand back releases the stop only.
     if (action === "stop") record(conversation.conversationId, result.ok ? "recorded" : result.outcome === "unconfirmed" ? "unconfirmed" : "refused", result.ok ? result.recordedRevision : null);
     if (result.ok && action === "takeover") record(conversation.conversationId, undefined, result.recordedRevision);
-    if (result.ok && action === "handback") setSession(current => { const next = { ...current }; delete next[conversation.conversationId]; return next; });
+    if (result.ok && action === "handback") setSession(current => { const was = current[conversation.conversationId]?.revision ?? null, now = result.recordedRevision;
+      return { ...current, [conversation.conversationId]: { revision: now !== null && (was ?? -1) < now ? now : was, floor: true } }; });
     return result;
   };
 
