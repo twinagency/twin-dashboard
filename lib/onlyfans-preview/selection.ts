@@ -108,6 +108,15 @@ function entryOf(state: PreviewSelectionState, accountId: string): AccountSelect
   return state.byAccount[accountId] ?? emptyAccountSelection();
 }
 
+/**
+ * Every read creates its account's entry when it is issued, and only a scope change (applyAccounts dropping the account,
+ * or beginScope) removes it. A response for an account with no entry therefore belongs to an account that left scope:
+ * it is refused, so it can never recreate that account's cache.
+ */
+function leftScope(state: PreviewSelectionState, accountId: string): boolean {
+  return !Object.hasOwn(state.byAccount, accountId);
+}
+
 export function applyAccounts(
   state: PreviewSelectionState,
   generation: number,
@@ -239,7 +248,7 @@ export function applyConversations(
   seq: number,
   result: RequestState<CursorPage<ConversationSummary>>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId)) return { state, applied: false };
   const entry = entryOf(state, accountId);
   if (seq < entry.listSeq) {
     // A newer list read is outstanding for this account. Dropping this keeps a
@@ -290,7 +299,7 @@ export function appendConversations(
   seq: number,
   result: RequestState<CursorPage<ConversationSummary>>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId)) return { state, applied: false };
   const entry = entryOf(state, accountId);
   const current = entry.conversations;
   const hadRows = current.status === "ready" || current.status === "stale";
@@ -382,7 +391,7 @@ export function applyConversation(
   seq: number,
   result: RequestState<ConversationDetail>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId)) return { state, applied: false };
   // A payload naming another account or thread is never cached under this one; the thread shows an error instead of loading forever.
   if ((result.status === "ready" || result.status === "stale") && (result.data.accountId !== accountId || result.data.conversationId !== conversationId))
     result = { status: "error", message: "This conversation could not be loaded. Reopen it to retry." };
@@ -466,7 +475,7 @@ function mergeHistory(older: ConversationDetail["messages"], newer: Conversation
 
 export function appendOlderConversation(state: PreviewSelectionState, accountId: string, conversationId: string,
   generation: number, seq: number, result: RequestState<ConversationDetail>): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId)) return { state, applied: false };
   const entry = entryOf(state, accountId);
   if (seq < (entry.detailSeq[conversationId] ?? 0)) return { state, applied: false };
   const cached = entry.detail[conversationId];

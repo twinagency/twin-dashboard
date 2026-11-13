@@ -76,7 +76,9 @@ test("launch B: conversation command acknowledgement matches scope, revision and
   stub((url, init) => { seen = { url, body: JSON.parse(String(init?.body)) }; return json(ack()); });
   assert.deepEqual(await sendControl("acc-a", "acc-a:7", "pause_automation", 3), { kind: "ok", data: { recordedRevision: 4 } });
   assert.equal(seen!.url, "/api/onlyfans-controls/accounts/acc-a/conversations/acc-a%3A7"); assert.deepEqual(seen!.body, { action: "pause_automation", expectedRevision: 3 });
-  for (const bad of [{ recordedRevision: 9 }, { accountId: "acc-b" }, { action: "resume_automation" }, { applied: false }]) {
+  // A stop applied at a later revision (the fan wrote in between) is still recorded; at or below the expected one is not.
+  stub(() => json(ack({ recordedRevision: 9 }))); assert.deepEqual(await sendControl("acc-a", "acc-a:7", "pause_automation", 3), { kind: "ok", data: { recordedRevision: 9 } });
+  for (const bad of [{ recordedRevision: 3 }, { accountId: "acc-b" }, { action: "resume_automation" }, { applied: false }]) {
     stub(() => json(ack(bad))); assert.equal((await sendControl("acc-a", "acc-a:7", "pause_automation", 3)).kind, "unconfirmed");
   }
 });

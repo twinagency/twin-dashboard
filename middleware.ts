@@ -243,7 +243,9 @@ async function routeMiddleware(req: NextRequest) {
     return response;
   }
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
-  const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE)) || viewAs?.targetType === "creator";
+  // The Referer is client-sent: it may pick the creator branch only for a request that carries a creator credential, never
+  // stand in for one (a cookieless or admin-session request takes the branch it would take without the header).
+  const useCreator = (creatorReferrer(req) && !!creatorToken) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE)) || viewAs?.targetType === "creator";
   if (useCreator) {
     const creator = (await creatorDashboardIdentity(creatorToken)) ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     if (!creator || !creator.onboarded) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));

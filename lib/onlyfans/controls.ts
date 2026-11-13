@@ -36,6 +36,13 @@ export type RecordedControlResult = {
 export type ControlReply = { ok: true; ack: ControlAck } | {
   ok: false; status: number; outcome: "refused" | "unconfirmed"; error: string; code?: string;
 };
+/** Actions that halt the bot on a conversation. A STOP is never harder to confirm than a go (REVIEW inv 7). */
+const STOP_ACTIONS: readonly string[] = ["pause_automation", "request_takeover", "mark_no_contact"];
+/** The revision an ack may record: exact for a go or a payload command; any later one for a stop (the fan may write in between). */
+function ackRevisionMatches(action: string, recorded: unknown, expected: number): boolean {
+  if (STOP_ACTIONS.includes(action)) return Number.isSafeInteger(recorded) && (recorded as number) > expected;
+  return recorded === expected + (["manual_message", "resolve_delivery_evidence"].includes(action) ? 0 : 1);
+}
 export function parseControlAck(value: unknown, expected: {
   accountId: string; conversationId: string; action: string; expectedRevision: number; commandKey?: string;
 }): ControlAck | null {
@@ -47,7 +54,7 @@ export function parseControlAck(value: unknown, expected: {
   if (body.schemaVersion !== CONTROL_SCHEMA || body.ok !== true || body.applied !== true ||
       body.accountId !== expected.accountId || body.conversationId !== expected.conversationId ||
       body.action !== expected.action || !isControlAction(body.action) ||
-      body.recordedRevision !== expected.expectedRevision + (["manual_message", "resolve_delivery_evidence"].includes(body.action) ? 0 : 1) ||
+      !ackRevisionMatches(body.action, body.recordedRevision, expected.expectedRevision) ||
       typeof body.commandKey !== "string" || !/^[a-f0-9]{64}$/.test(body.commandKey) ||
       (expected.commandKey !== undefined && body.commandKey !== expected.commandKey)) return null;
   if (body.action === "manual_message" && (body.outcome !== "queued" || typeof body.intentId !== "string" ||

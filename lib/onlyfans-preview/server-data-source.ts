@@ -219,7 +219,9 @@ export function createFetchOnlyFansTransport(
   };
 }
 
-function oldestStale(values: Freshness[]): Freshness | null {
+/** The oldest stale reading, or undefined when a row carries no freshness at all (a contract the page cannot vouch for). */
+function oldestStale(values: Freshness[]): Freshness | null | undefined {
+  if (values.some((value) => typeof value !== "object" || value === null)) return undefined;
   return values.filter((value) => value.stale).reduce<Freshness | null>((oldest, value) => {
     const age = (item: Freshness) => item.asOf ? Date.parse(item.asOf) : -Infinity;
     return !oldest || age(value) < age(oldest) ? value : oldest;
@@ -229,12 +231,13 @@ function oldestStale(values: Freshness[]): Freshness | null {
 function toState<T>(
   reply: TransportReply<T>,
   isEmpty: (data: T) => boolean,
-  freshnessOf: (data: T) => Freshness | null,
+  freshnessOf: (data: T) => Freshness | null | undefined,
 ): RequestState<T> {
   switch (reply.outcome) {
     case "ok": {
       if (isEmpty(reply.data)) return { status: "empty" };
       const freshness = freshnessOf(reply.data);
+      if (freshness === undefined) return { status: "error", message: "The OnlyFans read returned rows without freshness, so none of it is shown." };
       return freshness?.stale
         ? { status: "stale", data: reply.data, freshness }
         : { status: "ready", data: reply.data };
@@ -276,7 +279,7 @@ export function createServerOnlyFansDataSource(options: {
       }
       const found = state.data.find((account) => account.accountId === accountId);
       if (!found) return { status: "error", message: "This account is not available in the current view." };
-      return toState({ outcome: "ok", data: found }, () => false, (account) => account.syncFreshness);
+      return toState({ outcome: "ok", data: found }, () => false, (account) => account.syncFreshness ?? null);
     },
 
     async listConversations(accountId, cursor, aiOnly, search) {
@@ -291,7 +294,7 @@ export function createServerOnlyFansDataSource(options: {
       return toState(
         await transport.readConversation(accountId, conversationId, cursor),
         () => false,
-        (conversation) => conversation.freshness,
+        (conversation) => conversation.freshness ?? null,
       );
     },
 
