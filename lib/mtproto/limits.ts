@@ -11,13 +11,13 @@
 // which layer supplied it (twin-userbot/src/contract.ts resolveMtprotoLimits).
 // This module clamps on the way IN too (setMtprotoLimits), so a bad write
 // from this dashboard can never reach the DB in the first place, and clamps
-// on the way OUT (getMtprotoLimits), so a row written by hand or by an older
+// on the way OUT (readMtprotoLimits), so a row written by hand or by an older
 // version of this code can never be shown or handed to the worker unclamped.
 //
-// An unreadable row (network error, missing row, bad JSON) falls back to the
-// SAFE side, the built-in defaults, never to "no limit" or a thrown error
-// that would make the settings page unusable while the migration is not yet
-// applied.
+// Only an absent row reads as the built-in defaults. A failed read or a
+// malformed row throws: the settings page shows an alert instead of the form
+// and setMtprotoLimits refuses, because the defaults turn warm-up, min gap and
+// the day-one cap OFF and a save would write them over the real values.
 
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
@@ -73,25 +73,26 @@ export function clampMtprotoLimits(raw: unknown): MtprotoLimits {
   return { hourlyCap, defaultDailyCap, jitterMinMs, jitterMaxMs, minSilenceHours, floodWaitMultiplier, warmupHours, minSendGapMinutes, firstDayMaxSends };
 }
 
-/** Reads the current limits, clamped. Never throws: an unreadable row (missing
- *  table/column, network error, bad JSON) reads as the built-in defaults, the
- *  same safe fallback the worker itself applies, so the Settings page is
- *  usable before migration 169/171 lands. */
-export async function getMtprotoLimits(): Promise<MtprotoLimits> {
+/** Reads the current limits, clamped. Only an ABSENT row reads as the
+ *  built-in defaults. A failed read, bad JSON, a non-object or a field that is
+ *  not a number THROWS: never "defaults" for a row that may hold real caps.
+ *  A field the row lacks (an older row) takes its default. */
+export async function readMtprotoLimits(): Promise<MtprotoLimits> {
+  const { data, error } = await mtDb().from("app_settings").select("value").eq("key", MTPROTO_LIMITS_KEY).maybeSingle();
+  if (error) throw new Error(`could not read the current limits: ${error.message}`);
+  if (data?.value == null) return { ...MTPROTO_LIMITS_DEFAULTS };
+  let raw: unknown;
   try {
-    const { data, error } = await mtDb().from("app_settings").select("value").eq("key", MTPROTO_LIMITS_KEY).maybeSingle();
-    if (error) throw error;
-    if (!data?.value) return { ...MTPROTO_LIMITS_DEFAULTS };
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(data.value as string);
-    } catch {
-      return { ...MTPROTO_LIMITS_DEFAULTS };
-    }
-    return clampMtprotoLimits(parsed);
+    raw = JSON.parse(data.value as string);
   } catch {
-    return { ...MTPROTO_LIMITS_DEFAULTS };
+    throw new Error("the stored limits are not valid JSON");
   }
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("the stored limits are not an object");
+  for (const k of Object.keys(MTPROTO_LIMITS_DEFAULTS)) {
+    const v = (raw as Record<string, unknown>)[k];
+    if (v !== undefined && finite(v) === undefined) throw new Error(`the stored limit ${k} is not a number`);
+  }
+  return clampMtprotoLimits(raw);
 }
 
 /** Validates each field is a finite number, clamps into range (never silently
@@ -100,7 +101,12 @@ export async function getMtprotoLimits(): Promise<MtprotoLimits> {
  *  stop/arm this needs no typed confirmation: every field is already bounded
  *  by a hard safety rail the worker enforces regardless of this write. */
 export async function setMtprotoLimits(input: Partial<MtprotoLimits>, actor: string): Promise<MtprotoLimits> {
-  const before = await getMtprotoLimits();
+  let before: MtprotoLimits;
+  try {
+    before = await readMtprotoLimits();
+  } catch (e) {
+    throw new Error(`${e instanceof Error ? e.message : e}. Nothing was saved, so the stored limits are unchanged; reload and try again`);
+  }
   const merged: Record<string, unknown> = { ...before, ...input };
   for (const [key, min, max] of [
     ["hourlyCap", HARD_MIN_HOURLY_CAP, HARD_MAX_HOURLY_CAP],

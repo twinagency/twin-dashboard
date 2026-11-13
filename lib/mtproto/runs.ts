@@ -13,8 +13,9 @@ import { parseMediaBundleCampaign, mediaCampaignReviewKey, type MediaBundleCampa
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getGlobalStop } from "./global-stop";
+import { getGlobalLiveArm } from "./global-live-arm";
 import { getFlow } from "./flows";
-import { REVIEW_KIND, checkReviewGate, computeDryRunSummary, currentAudienceSize, type DryRunSummary } from "./review";
+import { REVIEW_KIND, checkReviewGate, currentAudience, readDryRun, type DryRunSummary } from "./review";
 import { RunValidationError, isMissingTable, isUuid, requireUuid, sanitizeFilters, sanitizeMessageVariants, validateCaps } from "./validate";
 import {
   DEFAULT_DAILY_CAP,
@@ -227,6 +228,8 @@ export async function queueRun(id: string, actor: string): Promise<ReengageRun> 
   const run = await getRun(id);
   if (!run) throw new RunValidationError("run not found");
   if (run.status !== "draft") throw new RunValidationError(`cannot queue a run in status "${run.status}"`);
+  await assertUsableCreators(run.cloneIds); // a creator paused since the draft was made
+  await assertConnections(run.cloneIds, false);
   const { data, error } = await mtDb()
     .from("reengage_runs")
     .update({ status: "queued" })
@@ -258,10 +261,13 @@ export async function recordDryRunReview(id: string, actor: string): Promise<Dry
   if (!run.dryRun || run.confirmLiveAt) throw new RunValidationError("this run is already live; there is no dry run to review");
   if (run.status !== "done") throw new RunValidationError(`the dry run is not finished (status "${run.status}", need "done")`);
   if (run.stopRequested) throw new RunValidationError("this run was stopped; create a new run instead");
-  const summary = await computeDryRunSummary(id);
+  await assertConnections(run.cloneIds, false); // a paused connection's fans drop out of the audience
+  const { summary, members } = await readDryRun(id);
   if (summary.truncated) throw new RunValidationError("the dry run is too large to review completely; narrow the audience");
   if (summary.wouldSendCount === 0) throw new RunValidationError("the dry run would send nothing; there is nothing to review or take live");
-  const audienceSize = await currentAudienceSize(run);
+  const audience = await currentAudience(run);
+  const unseen = audience.members.filter((m) => !members.has(m)).length;
+  if (unseen) throw new RunValidationError(`${unseen} fan(s) entered the audience after the dry run and were never dry-run; run a new dry run`);
   await insertEvent({
     runId: id,
     cloneId: null,
@@ -276,11 +282,40 @@ export async function recordDryRunReview(id: string, actor: string): Promise<Dry
       holdout_count: summary.holdoutCount,
       episode_count: summary.episodeCount,
       excluded_total: summary.excludedTotal,
-      audience_size: audienceSize,
+      audience_size: audience.size,
+      audience_digest: audience.digest,
       ...(mediaCampaignReviewKey(run) ? { media_campaign_key: mediaCampaignReviewKey(run) } : {}),
     },
   });
   return summary;
+}
+
+/** Every run creator's Telegram connection must be unpaused (a paused one
+ *  sends nothing and its fans drop out of the audience) and, with `live`, its
+ *  LIVE switch on. Read fresh; unreadable refuses. */
+async function assertConnections(cloneIds: string[], live: boolean): Promise<void> {
+  const { data, error } = await mtDb().from("userbot_connections").select("clone_id,live_enabled,paused").in("clone_id", cloneIds);
+  if (error) throw new RunValidationError(`cannot verify creator connections (${error.message})`);
+  const rows = (data ?? []) as { clone_id: string; live_enabled?: boolean | null; paused?: boolean | null }[];
+  const paused = rows.filter((r) => r.paused === true).map((r) => r.clone_id);
+  if (paused.length) throw new RunValidationError(`creator ${paused.join(", ")} has its Telegram connection paused; resume it first`);
+  if (!live) return;
+  const on = new Set(rows.filter((r) => r.live_enabled === true).map((r) => r.clone_id));
+  const dry = cloneIds.filter((id) => !on.has(id));
+  if (dry.length) throw new RunValidationError(`creator ${dry.join(", ")} is not LIVE; switch it to LIVE before confirming a live run`);
+}
+
+/** The live gates the worker also needs, read fresh at confirm: the fleet
+ *  live arm, and every run creator's connection unpaused and LIVE. */
+async function assertLiveGatesOpen(cloneIds: string[]): Promise<void> {
+  let armed: boolean;
+  try {
+    armed = await getGlobalLiveArm();
+  } catch (e) {
+    throw new RunValidationError(`cannot confirm live: global live arm unreadable (${e instanceof Error ? e.message : e})`);
+  }
+  if (!armed) throw new RunValidationError("the fleet live arm is off; arm live sending before confirming a live run");
+  await assertConnections(cloneIds, true);
 }
 
 /** The second, clearly-marked explicit action (prompt step 5). Only allowed
@@ -314,9 +349,11 @@ export async function confirmLive(id: string, actor: string, typed: string | nul
     throw new RunValidationError(`cannot confirm live: global stop state unreadable (${e instanceof Error ? e.message : e})`);
   }
   if (globallyStopped) throw new RunValidationError("GLOBAL STOP is active; lift it before confirming a live run");
+  await assertUsableCreators(run.cloneIds); // paused since the dry run: refuse
+  await assertLiveGatesOpen(run.cloneIds);
 
   // REVIEW GATE: a recorded human review, dry-run counts unchanged since, and
-  // an audience no larger than what was reviewed. Checked immediately before
+  // the same audience (by digest) that was reviewed. Checked immediately before
   // the conditional update below, which itself only matches a still-'done',
   // still-dry, not-stopped run, so two concurrent confirms cannot both win.
   const gate = await checkReviewGate(run);

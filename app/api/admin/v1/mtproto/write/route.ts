@@ -1,7 +1,7 @@
 import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, validateCreateRunInput, RunValidationError, type CreateRunInput } from "@/lib/mtproto/runs";
 import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
-import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
+import { setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
 import { setMtprotoLimits } from "@/lib/mtproto/limits";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type MtprotoLimits, type RunFilters } from "@/lib/mtproto/types";
@@ -105,9 +105,9 @@ export const POST = withAdmin(async (req) => {
       case "global_stop":
       case "global_resume": {
         const stopped = action === "global_stop";
-        await setGlobalStop(stopped, ACTOR, typeof body.reason === "string" ? body.reason : undefined, typeof body.confirmText === "string" ? body.confirmText : null);
+        const after = await setGlobalStop(stopped, ACTOR, typeof body.reason === "string" ? body.reason : undefined, typeof body.confirmText === "string" ? body.confirmText : null);
         logAdminWrite(`mtproto:${action}`, null, {});
-        return ok({ action, stopped: await getGlobalStop() });
+        return ok({ action, stopped: after }); // the verified read-back; a second read could 500 a landed STOP
       }
 
       // The fleet-wide LIVE ARM (migration 165). global_arm_live needs

@@ -23,7 +23,7 @@ import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "..
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "../global-live-arm";
-import { clampMtprotoLimits, getMtprotoLimits, setMtprotoLimits } from "../limits";
+import { clampMtprotoLimits, readMtprotoLimits, setMtprotoLimits } from "../limits";
 import { connectionFor, listConnections, setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "../connections";
 import { armLivePhraseOk, autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
 import { autoHaltsFor } from "../halt-server";
@@ -490,7 +490,14 @@ async function finishedDryRun(db: FakeDb): Promise<string> {
     { id: "e4", run_id: run.id, clone_id: CLONE_A, user_id: uid(4), telegram_id: 1004, episode_start_inbound_at: start, state: "holdout", dry_run: true, tg_message_id: null, sent_at: null, prepared_text: null, acked_text: null, skip_reason: null, error_code: null, created_at: T(2) },
   ]);
   await insertEvent({ runId: run.id, cloneId: CLONE_A, userId: uid(9), episodeId: null, eventType: "scan_excluded", actor: "system", detail: { reason: "blocked" } });
+  openLiveGates(db);
   return run.id;
+}
+// G50a F2: confirmLive needs the fleet arm AND the creator's live_enabled. Open both so these checks test what they name.
+const ARM_ON = { key: "mtproto_global_live_arm", value: "true" };
+function openLiveGates(db: FakeDb): void {
+  db.rows("app_settings").push(ARM_ON);
+  db.rows("userbot_connections").push({ clone_id: CLONE_A, status: "active", paused: false, paused_reason: null, daily_cap: 30, live_enabled: true, tg_user_id: null, dc_id: null, last_seen_at: null, session_ref: null, created_at: T(5), updated_at: T(5) });
 }
 
 acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no global stop; then sets confirm_live_at once", async () => {
@@ -511,12 +518,12 @@ acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no 
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /stopped/);
   setStatus("done", { stop_requested: false });
 
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }, ARM_ON]);
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /GLOBAL STOP/);
   db.fail("app_settings", "select", { message: "boom" });
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /unreadable/);
   db.fail("app_settings", "select", null);
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }, ARM_ON]);
   eq(db.rows("reengage_runs")[0].dry_run, true, "every refusal left the run dry");
 
   await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /nobody has reviewed/);
@@ -679,13 +686,14 @@ check("H6f clampMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends de
   eq(nonzero.firstDayMaxSends, 10, "nonzero firstDayMaxSends round-trips");
 });
 
-acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as defaults (never throws), writes validate, clamp and log config_change", async () => {
+acheck("H6e readMtprotoLimits/setMtprotoLimits: a missing row reads as defaults, an unreadable one THROWS (G50a), writes validate, clamp and log config_change", async () => {
   const db = freshDb();
   // No row at all yet (migration 169/171 not applied, or a fresh project):
   // reads as the built-in defaults, same safe fallback the worker itself uses.
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no row -> defaults");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no row -> defaults");
   db.fail("app_settings", "select", { message: "boom" });
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "an unreadable row never throws: reads as defaults, the safe side");
+  // G50a F5: defaults turn warm-up, min gap and the day-one cap OFF, so they are not "the safe side" of a failed read.
+  await rejects(readMtprotoLimits(), /could not read the current limits/);
   db.fail("app_settings", "select", null);
 
   // A write validates each provided field is a finite number in range BEFORE
@@ -693,13 +701,13 @@ acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as d
   await rejects(setMtprotoLimits({ hourlyCap: 9999 }, "operator"), /hourlyCap must be between/);
   await rejects(setMtprotoLimits({ hourlyCap: NaN }, "operator"), /hourlyCap must be a number/);
   await rejects(setMtprotoLimits({ jitterMinMs: 30_000, jitterMaxMs: 5_000 }, "operator"), /jitterMaxMs must not be smaller than jitterMinMs/);
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "every rejected write left the stored value untouched");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "every rejected write left the stored value untouched");
 
   const after = await setMtprotoLimits({ hourlyCap: 40, minSilenceHours: 12 }, "operator");
   eq(after.hourlyCap, 40, "hourlyCap updated");
   eq(after.minSilenceHours, 12, "minSilenceHours updated");
   eq(after.defaultDailyCap, MTPROTO_LIMITS_DEFAULTS.defaultDailyCap, "an untouched field keeps its prior (default) value");
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(after), "read-back matches the write");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(after), "read-back matches the write");
 
   const ev = eventsOf(db, "config_change").find((e) => e.detail.action === "set_mtproto_limits");
   assert(ev, "set_mtproto_limits event written");
@@ -716,7 +724,7 @@ acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as d
 
 acheck("H6g setMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends write, validate and default to off (0)", async () => {
   freshDb();
-  const fresh = await getMtprotoLimits();
+  const fresh = await readMtprotoLimits();
   eq(fresh.warmupHours, 0, "a fresh/unreadable row reads warmupHours as off");
   eq(fresh.minSendGapMinutes, 0, "a fresh/unreadable row reads minSendGapMinutes as off");
   eq(fresh.firstDayMaxSends, 0, "a fresh/unreadable row reads firstDayMaxSends as off");
@@ -735,7 +743,7 @@ acheck("H6g setMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends wri
   eq(disabledAgain.warmupHours, 0, "warmupHours can be written back to 0 (off)");
   eq(disabledAgain.minSendGapMinutes, 0, "minSendGapMinutes can be written back to 0 (off)");
   eq(disabledAgain.firstDayMaxSends, 0, "firstDayMaxSends can be written back to 0 (off)");
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(disabledAgain), "read-back matches the 0/off write");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(disabledAgain), "read-back matches the 0/off write");
 });
 
 acheck("H7 connection pause/cap write before/after events and reject bad input", async () => {
@@ -1167,7 +1175,7 @@ acheck("K3 review gate: REFUSED with the wrong phrase even when reviewed and eve
   eq(db.rows("reengage_runs")[0].dry_run, true, "still dry after wrong phrases");
 });
 
-acheck("K4 review gate: the live audience may be identical or smaller than reviewed, NEVER larger", async () => {
+acheck("K4 review gate: the live audience must be the reviewed one; larger, smaller or swapped re-requires review", async () => {
   const db = freshDb();
   const id = await finishedDryRun(db);
   await recordDryRunReview(id, "operator");
@@ -1175,17 +1183,21 @@ acheck("K4 review gate: the live audience may be identical or smaller than revie
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /audience grew/);
   eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
   db.tables["users"] = db.rows("users").filter((u) => u.id !== uid(50) && u.id !== uid(2)); // and one fan left
+  // G50a F3: the gate compares WHO, not just how many, so a smaller audience is a different one too (stricter).
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /audience changed/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry after a fan left");
+  await recordDryRunReview(id, "operator");
   const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
-  eq(live.dryRun, false, "smaller audience is allowed");
+  eq(live.dryRun, false, "re-reviewed smaller audience is allowed");
 });
 
 acheck("K5 review gate: allowed ONLY when review + unchanged counts + phrase + no global stop + not stopped + audience not larger all hold", async () => {
   const db = freshDb();
   const id = await finishedDryRun(db);
   await recordDryRunReview(id, "operator");
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }, ARM_ON]);
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /GLOBAL STOP/);
-  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }, ARM_ON]);
   Object.assign(db.rows("reengage_runs")[0], { stop_requested: true });
   await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /stopped/);
   Object.assign(db.rows("reengage_runs")[0], { stop_requested: false });

@@ -101,7 +101,7 @@ export default function RunControls({ run, reviewed = false, plan = null }: { ru
             {plan ? `: up to ${plan.firstDayTotal} today, up to ${plan.runTotal} over the whole run (min of run cap, daily cap, per-creator cap)` : ""}. Type {CONFIRM_LIVE_PHRASE}.
           </div>
           <div className="mt-1 text-[11px] leading-snug text-muted">
-            The worker on the laptop additionally needs REENGAGE_ALLOW_LIVE=true, otherwise it stays a dry run even after this.
+            Needs the fleet live arm and each creator's LIVE switch on, both in Settings. Otherwise this is refused.
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <input

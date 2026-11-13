@@ -243,12 +243,21 @@ export async function computeAudiencePreview(
   filters: RunFilters,
   opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string; allowRecontact?: boolean },
 ): Promise<AudiencePreview> {
+  return (await computeAudience(filters, opts)).preview;
+}
+
+/** The preview plus WHO is in the audience (eligible + hold-out + over cap),
+ *  as `clone_id:user_id` keys. Server-only: the review gate digests these. */
+export async function computeAudience(
+  filters: RunFilters,
+  opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string; allowRecontact?: boolean },
+): Promise<{ preview: AudiencePreview; members: string[] }> {
   const cloneIds = uuidList(filters.cloneIds ?? filters.creatorIds ?? [], "cloneIds", 100);
   validateCaps({ dailyCap: opts.dailyCap, runCap: opts.runCap, holdoutPct: opts.holdoutPct });
   filters = sanitizeFilters(filters, cloneIds);
   const excluded: ExclusionCounts = Object.fromEntries(PREVIEW_EXCLUSION_REASONS.map((r) => [r, 0])) as ExclusionCounts;
   if (cloneIds.length === 0) {
-    return { candidatePool: 0, pausedCreators: [], pausedNotSent: 0, eligible: 0, holdout: 0, excluded, excludedTotal: 0, sample: [], truncated: false };
+    return { preview: { candidatePool: 0, pausedCreators: [], pausedNotSent: 0, eligible: 0, holdout: 0, excluded, excludedTotal: 0, sample: [], truncated: false }, members: [] };
   }
 
   const cols =
@@ -327,6 +336,7 @@ export async function computeAudiencePreview(
   let holdoutCount = 0;
 
   const pausedCounts = new Map<string, number>();
+  const members: string[] = [];
   let poolRows = 0;
   for (const row of rows) {
     if (pausedConn.has(row.clone_id)) {
@@ -339,6 +349,7 @@ export async function computeAudiencePreview(
       excluded[verdict] += 1;
       continue;
     }
+    members.push(`${row.clone_id}:${row.id}`);
     if (isHoldout(seed, row.clone_id, row.id, opts.holdoutPct)) {
       holdoutCount += 1;
       excluded.holdout += 1;
@@ -381,6 +392,6 @@ export async function computeAudiencePreview(
     notSent: pausedCounts.get(c.cloneId) ?? 0,
   }));
   const pausedNotSent = pausedCreators.reduce((a, p) => a + p.notSent, 0);
-  return { candidatePool: poolRows, pausedCreators, pausedNotSent, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated };
+  return { preview: { candidatePool: poolRows, pausedCreators, pausedNotSent, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated }, members };
 }
 

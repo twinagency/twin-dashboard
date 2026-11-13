@@ -14,6 +14,9 @@ export default function GlobalStopControl({ stopped }: { stopped: boolean | null
   const [confirmingResume, setConfirmingResume] = useState(false);
   const [typed, setTyped] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // A failed STOP or lift may still have landed: the state is unknown until an
+  // action is verified, and unknown keeps the STOP button up (unknown holds win).
+  const [unknown, setUnknown] = useState(false);
   const router = useRouter();
 
   const stop = () => {
@@ -24,8 +27,10 @@ export default function GlobalStopControl({ stopped }: { stopped: boolean | null
     startTransition(async () => {
       try {
         const result = await globalStopAction(fd);
+        setUnknown(!result.ok);
         if (!result.ok) setError(`GLOBAL STOP FAILED: ${result.error}`);
       } catch (e) {
+        setUnknown(true);
         setError(`GLOBAL STOP FAILED: ${e instanceof Error ? e.message : "unknown error"}`);
       }
       router.refresh();
@@ -41,16 +46,17 @@ export default function GlobalStopControl({ stopped }: { stopped: boolean | null
     startTransition(async () => {
       try {
         const result = await globalStopAction(fd);
-        if (!result.ok) {
-          setError(result.error);
-          return;
+        setUnknown(!result.ok);
+        if (!result.ok) setError(result.error);
+        else {
+          setConfirmingResume(false);
+          setTyped("");
         }
-        setConfirmingResume(false);
-        setTyped("");
-        router.refresh();
       } catch (e) {
+        setUnknown(true);
         setError(e instanceof Error ? e.message : "resume failed");
       }
+      router.refresh(); // a failed lift may have landed: re-read the flag either way
     });
   };
 
@@ -61,7 +67,7 @@ export default function GlobalStopControl({ stopped }: { stopped: boolean | null
   ) : null;
 
   // stopped === null means the flag could not be read: offer the SAFE action.
-  if (!stopped) {
+  if (!stopped || unknown) {
     return (
       <div className="flex w-full flex-col items-stretch md:w-auto">
         <button
@@ -76,6 +82,9 @@ export default function GlobalStopControl({ stopped }: { stopped: boolean | null
             <span className="block text-[11px] font-medium text-white/85">Halts all sending, right now</span>
           </span>
         </button>
+        {stopped === null || unknown ? (
+          <div role="status" className="mt-2 text-xs font-semibold text-crit">State unknown. Treat sending as possibly active.</div>
+        ) : null}
         {errorBox}
       </div>
     );
