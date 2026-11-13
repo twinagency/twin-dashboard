@@ -24,7 +24,7 @@
 //       and fileId are not asserted).
 //       Declared limit: the new revision (4) is offered ONLY by the mocked configuredVaultBackend().get; the 409 body, the read backend's
 //       account list and the uploads read carry none. A fix that learns the revision anywhere else stays red here and needs a TEST-CHANGE.
-// Green since G05 (the B-C3 tests; B-C2 stays in tests/known-red). Runs in npm run test:rules.
+// Green since G05 (the B-C3 tests; B-C2 is not covered here). Runs in npm run test:rules.
 // Synthetic values only.
 import assert from "node:assert/strict";
 import test, { beforeEach, mock } from "node:test";
