@@ -1,7 +1,7 @@
 /**
  * Rule (F0, D9): scripts/check-plan.ts decides per mode what scripts/check.sh runs: premerge first, then promoted, NEEDS (full only,
  * its env) and OWNER (never, listed) leaves, a leaf being a same-tag run of one && chain; it refuses what it cannot parse and dead entries.
- * Control: the real package.json plans, and every script file a test:* script names is premerge's or in a row.
+ * Control: the real package.json plans, and every script file a test:* script names is premerge's or in a row. The real NEEDS/OWNER files keep their actions (listed in the test).
  * Run: nice -n 10 node --import tsx --test tests/rules/F0-check-plan.test.ts
  */
 import assert from "node:assert/strict";
@@ -39,6 +39,27 @@ test("control: the real package.json plans, and every script file named by a tes
   assert.deepEqual(named.filter((f) => !have.has(f)), []);
 });
 
+// Listed here, not read from NEEDS/OWNER: dropping an entry there must turn this red, not quietly promote the file to `run`.
+const REAL_NEEDS = [
+  "check-commercial-category-http.ts", "build-engine-journey.mjs", "check-engine-journey.mjs", "check-ai-models.ts",
+  "check-mini-app-sell-toggle.ts", "check-sequence-render.ts", "check-sequence-ui.ts", "check-media-repair-db.ts",
+  "check-creator-video-upload.cjs", "check-onlyfans-agency-http.ts",
+];
+const REAL_OWNER = ["check-revenue-rollups.ts", "check-window-tiles.ts", "check-users-tile.ts", "check-conversation-funnel.ts", "check-buyer-conversion.ts"];
+test("the real package: each NEEDS file is skipped in fast and run in full, each OWNER file skipped in both", () => {
+  const cli = (mode: string) => execFileSync("node", ["--import", "tsx", "scripts/check-plan.ts", mode], { encoding: "utf8" }).trim().split("\n").map((l) => l.split("\x1f"));
+  const fast = cli("fast");
+  const full = cli("full");
+  const of = (out: string[][], f: string) => out.filter((r) => files(r[4]).some((x) => x.endsWith(`/${f}`) || x === f)).map((r) => [r[1], r[2].replace(/needs .*/, "needs")]);
+  for (const f of REAL_NEEDS) {
+    assert.deepEqual(of(fast, f), [["skip", "full only, needs"]], `fast ${f}`);
+    assert.deepEqual(of(full, f), [["run", ""]], `full ${f}`);
+  }
+  for (const f of REAL_OWNER) {
+    for (const out of [fast, full]) assert.deepEqual(of(out, f), [["skip", "never run by this harness: needs"]], f);
+  }
+});
+
 test("rows per mode, literally: premerge first, && pairs grouped, NEEDS full only with its env, OWNER never, names unique", () => {
   const owner = ["test:m/o", "skip", "never run by this harness: needs live-shaped data; owner-run only", "", "tsx o.ts"];
   const fast = [
@@ -58,7 +79,8 @@ test("rows per mode, literally: premerge first, && pairs grouped, NEEDS full onl
 
 test("plan() throws on separators it does not parse, npm runs it cannot follow, and unused NEEDS/OWNER entries", () => {
   const base = { "test:a": "node a.ts" };
-  for (const bad of ["node a.ts; node b.ts", "node a.ts || true", "node a.ts | tee x", "npm run nope", "npm run test:a -- --flag"]) {
+  const seps = ["node a.ts; node b.ts", "node a.ts || true", "node a.ts | tee x", "false & true", "node a.ts &", "false\ntrue"];
+  for (const bad of [...seps, "npm run nope", "npm run test:a -- --flag"]) {
     assert.throws(() => plan({ ...base, "test:b": bad }, [], {}, []), /cannot|no such script/, bad);
   }
   assert.throws(() => plan(base, [], { "gone.ts": ["x"] }, []), /gone\.ts/);

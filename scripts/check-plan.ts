@@ -38,11 +38,11 @@ export type Row = { name: string; action: "run" | "skip" | "plan"; note: string;
 type Tag = Pick<Leaf, "kind" | "why" | "env"> & { files: string[]; entry?: string };
 const PREMERGE: Leaf = { name: "premerge", kind: "run", why: "", env: ["PREMERGE_BASE"], cmd: "scripts/premerge.sh" };
 
-/** [script, command] for every leaf command reached from npm script `n`, following `npm run` through `&&` only. */
+/** [script, command] for every leaf command reached from npm script `n`, following `npm run` through `&&` only; any other ;|&\n throws. */
 export function leavesOf(scripts: Record<string, string>, n: string): [string, string][] {
   if (!(n in scripts)) throw new Error(`npm run ${n}: no such script in package.json`);
   return scripts[n].split("&&").map((c) => c.trim()).flatMap((c): [string, string][] => {
-    if (/[;|]/.test(c)) throw new Error(`${n}: cannot split "${c}" (only && is parsed)`);
+    if (/[;|&\n]/.test(c)) throw new Error(`${n}: cannot split "${c}" (only && is parsed)`); // a lone & backgrounds: exit 0 on a fail
     const m = /^npm run (?:-s )?(\S+)$/.exec(c);
     if (!m && /^npm /.test(c)) throw new Error(`${n}: cannot follow "${c}"`);
     return m ? leavesOf(scripts, m[1]) : [[n, c]];
