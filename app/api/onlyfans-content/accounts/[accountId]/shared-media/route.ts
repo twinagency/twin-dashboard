@@ -88,9 +88,9 @@ export async function POST(request: NextRequest, context: Context) {
       if (!row) return refuse("Refresh the saved upload before retrying.", 503);
     }
     if (row.clone_id !== cloneId || row.storage_path !== source.data.storage_path) return refuse("The source file changed. Review it before sharing.");
-    // Agency actors must match the backend's freshly verified grant. Owner
-    // sessions may resume their server-recorded receipt after signing in again.
-    if (ctx.auth.auth.agencyGrant && row.actor !== ctx.auth.actor) return refuse("This upload was started by another team member. Ask them to finish it.");
+    // Agency actors must match the backend's freshly verified grant. Owner sessions may resume an owner receipt after signing in
+    // again, never an agency member's: the backend binds the job to its actor, so relaying it would attribute the write to them.
+    if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !row.actor.startsWith("op-session:")) return refuse("This upload was started by another team member. Ask them to finish it.");
     if (!active.has(row.status) && row.error_code !== "provider_cleanup_required") return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {

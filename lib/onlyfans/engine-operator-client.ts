@@ -8,7 +8,7 @@ export async function submitEngineOperatorCommand(args: { accountId: string; con
   try {
     const response = await fetchImpl(`/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/conversations/${encodeURIComponent(conversationId)}/requests/${encodeURIComponent(requestId)}`, {
       method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, expectedRevision, ...(engineActionNeedsNote(action) ? { note } : {}), ...(environment && environment !== "simulation" ? { environment } : {}) }) });
+      body: JSON.stringify({ action, expectedRevision, ...(engineActionNeedsNote(action) ? { note } : {}), ...(environment ? { environment } : {}) }) });
     const data = await response.json() as Record<string, unknown>;
     // Success needs a 2xx AND a recorded body; a refusal needs a non-2xx. Anything else proves nothing.
     if (response.ok && data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === true && data.outcome === "recorded") return { ok: true };

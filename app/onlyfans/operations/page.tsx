@@ -23,5 +23,6 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   const result = await ctx.backend.getOperations(account.accountId);
   if (!result.ok) return unavailable(result.error);
   const data = result.data;
-  return <OperationsView data={data} account={account} accounts={accounts.data} creatorId={creatorId} canAct={ctx.canChat} />;
+  // canAct gates only "Mark reconciled" here; reconciling is a manager decision (RISKS D6), a chat-only grant may only see the rows.
+  return <OperationsView data={data} account={account} accounts={accounts.data} creatorId={creatorId} canAct={ctx.canManage} />;
 }

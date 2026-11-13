@@ -13,7 +13,8 @@ const refuse = (status: number, error: string) => planCJson(planCRefused(status,
 export type PlanCRequestContext = { actor: string; accountId: string; backend: PlanCBackend; body?: unknown };
 
 /**
- * Operator only (not agency, not view-as), a configured backend, a valid account id and, for a write, a same-origin JSON body of at most 8 KB.
+ * Operator only (not agency, not view-as), a configured backend, a valid account id, for a write a same-origin JSON body of at most 8 KB,
+ * and the backend's pilot scope for this actor on this account.
  * Returns a response to send when any of that fails, so a route cannot forget a gate.
  */
 export async function planCGate(request: NextRequest, rawAccountId: string, write: boolean): Promise<PlanCRequestContext | NextResponse> {
@@ -27,12 +28,16 @@ export async function planCGate(request: NextRequest, rawAccountId: string, writ
   if (!accountId) return refuse(400, "That account reference is invalid.");
   const backend = configuredPlanCBackend();
   if (!backend) return refuse(503, "Plan C approvals are not configured.");
-  if (!write) return { actor: operator.actor, accountId, backend };
-  if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
-      request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
-    return refuse(403, "This change must be requested from this dashboard.");
   let body: unknown;
-  try { body = await readCommandJson(request, PLAN_C_MAX_BODY_BYTES); }
-  catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request is invalid."); }
-  return { actor: operator.actor, accountId, backend, body };
+  if (write) {
+    if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
+        request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
+      return refuse(403, "This change must be requested from this dashboard.");
+    try { body = await readCommandJson(request, PLAN_C_MAX_BODY_BYTES); }
+    catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request is invalid."); }
+  }
+  // The backend's pilot scope for THIS actor and account, before any read or write is relayed. Any failure refuses.
+  const scope = await backend.scope(accountId, operator.actor);
+  if (!scope.ok) return refuse(scope.status, "This pilot account is not available to this session.");
+  return write ? { actor: operator.actor, accountId, backend, body } : { actor: operator.actor, accountId, backend };
 }
