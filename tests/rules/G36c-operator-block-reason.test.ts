@@ -162,6 +162,10 @@ test("the agency write scope admits only the exact conditional stamp and clear, 
     // Flash F-major: both shapes the two-statement r0 admitted.
     ["a standalone stamp on an already-blocked reason-less row", "", { blocked_reason: "operator", blocked_at: at }],
     ["blocked:false combined with the stamp", "&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null", { blocked: false, blocked_reason: "operator", blocked_at: at }],
+    // r1 delta: a plain unblock carries no reason key, so it must still be the exact operator clear.
+    ["a plain unblock", "", { blocked: false }],
+    ["a plain unblock with another column", "", { blocked: false, paused: false }],
+    ["a plain unblock with the clear filters", clearQ, { blocked: false }],
   ] as const) {
     await assert.rejects(scopeAgencyWrite(url(q), "PATCH", body, manager), /operator block reason/, label);
   }
