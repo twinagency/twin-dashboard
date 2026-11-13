@@ -196,6 +196,7 @@ export default function CloneForm({
   const [models, setModels] = useState<OrModel[]>([]);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [notStored, setNotStored] = useState<string[]>([]);
   const [changedFields, setChangedFields] = useState<string[]>([]);
   const [reviewSnapshot, setReviewSnapshot] = useState<FormSnapshot>({});
   const [reviewOpen, setReviewOpen] = useState(false);
@@ -251,13 +252,22 @@ export default function CloneForm({
     if (goLive) fd.set("status", "active");
     setStep("saving");
     setErrorMsg("");
+    setNotStored([]);
     try {
-      await updateClone(clone.id, fd);
-      baselineRef.current = snapshotForm(formRef.current);
-      setChangedFields([]);
+      const result = await updateClone(clone.id, fd);
+      const saved = snapshotForm(formRef.current);
+      // A column whose migration has not run was not stored: keep its old
+      // baseline so the field still counts as changed instead of looking saved.
+      for (const key of result.notStored) {
+        if (key in baselineRef.current) saved[key] = baselineRef.current[key];
+        else delete saved[key];
+      }
+      baselineRef.current = saved;
+      setChangedFields(changedSnapshotKeys(saved, snapshotForm(formRef.current)));
+      setNotStored(result.notStored);
       setReviewOpen(false);
       setStep("done");
-      if (goLive) {
+      if (goLive && !result.notStored.length) {
         router.push("/clones");
       } else {
         router.refresh();
@@ -452,7 +462,9 @@ export default function CloneForm({
 
             <div className="grid w-full grid-cols-2 items-center gap-2 lg:flex lg:w-auto lg:shrink-0 lg:flex-wrap lg:justify-end lg:gap-1.5">
               {step === "saving" && <span className="col-span-2 inline-flex items-center gap-1.5 text-xs text-muted lg:col-auto"><LoaderCircle className="size-3.5 animate-spin" /> Saving</span>}
-              {step === "done" && <span className="col-span-2 text-xs font-medium text-good lg:col-auto">Saved</span>}
+              {step === "done" && (notStored.length
+                ? <span className="col-span-2 text-xs font-medium text-warn lg:col-auto">Saved. Not stored until its migration is applied: {notStored.join(", ")}</span>
+                : <span className="col-span-2 text-xs font-medium text-good lg:col-auto">Saved</span>)}
               {step === "save-error" && <span className="col-span-2 truncate text-xs text-crit lg:col-auto lg:max-w-64">{errorMsg}</span>}
               <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy} className="w-full lg:w-auto">
                 Review changes

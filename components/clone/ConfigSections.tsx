@@ -1734,11 +1734,9 @@ export default function ConfigSections({
             merely defaulted.
 
             This hidden input is NOT the usual mirror-the-stored-value pattern
-            used elsewhere in this file — it is a hard PIN to "true". A control
-            that does not render posts nothing, and rowFromForm reads
-            `fd.get("strict_minor_gate") === "true"`, so posting nothing would
-            write FALSE and silently disarm the gate on the first save. Pinning
-            the literal instead means every save from this form re-arms it.
+            used elsewhere in this file — it is a hard PIN to "true". Since G27
+            rowFromForm ignores it and always writes true, so no form, API body
+            or missing field can disarm the gate; the pin stays as a belt.
             strict_minor_gate was also removed from CLONE_TOGGLE_FIELDS
             (app/clones/toggle-fields.ts) so neither setCloneToggle nor the /ai
             assistant can flip it off through the generic toggle path, exactly
