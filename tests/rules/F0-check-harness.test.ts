@@ -1,5 +1,5 @@
 /**
- * Rule (F0): scripts/check.sh exec runs one step; RED beats INFRA; a step cap or blown budget is RED
+ * Rule (F0): scripts/check.sh records exactly check-plan.ts's rows for the mode; RED beats INFRA; a step cap or blown budget is RED
  * and kills the step, as does leaving processes behind or an interrupt; steps run in the loopback-only network sandbox (refused
  * without, unless already inside it); steps get a
  * scrubbed env (premerge.sh children: F0-premerge-env.test.ts); a prod Supabase name in our env is refused; no secret reaches the evidence.
@@ -12,6 +12,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, statSync, symlinkSy
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
+import { plan, premergeSuites, rows } from "../../scripts/check-plan";
 
 type Verdict = { mode: string; verdict: string; sha: string; wallSecs: number; steps: { name: string; status: string; note: string }[] };
 type Done = { code: number; out: string; root: string; secs: number };
@@ -62,13 +63,18 @@ function noSandboxPath() {
   return `${usr}:/bin:/usr/sbin:/sbin:${dirname(process.execPath)}`;
 }
 
-test("control: exec true is EXEC", async () => {
+test("control: exec true is EXEC; plan records exactly check-plan.ts's plan rows (name, status = action, note), never GREEN", async () => {
   const r = await run(["exec", "true"]);
   const v = verdict(r.root);
   assert.equal(r.code, 0, r.out);
   assert.deepEqual([v.mode, v.verdict, typeof v.sha, typeof v.wallSecs], ["exec", "EXEC", "string", "number"]);
   assert.deepEqual(Object.keys(v.steps[0]).slice(0, 3), ["name", "status", "secs"]);
   assert.match(r.out, /^EXEC exec @ \S+ pass=1 fail=0 skip=0 infra=0/m);
+  const p = verdict((await run(["plan"])).root);
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  const expected = rows("plan", plan(scripts, premergeSuites())).map((x) => [x.name, x.action, x.note]);
+  assert.equal(p.verdict, "PLAN");
+  assert.deepEqual(p.steps.map((s) => [s.name, s.status, s.note]), expected);
 });
 
 test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", async () => {
@@ -102,6 +108,12 @@ test("TERM to the harness kills the running step's process group", async () => {
   assert.equal(r.code, 2, r.out);
   assert.ok(r.secs < 15, `took ${r.secs}s`);
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "step outlived the harness");
+});
+
+test("fast refuses (INFRA) without the loopback-only network sandbox", async () => {
+  const r = await run(["fast"], { PATH: noSandboxPath() });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /sandbox/);
 });
 
 test("exec runs its step in the loopback-only network sandbox, and refuses (INFRA) without one unless already inside it", async () => {

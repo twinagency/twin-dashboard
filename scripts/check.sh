@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# Test harness runner. Exit 0 EXEC, 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
-#   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
-# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED).
+# Test harness. Exit 0 GREEN (PLAN/EXEC in those modes), 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
+#   fast  merge gate: premerge.sh, then every promoted test:* leaf.   full  fast plus the NEEDS leaves, each with only its listed env.
+#   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
+#   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
 #   process group; leaving processes behind fails (setsid escapes). INFRA if a *SUPABASE*URL* var is not loopback or any var names prod.
-# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
+# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,rows.txt,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
 [ -n "$CHECK_NICED" ] || exec env CHECK_NICED=1 nice -n 10 bash "$0" "$@"
 set -o pipefail
 cd "$(dirname "$0")/.." || exit 2
 MODE=$1
 shift
-case $MODE in # BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed
-  exec) BUDGET=0   CAP=600 OK=EXEC;;
-  *) echo "usage: scripts/check.sh exec [-- cmd...]"; exit 2;;
+case $MODE in # BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed  PRE: preflight (sandbox, deps, clean tree)
+  fast) BUDGET=900 CAP=300 OK=GREEN PRE=1;;
+  full) BUDGET=0   CAP=600 OK=GREEN PRE=1;;
+  plan) BUDGET=0   CAP=0   OK=PLAN  PRE=0;;
+  exec) BUDGET=0   CAP=600 OK=EXEC  PRE=0;;
+  *) echo "usage: scripts/check.sh fast|full|plan|exec [-- cmd...]"; exit 2;;
 esac
 lower() { [[ $1 =~ ^[0-9]+$ ]] && (( $1 > 0 && ($2 == 0 || $1 < $2) )) && echo "$1" || echo "$2"; }
 BUDGET=$(lower "$CHECK_BUDGET_SECS" $BUDGET)
@@ -142,3 +147,23 @@ if [ $MODE = exec ]; then
   fi
   finish
 fi
+if (( PRE )); then
+  "${SANDBOX[@]}" true 2>/dev/null || infra preflight "no loopback-only network sandbox (sandbox-exec: macOS only, and not nestable)"
+  [ -x node_modules/.bin/tsx ] || infra preflight "node_modules missing (deps not installed or symlink broken)"
+  [ -f next-env.d.ts ] || infra preflight "next-env.d.ts missing (run next dev/build once)"
+  [ -z "$(git status --porcelain)" ] || infra preflight "dirty tree: commit first"
+fi
+node --import tsx scripts/check-plan.ts "$MODE" >"$EV/rows.txt" 2>"$EV/logs/plan.log" ||
+  infra preflight "scripts/check-plan.ts failed: $(head -c 300 "$EV/logs/plan.log")"
+while IFS=$'\x1f' read -r n a why envs c; do
+  pe=() # the row's own env, from ours, only if set
+  for e in $envs; do
+    [ -n "${!e+x}" ] && pe+=("$e=${!e}")
+  done
+  if [ "$a" = run ]; then
+    step "$n" "${CLEAN[@]}" ${pe[@]+"${pe[@]}"} "${SANDBOX[@]}" sh -c "$c"
+  else
+    rec "$n" "$a" 0 "$why"
+  fi
+done <"$EV/rows.txt"
+finish
