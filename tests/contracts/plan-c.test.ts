@@ -1,6 +1,6 @@
 /** Plan C operator surface: contract tests for the client, the proxy handlers and the files that must stay out of the browser. Offline; the backend is a typed mock. */
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { build } from "esbuild";
@@ -10,6 +10,7 @@ import { PLAN_C_HEADER, PLAN_C_SCHEMA, newCommandKey, parsePlanCDrafts, parsePla
 import { planCConversationCommand, planCDraftCommand, planCOperatorOnly, planCReconcile } from "../../lib/onlyfans/plan-c-route";
 import { agencyOnlyFansRequest } from "../../lib/onlyfans/agency-scope";
 import { engineOperatorEvidenceRef } from "../../lib/onlyfans/engine-operator";
+import { SERVER_MODULES, importGraph } from "../helpers/import-graph";
 import { MOCK_ACCOUNT, MOCK_TOKEN, createPlanCMock, seedDraft, seedOffer, type RawUnresolved } from "./plan-c-mock-backend";
 import { OPERATOR_ACTOR, createPlanCProxy } from "./plan-c-proxy";
 
@@ -305,26 +306,16 @@ test("agency identities cannot reach the Plan C page or routes even with manage 
 });
 
 // ── no token in the browser, no automatic approval ────────────────────────────
-const SERVER_ONLY = ["plan-c-backend", "plan-c-guard", "plan-c-route", "backend-transport", "lib/onlyfans/route", "engine-operator", "command-json"];
-function importGraph(entry: string): string[] {
-  const seen = new Set<string>(), queue = [entry];
-  while (queue.length) {
-    const file = queue.pop()!; if (seen.has(file)) continue; seen.add(file);
-    for (const match of read(file).matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
-      const spec = match[1]; let target: string | null = null;
-      if (spec.startsWith("@/")) target = spec.slice(2); else if (spec.startsWith(".")) target = path.posix.join(path.posix.dirname(file), spec); else continue;
-      for (const candidate of [`${target}.ts`, `${target}.tsx`, `${target}/index.ts`, target]) if (existsSync(path.join(root, candidate)) && statSync(path.join(root, candidate)).isFile()) { queue.push(candidate); break; }
-    }
-  }
-  return [...seen];
-}
-
+// Exact paths: a name would also catch browser-safe siblings (engine-operator-core.ts). command-json.ts is browser-safe elsewhere
+// (SessionConnect) but has no business in the Plan C screen.
+const SERVER_ONLY = [...SERVER_MODULES, "lib/onlyfans/command-json.ts"];
 test("the browser import graph holds no server module, credential reader or token name", () => {
+  for (const file of SERVER_ONLY) assert.ok(read(file), `fixture: ${file} exists`);
   for (const entry of ["components/onlyfans-preview/PlanCConsole.tsx", "lib/onlyfans/plan-c-client.ts"]) {
-    const graph = importGraph(entry);
+    const graph = [...importGraph(entry).keys()];
     assert.ok(graph.includes("lib/onlyfans/plan-c.ts"));
     for (const file of graph) {
-      assert.ok(!SERVER_ONLY.some(name => file.includes(name)), `${entry} reaches ${file}`);
+      assert.ok(!SERVER_ONLY.includes(file), `${entry} reaches ${file}`);
       const source = read(file);
       assert.ok(!/process\.env/.test(source), `${file} reads the environment`);
       assert.ok(!/ONLYFANS_[A-Z_]*TOKEN|Bearer /.test(source), `${file} names a credential`);

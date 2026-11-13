@@ -1,4 +1,4 @@
-import { engineActionNeedsNote, ENGINE_OPERATOR_SCHEMA, type EngineOperatorAction, type EngineOperatorResult } from "./engine-operator";
+import { engineActionNeedsNote, ENGINE_OPERATOR_SCHEMA, type EngineOperatorAction, type EngineOperatorResult } from "./engine-operator-core";
 import type { EngineEnvironment } from "./engine-status";
 
 /** Browser side of the request action route. A reply that cannot be read is unconfirmed, never a failure. */
