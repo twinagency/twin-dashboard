@@ -7,7 +7,8 @@
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
 #   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
-#   process group; leaving processes behind fails (setsid escapes, but stays in the sandbox and cannot change the verdict).
+#   process group; leaving processes behind fails. Detached (setsid) descendants are unsupported: the sandbox limits the network
+#   only, and the harness trusts test code not to rewrite $EV.
 #   INFRA if a *SUPABASE*URL* var is not loopback or any var names prod. CHECK_INHERITED_SANDBOX=1: see sandbox() below.
 # Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
 #   *PUBLISHABLE*) in our env or the repo's .env* files.
