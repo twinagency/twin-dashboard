@@ -6,7 +6,7 @@
  * A write that gets no readable acknowledgement is "unconfirmed", never "failed": the backend may have committed.
  */
 import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
-import { PLAN_C_CONFLICT_TEXT, PLAN_C_HEADER, PLAN_C_REFUSED_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, parsePlanCDrafts, parsePlanCUnresolved,
+import { PLAN_C_CONFLICT_TEXT, PLAN_C_GONE_TEXT, PLAN_C_HEADER, PLAN_C_REFUSED_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, parsePlanCDrafts, parsePlanCUnresolved,
   type PlanCCommandResult, type PlanCConversationAction, type PlanCDraftAction, type PlanCDraftList, type PlanCUnresolvedList } from "./plan-c";
 
 export type PlanCReadResult<T> = { ok: true; data: T } | { ok: false; status: 404 | 502 | 503; error: string };
@@ -17,10 +17,16 @@ export type PlanCConversationCommand = { conversationId: string; action: PlanCCo
 export type PlanCReconcileCommand = { id: string; commandKey: string; actor: string; evidenceRef: string };
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
-/** Statuses that prove the backend did not apply the command. Everything else (5xx, timeouts, odd bodies) is unconfirmed. */
-const REFUSED = new Set([400, 401, 403, 404, 405, 409, 410, 413, 422]);
-/** 404 and 410: the draft, conversation or the route itself is not there. Not a conflict: nothing says it changed. */
-const GONE_TEXT = "That draft, conversation or action is not available. The list was reloaded.";
+/**
+ * Statuses that prove the backend did not apply the command, and what each means. Everything else (5xx, timeouts, odd bodies) is
+ * unconfirmed. 409 is a version or revision conflict; 404 and 410 mean the target (or the route) is gone. All three need a fresh read.
+ */
+const denied = { outcome: "refused", reload: false, error: PLAN_C_REFUSED_TEXT } as const;
+const gone = { outcome: "refused", reload: true, error: PLAN_C_GONE_TEXT } as const;
+const REFUSED: Record<number, { outcome: "refused" | "conflict"; reload: boolean; error: string }> = {
+  400: denied, 401: denied, 403: denied, 405: denied, 413: denied, 422: denied,
+  404: gone, 410: gone, 409: { outcome: "conflict", reload: true, error: PLAN_C_CONFLICT_TEXT },
+};
 
 export function createPlanCBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
@@ -40,16 +46,12 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   async function write(url: string, body: Record<string, unknown>, expect: { commandKey: string; accountId: string; action: string; requestId?: string; conversationId?: string; id?: string }): Promise<PlanCCommandResult> {
     try {
       const response = await call(url, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (REFUSED.has(response.status)) {
-        await response.body?.cancel();
-        // 409 is a version or revision conflict. 404 and 410 mean the target (or the route) is gone. All three need a fresh read.
-        const conflict = response.status === 409, gone = [404, 410].includes(response.status);
-        return { ok: false, outcome: conflict ? "conflict" : "refused", reload: conflict || gone, error: conflict ? PLAN_C_CONFLICT_TEXT : gone ? GONE_TEXT : PLAN_C_REFUSED_TEXT };
-      }
+      const refused = Object.hasOwn(REFUSED, response.status) ? REFUSED[response.status] : null;
+      if (refused) { await response.body?.cancel(); return { ok: false, ...refused }; }
       if (response.ok) {
         const ack: unknown = await response.json();
         if (record(ack) && ack.schemaVersion === PLAN_C_SCHEMA && ack.ok === true && ack.commandKey === expect.commandKey &&
-            (ack.accountId === undefined || ack.accountId === expect.accountId) && (ack.action === undefined || ack.action === expect.action) && (ack.requestId === undefined || ack.requestId === expect.requestId) &&
+            ack.action === expect.action && (ack.accountId === undefined || ack.accountId === expect.accountId) && (ack.requestId === undefined || ack.requestId === expect.requestId) &&
             (ack.conversationId === undefined || ack.conversationId === expect.conversationId) && (ack.id === undefined || ack.id === expect.id) &&
             (ack.replayed === undefined || typeof ack.replayed === "boolean")) {
           const version = ack.recordedVersion ?? ack.draftVersion, revision = ack.recordedRevision;

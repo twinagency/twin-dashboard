@@ -3,7 +3,7 @@
  * planCGate tags every requireOnlyFansRead denial with a Plan C `outcome: "refused"` body, so the browser client reads the
  * dashboard's own pre-call denial (no session, 401, nothing sent upstream) as refused and releases the intent key, never as
  * "unconfirmed, retrying is safe". Preconditions: the route really answered 401 and nothing went upstream.
- * Runs in tests/rules/plan-c-gate-scope.child.ts (real routes; only next/headers and the server-only line replaced; fake fetch
+ * Runs in tests/rules/plan-c-route.child.ts (real routes; only next/headers and the server-only line replaced; fake fetch
  * at the wire), via planCRouteChild in tests/rules/plan-c-fixtures.ts. Offline.
  */
 import assert from "node:assert/strict";

@@ -5,7 +5,8 @@
  * Design rules, all asserted in tests/contracts/plan-c.test.ts:
  *  - One command per call, one draft or conversation per call. There is no bulk form and no function that decides by itself.
  *  - Every command carries a random 64-hex commandKey. The key for an intent is kept until the outcome is known, so a retry
- *    after a lost reply or a double click reuses it and the backend replays instead of acting twice.
+ *    after a lost reply or a double click reuses it and the backend replays instead of acting twice. After an unconfirmed
+ *    attempt only a recorded ack releases it.
  *  - A 409 (version or revision conflict) is returned as `conflict` with `reload: true`; it is never retried.
  */
 import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newCommandKey, parsePlanCDrafts, parsePlanCUnresolved,
@@ -16,10 +17,19 @@ export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: st
 
 /** Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent. */
 export function createCommandKeyStore(random: () => string = newCommandKey) {
-  const keys = new Map<string, string>();
+  const keys = new Map<string, string>(), held = new Set<string>();
   return {
     keyFor(intent: string): string { let key = keys.get(intent); if (!key) { key = random(); keys.set(intent, key); } return key; },
-    forget(intent: string) { keys.delete(intent); },
+    /**
+     * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
+     * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
+     */
+    settle(intent: string, result: PlanCCommandResult) {
+      if (result.ok) { keys.delete(intent); held.delete(intent); }
+      else if (result.outcome === "unconfirmed") held.add(intent);
+      else if (!held.has(intent)) keys.delete(intent);
+    },
+    forget(intent: string) { keys.delete(intent); held.delete(intent); },
     size: () => keys.size,
   };
 }
@@ -42,7 +52,7 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
     } catch { return { ok: false, error: `${what} is unavailable.` }; }
   }
 
-  /** `intent` ties the key to this exact action. The key is dropped once the outcome is definite and kept when it is not. */
+  /** `intent` ties the key to this exact action; the key store decides when the outcome releases it. */
   async function send(path: string, intent: string, body: (commandKey: string) => Record<string, unknown>): Promise<PlanCCommandResult> {
     const commandKey = keys.keyFor(intent);
     let result: PlanCCommandResult = unconfirmed();
@@ -60,8 +70,7 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
           result = { ok: false, outcome: record.outcome, error: record.outcome === "conflict" ? PLAN_C_CONFLICT_TEXT : record.error, reload: record.reload === true || record.outcome === "conflict" };
       }
     } catch { /* A lost reply does not prove the command failed. */ }
-    // Only a definite answer releases the key. Unconfirmed keeps it so that retrying is idempotent.
-    if (result.ok || result.outcome !== "unconfirmed") keys.forget(intent);
+    keys.settle(intent, result);
     return result;
   }
 

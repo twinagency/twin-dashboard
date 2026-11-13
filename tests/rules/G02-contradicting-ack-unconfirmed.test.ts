@@ -1,8 +1,9 @@
 /**
- * RULE G02 (W1 lane 1 finding 7; REVIEW.md invariant 7 "No false success"): plan-c-backend checks every target field of an ack
- * when present, `action` included, so an ack whose action differs from the command (a STOP acked as handback) reads
- * "unconfirmed", never success. A bare contract-minimal ack `{ schemaVersion, ok: true, commandKey, replayed }` stays valid
- * (NEEDS-BACKEND.md section 7). Offline: fake fetch, no network.
+ * RULE G02 (W1 lane 1 finding 7, R1 finding 6; REVIEW.md invariant 7 "No false success"): a Plan C ack is success only when its
+ * `action` is present and equals the command's. A STOP acked as handback, or acked with no action at all, reads "unconfirmed".
+ * The real backend echoes the route's action word in every ack and replay (twin-onlyfans-backend
+ * service/conversation_engine/operator_v2.py draft_command, _control_ack, reconcile), so requiring it strands nobody.
+ * Other target fields are checked when present (NEEDS-BACKEND.md section 7). Offline: fake fetch, no network.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -19,5 +20,12 @@ test("control: a full matching STOP ack is success", async () => {
 test("finding 7: an ack for a STOP that says action handback is unconfirmed, not success", async () => {
   const result = await stopAnswered(() => Response.json({ ...full, action: "handback" }));
   assert.equal(result.ok, false, "a contradicting ack was taken as success");
+  if (!result.ok) assert.equal(result.outcome, "unconfirmed");
+});
+
+test("finding 6: an ack with no action is unconfirmed, not success", async () => {
+  const { action: _action, ...minimal } = full;
+  const result = await stopAnswered(() => Response.json(minimal));
+  assert.equal(result.ok, false, "an ack that does not say which action it recorded was taken as success");
   if (!result.ok) assert.equal(result.outcome, "unconfirmed");
 });

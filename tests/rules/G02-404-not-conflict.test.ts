@@ -16,8 +16,13 @@ test("control: a 409 is a conflict with the conflict text", async () => {
   if (!result.ok) { assert.equal(result.outcome, "conflict"); assert.equal(result.error, PLAN_C_CONFLICT_TEXT); }
 });
 
-test("finding 12: a 404 is refused without claiming the draft or conversation changed", async () => {
-  const result = await stopAnswered(404);
-  assert.equal(result.ok, false);
-  if (!result.ok) { assert.equal(result.outcome, "refused"); assert.notEqual(result.error, PLAN_C_CONFLICT_TEXT); }
-});
+for (const status of [404, 410])
+  test(`finding 12: a ${status} is refused with a reload, without claiming the draft or conversation changed`, async () => {
+    const result = await stopAnswered(status);
+    assert.equal(result.ok, false);
+    if (!result.ok) {
+      assert.equal(result.outcome, "refused");
+      assert.equal(result.reload, true, "a missing target must send the operator back to a fresh list");
+      assert.notEqual(result.error, PLAN_C_CONFLICT_TEXT);
+    }
+  });
