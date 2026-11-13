@@ -6,18 +6,33 @@ export function isAiChatting(conversation: Pick<ConversationSummary, "automation
   return conversation.automationMode === "automated" && conversation.takeoverState === "none";
 }
 
+/** Account-level reason AI replies cannot go out, checked before any per-conversation state. null: none. */
+export function accountBlocker(account: OfAccount | null): "runtime" | "paused" | "connection" | "sender_disabled" | null {
+  if (!account?.runtime) return "runtime";
+  if (!account.runtime.enabled) return "paused";
+  if (account.health !== "connected") return "connection";
+  return account.runtime.deliveryEnabled ? null : "sender_disabled";
+}
+
+/** Sender-level reason: not running, or its status is missing, stale (>180s) or from the future. null: running and fresh. */
+export function senderBlocker(runtime: NonNullable<OfAccount["runtime"]>, now = Date.now()): "sender" | "sender_status" | null {
+  if (runtime.sender.state !== "running") return "sender";
+  const observed = runtime.sender.observedAt ? Date.parse(runtime.sender.observedAt) : NaN;
+  return !Number.isFinite(observed) || now - observed > 180_000 || observed > now + 5000 ? "sender_status" : null;
+}
+
+const BLOCKED = { runtime: "Runtime status unavailable", paused: "Account paused", connection: "Connection unavailable", sender_disabled: "Sender disabled",
+  sender: "Sender unavailable", sender_status: "Sender status unavailable" } as const;
+
 export function effectiveAiStatus(conversation: ConversationSummary, account: OfAccount | null): string {
   if (!isAiChatting(conversation)) return conversation.takeoverState === "requested" ? "Takeover pending" :
     conversation.automationMode === "human_controlled" ? "Human replies" : "Intentionally paused";
-  if (!account?.runtime) return "AI enabled for this fan. Runtime status unavailable";
-  if (!account.runtime.enabled) return "AI enabled for this fan. Account paused";
-  if (account.health !== "connected") return "AI enabled for this fan. Connection unavailable";
-  if (!account.runtime.deliveryEnabled) return "AI enabled for this fan. Sender disabled";
+  const blocked = accountBlocker(account);
+  if (blocked) return `AI enabled for this fan. ${BLOCKED[blocked]}`;
   if (conversation.historyHeld) return "AI enabled for this fan. History requires repair";
   if (["unknown", "partial"].includes(conversation.delivery)) return "AI enabled for this fan. Delivery unresolved";
-  if (account.runtime.sender.state !== "running") return "AI enabled for this fan. Sender unavailable";
-  const observed = account.runtime.sender.observedAt ? Date.parse(account.runtime.sender.observedAt) : NaN;
-  if (!Number.isFinite(observed) || Date.now() - observed > 180_000 || observed > Date.now() + 5000) return "AI enabled for this fan. Sender status unavailable";
+  const sender = senderBlocker(account!.runtime!);
+  if (sender) return `AI enabled for this fan. ${BLOCKED[sender]}`;
   if (conversation.delivery === "dispatching") return "AI sending";
   if (conversation.delivery === "accepted_pending") return "AI reply accepted. CRM update pending";
   if (conversation.delivery === "queued") return "AI reply queued";

@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { appendEnginePage, engineEnvironmentIsReal, engineEnvironmentLabel, engineNextStepText, engineRequestLabel, engineRequestPurchase,
   isUnresolvedRequest, parseEngineStatus, type EngineEnvironment, type EngineRequestView } from "@/lib/onlyfans/engine-status";
-import { engineActionNeedsNote, type EngineOperatorAction, type EngineOperatorResult } from "@/lib/onlyfans/engine-operator";
+import { engineActionNeedsNote, type EngineOperatorAction, type EngineOperatorResult } from "@/lib/onlyfans/engine-operator-core";
 import { engineControlLabel } from "@/lib/onlyfans/engine-controls";
 
 export type EngineActionHandler = (requestId: string, action: EngineOperatorAction, revision: number, note?: string, environment?: EngineEnvironment) => Promise<EngineOperatorResult>;
