@@ -212,14 +212,26 @@ export function canonicalPayload(payload: CommandPayload): string {
   }
 }
 
-export function payloadDigest(payload: CommandPayload): string {
-  const canonical = canonicalPayload(payload);
+function fnv1a(text: string): string {
   let hash = 0x811c9dc5;
-  for (let index = 0; index < canonical.length; index += 1) {
-    hash ^= canonical.charCodeAt(index);
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
     hash = Math.imul(hash, 0x01000193) >>> 0;
   }
   return hash.toString(16).padStart(8, "0");
+}
+
+export function payloadDigest(payload: CommandPayload): string {
+  return fnv1a(canonicalPayload(payload));
+}
+
+/**
+ * The idempotency key in the UUID shape the controls route accepts. Derived from the intent, not random, so a retry of the
+ * same intent (after a lost reply, a remount or a reload) sends the same key.
+ */
+export function intentRequestKey(idempotencyKey: string): string {
+  const hex = [0, 1, 2, 3].map(salt => fnv1a(`${salt}:${idempotencyKey}`)).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /** The longest modelled manual message. A contract limit, not a provider rule. */
