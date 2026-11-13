@@ -34,13 +34,24 @@ export function createCommandKeyStore(random: () => string = newCommandKey) {
   };
 }
 
+/**
+ * One key store per account for the page's lifetime, so a remounted console (navigation, a new client) still holds the key of an
+ * unconfirmed attempt. A full page reload still loses it; the backend's commandKey replay is the only guard across reloads.
+ */
+const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
+function accountKeyStore(accountId: string) {
+  let store = accountStores.get(accountId);
+  if (!store) accountStores.set(accountId, store = createCommandKeyStore());
+  return store;
+}
+
 const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c`;
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });
 const invalid = (error: string): PlanCCommandResult => ({ ok: false, outcome: "refused", reload: false, error });
 
 export function createPlanCClient(options: { accountId: string; fetchImpl?: typeof fetch; keys?: ReturnType<typeof createCommandKeyStore> }) {
   const { accountId } = options, fetchImpl = options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
-  const keys = options.keys ?? createCommandKeyStore();
+  const keys = options.keys ?? accountKeyStore(accountId);
   const init = { credentials: "same-origin", cache: "no-store", redirect: "error" } as const;
 
   async function read<T>(path: string, parse: (value: unknown) => T | null, what: string): Promise<PlanCReadOutcome<T>> {

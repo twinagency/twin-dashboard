@@ -5,7 +5,8 @@
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { PLAN_C_SCHEMA, parsedDraft, recordingClient } from "../rules/plan-c-fixtures";
+import { PLAN_C_SCHEMA, parsedDraft, recordingClient, recordingFetch } from "../rules/plan-c-fixtures";
+import { createPlanCClient } from "../../lib/onlyfans/plan-c-client";
 
 const refused = () => Response.json({ schemaVersion: PLAN_C_SCHEMA, ok: false, outcome: "refused", error: "Sign in again.", reload: false }, { status: 401 });
 const lost = (): Response => { throw new TypeError("connection reset"); };
@@ -40,4 +41,22 @@ test("finding 5: a recorded ack clears the hold, so a later refusal releases the
   assert.equal(sent[1], sent[0], "the retry after the lost reply reuses the key");
   assert.notEqual(sent[3], sent[2], "the hold outlived the recorded ack, so keys are never released for this intent again");
   assert.equal(held, 0);
+});
+
+test("codex final P1: a held key survives a new client for the same account (remount), so the retry cannot act twice", async () => {
+  let i = 0;
+  const answers = [lost, recorded];
+  const { sent, fetchImpl } = recordingFetch(() => answers[i++]());
+  const draft = parsedDraft();
+  await createPlanCClient({ accountId: "acc-remount", fetchImpl }).approveDraft(draft);
+  const retry = await createPlanCClient({ accountId: "acc-remount", fetchImpl }).approveDraft(draft);
+  assert.equal(retry.ok, true, "precondition: the retry was recorded");
+  assert.equal(sent[1], sent[0], "the remounted client minted a fresh key for an intent whose first attempt may have committed");
+});
+
+test("control: a held key is per account; another account's same-looking intent gets its own key", async () => {
+  const a = recordingFetch(() => lost()), b = recordingFetch(() => lost());
+  await createPlanCClient({ accountId: "acc-iso-a", fetchImpl: a.fetchImpl }).approveDraft(parsedDraft());
+  await createPlanCClient({ accountId: "acc-iso-b", fetchImpl: b.fetchImpl }).approveDraft(parsedDraft());
+  assert.notEqual(a.sent[0], b.sent[0]);
 });

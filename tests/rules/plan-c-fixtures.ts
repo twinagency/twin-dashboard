@@ -37,7 +37,7 @@ export const stopAnswered = (answer: Answer) => createPlanCBackend({ baseUrl: "h
   .conversation(MOCK_ACCOUNT, { conversationId: CONVERSATION, action: "stop", expectedRevision: 7, commandKey: KEY, actor: OPERATOR_ACTOR });
 
 /** A browser-side fetch that records each command's key and answers with `answer`. */
-function recordingFetch(answer: Answer) {
+export function recordingFetch(answer: Answer) {
   const sent: string[] = [];
   const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => { sent.push(JSON.parse(String(init?.body)).commandKey); return answer(); }) as typeof fetch;
   return { sent, fetchImpl };
