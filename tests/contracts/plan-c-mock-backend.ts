@@ -11,7 +11,7 @@ const HEADER = "X-OnlyFans-Engine-Operator-Version";
 
 export type RawPart = { part_index: number; action: "reply" | "offer"; body: string; price_cents: number | null; currency: string | null; media_ids: string[]; preview_ids: string[]; catalog_item_id: string | null };
 export type RawDraft = { requestId: string; generation: number; draftVersion: number; draftHash: string; status: "awaiting" | "approved" | "rejected" | "invalidated";
-  action: "reply" | "offer"; fanId: string; expiresAt: string; parts: RawPart[]; conversation: { revision: number; messages: Array<{ direction: string; text: string; at: string }> };
+  action: "reply" | "offer"; fanId: string; conversationId: string; expiresAt: string; parts: RawPart[]; conversation: { revision: number; messages: Array<{ direction: string; text: string; at: string }> };
   evidence: string | null; approvedBy: string | null; approvedAt: string | null; rejectReason?: string };
 export type RawReceipt = { intentId: string; fanId: string; messageId: string; acceptedAt: string; action: "reply" | "offer"; projected: boolean };
 export type RawUnresolved = { id: string; kind: string; owner: string; nextStep: string; summary: string; conversationId: string | null; revision: number | null; createdAt: string };
@@ -23,7 +23,9 @@ export const requestUuid = (n: number) => `00000000-0000-4000-8000-${n.toString(
 
 export function seedDraft(overrides: Partial<RawDraft> & { fanId?: string } = {}): RawDraft {
   const n = ++counter, fanId = overrides.fanId ?? "900000000001";
+  // TEST-CHANGE (G03): conversationId is always sent (backend operator_v2.py:239) and the parser no longer invents it.
   return { requestId: requestUuid(n), generation: 1, draftVersion: 1, draftHash: hex(0xabc000 + n), status: "awaiting", action: "reply", fanId,
+    conversationId: `${MOCK_ACCOUNT}:${fanId}`,
     expiresAt: new Date(Date.now() + 45 * 60_000).toISOString(),
     parts: [{ part_index: 0, action: "reply", body: "Hey you, I got your message.", price_cents: null, currency: null, media_ids: [], preview_ids: [], catalog_item_id: null },
             { part_index: 1, action: "reply", body: "What are you after tonight?", price_cents: null, currency: null, media_ids: [], preview_ids: [], catalog_item_id: null }],
