@@ -160,9 +160,6 @@ export function withSummaryOverrides(
  */
 const OUTCOMES_WITH_ATTEMPT: DeliveryOutcome[] = ["dispatching", "unknown", "partial", "failed"];
 
-/** Outcomes where the attempt is still an open question rather than a record. */
-const OUTCOMES_AWAITING_EVIDENCE: DeliveryOutcome[] = ["dispatching", "unknown"];
-
 const ATTEMPT_DETAIL: Partial<Record<DeliveryOutcome, string>> = {
   unknown:
     "The provider has not confirmed this send. Resolve it from provider evidence before anything else is sent to this fan.",
@@ -196,7 +193,6 @@ export function withDetailOverrides(
         }
     : null;
 
-  const awaitingEvidence = OUTCOMES_AWAITING_EVIDENCE.includes(outcome);
   // The old attempt's id, when the override no longer records it: a settled bubble must not still point at it.
   const droppedAttempt = detail.deliveryIncident && detail.deliveryIncident.attemptId !== incident?.attemptId
     ? detail.deliveryIncident.attemptId : null;
@@ -210,11 +206,12 @@ export function withDetailOverrides(
     return {
       ...message,
       delivery: outcome,
+      // Only a sent or retracted bubble has a receipt; any other outcome points at its recorded attempt, or nothing.
       evidenceRef: reachedProvider
-        ? awaitingEvidence
-          ? (incident?.attemptId ?? message.evidenceRef)
-          : message.evidenceRef !== null && message.evidenceRef !== droppedAttempt
+        ? ["sent", "retracted"].includes(outcome)
+          ? message.evidenceRef !== null && message.evidenceRef !== droppedAttempt
             ? message.evidenceRef : `of-receipt-preview-${message.messageId}`
+          : (incident?.attemptId ?? null)
         : null,
     };
   });

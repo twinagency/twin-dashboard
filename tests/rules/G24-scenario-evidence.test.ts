@@ -54,3 +54,12 @@ test("F7: a stale thread read keeps the thread's messages behind its freshness w
   const data = dataOf(await staleRead());
   assert.equal(data?.messages.length, THREAD.messages.length, `stale thread has ${data?.messages.length} of ${THREAD.messages.length} messages`);
 });
+
+test("R1 #10: no outbound bubble claims a synthetic receipt for a refused or unsettled outcome; a sent one still has a receipt", () => {
+  for (const outcome of ["refused", "failed", "partial", "accepted_pending", "dispatching", "unknown"] as const) {
+    for (const m of outbound(override(THREAD, outcome))) {
+      assert.doesNotMatch(m.evidenceRef ?? "", /^of-receipt-/, `${outcome} bubble ${m.messageId} claims receipt ${m.evidenceRef}`);
+    }
+  }
+  assert.ok(outbound(override(UNKNOWN, "sent")).every(m => m.evidenceRef !== null), "a sent bubble keeps a receipt");
+});

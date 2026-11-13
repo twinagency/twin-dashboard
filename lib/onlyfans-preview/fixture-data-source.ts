@@ -239,6 +239,10 @@ export function simulateCommand(request: CommandRequest, viewer: PreviewViewer, 
     return refuse(actions.blocked.find((entry) => entry.action === request.command)?.reason ?? "That action is not offered here.");
   }
 
+  if (request.payload.kind === "delivery_resolution" && request.payload.attemptId !== conversation.deliveryIncident?.attemptId) {
+    return refuse("That is not the attempt this conversation is waiting on.");
+  }
+
   const described =
     request.payload.kind === "manual_message"
       ? `a message of ${request.payload.body.trim().length} characters`

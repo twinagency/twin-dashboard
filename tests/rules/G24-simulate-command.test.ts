@@ -61,3 +61,15 @@ test("F5: a send from a read-only view with no accounts is refused; the same sen
   assert.equal(bad.accepted, false, `accepted: ${bad.note}`);
   assert.equal((await validSend()).accepted, true);
 });
+
+test("R1 #9: a delivery resolution naming another attempt is refused with a literal reason; the conversation's own attempt is not", async () => {
+  const attemptId = unknown.deliveryIncident?.attemptId ?? "";
+  const resolve = (id: string) => submit(operatorViewer(), unknown, "resolve_delivery_evidence",
+    { kind: "delivery_resolution", attemptId: id, decision: "delivered", providerMessageId: "123" });
+  assert.ok(attemptId);
+  const good = await resolve(attemptId);
+  assert.equal(good.accepted, true, `own attempt refused: ${good.refusalReason}`);
+  const bad = await resolve(`${attemptId}-other`);
+  assert.equal(bad.accepted, false, `accepted another attempt: ${bad.note}`);
+  assert.equal(bad.refusalReason, "That is not the attempt this conversation is waiting on.");
+});
