@@ -69,8 +69,8 @@ export function EngineStatus({ value, accountId, conversationId, onAction, onLoa
   const status = useMemo(() => value === undefined ? undefined : parseEngineStatus(value, accountId, conversationId), [value, accountId, conversationId]);
   const [loaded, setLoaded] = useState<{ requests: EngineRequestView[]; cursor: string | null } | null>(null);
   const [busy, setBusy] = useState(false), [loadError, setLoadError] = useState<string | null>(null);
-  // Any change to the first page (a new request, a new revision) invalidates later pages: they could be stale or skip rows.
-  const signature = status?.state === "current" ? status.requests.map(request => `${request.requestId}:${request.revision ?? "r"}`).join(",") + "|" + (status.nextCursor ?? "") : "";
+  // Any change to the first page (another conversation, a new request, revision or outcome) invalidates later pages: they could be stale or skip rows.
+  const signature = status?.state === "current" ? `${accountId}|${conversationId}|` + status.requests.map(request => `${request.requestId}:${request.revision ?? "r"}:${request.actionOutcome}`).join(",") + "|" + (status.nextCursor ?? "") : "";
   const current = useRef(signature);
   useEffect(() => { current.current = signature; setLoaded(null); setLoadError(null); }, [signature]);
   if (value === undefined) return null;

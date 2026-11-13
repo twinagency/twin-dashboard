@@ -1,10 +1,7 @@
-// KNOWN RED (W4 lib-onlyfans-preview-1 F2, F3; docs/review/W4/lib-onlyfans-preview-1.md): lib/onlyfans-preview/actions.ts
-// F2: pause_automation and mark_no_contact need the pauseAutomation capability (:75-83,126-131), which the fixtures mark
-// unavailable on an expired/disconnected session, so a stop (our own state, no provider write) is blocked on degraded accounts.
-// F3: a manual send is offered on a taken-over thread while summary.delivery is "queued"/"generating" (only
-// dispatching/accepted_pending/unknown/partial hold, :52), so a queued automated reply and a manual send can both land.
+// Rule (W4 lib-onlyfans-preview-1 F2, F3, lib/onlyfans-preview/actions.ts): a stop (pause_automation, mark_no_contact) stays
+// offered on a degraded account whose pauseAutomation capability is unavailable; a manual send is not offered on a taken-over
+// thread while an automated reply is queued or generating, so the two cannot both land.
 // Control: on Ava's healthy account an automated thread offers pause + no-contact, and a "sent" taken-over thread offers send.
-// Run: nice -n 10 node --import tsx --test tests/known-red/W7-P-picks-W4-p1-stop-and-queued.test.ts
 import assert from "node:assert/strict";
 import test from "node:test";
 import { availableActions } from "../../lib/onlyfans-preview/actions";

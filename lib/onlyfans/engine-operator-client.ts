@@ -13,9 +13,6 @@ export async function submitEngineOperatorCommand(args: { accountId: string; con
     // Success needs a 2xx AND a recorded body; a refusal needs a non-2xx. Anything else proves nothing.
     if (response.ok && data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === true && data.outcome === "recorded") return { ok: true };
     if (!response.ok && data.schemaVersion === ENGINE_OPERATOR_SCHEMA && data.ok === false && data.outcome === "refused" && typeof data.error === "string") return { ok: false, outcome: "refused", error: data.error };
-    // The dashboard's own denial (lib/onlyfans/route.ts denialBody) is raised before any upstream call, so nothing was applied.
-    if (!response.ok && data.schemaVersion === undefined && data.ok === false && (data.state === "denied" || data.state === "unavailable") &&
-        typeof data.code === "string" && typeof data.error === "string") return { ok: false, outcome: "refused", error: data.error };
   } catch { /* A failed connection does not prove the action failed. */ }
   return { ok: false, outcome: "unconfirmed", error: "The outcome is unconfirmed. Refresh the request before taking another action." };
 }

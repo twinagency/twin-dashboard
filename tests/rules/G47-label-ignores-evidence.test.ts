@@ -1,10 +1,5 @@
-// KNOWN RED (W1 lane 2 finding 2, docs/review/W1/lib-onlyfans-engine.md; REVIEW inv 7 "No false success"): explicit
-// purchase evidence from the backend wins in engineRequestPurchase (lib/onlyfans/engine-status.ts:122) but
-// engineRequestLabel (:148) ignores it, so a completed offer whose evidence says refunded / offered / purchased /
-// held_for_review still reads "Purchase and access confirmed" while the chip on the same row says otherwise.
-// Distinct from B1 (tests/known-red/b1-false-success.test.mjs, no evidence at all): a B1 fix that only touches :126 leaves this.
-// Team's Claude owns the fix. Not run by init.sh or npm yet: listed under '## Wiring (orchestrator)' in
-// docs/review/W1/lib-onlyfans-engine.md.
+// Rule (W1 lane 2 finding 2, REVIEW inv 7 "No false success"): a completed offer's label follows the same purchase evidence as
+// its chip, so explicit refunded, offered, purchased or held_for_review evidence never reads "Purchase and access confirmed".
 import assert from "node:assert/strict";
 import test from "node:test";
 import { engineRequestLabel, engineRequestPurchase, parseEngineRequest } from "../../lib/onlyfans/engine-status";

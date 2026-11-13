@@ -1,5 +1,5 @@
-// Shared fixtures for the W4 lib-onlyfans-preview-1 tests (tests/rules/W4-lib-onlyfans-preview-1-holds.test.ts and
-// tests/known-red/W4-lib-onlyfans-preview-1-*.test.ts), so an ActionSet, RequestState or fixture change edits one place.
+// Shared fixtures for the W4 lib-onlyfans-preview-1 tests (here, tests/rules/G47-stop-and-queued.test.ts), so an ActionSet,
+// RequestState or fixture change edits one place.
 // Not a test file: the name must never match *.test.*.
 import { availableActions } from "../../lib/onlyfans-preview/actions";
 import { accounts, conversationDetails, ACCOUNT_AVA } from "../../lib/onlyfans-preview/fixtures";

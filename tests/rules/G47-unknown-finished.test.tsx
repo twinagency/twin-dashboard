@@ -1,11 +1,6 @@
-// KNOWN RED (W1 lane 2 finding 1, docs/review/W1/lib-onlyfans-engine.md; REVIEW inv 7 "unknown-delivery holds win",
-// rules a + b): a request whose send outcome is unknown or held needs a person, whatever its status. isUnresolvedRequest
-// (lib/onlyfans/engine-status.ts:45-46) is status-only, so {status: completed|cancelled|declined, actionOutcome: unknown|held}
-// is filed under "Finished" by EngineStatus.tsx:82 with data-engine-unresolved="false". Adds the grouping half of A-HELD
-// (label half: tests/known-red/a-held-outcome.test.ts). engine-unresolved.ts:20-21 needsReview counts unknown but is unused.
-// Note for the fix: tests/contracts/engine-environment.test.ts:56-58 pins the status-only rule; changing it needs TEST-CHANGE.
-// Team's Claude owns the fix. Not run by init.sh or npm yet: listed under '## Wiring (orchestrator)' in
-// docs/review/W1/lib-onlyfans-engine.md. Offline: jsdom, no fetch.
+// Rule (W1 lane 2 finding 1, REVIEW inv 7 "unknown-delivery holds win", rules a + b): a request whose send outcome is unknown
+// or held needs a person whatever its status, so it is filed under Needs attention (data-engine-unresolved="true"), never Finished.
+// Offline: jsdom, no fetch.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import test, { after, before } from "node:test";

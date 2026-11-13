@@ -1,9 +1,6 @@
-// KNOWN RED (W1 lane 7a finding 7, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "Stale work" and
-// "new inbound supersedes unsent work"). EngineStatus.tsx:72-74 resets loaded pages when the first page's signature
-// changes, but an in-flight loadMore (:84-93) still writes its old-cursor page afterwards, so rows from a page the
-// component itself declared invalid come back. The parent refreshes the first page every 15 s
-// (OnlyFansWorkspace.tsx:571), so the race is reachable in normal use. Team's Claude owns the fix.
-// Not wired into npm scripts. Offline: 7a-harness (jsdom), synthetic engine views, a deferred page loader. No network.
+// Rule (W1 lane 7a finding 7, REVIEW inv 7 "Stale work"): when the first page changes (the parent refreshes it every 15 s),
+// later pages are dropped, including one still in flight; a page from an invalidated cursor never comes back.
+// Offline: 7a-harness (jsdom), synthetic engine views, a deferred page loader. No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { act } from "react";
@@ -40,4 +37,11 @@ test("finding 7: a page requested before the first page changed is dropped, not 
   assert.deepEqual(shown(), [id(1)], "fixture: the refresh reset the loaded pages");
   await resolve(page([row(2, 1)], null));
   assert.deepEqual(shown(), [id(1)], "a page from the invalidated cursor must not come back (stale rows)");
+});
+
+test("a page requested before a first-page outcome changed is dropped, even with the same revision and cursor", async () => {
+  const { show, resolve } = await setup();
+  await show(page([{ ...row(1, 1), actionOutcome: "unknown" }], "cursor-one"));
+  await resolve(page([row(2, 1)], null));
+  assert.deepEqual(shown(), [id(1)], "the first page changed, so the in-flight page is stale");
 });

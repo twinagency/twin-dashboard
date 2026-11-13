@@ -1,5 +1,5 @@
 /** Account-wide list of engine requests and sends that still need a person. */
-import { ENGINE_PAGE_MAX, isCursor, isEngineEnvironment, isUnresolvedRequest, parseEngineRequest, type EngineEnvironment, type EngineRequestView } from "./engine-status";
+import { ENGINE_PAGE_MAX, isCursor, isEngineEnvironment, parseEngineRequest, type EngineEnvironment, type EngineRequestView } from "./engine-status";
 
 export type EngineUnresolvedItem = EngineRequestView & {
   conversationId: string;
@@ -15,9 +15,6 @@ export type EngineUnresolvedPage = { schemaVersion: "of-engine.v1"; state: "curr
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const ID = /^[A-Za-z0-9._:-]{1,64}$/;
-
-/** A row needing review: not finished, or a send whose outcome is unknown or held. */
-export const needsReview = (item: Pick<EngineRequestView, "status" | "actionOutcome">) => isUnresolvedRequest(item);
 
 export function parseEngineUnresolved(value: unknown, accountId: string): EngineUnresolvedPage | null {
   if (!record(value) || value.schemaVersion !== "of-engine.v1") return null;

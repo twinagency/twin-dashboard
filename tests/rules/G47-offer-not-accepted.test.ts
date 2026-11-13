@@ -1,9 +1,5 @@
-// KNOWN RED (W1 lane 2 finding 3, docs/review/W1/lib-onlyfans-engine.md; REVIEW inv 7 "No false success"): an offer
-// request waiting_fan/await_purchase_or_question reads "Offer sent; purchase is not confirmed" (engine-status.ts:141) and
-// chips "Offered" (:128) whatever its actionOutcome. With not_accepted, refused or cancelled the outcome checks at :142 and
-// :145 are never reached, so a send that did not go out is shown as sent; with unknown the label asks for review (:134)
-// but the chip still claims "Offered". Backend emitting these combinations: guess. Team's Claude owns the fix.
-// Not run by init.sh or npm yet: listed under '## Wiring (orchestrator)' in docs/review/W1/lib-onlyfans-engine.md.
+// Rule (W1 lane 2 finding 3, REVIEW inv 7 "No false success"): an offer whose send was not accepted, refused, cancelled or
+// unknown never reads "Offer sent" and never chips "Offered"; only an accepted send does.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { engineRequestLabel, engineRequestPurchase, parseEngineRequest } from "../../lib/onlyfans/engine-status";

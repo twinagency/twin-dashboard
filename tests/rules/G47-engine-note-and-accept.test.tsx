@@ -1,11 +1,7 @@
-// KNOWN RED (W1 lane 7a finding 12, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "No false
-// success" and Structure "duplicate helper where a canonical one exists").
-// Finding 11 (1-character engine note) is not tested: the engine route contract only requires non-empty, <= 108
-// (requests/[requestId]/route.ts:32); a 6-char minimum is Plan C's, not the engine's (codex final check).
-//  12: EngineStatus.tsx:52-54 shows "Take over the conversation first, then accept this request." but Accept
-//      responsibility is disabled only while pending, so it can be accepted without taking over. Design-neutral: the
-//      test only forbids the copy and an enabled Accept together.
-// Team's Claude owns the fix. Not wired into npm scripts. Offline: 7a-harness (jsdom), synthetic engine views. No network.
+// Rule (W1 lane 7a finding 12, REVIEW inv 7 "No false success"): while the copy says "Take over the conversation first,
+// then accept this request", Accept responsibility is disabled; a request cannot be accepted without human control.
+// Finding 11 (1-character engine note) is not a rule: the engine route only requires non-empty, <= 108 characters.
+// Offline: 7a-harness (jsdom), synthetic engine views. No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { button, engineView, q, showEngine, text } from "./7a-harness";

@@ -1,7 +1,5 @@
-// KNOWN RED (rule a, docs/RISKS.md): the engine reports actionOutcome "held" (a send stopped by a hold, the only way a
-// budget or policy hold reaches a request row), and lib/onlyfans/engine-status.ts:42 accepts it, but engineRequestLabel
-// (engine-status.ts:132-155) has no case for it: a held send reads "Request in progress" or "Reply completed".
-// Holds must always be visible. Team's Claude owns the fix. Not wired into npm scripts; init.sh reports it.
+// Rule (rule a, docs/RISKS.md): a held send (actionOutcome "held", how a budget or policy hold reaches a request row) always
+// reads as held and needing review, never "Request in progress", "Reply completed" or any other settled state.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { engineRequestLabel, parseEngineRequest } from "../../lib/onlyfans/engine-status";

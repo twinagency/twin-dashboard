@@ -1,9 +1,5 @@
-// KNOWN RED (W1 lane 2 finding 4, docs/review/W1/lib-onlyfans-engine.md; REVIEW inv 7 "No false success"):
-// submitEngineOperatorCommand (lib/onlyfans/engine-operator-client.ts:12-14) reads only the body, never the HTTP status,
-// so a non-2xx reply whose body says {ok:true, outcome:"recorded"} returns {ok:true}. Our route only sends "recorded"
-// with 200 [inferred], so this is defence in depth; same pattern outside lane in EngineCatalogue.tsx:89 (lane 7b).
-// Team's Claude owns the fix. Not run by init.sh or npm yet: listed under '## Wiring (orchestrator)' in
-// docs/review/W1/lib-onlyfans-engine.md. Offline: fetchImpl fake, nothing leaves the process.
+// Rule (W1 lane 2 finding 4, REVIEW inv 7 "No false success"): submitEngineOperatorCommand reads success only from a 2xx
+// whose body says recorded. A non-2xx reply is never success, whatever its body claims. Offline: fetchImpl fake.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { submitEngineOperatorCommand } from "../../lib/onlyfans/engine-operator-client";

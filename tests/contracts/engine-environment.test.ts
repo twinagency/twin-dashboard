@@ -54,8 +54,8 @@ test("pages append without repeating or reordering rows", () => {
 });
 
 test("unresolved matches the backend's finished set", () => {
-  for (const status of ["open", "waiting_fan", "waiting_provider", "handover_pending", "handover_accepted"]) assert.equal(isUnresolvedRequest({ status }), true);
-  for (const status of ["completed", "declined", "cancelled"]) assert.equal(isUnresolvedRequest({ status }), false);
+  for (const status of ["open", "waiting_fan", "waiting_provider", "handover_pending", "handover_accepted"]) assert.equal(isUnresolvedRequest({ status, actionOutcome: null }), true);
+  for (const status of ["completed", "declined", "cancelled"]) assert.equal(isUnresolvedRequest({ status, actionOutcome: null }), false);
 });
 
 test("purchase evidence is derived from request state and never overstated", () => {
