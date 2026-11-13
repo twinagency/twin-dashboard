@@ -38,7 +38,7 @@ globalThis.fetch = (async (input: any, init?: any) => {
 }) as typeof fetch;
 
 export type WireCall = { method: string; path: string; query: URLSearchParams; body: any };
-export type Reply = { status?: number; body?: unknown; headers?: Record<string, string> };
+export type Reply = { status?: number; body?: unknown; headers?: Record<string, string>; raw?: Buffer };
 
 export async function startFakeSupabase() {
   const calls: WireCall[] = [];
@@ -53,6 +53,7 @@ export async function startFakeSupabase() {
       const call: WireCall = { method: req.method ?? "GET", path: u.pathname, query: u.searchParams, body };
       calls.push(call);
       const reply = responder(call) ?? { status: 200, body: [] };
+      if (reply.raw) { res.writeHead(reply.status ?? 200, { "content-type": "application/octet-stream", ...(reply.headers ?? {}) }); res.end(reply.raw); return; }
       let payload = reply.body ?? [];
       if (String(req.headers.accept ?? "").includes("vnd.pgrst.object") && Array.isArray(payload)) payload = payload[0] ?? null;
       res.writeHead(reply.status ?? 200, { "content-type": "application/json", ...(reply.headers ?? {}) });

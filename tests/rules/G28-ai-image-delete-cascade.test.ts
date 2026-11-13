@@ -15,8 +15,9 @@
 import { startFakeSupabase, asAdmin, outcome, blockedFetches } from "./G28-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
-// G28 round 2 (Flash): delete order is public copy, then the row, then the private original, so a failed public remove
-// leaves the row and the original in place (retry safe); a missing ai-public bucket (lazy) counts as already gone.
+// G28 round 2 (Flash): a failed public remove leaves the row and the original in place (retry safe); a missing ai-public
+// bucket (lazy) counts as already gone. G28c: delete denies first through the reject takedown (public copy down even when the
+// delete is then refused), then public variants, private, row (see G28c-ai-image-storage-order / G28c-ai-image-retry).
 import { deleteAiImage } from "../../app/ai-models/actions";
 
 const MODEL = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -42,15 +43,15 @@ function seed(purchases: "one" | "none" | "timeout", publicRemove: "ok" | "fails
   });
 }
 const rowDeletes = () => sb.calls.filter((c) => c.method === "DELETE" && c.path === "/rest/v1/ai_model_images");
-const storageRemoves = () => sb.calls.filter((c) => c.method === "DELETE" && c.path.startsWith("/storage/v1/object/")).map((c) => `${c.path} ${JSON.stringify(c.body)}`);
+const privateRemoves = () => sb.calls.filter((c) => c.method === "DELETE" && c.path === "/storage/v1/object/ai-private");
 
-test("control: a purchased image (count 1) is refused, nothing removed or deleted", async () => {
+test("control: a purchased image (count 1) is refused: denied (public copy down), private original and row kept", async () => {
   seed("one");
   const result = await outcome(asAdmin(() => deleteAiImage(IMAGE)));
   assert.match(result, /^rejected: A fan bought this one/);
   assert.equal(sb.calls.some((c) => c.path === "/rest/v1/ai_model_purchases"), true, "purchase count was asked");
   assert.deepEqual(rowDeletes(), []);
-  assert.deepEqual(storageRemoves(), []);
+  assert.deepEqual(privateRemoves(), [], "the private original a buyer owns must stay");
   assert.deepEqual(blockedFetches, []);
 });
 
@@ -58,7 +59,7 @@ test("F-B1: a failed purchase count (57014) must not delete the image row (casca
   seed("timeout");
   const result = await outcome(asAdmin(() => deleteAiImage(IMAGE)));
   assert.equal(rowDeletes().length, 0, `DELETE /rest/v1/ai_model_images was sent after the purchase count failed (action ${result})`);
-  assert.deepEqual(storageRemoves(), [], "storage objects removed after the purchase count failed");
+  assert.deepEqual(privateRemoves(), [], "private original removed after the purchase count failed");
   assert.notEqual(result, "resolved", "deleteAiImage reported success although it could not tell whether a fan bought the image");
   assert.deepEqual(blockedFetches, []);
 });
@@ -74,10 +75,10 @@ test("F-B3: a failed public remove keeps the row and the private original (retry
   assert.deepEqual(blockedFetches, []);
 });
 
-test("F-B3b: with the ai-public bucket missing the delete goes through: public, then row, then private", async () => {
+test("F-B3b: with the ai-public bucket missing the delete goes through: public, then private, then row", async () => {
   seed("none", "no-bucket");
   const result = await outcome(asAdmin(() => deleteAiImage(IMAGE)));
   assert.equal(result, "resolved", "a missing public bucket means nothing public is left, so the delete must not be blocked");
-  assert.deepEqual(deletes(), ["/storage/v1/object/ai-public", "/rest/v1/ai_model_images", "/storage/v1/object/ai-private"]);
+  assert.deepEqual(deletes(), ["/storage/v1/object/ai-public", "/storage/v1/object/ai-public", "/storage/v1/object/ai-private", "/rest/v1/ai_model_images"]);
   assert.deepEqual(blockedFetches, []);
 });

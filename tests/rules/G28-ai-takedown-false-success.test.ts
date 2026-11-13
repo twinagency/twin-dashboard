@@ -10,9 +10,9 @@
 // only that call on bucket ai-public. A fix that removes objects one by one on the same path still meets the fake.
 // Harness: W5-app-ai-plus3-harness.ts (declared Next request-store bypass for cookies()/revalidatePath()).
 // Run: TSX_TSCONFIG_PATH=scripts/tsconfig.json node --import tsx --test <this file>. Offline: fake Supabase on 127.0.0.1:0.
-// G28 round 2 (Codex P1-b, Flash): a takedown removes the public copy FIRST and writes status/access + public_path in one
-// PATCH only after the remove succeeded; a failed remove sends no PATCH at all (row stays as it was). A missing ai-public
-// bucket (created lazily on first upload) means there is nothing public to take down, so it must not block a takedown.
+// G28c (batch rwl 2 C1, supersedes G28 round 2): a takedown writes the deny (status/access) FIRST, keeping public_path, then
+// removes the public copy, then nulls public_path; a failed remove leaves the row denied with the stale path recorded and
+// rejects. A missing ai-public bucket (created lazily on first upload) means nothing is public, so it must not block a takedown.
 import { startFakeSupabase, asAdmin, outcome, blockedFetches } from "./G28-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -42,36 +42,35 @@ function seed(publicRemove: "ok" | "fails" | "no-bucket") {
 const publicRemoves = () => sb.calls.filter((c) => c.method === "DELETE" && c.path === "/storage/v1/object/ai-public");
 const publicPathNulls = () => sb.calls.filter((c) => c.method === "PATCH" && c.path === "/rest/v1/ai_model_images" && c.body && "public_path" in c.body && c.body.public_path === null);
 const imagePatches = () => sb.calls.filter((c) => c.method === "PATCH" && c.path === "/rest/v1/ai_model_images").map((c) => c.body);
-const dbWrites = () => sb.calls.filter((c) => c.path.startsWith("/rest/v1/") && c.method !== "GET" && c.method !== "HEAD").map((c) => `${c.method} ${c.path} ${JSON.stringify(c.body)}`);
 
-test("control: rejecting an approved Free image removes the public copy, then writes status and public_path together", async () => {
+test("control: rejecting an approved Free image writes the deny, removes the public copy, then nulls public_path", async () => {
   seed("ok");
   const result = await outcome(asAdmin(() => setImageStatus(IMAGE, "rejected")));
   assert.equal(result, "resolved");
   assert.equal(publicRemoves().length, 1);
   assert.ok((publicRemoves()[0].body?.prefixes ?? []).includes(FREE), "the Free public copy is asked to be removed");
   assert.equal(publicPathNulls().length, 1, "public_path cleared");
-  assert.deepEqual(imagePatches(), [{ status: "rejected", public_path: null }], "one PATCH carrying status and public_path, after the remove");
+  assert.deepEqual(imagePatches(), [{ status: "rejected" }, { public_path: null }], "deny first, public_path nulled only after the remove");
   assert.ok(sb.calls.indexOf(publicRemoves()[0]) < sb.calls.indexOf(publicPathNulls()[0]), "remove before PATCH");
   assert.deepEqual(blockedFetches, []);
 });
 
-test("F-B2: a failed public remove must not be recorded as taken down, and the row stays as it was", async () => {
+test("F-B2: a failed public remove must not be recorded as taken down, and the row stays denied", async () => {
   seed("fails");
   const result = await outcome(asAdmin(() => setImageStatus(IMAGE, "rejected")));
   assert.equal(publicRemoves().length, 1, "the public remove was attempted");
   assert.equal(publicPathNulls().length, 0, `PATCH public_path:null was written although ai-public/${FREE} was not removed (action ${result})`);
-  assert.deepEqual(dbWrites(), [], "no status/public_path (or any other) write after a failed remove: the row keeps its pre-action state");
+  assert.deepEqual(imagePatches(), [{ status: "rejected" }], "the deny lands before storage; public_path still records the stale copy");
   assert.notEqual(result, "resolved", "setImageStatus(rejected) reported success while the public copy is still served");
   assert.deepEqual(blockedFetches, []);
 });
 
-test("F-B2b: Free to Locked with a failed public remove sends no access PATCH (row stays Free, no price)", async () => {
+test("F-B2b: Free to Locked with a failed public remove still locks the row, public_path kept", async () => {
   seed("fails");
   const result = await outcome(asAdmin(() => setImageAccess(IMAGE, "locked", 50)));
   assert.equal(publicRemoves().length, 1, "the Free public copy remove was attempted");
   assert.ok((publicRemoves()[0].body?.prefixes ?? []).includes(FREE));
-  assert.deepEqual(dbWrites(), [], "access/price_stars were written although the Free copy is still public");
+  assert.deepEqual(imagePatches(), [{ access: "locked", price_stars: 50 }], "the lock lands before storage; public_path is not rewritten while the Free copy is up");
   assert.notEqual(result, "resolved");
   assert.deepEqual(blockedFetches, []);
 });
@@ -80,7 +79,7 @@ test("F-B2c: a missing ai-public bucket means nothing is public, so the reject s
   seed("no-bucket");
   const result = await outcome(asAdmin(() => setImageStatus(IMAGE, "rejected")));
   assert.equal(result, "resolved", "a takedown must never be harder than a go");
-  assert.deepEqual(imagePatches(), [{ status: "rejected", public_path: null }]);
+  assert.deepEqual(imagePatches(), [{ status: "rejected" }, { public_path: null }]);
   assert.deepEqual(blockedFetches, []);
 });
 
