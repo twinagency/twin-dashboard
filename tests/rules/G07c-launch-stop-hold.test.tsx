@@ -32,6 +32,7 @@ async function open(a: Answers = {}, keepStorage = false) {
     if (url.startsWith(`/api/onlyfans-controls/accounts/${id}/conversations/`) && method === "POST") return a.control ? a.control() : html502();
     if (url === `/api/onlyfans-configuration/accounts/${id}/moxy` && a.moxy) return a.moxy();
     if (url === `/api/onlyfans-launch/automation/accounts/${id}/settings` && method === "GET") return json(settings(3, id));
+    if (url === `/api/onlyfans-launch/automation/accounts/${id}/settings` && method === "POST") return html502();
     if (url === `/api/onlyfans-launch/automation/accounts/${id}/follow-ups` && method === "GET") return json(followUps([], null, id));
     if (url.startsWith("/api/onlyfans-configuration/")) return json({ error: "Not in this fixture." }, 503);
     throw new TypeError(`unexpected fetch ${method} ${url}`);
@@ -143,6 +144,22 @@ test("L4: go is held while the STOP is in flight, and an old stopped read that l
   post.resolve(html502());
   await typeInto(reasonInput(), "Synthetic stop reason");
   assert.equal(conv("resume_automation"), false, "held after the unconfirmed reply");
+  await unmount();
+});
+
+test("L4: a stale STOP reply cannot clear a newer STOP's hold", async () => {
+  // STOP 1 hangs; the operator switches away and back (remount), sends STOP 2 (502, unknown), then STOP 1 answers recorded.
+  const first = deferred();
+  let n = 0;
+  const stub = await open({ ids: ["of-a", "of-b"], stopPost: () => (n++ === 0 ? first.promise : html502()) });
+  await sendStop();
+  await choose("select#b-auto-acct", "of-b");
+  await choose("select#b-auto-acct", "of-a");
+  await sendStop();
+  assert.deepEqual(actions(stub), ["emergency_stop", "emergency_stop"], "both STOPs were sent");
+  first.resolve(recorded());
+  await typeInto(reasonInput(), "Synthetic stop reason");
+  assert.equal(conv("resume_automation"), false, "STOP 1's late recorded reply cleared STOP 2's unknown hold");
   await unmount();
 });
 
@@ -260,5 +277,23 @@ test("L4: engagement enabling is held by an unconfirmed STOP, disabling stays li
   await click(box("enabled"));
   await click(box("follow ups"));
   assert.equal(save(), true, "turning follow-ups off is held");
+  await unmount();
+});
+
+test("L4: saving an identical engagement policy with a flag on is held", async () => {
+  await open({ moxy: () => json(moxyLegacy()) }); // the saved policy has follow ups on
+  const save = () => enabled(/^Save engagement settings$/);
+  assert.equal(save(), true, "control: an identical save is live before the STOP");
+  await sendStop();
+  assert.equal(save(), false, "an identical enabled save escapes the STOP hold");
+  await unmount();
+});
+
+test("L4: retrying identical engagement settings with a flag on is held", async () => {
+  await open({ moxy: () => json(moxyLegacy()) });
+  await click(button(/^Save engagement settings$/)); // 502: the retry is offered
+  assert.equal(enabled(/^Retry identical engagement settings$/), true, "control: the identical retry is live before the STOP");
+  await sendStop();
+  assert.equal(enabled(/^Retry identical engagement settings$/), false, "an identical enabled retry escapes the STOP hold");
   await unmount();
 });

@@ -41,7 +41,8 @@ export default function AccountControls({
   goHold: string | null;
   /** When the held STOP was sent (`stamp()`), or null. */
   stopSince: number | null;
-  onStop: (phase: StopPhase) => void;
+  /** `attempt` is the `stamp()` taken when that STOP was sent (unused for "confirmed"). */
+  onStop: (phase: StopPhase, attempt: number) => void;
 }) {
   const base = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
   const r = useJsonResource(
@@ -76,7 +77,7 @@ export default function AccountControls({
   // A read issued after the STOP was sent that shows the account stopped confirms it: release the hold and the stop lane.
   useEffect(() => {
     if (stopSince === null || !ready || ready.accountControl.enabled || issued.current <= stopSince) return;
-    onStop("confirmed");
+    onStop("confirmed", 0);
     setOutcome((o) => ({ ...o, stop: { pending: null, notice: "Emergency stop: the account reads as stopped." } }));
   }, [stopSince, ready, onStop]);
   const mounted = useRef(true);
@@ -86,7 +87,8 @@ export default function AccountControls({
   }, []);
   async function send(command: Command) {
     const isStop = command.action === "emergency_stop";
-    if (isStop) onStop("sent");
+    const attempt = stamp();
+    if (isStop) onStop("sent", attempt);
     setInFlight((f) => [...f, command.action]);
     const q = await bFetch(base, { method: "POST", body: command });
     const recorded =
@@ -99,7 +101,7 @@ export default function AccountControls({
       q.data.command.recorded === true;
     const unconfirmed = q.kind === "unconfirmed" || (q.kind === "ok" && !recorded);
     // Before the unmount check: a STOP answered after the operator switched account still settles that account's hold.
-    if (isStop) onStop(recorded ? "recorded" : unconfirmed ? "unknown" : "refused");
+    if (isStop) onStop(recorded ? "recorded" : unconfirmed ? "unknown" : "refused", attempt);
     if (!mounted.current) return;
     setInFlight((f) => f.filter((a) => a !== command.action));
     setAction((a) => (a === command.action ? null : a));

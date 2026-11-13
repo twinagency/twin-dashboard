@@ -33,11 +33,11 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   // control there until a later one succeeds.
   const [denied, setDenied] = useState<Record<string, boolean>>({});
   const [, setHoldTick] = useState(0);
-  const heldBefore = useRef(new Map<string, boolean>());
-  function stopPhase(id: string, phase: StopPhase) {
-    if (phase === "sent") { heldBefore.current.set(id, readHold(id) !== null); writeHold(id, stamp()); }
-    // A refusal proves this STOP did nothing, so it lifts only the hold it set itself, never an earlier unconfirmed STOP's.
-    else if (phase === "recorded" || phase === "confirmed" || (phase === "refused" && !heldBefore.current.get(id))) writeHold(id, null);
+  function stopPhase(id: string, phase: StopPhase, attempt: number) {
+    const hold = readHold(id);
+    if (phase === "sent") writeHold(id, { since: attempt, attempt, carried: hold !== null });
+    // A reply settles only the STOP that set the current hold; a refusal proves that STOP did nothing, so it never lifts a carried hold.
+    else if (phase === "confirmed" || (hold?.attempt === attempt && (phase === "recorded" || (phase === "refused" && !hold.carried)))) writeHold(id, null);
     setHoldTick(t => t + 1);
   }
   const [accounts, setAccounts] = useState<Load<BAccount[]>>(loading);
@@ -105,7 +105,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
   }
 
   const account = accounts.state === "ok" ? accounts.data.find(a => a.accountId === accountId) : undefined;
-  const stopSince = accountId ? readHold(accountId) : null;
+  const stopSince = accountId ? readHold(accountId)?.since ?? null : null;
   const goHold = stopSince !== null ? "Held until the emergency stop is confirmed." :
     denied[accountId] ? "Access was refused on this account. Sign in again and reload the page." : null;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-auto-h" data-b-automation>
@@ -133,7 +133,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {runtime.state === "loading" ? <BLoading label="Loading runtime…" /> : null}
         {runtime.state === "error" ? <BError message={runtime.message} onRetry={() => void loadAccountData(accountId)} /> : null}
         <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)}
-          goHold={goHold} stopSince={stopSince} onStop={phase => stopPhase(accountId, phase)} />
+          goHold={goHold} stopSince={stopSince} onStop={(phase, attempt) => stopPhase(accountId, phase, attempt)} />
       </div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="conversations">

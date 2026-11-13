@@ -36,11 +36,13 @@ const pageParser = (accountId: string) => (v: unknown) =>
     ? parseEngagementPage(v)
     : null;
 const FLAGS = ["enabled", "offers", "follow_ups", "reengagement"] as const;
-/** A brake: every flag off, or only switching flags off. Anything else is a go, held while `goHold` is set. */
+/** A brake: every flag off, or against `saved` it turns at least one flag off and changes nothing else. An identical policy with a
+ *  flag on is a go. Anything that is not a brake is held while `goHold` is set. */
 function brakeOnly(next: EngagementPolicy, saved: EngagementPolicy | null) {
   if (FLAGS.every((f) => !next[f])) return true;
-  return saved !== null && (Object.keys(next) as (keyof EngagementPolicy)[]).every((k) =>
-    next[k] === saved[k] || ((FLAGS as readonly string[]).includes(k) && next[k] === false));
+  if (saved === null) return false;
+  const changed = (Object.keys(next) as (keyof EngagementPolicy)[]).filter((k) => next[k] !== saved[k]);
+  return changed.length > 0 && changed.every((k) => (FLAGS as readonly string[]).includes(k) && next[k] === false);
 }
 function Settings({
   data,
@@ -267,12 +269,14 @@ export default function EngagementPanel({
     useCallback(pageParser(accountId), [accountId]),
     false,
   );
+  // An identical retry is a brake only if every flag is off: it is not compared with the current read.
+  const retryHeld = (p: EngagementPolicy) => goHold !== null && !brakeOnly(p, null);
   async function saveSettings(command: {
     expectedRevision: number;
     settings: EngagementPolicy;
-  }) {
+  }, retry = false) {
     const saved = settings.state.kind === "ok" ? settings.state.data.settings : null;
-    if (!manage || settingsBusy || (goHold !== null && !brakeOnly(command.settings, saved))) return;
+    if (!manage || settingsBusy || (goHold !== null && !brakeOnly(command.settings, retry ? null : saved))) return;
     setSettingsBusy(true);
     const r = await bFetch(`${base}/settings`, {
       method: "POST",
@@ -358,10 +362,9 @@ export default function EngagementPanel({
           <div className="flex flex-wrap gap-2">
             <button
               className={buttonClass}
-              disabled={!manage || settingsBusy || (goHold !== null &&
-                !brakeOnly(pendingSettings.settings, settings.state.kind === "ok" ? settings.state.data.settings : null))}
+              disabled={!manage || settingsBusy || retryHeld(pendingSettings.settings)}
               title={goHold ?? undefined}
-              onClick={() => void saveSettings(pendingSettings)}
+              onClick={() => void saveSettings(pendingSettings, true)}
             >
               Retry identical engagement settings
             </button>
