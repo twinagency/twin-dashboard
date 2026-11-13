@@ -24,6 +24,8 @@
 //       and fileId are not asserted).
 //       Declared limit: the new revision (4) is offered ONLY by the mocked configuredVaultBackend().get; the 409 body, the read backend's
 //       account list and the uploads read carry none. A fix that learns the revision anywhere else stays red here and needs a TEST-CHANGE.
+// F8 (Flash R1): an agency session whose grant does not name ?creator= is refused 403 before the backend is consulted (no agency
+//       preflight, no account list): the real read backend over the wire is used for that test, so any upstream call shows.
 // Green since G05 (the B-C3 tests; B-C2 is not covered here). Runs in npm run test:rules.
 // Synthetic values only.
 import assert from "node:assert/strict";
@@ -103,7 +105,7 @@ const creates = () => calls.filter(c => c.method === "POST" && servicePath(c) ==
 const share = () => call(ROUTE, { accountId: "of-a" }, { body: { kind: "photo", sourceId: S }, query: `?creator=${C}` });
 const agencySession = (actor: string) => { state.identity = { grant: { creatorIds: [C], actor, canManage: true, canChat: true } }; };
 
-if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 1 }, () => {
+if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 2 }, () => {
   mock.module(new URL("../../lib/onlyfans/vault-backend.ts", import.meta.url).href, { namedExports: {
     configuredVaultBackend: () => ({ get: async () => ({ ok: true, data: { connectionRevision: vaultRevision } }) }),
   } });
@@ -136,5 +138,13 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 1 }, () => {
     await share();
     const relayed = writes().map(c => (c.body as { actor?: unknown }).actor);
     for (const actor of relayed) assert.equal(actor, operatorActor(), `an upstream write was attributed to ${String(actor)}, not to the session that made it`);
+  });
+
+  test("F8: an agency session not granted ?creator= is refused 403 before any backend call", async () => {
+    rows = [receipt(STARTER)]; state.identity = { grant: { creatorIds: [AGENCY], actor: STARTER, canManage: true, canChat: true } };
+    state.backend = undefined;
+    const response = await share();
+    assert.equal(response.status, 403);
+    assert.deepEqual(calls.map(c => `${c.method} ${c.path}`), [], "the backend was consulted for a creator outside the grant");
   });
 }

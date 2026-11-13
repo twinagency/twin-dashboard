@@ -24,7 +24,7 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   if (!accountId) return unavailable("Select the configured pilot account.");
   // Gated on pilot scope alone: a failing draft read must not take STOP away. The console shows its own draft error.
   const scope = await backend.scope(accountId, operator.actor);
-  if (!scope.ok) return unavailable("This pilot account is not available to this session.");
+  if (!scope.ok) return unavailable(scope.status === 502 || scope.status === 503 ? "Pilot configuration is unavailable. Retry." : "This pilot account is not available to this session.");
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>

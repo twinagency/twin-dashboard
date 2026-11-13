@@ -68,3 +68,16 @@ test("L9-20: an agency granted only c1 with no creator filter is not shown c2's 
   assert.ok(!result.ok || !creators.includes("c2"),
     `isolation: an account bound to a creator outside the grant must be refused or filtered out; actual ok ${result.ok} with creators ${JSON.stringify(creators)}`);
 });
+
+// ---------- F9 (Flash R1): the requested creator is normalized once, like the grant ids (lowercased at agency-scope.ts) ----------
+test("F9: an agency granted c1 asking for C1 reads c1's account, and the backend is asked for c1", async () => {
+  const { backend, calls } = fakeBackend([boundTo("c1")]);
+  const result = await readAccounts({ auth: AGENCY, backend }, { creatorId: "C1", accountId: null });
+  assert.equal(result.ok, true);
+  assert.deepEqual(calls, [{ creatorId: "c1" }]);
+});
+test("F9: the operator asking for C1 is not refused a c1 account as a scope violation", async () => {
+  const { backend } = fakeBackend([boundTo("c1")]);
+  const result = await readAccounts({ auth: OPERATOR, backend }, { creatorId: "C1", accountId: null });
+  assert.equal(result.ok, true);
+});

@@ -12,7 +12,7 @@
  * operator is `withDashboardAccess(null)` plus a session cookie the fake owner-session RPC verifies.
  * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a UUID or null per `state.owner`)
  * and the OnlyFans backend at https://backend.fixture.invalid (agency preflight of-agency.v2; reads answer the contract fixtures in
- * tests/contracts/fixtures; writes are recorded and acknowledged; `state.upstream` makes every backend answer an error carrying
+ * tests/contracts/fixtures; account of-a is bound to `state.accountCreator`, by default CHAT_AGENCY's clone; writes are recorded and acknowledged; `state.upstream` makes every backend answer an error carrying
  * SENTINEL). Only `*.fixture.invalid` hosts and obviously synthetic credentials. Synthetic values only.
  */
 import { mock } from "node:test";
@@ -47,8 +47,8 @@ const OPERATIONS = { schemaVersion: "of-operations.v3", accountId: "of-a", asOf:
   runtime: { registered: true, enabled: true, recoveryRequired: false, lastCompleteSyncAt: null },
   policy: { revision: 2, enabled: true, usedUnits: 2, limitUnits: 5, nextDispatchAt: null } };
 
-export const state: { session?: string; owner: "uuid" | "null"; upstream: UpstreamStatus | null; drafts: "ok" | "502"; scope: "ok" | "502" } =
-  { owner: "uuid", upstream: null, drafts: "ok", scope: "ok" };
+export const state: { session?: string; owner: "uuid" | "null"; upstream: UpstreamStatus | null; drafts: "ok" | "502"; scope: "ok" | "502" | "403"; accountCreator: string } =
+  { owner: "uuid", upstream: null, drafts: "ok", scope: "ok", accountCreator: CHAT_AGENCY.cloneIds[0] };
 /** Every backend call (Supabase excluded) and every backend POST body, in order. */
 export const calls: Call[] = [];
 export const posts: Array<{ path: string; body: Record<string, unknown> }> = [];
@@ -63,7 +63,7 @@ function backendAnswer(method: string, path: string, body: Record<string, unknow
     { status: state.upstream, statusText: SENTINEL, headers: { ...agencyHeaders, "content-type": "application/json", "x-upstream-detail": SENTINEL } });
   if (method === "GET" && path === "/onlyfans/api/v1/status") return json({ ok: true });
   if (method === "GET" && path === "/onlyfans/api/v1/accounts") return json({ schemaVersion: "of-preview.v2",
-    accounts: [{ accountId: "of-a", binding: { creatorName: "Synthetic Creator", handle: "synthetic" } }] });
+    accounts: [{ accountId: "of-a", binding: { creatorId: state.accountCreator, creatorName: "Synthetic Creator", handle: "synthetic" } }] });
   if (method === "GET" && path === "/onlyfans/api/v1/accounts/of-a/operations") return json({ schemaVersion: "of-preview.v2", operations: OPERATIONS });
   if (method === "GET" && /\/engine-status$/.test(path)) return json(fixture("engine-status-live"));
   if (method === "GET" && /\/engine\/catalogue$/.test(path)) return json(fixture("engine-catalogue"));
@@ -78,7 +78,7 @@ function backendAnswer(method: string, path: string, body: Record<string, unknow
   m = /^\/onlyfans\/control\/v2\/accounts\/([^/]+)\/(.*)$/.exec(path);
   if (m) {
     const accountId = decodeURIComponent(m[1]), rest = decodeURIComponent(m[2]);
-    if (method === "GET" && rest === "pilot-scope") return state.scope === "502" ? json({ ok: false }, 502) : json({ ok: true, accountId, config: { authorization_mode: "supervised" } });
+    if (method === "GET" && rest === "pilot-scope") return state.scope !== "ok" ? json({ ok: false }, Number(state.scope)) : json({ ok: true, accountId, config: { authorization_mode: "supervised" } });
     if (method === "GET" && rest === "drafts") return state.drafts === "502" ? json({ ok: false }, 502) : json({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId, drafts: [] });
     // One unresolved send on a pilot conversation, so a mounted Plan C console knows that conversation without any draft.
     if (method === "GET" && rest === "unresolved") return json({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId, items: [{ id: "unk-1",

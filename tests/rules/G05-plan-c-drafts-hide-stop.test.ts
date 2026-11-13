@@ -11,8 +11,8 @@
  * and fails (502) or serves the draft read.
  * Controls: drafts ok + scope ok renders the console (static) and, mounted, a STOP control for that conversation (so the red's
  * STOP assertion is satisfiable); pilot-scope 502 (drafts ok) renders no console, so a fix that opens the console on any failure
- * (fail-open) stays caught. The scope control does not pin the message: finding 3 also asks that an outage stop reading as
- * "not available to this session", so the fix is free to change that text.
+ * (fail-open) stays caught. F10 (Flash R1): an outage (502/503) reads "Pilot configuration is unavailable. Retry.", a refusal (403)
+ * reads "not available to this session"; neither renders a console.
  * Held since G05: with drafts failing and scope ok, the mounted console still offers STOP for the conversation known from
  * unresolved work (page gates on scope only; console shows the draft failure). A fix that renders a console with no STOP stays
  * red.
@@ -33,6 +33,16 @@ test("control: a failing pilot-scope read (drafts ok) renders no console", () =>
   const r = run()["scope 502"];
   assert.ok(r.calls.some(c => c.endsWith("/pilot-scope")), "precondition: the page read pilot-scope");
   assert.equal(r.console, false);
+});
+
+test("F10: a pilot-scope outage says the configuration is unavailable, not that the account is not available to this session", () => {
+  assert.equal(run()["scope 502"].message, "Pilot configuration is unavailable. Retry.");
+});
+
+test("F10: a pilot-scope refusal (403) renders no console and says the account is not available to this session", () => {
+  const r = run()["scope 403"];
+  assert.equal(r.console, false);
+  assert.equal(r.message, "This pilot account is not available to this session.");
 });
 
 test("control: drafts ok and pilot scope ok, mounted, offer STOP for the conversation with unresolved work", () => {

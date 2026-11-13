@@ -76,11 +76,13 @@ test("operator evidence is synthetic only in simulation and a real operator stri
   for (const environment of ["simulation", "live", "fansapi"] as const) assert.ok(engineOperatorEvidenceRef(environment, note).length <= 128);
   const bodies: Record<string, unknown>[] = [];
   const backend = createEngineOperatorBackend({ baseUrl: "http://backend.invalid", token: "t", fetchImpl: async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return Response.json(ack("complete", "completed")); } });
-  assert.deepEqual(await backend(command), { ok: true });
+  const missing = await backend(command as Parameters<typeof backend>[0]);
+  assert.equal(missing.ok === false && missing.outcome, "refused", "a command naming no environment is refused, never defaulted to simulation");
+  assert.equal(bodies.length, 0, "a command naming no environment reached the backend");
   assert.deepEqual(await backend({ ...command, environment: "simulation" }), { ok: true });
   assert.deepEqual(await backend({ ...command, environment: "live" }), { ok: true });
   assert.deepEqual(await backend({ ...command, environment: "fansapi" }), { ok: true });
-  assert.deepEqual(bodies.map(body => body.evidenceRef), ["synthetic:operator:Checked the receipt", "synthetic:operator:Checked the receipt", "operator:live:Checked the receipt", "operator:fansapi:Checked the receipt"]);
+  assert.deepEqual(bodies.map(body => body.evidenceRef), ["synthetic:operator:Checked the receipt", "operator:live:Checked the receipt", "operator:fansapi:Checked the receipt"]);
   assert.equal(bodies.every(body => !JSON.stringify(body).includes("synthetic:") || body.evidenceRef === "synthetic:operator:Checked the receipt"), true);
   const handover: Record<string, unknown>[] = [];
   await createEngineOperatorBackend({ baseUrl: "http://backend.invalid", token: "t", fetchImpl: async (_u, init) => { handover.push(JSON.parse(String(init?.body))); return Response.json(ack("request_handover", "handover_pending")); } })({ ...command, action: "request_handover", environment: "live" });
@@ -93,9 +95,9 @@ test("mark_reconciled is a typed command that needs a note and never claims succ
   assert.deepEqual(await ok({ ...command, action: "mark_reconciled", environment: "live" }), { ok: true });
   assert.equal(sent[0].action, "mark_reconciled"); assert.equal(sent[0].evidenceRef, "operator:live:Checked the receipt");
   const wrongRevision = createEngineOperatorBackend({ baseUrl: "http://backend.invalid", token: "t", fetchImpl: async () => Response.json(ack("mark_reconciled", "waiting_provider", 9)) });
-  const result = await wrongRevision({ ...command, action: "mark_reconciled" }); assert.equal(result.ok, false);
+  const result = await wrongRevision({ ...command, action: "mark_reconciled", environment: "live" }); assert.equal(result.ok, false);
   const refused = createEngineOperatorBackend({ baseUrl: "http://backend.invalid", token: "t", fetchImpl: async () => new Response(null, { status: 400 }) });
-  const rejected = await refused({ ...command, action: "mark_reconciled" }); assert.equal(rejected.ok === false && rejected.outcome, "refused");
+  const rejected = await refused({ ...command, action: "mark_reconciled", environment: "live" }); assert.equal(rejected.ok === false && rejected.outcome, "refused");
 });
 
 test("the new read routes are open to the team and the catalogue decision stays manager only", () => {

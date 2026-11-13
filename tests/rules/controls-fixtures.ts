@@ -53,6 +53,8 @@ export type PageCase = { console: boolean; message: string | null; calls: string
 /** The Plan C page mounted in jsdom with effects: `stop` = a STOP control for the pilot conversation that has unresolved work. */
 export type ConsoleCase = { console: boolean; stop: boolean; calls: string[]; browser: string[] };
 export type OpsCase = { canAct: unknown; panel: boolean; rows: number; reconcile: number };
+/** The Operations page server render only: `view` = it rendered an account's operations; `accountReads` = backend account list calls. */
+export type OpsGrantCase = { view: boolean; text: string; accountReads: string[] };
 
 /** What each route-child scenario prints. */
 export type RouteScenarios = {
@@ -66,13 +68,14 @@ export type RouteScenarios = {
 };
 /** What each page-child scenario prints. */
 export type PageScenarios = {
-  "plan-c-page": Record<"ok" | "drafts 502" | "scope 502" | "env, no param" | "env, array param" | "no env, no param", PageCase>;
+  "plan-c-page": Record<"ok" | "drafts 502" | "scope 502" | "scope 403" | "env, no param" | "env, array param" | "no env, no param", PageCase>;
   operations: Record<"manager" | "chat", OpsCase>;
+  "operations-grant": Record<"granted" | "creator outside grant" | "account of another creator", OpsGrantCase>;
   "plan-c-console": Record<"ok" | "drafts 502", ConsoleCase>;
 };
 export type ControlsScenarios = RouteScenarios & PageScenarios;
 const CHILD_OF: Record<keyof ControlsScenarios, keyof typeof CHILDREN> = {
-  requests: "route", agency: "route", "plan-c-no-owner": "route", upstream: "route", validation: "route", "plan-c-page": "page", operations: "page", "plan-c-console": "page",
+  requests: "route", agency: "route", "plan-c-no-owner": "route", upstream: "route", validation: "route", "plan-c-page": "page", operations: "page", "operations-grant": "page", "plan-c-console": "page",
 };
 
 /** One JSON line from the child, memoized per scenario. A child that crashes fails here (an Error, not an assertion). */

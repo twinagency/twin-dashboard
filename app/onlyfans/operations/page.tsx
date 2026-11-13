@@ -2,6 +2,7 @@ import OperationsView from "@/components/onlyfans-preview/OperationsView";
 import { CreatorPlatformHeading, CreatorPlatformEmpty } from "@/components/onlyfans-preview/CreatorPlatformPage";
 import { NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
+import { readAccounts } from "@/lib/onlyfans/reads";
 
 export const dynamic = "force-dynamic";
 
@@ -16,13 +17,15 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   const creatorId = typeof requested.creator === "string" ? requestId(requested.creator) : null;
   if (requested.account !== undefined && !accountId) return unavailable("That account reference is not valid.");
   if (requested.creator !== undefined && !creatorId) return unavailable("That creator reference is not valid.");
-  const accounts = await ctx.backend.listAccounts({ creatorId });
-  if (!accounts.ok) return unavailable(accounts.error);
-  const account = accountId ? accounts.data.find((item) => item.accountId === accountId) : accounts.data[0];
+  // Through readAccounts, so an agency grant is held: a creator outside it is denied unasked, a misrouted account is refused.
+  const read = await readAccounts(ctx, { creatorId, accountId });
+  if (!read.ok) return unavailable(read.error);
+  const accounts = read.body.accounts;
+  const account = accountId ? accounts.find((item) => item.accountId === accountId) : accounts[0];
   if (!account) return unavailable(accountId ? "That account is not available to this session." : "Connect an OnlyFans account to see its activity and connection status.", !accountId);
   const result = await ctx.backend.getOperations(account.accountId);
   if (!result.ok) return unavailable(result.error);
   const data = result.data;
   // canAct gates only "Mark reconciled" here; reconciling is a manager decision (RISKS D6), a chat-only grant may only see the rows.
-  return <OperationsView data={data} account={account} accounts={accounts.data} creatorId={creatorId} canAct={ctx.canManage} />;
+  return <OperationsView data={data} account={account} accounts={accounts} creatorId={creatorId} canAct={ctx.canManage} />;
 }

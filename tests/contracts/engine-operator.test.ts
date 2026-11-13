@@ -4,7 +4,7 @@ import { createEngineOperatorBackend, ENGINE_OPERATOR_HEADER, ENGINE_OPERATOR_SC
 import { agencyOnlyFansRequest, chatBackendPath } from "../../lib/onlyfans/agency-scope";
 
 const command = { accountId: "acc-a", conversationId: "acc-a:101", requestId: "12345678-1234-1234-1234-123456789abc",
-  action: "request_handover" as const, expectedRevision: 3, commandKey: "a".repeat(64), actor: "op-session:" + "b".repeat(64) };
+  action: "request_handover" as const, expectedRevision: 3, commandKey: "a".repeat(64), actor: "op-session:" + "b".repeat(64), environment: "live" as const };
 const ack = { schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: true, accountId: command.accountId, conversationId: command.conversationId,
   requestId: command.requestId, action: command.action, commandKey: command.commandKey, status: "handover_pending",
   owner: "engine", nextStep: "await_handover_acceptance", recordedRevision: 4, replayed: false };

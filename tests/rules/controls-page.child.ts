@@ -5,21 +5,23 @@
  * browser fetch serving tests/contracts/fixtures/engine-unresolved-live.json); `plan-c-console` mounts the Plan C page in jsdom too,
  * its browser fetch forwarded to the REAL Plan C read routes. All over the fake wire and identity setup in
  * tests/rules/controls-wire.ts (see its header for exactly what is replaced).
- * Usage: controls-page.child.ts <plan-c-page | operations | plan-c-console>. Prints one JSON line. Synthetic values only.
+ * `operations-grant` server-renders Operations as CHAT_AGENCY (granted one clone) with an in-grant or out-of-grant `?creator=`, or with
+ * the backend answering an account bound to another creator.
+ * Usage: controls-page.child.ts <plan-c-page | operations | operations-grant | plan-c-console>. Prints one JSON line. Synthetic values only.
  */
 import { createRequire } from "node:module";
 import React from "react";
 import type { AgencyIdentity } from "../../lib/agency-identity";
 import { NextRequest } from "next/server";
-import { PILOT_ACCOUNT, SESSION_A, type ConsoleCase, type OpsCase, type PageCase, type PageScenarios } from "./controls-fixtures";
+import { PILOT_ACCOUNT, SESSION_A, type ConsoleCase, type OpsCase, type OpsGrantCase, type PageCase, type PageScenarios } from "./controls-fixtures";
 import { CHAT_AGENCY, DASH, MANAGER_AGENCY, PLAN_C_FAN, acting, calls, fixture, runChild, since, state } from "./controls-wire";
 
-const MESSAGES = ["Select the configured pilot account.", "This pilot account is not available to this session.",
+const MESSAGES = ["Select the configured pilot account.", "This pilot account is not available to this session.", "Pilot configuration is unavailable. Retry.",
   "Plan C is available to the configured administrator only.", "The pilot backend is not configured.", "Your session cannot open this page. Sign in as the operator."];
 
 /** Render the Plan C page as the internal operator with the given env pilot, search params and backend modes. */
 async function planCPage(env: string | undefined, searchParams: { account?: string | string[] }, draftMode: "ok" | "502" = "ok",
-  scopeMode: "ok" | "502" = "ok"): Promise<PageCase> {
+  scopeMode: "ok" | "502" | "403" = "ok"): Promise<PageCase> {
   const { default: PlanCPage } = await import("../../app/onlyfans/plan-c/page");
   const { renderToStaticMarkup } = await import("react-dom/server");
   if (env === undefined) delete process.env.ONLYFANS_PLAN_C_ACCOUNT; else process.env.ONLYFANS_PLAN_C_ACCOUNT = env;
@@ -67,6 +69,19 @@ async function operations(): Promise<PageScenarios["operations"]> {
   return out;
 }
 
+/** Server-render Operations as CHAT_AGENCY with `creator` as `?creator=` and account of-a bound to `bound`. */
+async function operationsGrant(creator: string | undefined, bound: string): Promise<OpsGrantCase> {
+  const { default: OperationsPage } = await import("../../app/onlyfans/operations/page");
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  state.accountCreator = bound;
+  const before = calls.length;
+  const element = await acting(CHAT_AGENCY, undefined, () => OperationsPage({ searchParams: Promise.resolve(creator ? { creator } : {}) }));
+  const view = "account" in (element.props as Record<string, unknown>);
+  state.accountCreator = CHAT_AGENCY.cloneIds[0];
+  return { view, text: view ? "" : renderToStaticMarkup(element).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim(),
+    accountReads: since(before).filter(c => c.path.endsWith("/accounts")).map(c => c.path) };
+}
+
 /**
  * Server-render the Plan C page (named owner, `?account=` the pilot) with the draft read ok or 502, then mount it in jsdom with
  * effects. The browser fetch sends the console's own `/api/onlyfans-controls/...` reads to the REAL Plan C route handlers (same
@@ -110,10 +125,16 @@ runChild<PageScenarios>({
     ok: await planCPage(undefined, { account: PILOT_ACCOUNT }),
     "drafts 502": await planCPage(undefined, { account: PILOT_ACCOUNT }, "502"),
     "scope 502": await planCPage(undefined, { account: PILOT_ACCOUNT }, "ok", "502"),
+    "scope 403": await planCPage(undefined, { account: PILOT_ACCOUNT }, "ok", "403"),
     "env, no param": await planCPage(PILOT_ACCOUNT, {}),
     "env, array param": await planCPage(PILOT_ACCOUNT, { account: ["a-1", "b-1"] }),
     "no env, no param": await planCPage(undefined, {}),
   }),
   operations,
+  "operations-grant": async () => {
+    const granted = CHAT_AGENCY.cloneIds[0], other = "55555555-5555-4555-8555-555555555555";
+    return { granted: await operationsGrant(granted, granted), "creator outside grant": await operationsGrant(other, other),
+      "account of another creator": await operationsGrant(undefined, other) };
+  },
   "plan-c-console": async () => ({ ok: await planCConsole("ok"), "drafts 502": await planCConsole("502") }),
 });

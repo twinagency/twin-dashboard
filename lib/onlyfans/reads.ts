@@ -176,15 +176,16 @@ export async function readAccounts(
   const denial = authorizeRead(input.auth);
   if (denial) return denial;
   if (!input.backend) return unavailable(NOT_CONFIGURED);
-  // An agency grant names its creators (lowercased at source): anything outside it is denied before the backend is asked.
-  const grant = input.auth.agencyGrant?.creatorIds;
-  if (grant && request.creatorId !== null && !grant.includes(request.creatorId)) {
+  // An agency grant names its creators (lowercased at source, agency-scope.ts): the requested creator is lowercased once to match, and
+  // anything outside the grant is denied before the backend is asked.
+  const grant = input.auth.agencyGrant?.creatorIds, creatorId = request.creatorId?.toLowerCase() ?? null;
+  if (grant && creatorId !== null && !grant.includes(creatorId)) {
     return { ok: false, status: 403, state: "denied", code: "creator_not_granted", error: "That creator is not available to this session." };
   }
   // The creators this answer may contain: the requested one (already inside any grant), else the grant, else any.
-  const allowed = request.creatorId !== null ? new Set([request.creatorId]) : grant ? new Set(grant) : null;
+  const allowed = creatorId !== null ? new Set([creatorId]) : grant ? new Set(grant) : null;
 
-  const result = await input.backend.listAccounts({ creatorId: request.creatorId });
+  const result = await input.backend.listAccounts({ creatorId });
   if (!result.ok) return mapFailure(result);
   if (allowed && result.data.some((account) => !allowed.has(account.binding.creatorId))) {
     return violation("an account from a creator outside this scope");
@@ -195,7 +196,7 @@ export async function readAccounts(
     status: 200,
     body: {
       schemaVersion: ONLYFANS_PREVIEW_SCHEMA_VERSION,
-      scope: { creatorId: request.creatorId, accountId: request.accountId },
+      scope: { creatorId, accountId: request.accountId },
       accounts: result.data,
     },
   };
