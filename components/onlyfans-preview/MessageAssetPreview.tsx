@@ -1,10 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MediaPreviewState from "./MediaPreviewState";
 import { classifyPreview, nextPreviewStep, type PreviewState } from "@/lib/onlyfans/section8";
 
 export default function MessageAssetPreview({accountId, conversationId, messageId, mediaId, kind}: {accountId:string;conversationId:string;messageId:string;mediaId:string;kind:string}) {
   const [play,setPlay]=useState(false), [retry,setRetry]=useState(0), [url,setUrl]=useState<string|null>(null), [error,setError]=useState<PreviewState|null>(null);
+  // A URL handed to window.open is revoked a minute later, not at unmount: the new tab may not have loaded it yet.
+  const opened=useRef<string|null>(null);
   const fan=conversationId.startsWith(accountId+":")?conversationId.slice(accountId.length+1):"";
   const path=`/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}/message-media/${fan}/${messageId}/${mediaId}/${play?"file":"preview"}`;
   useEffect(()=>{
@@ -25,12 +27,13 @@ export default function MessageAssetPreview({accountId, conversationId, messageI
         await new Promise(r=>setTimeout(r,step.delayMs));
       }
     })();
+    return()=>{active=false;controller.abort();const created=objectUrl;if(created){if(opened.current===created)setTimeout(()=>URL.revokeObjectURL(created),60_000);else URL.revokeObjectURL(created);}};
   },[path,play,retry]);
   if(error)return <MediaPreviewState state={error} onRetry={()=>setRetry(n=>n+1)}/>;
   if(!url)return <span role="status" className="text-xs">Loading {play?"video":"preview"}…</span>;
   return <div data-of-message-asset={mediaId} className="max-w-full">
     {play?<video src={url} controls autoPlay playsInline className="max-h-96 max-w-full rounded-lg"/>
-      :<button type="button" aria-label={kind==="video"?"Play attached video":"Expand attached photo"} onClick={()=>kind==="video"?setPlay(true):window.open(url,"_blank","noopener")} className="relative block overflow-hidden rounded-lg border border-line">
+      :<button type="button" aria-label={kind==="video"?"Play attached video":"Expand attached photo"} onClick={()=>{if(kind==="video")setPlay(true);else{opened.current=url;window.open(url,"_blank","noopener");}}} className="relative block overflow-hidden rounded-lg border border-line">
         {/* Private object URL; source credentials never leave the server. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src={url} alt={kind==="video"?"Attached video preview":"Attached photo"} className="max-h-48 max-w-64 object-contain"/>

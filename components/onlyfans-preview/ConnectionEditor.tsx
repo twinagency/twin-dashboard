@@ -20,12 +20,16 @@ const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const primaryClass = "rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50";
 const BROWSERBASE_POLL_MS = 2000, BROWSERBASE_POLL_FAILURES = 5, BROWSERBASE_DEADLINE_MS = 11 * 60_000;
+/** How long Pause waits for its preflight status read before sending at the last-known revision. */
+const PAUSE_READ_MS = 3000;
 const BROWSERBASE_STATUS: Record<BrowserbaseState, string> = {
   starting: "Starting the Browserbase browser…", waiting_login: "Sign in to OnlyFans in the hosted browser. The session is captured automatically after login.",
   capturing: "Logged in. Capturing the session…", done: "Session captured.", failed: "Browserbase login failed.",
   cancelled: "Browserbase login cancelled.", expired: "The Browserbase login expired. Start it again.",
 };
 type BrowserbaseView = { jobId: string; state: BrowserbaseState; liveViewUrl: string | null; error: string | null };
+const RETRY_LABELS: Record<ConnectionRequest["action"], string> = { save: "Retry credential save", session: "Retry session update",
+  verify: "Retry verification request", pause: "Retry pause", activate: "Retry enabling outgoing" };
 const recordedTime = (value: string | null) => value ? new Date(value).toLocaleString() : "Not recorded";
 
 export default function ConnectionEditor({ accountId,creatorId,creatorName,initiallyOpen = false }: { accountId: string;creatorId?:string;creatorName?:string;initiallyOpen?:boolean }) {
@@ -59,7 +63,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     else if (!event.shiftKey && at === last) { event.preventDefault(); first.focus(); }
   }
   const [limit, setLimit] = useState(""), [throttle, setThrottle] = useState(""), [media, setMedia] = useState(false);
-  const [hasRetry, setHasRetry] = useState(false);
+  // The action an unconfirmed command would repeat; the Retry button names it.
+  const [retryAction, setRetryAction] = useState<ConnectionRequest["action"] | null>(null), hasRetry = retryAction !== null;
   const proxyEntry = useMemo(() => normalizeProxyInput(proxy), [proxy]);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
   const capture = useRef<Record<string, unknown> | null>(null), retry = useRef<ConnectionRequest | ConnectionRefSave | null>(null);
@@ -90,7 +95,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
   const holdCapture = (ownerId: number, ref: string) => {
     capture.current = null; setCaptureRef(ref); setXHash(""); setCaptureReady(true); setOwner(String(ownerId));
   };
-  const dropRetry = useCallback(() => { retry.current = null; setHasRetry(false); }, []);
+  const dropRetry = useCallback(() => { retry.current = null; setRetryAction(null); }, []);
   useEffect(() => { active.current = true; return () => { active.current = false; capture.current = null; retry.current = null; bbRun.current++; if (bbTimer.current !== null) window.clearTimeout(bbTimer.current);
     const open = bbLive.current; if (open) bbFireCancel(open); }; }, []);
   // Leaving the page must not strand a paid Browserbase session: cancel the open job on unmount.
@@ -100,20 +105,21 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     const onHide = () => { const open = bbLive.current; if (!open) return; bbLive.current = null; bbFireCancel(open); };
     window.addEventListener("pagehide", onHide); return () => window.removeEventListener("pagehide", onHide);
   }, [endpoint]);
-  const read = useCallback(async (updateForm = true) => {
+  /** The refreshed connection, or null. A transient failure keeps the last-known connection and revision, so Pause stays. */
+  const read = useCallback(async (updateForm = true, signal?: AbortSignal): Promise<Connection | null> => {
     try {
-      const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error" });
-      if (!active.current) return false;
+      const response = await fetch(endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal });
+      if (!active.current) return null;
       if ([401, 403].includes(response.status)) {
         sessionDenied.current = true; clearSecrets(); dropRetry(); setOwner(""); setModelId(""); setData(null); setDenied(true);
-        setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return false;
+        setNotice("Your session cannot manage this account. Sign in again."); router.refresh(); return null;
       }
       const next = response.ok ? parseConnection(await response.json(), accountId, true) : null;
-      if (!active.current) return false;
-      if (!next) { setData(null); setNotice("Connection status could not be refreshed. Try again."); return false; }
+      if (!active.current) return null;
+      if (!next) { setNotice("Connection status could not be refreshed. Try again."); return null; }
       setData(next); if (updateForm) { setOwner(next.ownerId ?? ""); setLimit(next.limitUnits ? String(next.limitUnits) : ""); setThrottle(next.throttleSeconds ? String(next.throttleSeconds) : ""); setMedia(next.mediaEnabled); }
-      return true;
-    } catch { if (active.current) { setData(null); setNotice("Connection status could not be refreshed. Try again."); } return false; }
+      return next;
+    } catch { if (active.current) setNotice("Connection status could not be refreshed. Try again."); return null; }
   }, [accountId, clearSecrets, dropRetry, endpoint, router]);
   useEffect(() => {
     if (initiallyOpen) { setOpen(true); void read(); }
@@ -264,7 +270,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     if (submitting.current || !validConnectionRequest(command) && !validConnectionRefSave(command)) return;
     submitting.current = true; setBusy(true); setNotice("Saving account connection command…");
     let message = "Outcome not confirmed. Refresh the recorded status or retry the exact same command.";
-    let uncertain = true, sessionLost = false, expired = false;
+    let uncertain = true, sessionLost = false, expired = false, refused = false;
     try {
       const response = await fetch(endpoint, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error",
         headers: { "Content-Type": "application/json" }, body: JSON.stringify(command) });
@@ -282,12 +288,13 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
       } else if (response.status === 410 && (await response.json().catch(() => null) as { code?: unknown } | null)?.code === "capture_expired") {
         uncertain = false; expired = true; message = "That capture expired. If an earlier attempt may have saved, check the status below. Otherwise capture the session again.";
       } else if ([400, 404, 409, 413, 503].includes(response.status)) {
-        uncertain = false; message = command.action === "save" ? "Save refused. Check the owner ID, that messages are not queued or sending right now, and that the proxy and capture are valid, then review the refreshed account." : "Command refused. Review the refreshed account, credentials and limits before trying again.";
+        uncertain = false; refused = true; message = command.action === "save" ? "Save refused. Check the owner ID, that messages are not queued or sending right now, and that the proxy and capture are valid, then review the refreshed account." : "Command refused. Review the refreshed account, credentials and limits before trying again.";
       }
     } catch { /* Keep the exact retry in memory only, with no persistent browser storage. */ }
     finally {
       if (active.current && !sessionLost) {
-        retry.current = uncertain ? command : null; setHasRetry(uncertain);
+        // A refused command changed nothing: an earlier unconfirmed command keeps its retry unless this was that retry.
+        if (!refused || retry.current === command) { retry.current = uncertain ? command : null; setRetryAction(uncertain ? command.action : null); }
         if (expired) { setCaptureRef(null); setCaptureReady(false); } else clearSecrets(); // expiry keeps the typed proxy and model key
         const refreshed = await read(); if (active.current) { if (sessionDenied.current) dropRetry(); if (refreshed || (expired && !sessionDenied.current)) setNotice(message); setBusy(false); router.refresh(); }
       }
@@ -303,6 +310,18 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
     const command = { action: "save" as const, expectedRevision: data.revision, payload: captureRef ? { ...rest, captureRef } : { ...rest, capture: raw, xHash } };
     if (!validConnectionRefSave(command) && !validConnectionRequest(command)) { setNotice("Review the owner, capture, hash, proxy and selected model details."); return; }
     void send(command);
+  }
+  /** An unconfirmed command may have landed and moved the revision: read it first so the stop is not refused as stale.
+   *  The read is bounded: a hung status read falls back to the last-known revision rather than never sending the stop.
+   *  Once clicked the stop is sent even if the editor unmounted meanwhile; send() paints nothing after unmount. */
+  async function pause() {
+    if (submitting.current || !data) return;
+    submitting.current = true; setBusy(true);
+    const fresh = await read(false, AbortSignal.timeout(PAUSE_READ_MS));
+    submitting.current = false;
+    if (active.current) setBusy(false);
+    if (sessionDenied.current) return;
+    void send({ action: "pause", payload: {}, expectedRevision: (fresh ?? data).revision });
   }
   function activate() {
     if (!data || !/^\d+$/.test(limit) || !/^\d+$/.test(throttle)) return;
@@ -332,7 +351,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           {creatorId && creatorName ? <AdminOnlyFansSignIn creators={[{id:creatorId,name:creatorName}]} accountId={accountId} /> : null}
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry || state === "retrying" || state === "checking" && data.verifiedAt !== null} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
-          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
+          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void pause()} data-of-connection-pause>Pause outgoing</button> : null}
         </div>
         <form className="mt-5" autoComplete="off" onSubmit={event => { event.preventDefault(); saveCapture(); }}>
           <fieldset disabled={busy || hasRetry} className="min-w-0 space-y-3">
@@ -402,8 +421,8 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           </fieldset>
         </form>
       </> : null}
-      {hasRetry && !denied ? <div className="mt-3 flex flex-wrap gap-2">
-        <button type="button" className={buttonClass} disabled={busy} data-of-connection-retry onClick={() => { if (retry.current) void send(retry.current); }}>Retry same command</button>
+      {retryAction && !denied ? <div className="mt-3 flex flex-wrap gap-2">
+        <button type="button" className={buttonClass} disabled={busy} data-of-connection-retry onClick={() => { if (retry.current) void send(retry.current); }}>{RETRY_LABELS[retryAction]}</button>
         <button type="button" className={buttonClass} disabled={busy || !data} onClick={() => { dropRetry(); setNotice("Review the recorded status before entering another command."); }}>Discard retry</button>
       </div> : null}
       {!data && !denied ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()}>Refresh connection</button> : null}

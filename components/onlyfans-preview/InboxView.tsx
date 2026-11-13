@@ -253,6 +253,7 @@ function ConversationList({
 function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder }: { detail: ConversationDetail; principal: string; handoverHistory?: Handover | null; loadingOlder: boolean; onLoadOlder: () => void }) {
   const remembers = principal !== "fixture" && principal !== "unavailable";
   const timeline = conversationTimeline(detail, handoverHistory);
+  const messages = timeline.filter(entry => entry.kind === "message").length;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Open on the newest message, the way the Telegram thread does: a bottom-anchored
@@ -261,7 +262,7 @@ function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder 
   const olderAnchor = useRef<{ height: number; top: number } | null>(null);
   const bottom = useRef(true);
   const previousThread = useRef("");
-  const previousLength = useRef(0);
+  const previousMessages = useRef(0);
   // Messages that arrived while the reader was scrolled up. They are never
   // dragged into view; the pill below says how many are waiting.
   const [unseen, setUnseen] = useState(0);
@@ -278,9 +279,9 @@ function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder 
       node.scrollTop = olderAnchor.current.top + node.scrollHeight - olderAnchor.current.height;
       olderAnchor.current = null;
     } else if (!olderAnchor.current && bottom.current) node.scrollTop = node.scrollHeight;
-    else if (!olderAnchor.current && timeline.length > previousLength.current) setUnseen(count => count + timeline.length - previousLength.current);
-    previousLength.current = timeline.length;
-  }, [detail.conversationId, timeline.length, loadingOlder]);
+    else if (!olderAnchor.current && messages > previousMessages.current) { const added = messages - previousMessages.current; setUnseen(count => count + added); }
+    previousMessages.current = messages; // the pill counts messages, not handover or control events
+  }, [detail.conversationId, timeline.length, messages, loadingOlder]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -622,17 +623,16 @@ function ActionColumn({
           const needsDecision = resolution && (!incident || decision === null || commandPayloadProblem("resolve_delivery_evidence",
             { kind: "delivery_resolution", attemptId: incident.attemptId, decision, providerMessageId }) !== null);
           const primary = resolution || ["request_takeover", "release_takeover", "resume_automation"].includes(entry.action);
-          const label = isEngineControlAction(entry.action) ? engineControlLabel(entry.action, engineAware) : entry.label;
           const Icon = entry.action === "request_takeover" ? UserRound : entry.action === "pause_automation" ? Pause : Sparkles;
           return <div key={entry.action}><button type="button" data-of-action={entry.action} disabled={needsDecision || pending}
             title={needsDecision ? "Choose what the evidence shows first." : undefined}
             onClick={() => resolution ? incident && decision && onResolve(incident.attemptId, decision, providerMessageId) : onCommand(entry.action, NO_PAYLOAD)}
-            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{pending && pendingAction === entry.action ? isEngineControlAction(entry.action) ? engineControlPendingLabel(entry.action) : "Saving…" : label}</button>
+            className={`of-control-button ${primary ? "of-primary" : "of-secondary"}`}><Icon size={16} aria-hidden="true" />{controlLabel(entry, engineAware, pending && pendingAction === entry.action)}</button>
             {needsDecision ? <p className="of-filter-note">Choose what the evidence shows before resolving.</p> : null}</div>;
         })}
         {actionSet.available.every(entry => ["send_manual_message", "mark_no_contact"].includes(entry.action)) ? <p className="of-filter-note">No reply changes are available right now.</p> : null}
       </div>
-      {actionSet.available.some(entry => entry.action === "mark_no_contact") ? <details className="of-more-actions"><summary>More actions</summary><button type="button" data-of-action="mark_no_contact" disabled={pending} onClick={() => onCommand("mark_no_contact", NO_PAYLOAD)} className="of-control-button of-secondary">Stop further contact</button></details> : null}
+      {actionSet.available.some(entry => entry.action === "mark_no_contact") ? <details className="of-more-actions"><summary>More actions</summary><button type="button" data-of-action="mark_no_contact" disabled={pending} onClick={() => onCommand("mark_no_contact", NO_PAYLOAD)} className="of-control-button of-secondary">{controlLabel({ action: "mark_no_contact" }, engineAware, pending && pendingAction === "mark_no_contact")}</button></details> : null}
 
       {actionSet.blocked.length > 0 ? (
         <details open={!!incident} className="of-blocked-actions">
@@ -650,6 +650,26 @@ function ActionColumn({
 
     </div>
   );
+}
+
+/** The text on a control button, shared by the fan panel and the chat brake row: engine wording, "Saving…" style text while it is the pending action. */
+function controlLabel(entry: { action: string; label?: string }, engineAware: boolean, pendingNow: boolean): string {
+  if (isEngineControlAction(entry.action)) return pendingNow ? engineControlPendingLabel(entry.action) : engineControlLabel(entry.action, engineAware);
+  return pendingNow ? "Saving…" : entry.action === "mark_no_contact" ? "Stop further contact" : entry.label ?? "";
+}
+
+/** The brakes beside Send while the fan panel is closed (G09): one row, so the thread keeps its room. Go controls stay in the panel. */
+function ChatBrakes({ actionSet, incident, engineAware, pending, pendingAction, onCommand }: { actionSet: ActionSet; incident: boolean; engineAware: boolean;
+  pending: boolean; pendingAction?: string | null; onCommand: (action: AvailableAction, payload: CommandPayload) => void }) {
+  const brakes = actionSet.available.filter(entry => entry.action === "pause_automation" || entry.action === "mark_no_contact");
+  if (!brakes.length && !incident) return null;
+  return <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-line px-3 py-1" data-of-chat-brakes>
+    {incident ? <p className="of-filter-note" role="status">Delivery held. Resolve it in fan details.</p> : null}
+    {brakes.map(entry => <button key={entry.action} type="button" data-of-action={entry.action} disabled={pending} onClick={() => onCommand(entry.action, NO_PAYLOAD)}
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-line px-2.5 text-xs font-semibold text-[#356c96] disabled:opacity-50">
+      {entry.action === "pause_automation" ? <Pause size={14} aria-hidden="true" /> : null}
+      {controlLabel(entry, engineAware, pending && pendingAction === entry.action)}</button>)}
+  </div>;
 }
 
 function FanMemory({ accountId, fanId, canCorrect }: { accountId: string; fanId: string; canCorrect: boolean }) {
@@ -836,6 +856,9 @@ export default function InboxView({
     return () => query.removeEventListener("change", sync);
   }, []);
   const sheetOpen = narrow && mobilePanel === "controls";
+  // While the fan panel or sheet is not showing, its brakes (Pause, Stop further contact) and the hold line sit under the
+  // thread, so a brake is displayed whenever Send is (G09). The Reply control itself stays mounted in the panel.
+  const panelShowsReplyControl = narrow ? sheetOpen : profileOpen;
   useEffect(() => {
     if (!sheetOpen) return;
     sheetClose.current?.focus();
@@ -863,6 +886,7 @@ export default function InboxView({
           deliveryIncident: detail.deliveryIncident,
         })
       : null;
+  const engineAware = detail ? parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current" : false;
 
   const connectionReason =
     activeAccount && activeAccount.health !== "connected" ? activeAccount.healthReason : null;
@@ -947,6 +971,8 @@ export default function InboxView({
 
               <Thread detail={detail} principal={draftPrincipal} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
+              {!panelShowsReplyControl && actionSet ? <ChatBrakes actionSet={actionSet} incident={!!detail.deliveryIncident} pending={commandPending} pendingAction={pendingAction} onCommand={onCommand}
+                engineAware={engineAware} /> : null}
               {actionSet ? (
                 <Composer
                   key={draftKey(draftPrincipal, activeAccount.accountId, detail.conversationId)}
@@ -1002,7 +1028,7 @@ export default function InboxView({
               {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
               {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
               <ActionColumn
-                engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
+                engineAware={engineAware}
                 actionSet={actionSet}
                 viewer={viewer}
                 result={commandResult}

@@ -49,6 +49,10 @@ export const SHARED_CLEANUP_HOLD = "provider_cleanup_required";
 // decided by its own term before any comparison.
 /** The live predicate as a PostgREST `.or()` filter. */
 export const LIVE_SHARED_FILTER = `media_id.not.is.null,error_code.is.null,and(${RETRYABLE_SHARED_OUTCOMES.map(([s, e]) => `or(status.neq.${s},error_code.neq.${e})`).join(",")})`;
+/** Held (G04c1): live, terminal and not adopted (complete with a vault media id). Only a held receipt may be refreshed in the UI. */
+export const SHARED_ACTIVE: readonly string[] = ["prepared", "receiving", "pending", "running"];
+export const sharedHeld = (row: Pick<SharedTransfer, "status" | "media_id" | "error_code">) => !SHARED_ACTIVE.includes(row.status) && !(row.status === "complete" && row.media_id != null)
+  && (row.media_id != null || !RETRYABLE_SHARED_OUTCOMES.some(([status, code]) => row.status === status && row.error_code === code));
 /** The same predicate as SQL, the partial index's WHERE. */
 export const LIVE_SHARED_SQL = `media_id is not null or error_code is null or (${RETRYABLE_SHARED_OUTCOMES.map(([s, e]) => `(status <> '${s}' or error_code <> '${e}')`).join(" and ")})`;
 export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
@@ -63,6 +67,7 @@ export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
   const status = job.status === "complete" && (cleanup || file.status !== "done" || !file.mediaId) ? "failed" : job.status;
   return { job_id: job.jobId, status, media_id: file.mediaId, processing: file.processing, received_bytes: file.receivedBytes, error_code: cleanup ? "provider_cleanup_required" : file.error || status === "failed" ? "provider_review_required" : job.lastError };
 }
-export function publicSharedTransfer(row: SharedTransfer) {
-  return { id: row.id, sourceId: row.source_id, kind: row.source_kind, status: row.status, mediaId: row.media_id, processing: row.processing, receivedBytes: row.received_bytes, sizeBytes: row.size_bytes, error: row.error_code === "provider_cleanup_required" ? "OnlyFans scheduled-post cleanup needs review. Check the account's upload history before continuing." : row.error_code ? "This transfer needs review. Refresh its status before retrying." : null };
+/** `stored` is the row as saved, before any provider overlay (GET): `held` describes the receipt, not the overlay. */
+export function publicSharedTransfer(row: SharedTransfer, stored = row) {
+  return { id: row.id, held: sharedHeld(stored), sourceId: row.source_id, kind: row.source_kind, status: row.status, mediaId: row.media_id, processing: row.processing, receivedBytes: row.received_bytes, sizeBytes: row.size_bytes, error: row.error_code === "provider_cleanup_required" ? "OnlyFans scheduled-post cleanup needs review. Check the account's upload history before continuing." : row.error_code ? "This transfer needs review. Refresh its status before retrying." : null };
 }
