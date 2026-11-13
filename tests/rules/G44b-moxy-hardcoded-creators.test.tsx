@@ -38,3 +38,13 @@ test("P2: an account bound to no creator is not offered hard-coded creators (ame
   assert.deepEqual(named, [], `hard-coded creator setups offered to of-a: ${named.join(", ")}`);
   await unmount();
 });
+
+test("P2: a legacy account with no upload has only the Mode select, and Select Moxy is disabled", async () => {
+  await open();
+  const selects = [...document.querySelectorAll("[data-moxy-controls] select")].map(s => s.getAttribute("aria-label"));
+  assert.deepEqual(selects, ["Mode"], "no creator picker beside the Mode select");
+  const select = [...document.querySelectorAll<HTMLButtonElement>("[data-moxy-controls] button")].find(b => /select moxy/i.test(b.textContent ?? ""));
+  assert.ok(select, "Select Moxy button renders");
+  assert.equal(select.disabled, true, "Select Moxy needs an uploaded setup");
+  await unmount();
+});

@@ -99,7 +99,8 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
         </select></label>
         <span title="Off retains Moxy ownership and stops new Moxy work. Preview records decisions without sending. On requires current verified prerequisites." aria-label="Mode help" className="mb-3 cursor-help text-blue-700">ⓘ</span>
         <button type="button" className={nextMode === "off" ? dangerClass : buttonClass} disabled={!editable || !settings || nextMode === "on" && !onReady} onClick={() => void save()}>
-          {busy ? "Saving…" : value.engine === "legacy" ? "Select Moxy" : "Save mode"}</button></div>
+          {busy ? "Saving…" : value.engine === "legacy" ? "Select Moxy" : "Save mode"}</button>
+        {value.engine === "legacy" && !settings ? <span title="A creator setup file must be uploaded first." aria-label="Select Moxy help" className="mb-3 cursor-help text-blue-700">ⓘ</span> : null}</div>
       <details className="text-sm"><summary className="cursor-pointer font-medium">Creator setup</summary>
         <label className="mt-3 grid gap-2">Upload approved creator setup
           <input type="file" accept="application/json,.json" disabled={!editable} onChange={e => void importSetup(e.target.files?.[0])} /></label>

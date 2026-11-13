@@ -9,22 +9,24 @@
 import { ACTION_ID, automationReads, inNextApp, json, moxyLegacy, moxySelected, mount, settle, stubFetch, unmount } from "../helpers/w1-8-dom";
 import assert from "node:assert/strict";
 import test from "node:test";
-import React from "react";
+import React, { act } from "react";
 
 const reads = automationReads();
-function serve(moxy: () => Response) {
-  return stubFetch(url => {
+function serve(moxy: () => Response | Promise<Response>) {
+  return stubFetch((url, method) => {
     if (url === "/api/onlyfans/accounts") return json(reads.accounts);
     if (url === "/api/onlyfans/accounts/of-a/conversations") return json(reads.conversations);
     if (url === "/api/onlyfans/accounts/of-a/workspace/settings") return json(reads.runtime);
     if (url === "/api/onlyfans-configuration/accounts/of-a/moxy") return moxy();
-    if (url.startsWith("/api/onlyfans-launch/automation/accounts/of-a/follow-ups")) return json(reads.followUps);
-    // Engagement settings and the emergency-stop readiness read: contract unavailable; neither gates the follow-ups list.
-    if (url.startsWith("/api/onlyfans-launch/automation/accounts/of-a/")) return json({ error: "Not available in this fixture." }, 503);
+    if (url.startsWith("/api/onlyfans-launch/automation/accounts/of-a/follow-ups"))
+      return json(method === "POST" ? { schemaVersion: "of-launch-b.v1", ok: true, accountId: "of-a", action: { ...reads.followUps.actions[0], cancelRequested: true } } : reads.followUps);
+    if (url.endsWith("/emergency-stop")) return json(reads.emergency);
+    // Engagement settings read: contract unavailable in this fixture; it does not gate the follow-ups list.
+    if (url.startsWith("/api/onlyfans-launch/automation/accounts/of-a/")) return json({ error: EDITOR_MARK }, 503);
     throw new TypeError(`unexpected fetch ${url}`);
   });
 }
-async function open(moxy: () => Response) {
+async function open(moxy: () => Response | Promise<Response>) {
   const stub = serve(moxy);
   const { default: BAutomationPanel } = await import("../../components/onlyfans-launch/automation/BAutomationPanel");
   await mount(inNextApp(React.createElement(BAutomationPanel, { canManage: true, initialAccountId: "of-a" })));
@@ -39,6 +41,9 @@ function followUps() {
   return { card: Boolean(card), row: Boolean(row && row.textContent?.includes(ACTION_ID)), cancel: Boolean(cancel && !(cancel as HTMLButtonElement).disabled),
     moxy: Boolean(document.querySelector("[data-moxy-controls]")) };
 }
+/** The policy editor card's only copy in this fixture: its settings read fails with this message, rendered by the editor card alone. */
+const EDITOR_MARK = "Engagement settings unavailable in this fixture.";
+const policyEditor = () => (document.body.textContent ?? "").includes(EDITOR_MARK);
 
 test("control: Moxy GET answers a valid legacy view, scheduled follow-up and its cancel control are shown", async () => {
   const stub = await open(() => json(moxyLegacy()));
@@ -59,5 +64,35 @@ test("P1 B: Moxy selected with mode off, scheduled follow-up and its cancel cont
   const stub = await open(() => json(moxySelected("off")));
   assert.equal(stub.count(/\/moxy$/), 1, "the Moxy read happened");
   assert.deepEqual(followUps(), { card: true, row: true, cancel: true, moxy: true }, "follow-ups hidden because Moxy is selected");
+  await unmount();
+});
+
+test("P1 C: the Moxy read never resolves, follow-up and its cancel control are still shown, without the policy editor", async () => {
+  const stub = await open(() => new Promise<Response>(() => {}));
+  assert.equal(stub.count(/\/moxy$/), 1, "the Moxy read started");
+  assert.deepEqual(followUps(), { card: true, row: true, cancel: true, moxy: true }, "follow-ups wait for a Moxy read that never ends");
+  assert.equal(policyEditor(), false, "policy editor waits for a legacy view");
+  await unmount();
+});
+
+test("P1 D: the policy editor card is absent when Moxy owns the account and present on a legacy account", async () => {
+  await open(() => json(moxySelected("preview")));
+  assert.equal(policyEditor(), false, "policy editor shown beside Moxy, two owners");
+  await unmount();
+  await open(() => json(moxyLegacy()));
+  assert.equal(policyEditor(), true, "legacy account lost its policy editor");
+  await unmount();
+});
+
+test("P1 E: Request cancellation sends exactly one POST to the follow-up endpoint", async () => {
+  const stub = await open(() => json(moxySelected("off")));
+  const row = document.querySelector('[data-b-followup="scheduled"]');
+  const cancel = [...(row?.querySelectorAll("button") ?? [])].find(b => /request cancellation/i.test(b.textContent ?? ""));
+  assert.ok(cancel, "Request cancellation button renders");
+  await act(async () => { cancel.click(); });
+  await settle();
+  const posts = stub.calls.filter(c => c.method === "POST");
+  assert.deepEqual(posts.map(c => c.url), ["/api/onlyfans-launch/automation/accounts/of-a/follow-ups"]);
+  assert.deepEqual(posts[0].body, { actionId: ACTION_ID, action: "cancel" });
   await unmount();
 });

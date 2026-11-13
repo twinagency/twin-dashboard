@@ -1,6 +1,5 @@
 /**
- * Offline jsdom harness for W1 lane 8 (preview-shell-launch) component tests, known-red and rules. Pattern copied from lane 7b's
- * tests/helpers/w1-7b-dom.ts. Import it FIRST: it installs the DOM globals before any component (or next/navigation) module loads.
+ * Offline jsdom harness for the G44b Moxy component rules (tests/rules/G44b-*.test.tsx). Import it FIRST: it installs the DOM globals before any component (or next/navigation) module loads.
  * next/navigation hooks are satisfied by real Next context providers (`inNextApp`), not module mocks: useRouter/usePathname/
  * useSearchParams read AppRouterContext/PathnameContext/SearchParamsContext, so the component runs its real navigation code.
  * No network: every fetch goes to `stubFetch`. Synthetic ids only (of-a, *.invalid).
@@ -12,7 +11,7 @@ import React, { act } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { MOXY_SCHEMA, parseMoxy, type MoxyMode } from "../../lib/onlyfans/moxy";
-import { parseEngagementPage } from "../../lib/onlyfans/launch/native";
+import { parseEngagementPage, parseNativeReadiness } from "../../lib/onlyfans/launch/native";
 import { parseAccounts, parseConversations, parseRuntime } from "../../lib/onlyfans/launch/automation/b-automation";
 const requireNative = createRequire(import.meta.url);
 const { JSDOM } = requireNative("jsdom");
@@ -39,22 +38,6 @@ export async function mount(element: React.ReactElement) {
 }
 /** Real-time settle: lets stubbed fetches and React updates finish. */
 export const settle = async (ms = 25) => act(async () => { await new Promise(resolve => realSetTimeout(resolve, ms)); });
-export const button = (label: RegExp) => [...document.querySelectorAll<HTMLButtonElement>("button")].find(item => label.test(item.textContent ?? ""));
-export async function click(element: Element | null | undefined) {
-  assert.ok(element, "element to click exists");
-  await act(async () => { element.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true })); });
-  await settle();
-}
-/** Choose `value` in a <select> the way a user does (also reachable for a disabled option, as a script or devtools can). */
-export async function choose(select: HTMLSelectElement | null | undefined, value: string) {
-  assert.ok(select, "select exists");
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(dom.window.HTMLSelectElement.prototype, "value")!.set!.call(select, value);
-    select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
-  });
-}
-/** Status/alert text, for asserting notices without pinning layout. */
-export const liveText = () => [...document.querySelectorAll("[role=status],[role=alert]")].map(item => (item.textContent ?? "").trim()).filter(Boolean);
 
 /** Real Next app-router contexts around `element`, so next/navigation hooks work without module mocks. */
 export function inNextApp(element: React.ReactElement, pathname = "/onlyfans/launch") {
@@ -80,7 +63,6 @@ export function stubFetch(answer: (url: string, method: string, n: number) => Re
   globalThis.fetch = fetch;
   return { calls, fetch, count: (re: RegExp, method = "GET") => calls.filter(c => c.method === method && re.test(c.url)).length };
 }
-export const html502 = () => new Response("<html><body>502 Bad Gateway</body></html>", { status: 502, headers: { "Content-Type": "text/html" } });
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 
 /** Fixtures are checked against the real parsers so a drifted shape fails loudly instead of testing nothing. */
@@ -97,22 +79,28 @@ export function moxySelected(mode: MoxyMode, { accountId = "of-a", revision = 3,
     readiness: ready ? { ready: true, blockers: [] } : { ready: false, blockers: ["catalogue_bindings_missing"] }, settings: MOXY_SETTINGS, decisions: [] } };
   return parsed(body, parseMoxy(body, accountId)?.engine === "moxy", "moxy-selected view");
 }
-/** POST ack (lib/onlyfans/moxy.ts moxyAck): `revision` defaults to the one a matching ack must carry. */
-export const moxyAckBody = (mode: MoxyMode, revision: number, accountId = "of-a") =>
-  ({ ok: true, schemaVersion: MOXY_SCHEMA, accountId, moxy: { mode, revision, readiness: { ready: false, blockers: ["catalogue_bindings_missing"] } } });
 
-/** Reads BAutomationPanel makes for account of-a (accounts, conversations, runtime), plus EngagementPanel's follow-ups page. */
+/** Reads BAutomationPanel makes for account of-a (accounts, conversations, runtime), the emergency-stop readiness, plus EngagementPanel's follow-ups page. */
 export const ACTION_ID = "0a1b2c3d-1111-4222-8333-444455556661";
 export function automationReads(accountId = "of-a") {
   const accounts = { accounts: [{ accountId, health: "connected", automationMode: "automated" }] };
   const conversations = { accountId, page: { items: [], nextCursor: null } };
   const runtime = { accountId, section: "settings", runtimeEnabled: false };
+  const stamp = "2026-11-12T10:00:00Z";
+  const emergency = { schemaVersion: "of-launch-b.v1", ok: true, accountId, readiness: { readinessVersion: "of-launch-readiness.v1", observedAt: stamp,
+    schemaRevision: "synthetic", readyToEnable: true, checks: [{ key: "memory", status: "ready", blocking: false, observedAt: stamp, blocker: null, action: null }],
+    accountControl: { enabled: true, bindingId: "synthetic-binding", revision: 1, unresolvedOutgoing: 0, fingerprint: "a".repeat(64) },
+    coverage: { storedMessages: 0, storedCountStatus: "exact", processedMessages: 0, providerTotalMessages: null, archiveComplete: true, pendingArchiveConversations: 0 },
+    catalogue: { usableInspectedItems: 0, inspectedItems: 0, hasMore: false },
+    autonomy: { accountEnabled: true, deliveryEnabled: true, existingAutomatedConversations: 0, automateNewConversations: false, engagementEnabled: true, workerCapabilities: {} },
+    limits: [] } };
   const followUps = { schemaVersion: "of-launch-b.v1", ok: true, accountId, engagementVersion: "of-engagement.v1", nextCursor: null,
     actions: [{ actionId: ACTION_ID, kind: "follow_up", status: "scheduled", reason: null, fanId: "42", dueAt: "2026-11-12T10:00:00Z",
       expiresAt: "2026-11-13T10:00:00Z", intentId: null, cancelRequested: false }] };
   parsed(accounts, parseAccounts(accounts)?.length === 1, "accounts");
   parsed(conversations, parseConversations(conversations, accountId) !== null, "conversations");
   parsed(runtime, parseRuntime(runtime, accountId) !== null, "runtime");
+  parsed(emergency, parseNativeReadiness(emergency.readiness) !== null, "emergency-stop readiness");
   parsed(followUps, parseEngagementPage(followUps)?.actions.length === 1, "engagement follow-ups page");
-  return { accounts, conversations, runtime, followUps };
+  return { accounts, conversations, runtime, emergency, followUps };
 }
