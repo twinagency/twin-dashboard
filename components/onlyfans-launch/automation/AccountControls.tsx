@@ -8,6 +8,7 @@ import {
   buttonClass,
   dangerClass,
 } from "../a-shared";
+import { stamp } from "./stop-hold";
 const parser = (accountId: string) => (v: unknown) =>
   object(v) &&
   v.schemaVersion === "of-launch-b.v1" &&
@@ -23,14 +24,25 @@ const laneOf = (a: Action): Lane => (a === "emergency_stop" ? "stop" : "control"
 const LABEL: Record<Action, string> = { pause: "Pause", emergency_stop: "Emergency stop", resume: "Resume" };
 type Outcome = { notice: string; pending: Command | null };
 const NONE: Outcome = { notice: "", pending: null };
+/** What became of a STOP, reported to the panel that owns the per-account hold. */
+export type StopPhase = "sent" | "recorded" | "unknown" | "refused" | "confirmed";
 export default function AccountControls({
   accountId,
   manage,
   onChanged,
+  goHold,
+  stopSince,
+  onStop,
 }: {
   accountId: string;
   manage: boolean;
   onChanged: () => void;
+  /** Why go (resume) is held on this account, or null. Never gates a STOP or a pause. */
+  goHold: string | null;
+  /** When the held STOP was sent (`stamp()`), or null. */
+  stopSince: number | null;
+  /** `attempt` is the `stamp()` taken when that STOP was sent (unused for "confirmed"). */
+  onStop: (phase: StopPhase, attempt: number) => void;
 }) {
   const base = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
   const r = useJsonResource(
@@ -42,7 +54,12 @@ export default function AccountControls({
     [action, setAction] = useState<Action | null>(null),
     // Every command in flight (at most one STOP plus one pause or resume).
     [inFlight, setInFlight] = useState<Action[]>([]),
-    [outcome, setOutcome] = useState<Record<Lane, Outcome>>({ stop: NONE, control: NONE });
+    [outcome, setOutcome] = useState<Record<Lane, Outcome>>({ stop: NONE, control: NONE }),
+    [mountedAt] = useState(stamp);
+  // When the read on screen was issued: first render precedes the mount read, and every reload goes through `reread`.
+  // Only the latest read can land (useJsonResource), and a reload shows loading at once, so an ok read is the one issued last.
+  const issued = useRef(mountedAt);
+  const reread = () => { issued.current = stamp(); r.reload(); };
   const ready = r.state.kind === "ok" ? r.state.data : null;
   const unconfirmed = outcome.stop.pending !== null || outcome.control.pending !== null;
   const sending = (a: Action) => inFlight.includes(a);
@@ -52,24 +69,28 @@ export default function AccountControls({
   function blocked(a: Action, retry = false) {
     if (!manage) return true;
     if (a === "emergency_stop") return sending(a) || (!retry && !reason.trim());
-    if (inFlight.length) return true;
+    if (inFlight.length || (a === "resume" && goHold !== null)) return true;
     if (retry) return false;
     return !reason.trim() || !ready || unconfirmed ||
       (a === "pause" ? !ready.accountControl.enabled : ready.accountControl.enabled || !ready.readyToEnable);
   }
+  // A read issued after the STOP was sent that shows the account stopped confirms it: release the hold and the stop lane.
+  useEffect(() => {
+    if (stopSince === null || !ready || ready.accountControl.enabled || issued.current <= stopSince) return;
+    onStop("confirmed", 0);
+    setOutcome((o) => ({ ...o, stop: { pending: null, notice: "Emergency stop: the account reads as stopped." } }));
+  }, [stopSince, ready, onStop]);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
   async function send(command: Command) {
+    const isStop = command.action === "emergency_stop";
+    const attempt = stamp();
+    if (isStop) onStop("sent", attempt);
     setInFlight((f) => [...f, command.action]);
     const q = await bFetch(base, { method: "POST", body: command });
-    if (!mounted.current) return;
-    setInFlight((f) => f.filter((a) => a !== command.action));
-    setAction((a) => (a === command.action ? null : a));
-    r.reload();
-    onChanged();
     const recorded =
       q.kind === "ok" &&
       object(q.data) &&
@@ -78,14 +99,24 @@ export default function AccountControls({
       q.data.accountId === accountId &&
       object(q.data.command) &&
       q.data.command.recorded === true;
+    const unconfirmed = q.kind === "unconfirmed" || (q.kind === "ok" && !recorded);
+    // Before the unmount check: a STOP answered after the operator switched account still settles that account's hold.
+    if (isStop) onStop(recorded ? "recorded" : unconfirmed ? "unknown" : "refused", attempt);
+    if (!mounted.current) return;
+    setInFlight((f) => f.filter((a) => a !== command.action));
+    setAction((a) => (a === command.action ? null : a));
+    reread();
+    onChanged();
     setOutcome((o) => ({
       ...o,
       [laneOf(command.action)]: {
-        pending: q.kind === "unconfirmed" || (q.kind === "ok" && !recorded) ? command : null,
+        pending: unconfirmed ? command : null,
         notice: `${LABEL[command.action]}: ${
           recorded
             ? "Account command recorded. Reading authoritative current state. Already dispatched or unknown operations retain their status."
-            : "error" in q
+            : isStop && unconfirmed
+              ? "this stop is not confirmed and may not have applied. Send stop again. Resume is held until a stop is recorded or the account reads as stopped."
+              : "error" in q
               ? q.error
               : "The account command outcome is unconfirmed. Read current state before retrying."
         }`,
@@ -107,11 +138,11 @@ export default function AccountControls({
   return (
     <div className="mt-3 space-y-3 border-t border-line pt-3">
       <h3 className="font-semibold">Account-wide controls</h3>
-      <StateLine state={r.state} retry={r.reload} label="account controls" />
+      <StateLine state={r.state} retry={reread} label="account controls" />
       {r.state.kind === "pending" ? (
         <p role="alert">
           {r.state.error}
-          <button className={buttonClass} onClick={r.reload}>
+          <button className={buttonClass} onClick={reread}>
             Retry
           </button>
         </p>
@@ -158,6 +189,7 @@ export default function AccountControls({
           <button
             className={buttonClass}
             disabled={blocked("resume")}
+            title={goHold ?? undefined}
             onClick={() => setAction("resume")}
           >
             Resume with current prerequisites
@@ -190,6 +222,11 @@ export default function AccountControls({
             Cancel
           </button>
         </div>
+      ) : null}
+      {stopSince !== null && outcome.stop.pending === null ? (
+        <p role="status" className="text-sm" data-b-stop-held>
+          Emergency stop not confirmed yet. Resume is held until a stop is recorded or the account reads as stopped.
+        </p>
       ) : null}
       {(["control", "stop"] as const).map((lane) => {
         const { notice, pending } = outcome[lane];
