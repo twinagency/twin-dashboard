@@ -187,7 +187,7 @@ export async function readAccounts(
 
   const result = await input.backend.listAccounts({ creatorId });
   if (!result.ok) return mapFailure(result);
-  if (allowed && result.data.some((account) => !allowed.has(account.binding.creatorId))) {
+  if (allowed && result.data.some((account) => !allowed.has(account.binding.creatorId.toLowerCase()))) {
     return violation("an account from a creator outside this scope");
   }
 

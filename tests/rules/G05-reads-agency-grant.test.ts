@@ -81,3 +81,8 @@ test("F9: the operator asking for C1 is not refused a c1 account as a scope viol
   const result = await readAccounts({ auth: OPERATOR, backend }, { creatorId: "C1", accountId: null });
   assert.equal(result.ok, true);
 });
+test("F9: an account row whose creator id comes back upper-cased is still inside the grant", async () => {
+  const { backend } = fakeBackend([boundTo("C1")]);
+  const result = await readAccounts({ auth: AGENCY, backend }, { creatorId: null, accountId: null });
+  assert.equal(result.ok, true);
+});
