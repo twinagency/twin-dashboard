@@ -166,9 +166,14 @@ export function createFetchOnlyFansTransport(
             ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
               ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}), ...(command.payload.media ? { media: command.payload.media } : {}) } : {}) }),
         });
+        // The route labels its own refusals "refused". A bare or non-JSON 503 (a proxy) may follow a forwarded write, so it stays
+        // unconfirmed and Retry keeps the requestKey; so does any body the backend labelled "unconfirmed".
         if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) {
           const refusal = await response.json().catch(() => null);
-          return result("refused", controlRefusalNote(response.status, refusal));
+          const label = refusal && typeof refusal === "object" ? (refusal as { outcome?: unknown }).outcome : undefined;
+          if ([401, 403].includes(response.status) || (response.status === 503 ? label === "refused" : label !== "unconfirmed")) {
+            return result("refused", controlRefusalNote(response.status, refusal));
+          }
         }
         if (response.ok) {
           const ack = parseControlAck(await response.json(), { ...command, action });

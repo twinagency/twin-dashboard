@@ -4,11 +4,23 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCommandRequest, intentRequestKey } from "../../lib/onlyfans-preview/actions";
+import { createFetchOnlyFansTransport } from "../../lib/onlyfans-preview/server-data-source";
 
 // app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/route.ts, the resolve_delivery_evidence requestKey check.
 const ROUTE_SHAPE = /^[a-f0-9-]{36}$/;
-const key = (expectedRevision: number, attemptId = "attempt-1") => intentRequestKey(createCommandRequest({ command: "resolve_delivery_evidence", accountId: "of-a",
-  conversationId: "c-1", expectedRevision, payload: { kind: "delivery_resolution", attemptId, decision: "delivered", providerMessageId: "77" } }).idempotencyKey);
+const resolve = (expectedRevision: number, attemptId = "attempt-1") => createCommandRequest({ command: "resolve_delivery_evidence", accountId: "of-a",
+  conversationId: "c-1", expectedRevision, payload: { kind: "delivery_resolution", attemptId, decision: "delivered", providerMessageId: "77" } });
+const key = (expectedRevision: number, attemptId = "attempt-1") => intentRequestKey(resolve(expectedRevision, attemptId).idempotencyKey);
+
+test("finding 5: the transport sends intentRequestKey(idempotencyKey), in the route's shape, not the raw idempotency key", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const transport = createFetchOnlyFansTransport(async (_url, init) => { bodies.push(JSON.parse(String(init?.body))); return new Response(null, { status: 503 }); });
+  const command = resolve(3);
+  await transport.submitControl!(command);
+  assert.equal(bodies.length, 1, "the resolution was posted");
+  assert.equal(bodies[0].requestKey, intentRequestKey(command.idempotencyKey));
+  assert.match(String(bodies[0].requestKey), ROUTE_SHAPE);
+});
 
 test("finding 5: the key has the UUID shape the route accepts, is deterministic, and differs per revision and per attempt", () => {
   assert.match(key(3), ROUTE_SHAPE);

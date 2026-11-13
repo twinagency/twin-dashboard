@@ -63,15 +63,31 @@ test("control: the fixture is accepted, and opening a video sends at most one pr
 
 test("F5: closing and reopening the same video does not mint a new prepare key", async () => {
   try {
-    await host();
+    // The GET keeps answering unprepared and the first prepare's reply is lost, so the reopen must prepare again, with the held key.
+    await host(backend("206", [lostReply, () => json(videoBody("pending", false, "206"))]), "206");
     await openVideo();
+    assert.equal(prepares().length, 1, "opening an unprepared video prepares it");
     await closeVideo();
     await openVideo();
-    assert.ok(calls.filter(call => call.url === video).length >= 2, "the reopen was observed (the player asked about the video again, any method)");
-    const ids = prepares().map(call => bodyOf(call).requestId);
-    assert.ok(new Set(ids).size <= 1,
-      `reopening the same video reuses its prepare key (or does not prepare again); prepares ${ids.length}, distinct requestIds ${new Set(ids).size}`);
+    const ids = prepares().map(call => String(bodyOf(call).requestId));
+    assert.equal(ids.length, 2, "the reopen prepared the unprepared video again");
+    assert.match(ids[0], UUID);
+    assert.equal(ids[1], ids[0], "reopening the same video minted a new prepare key");
   } finally { await unmount(); uninstall(); }
+});
+
+test("a prepare refused for a lost session (401/403) releases the key, so a later prepare is new", async () => {
+  for (const [status, id] of [[401, "209"], [403, "210"]] as const) {
+    try {
+      await host(backend(id, [() => new Response(null, { status }), () => json(videoBody("pending", false, id))]), id);
+      await openVideo();
+      await closeVideo();
+      await openVideo();
+      const ids = prepares().map(call => String(bodyOf(call).requestId));
+      assert.equal(ids.length, 2, `${status}: the reopen prepared again`);
+      assert.notEqual(ids[1], ids[0], `${status}: a prepare after a session loss reused the old key`);
+    } finally { await unmount(); uninstall(); }
+  }
 });
 
 test("finding 1: a definite refusal releases the key, so Retry prepares with a new one", async () => {
