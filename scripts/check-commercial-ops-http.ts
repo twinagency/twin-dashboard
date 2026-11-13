@@ -84,6 +84,8 @@ async function main(){
   const complete=(await ok(await get(vault))).vault.sync;
   assert.equal(complete.status,"complete");
   assert.deepEqual(complete.selectedByKind,{photo:1,video:1});
+  const providerReadsAfterRefresh=(await state()).providerReads;
+  assert.equal(providerReadsAfterRefresh,setup.providerReads+6,"one initial turn and two typed refresh turns");
   // ---- history coverage: read-only, honest when no history import is configured
   const coveragePath=cfg+"/history-coverage";
   assert.notEqual((await fetch(base+coveragePath,{redirect:"manual"})).status,200,"coverage needs an agency session");
@@ -146,7 +148,7 @@ async function main(){
   assert.equal((await direct({"X-OnlyFans-Agency-Scope":scope,"X-OnlyFans-Configuration-Version":"of-configuration.v3"})).status,409,"actor that is not the scope actor");
   assert.equal((await state()).commands.filter((c:Json)=>c.kind==="commercial_scope").length,2,"refused direct calls wrote nothing");
   const final=await state();
-  assert.equal(final.providerReads,setup.providerReads+2,"no provider read from any commercial operation");
+  assert.equal(final.providerReads,providerReadsAfterRefresh,"no provider read from any commercial operation");
   // Exact terms review uses the same authenticated BFF and PostgreSQL owner.
   s=await (await fetch(backend+"/fixture/state")).json();
   const productId=String(s.terms[0].itemId);
