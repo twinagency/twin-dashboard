@@ -175,7 +175,7 @@ test("edit sends the new part texts, invalidates the approval, and returns a new
   assert.equal(all("[data-plan-c-part-text]")[0].textContent, "Hey, I saw your message, hi");
 });
 
-test("stop, take over and hand back each need a confirming click, and a take over never hands back by itself", async () => {
+test("take over and hand back each need a confirming click, and a take over never hands back by itself", async () => {
   const id = `${MOCK_ACCOUNT}:900000000001`;
   const { mock } = await mount({ drafts: [seedDraft()] });
   const conv = () => q(`[data-plan-c-conversation="${id}"]`)!;
@@ -200,10 +200,10 @@ test("stop, take over and hand back each need a confirming click, and a take ove
 
 test("a conversation action can be cancelled without sending anything", async () => {
   const { mock } = await mount({ drafts: [seedDraft()] });
-  await click(within(q("[data-plan-c-conversation]")!, '[data-plan-c-conversation-action="stop"]'));
+  await click(within(q("[data-plan-c-conversation]")!, '[data-plan-c-conversation-action="takeover"]'));
   await click(buttonByText(q("[data-plan-c-conversation]")!, /^Cancel$/));
   assert.equal(mock.posts().length, 0);
-  assert.ok(q('[data-plan-c-conversation-action="stop"]'));
+  assert.ok(q('[data-plan-c-conversation-action="takeover"]'));
 });
 
 test("unresolved work shows owner and next step, and reconcile needs an evidence reference", async () => {
@@ -287,11 +287,15 @@ test("a read-only viewer sees the drafts but every control is disabled", async (
   assert.equal(mock.posts().length, 0);
 });
 
-test("a conversation whose revision the backend did not report cannot be changed", async () => {
+test("a conversation whose revision the backend did not report keeps Stop; take over and hand back are unavailable", async () => {
   const draft = seedDraft(); (draft.conversation as { revision?: number }).revision = undefined;
-  await mount({ drafts: [draft] });
-  assert.match(text(), /did not report this conversation's revision/);
-  assert.equal(all("[data-plan-c-conversation-action]").length, 0);
+  const { mock } = await mount({ drafts: [draft] });
+  assert.match(text(), /Take over and hand back are unavailable/);
+  assert.deepEqual(all("[data-plan-c-conversation-action]").map(el => el.getAttribute("data-plan-c-conversation-action")), ["stop"]);
+  await click(q('[data-plan-c-conversation-action="stop"]'));
+  assert.equal(mock.posts().length, 0, "the wire needs a revision, so nothing is sent");
+  assert.match(text(), /Stop not sent/);
+  assert.equal(within(draftEl(), "[data-plan-c-approve]")?.hasAttribute("disabled"), true, "a stop that was not recorded holds approve");
 });
 
 

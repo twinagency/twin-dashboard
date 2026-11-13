@@ -217,12 +217,15 @@ function Action({
     </li>
   );
 }
+/** Follow-ups and their cancel control always render; only the policy editor is gated on ownership (`editPolicy`). */
 export default function EngagementPanel({
   accountId,
   manage,
+  editPolicy,
 }: {
   accountId: string;
   manage: boolean;
+  editPolicy: boolean;
 }) {
   const [cursor, setCursor] = useState<string | null>(null),
     [notice, setNotice] = useState(""),
@@ -311,7 +314,7 @@ export default function EngagementPanel({
   }
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-line p-3">
+      {editPolicy ? <div className="rounded-xl border border-line p-3">
         <StateLine
           state={settings.state}
           retry={settings.reload}
@@ -359,7 +362,7 @@ export default function EngagementPanel({
             </button>
           </div>
         ) : null}
-      </div>
+      </div> : null}
       <div
         className="rounded-xl border border-line p-3"
         data-b-card="follow-ups"

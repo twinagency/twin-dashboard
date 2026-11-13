@@ -31,7 +31,7 @@ async function main() {
 }
 const { MonetizationSections } = await import("../components/clone/ConfigSections");
 const { useCloneConfig } = await import("../components/clone/useCloneConfig");
-const { DEFAULT_SPOIL_OPTIONS } = await import("../components/clone/fields");
+const { DEFAULT_SPOIL_OPTIONS } = await import("../lib/clone-default-policy");
 check("only engine 'v2' counts as V2 (live, null, missing, other values do not)", isV2Engine({ engine: "v2" }) && !isV2Engine({ engine: "live" }) && !isV2Engine({ engine: null }) && !isV2Engine({}) && !isV2Engine(undefined) && !isV2Engine({ engine: "V2 " }));
 check("the label says what the operator asked for", V2_TIP_CREDITS_LABEL.includes("legacy V1 tips only, V2 tips give no reply credits"));
 check("no em dashes in the new copy (repo UI rule)", ![V2_TIPS_SECTION_HINT, V2_TIP_CREDITS_LABEL, V2_TIP_CREDITS_HINT_PREFIX, V2_SPOIL_HINT].some((t) => /[—–]/.test(t)));
