@@ -10,7 +10,7 @@
 // Error(j.error)` into the existing error banner). Coupling: asserts the server's error string is visible somewhere
 // in the page; a fix that replaces it with a generic message would need this assertion loosened.
 // The red reply mirrors the route exactly: `new Response(JSON.stringify({ error }), { status: 500 })` (no content type).
-// Not wired into npm scripts. Offline: jsdom, global fetch stubbed per URL; next/navigation's useRouter is fed a fake
+// Promoted: runs in `npm run test:rules` (globs tests/rules). Offline: jsdom, global fetch stubbed per URL; next/navigation's useRouter is fed a fake
 // router through AppRouterContext (the provider Next itself mounts), no module mocks.
 // Run: node --import tsx --test <this file>.
 import assert from "node:assert/strict";

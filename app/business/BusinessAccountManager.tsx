@@ -1,7 +1,7 @@
 "use client";
 import { ReadOnlyEditor } from "@/components/DashboardAccessProvider";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { inputCls } from "@/components/clone/fields";
@@ -84,10 +84,13 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
   useEffect(load, [cloneId]);
 
   // One lock for every action: the shared result banner and setBusy(null) serve all of them, and a story post is not
-  // idempotent, so nothing else may start (or unlock the story form) while any action is in flight.
+  // idempotent, so nothing else may start (or unlock the story form) while any action is in flight. The ref is the lock
+  // (taken synchronously, so two submits in one batch cannot both pass); `locked` only disables the controls.
+  const lockRef = useRef(false);
   const locked = busy !== null;
   async function act(action: string, build: (fd: FormData) => void) {
-    if (locked) return;
+    if (lockRef.current) return;
+    lockRef.current = true;
     setBusy(action);
     setResult(null);
     try {
@@ -106,6 +109,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
     } catch (e) {
       setResult({ action, ok: false, message: e instanceof Error ? e.message : String(e) });
     } finally {
+      lockRef.current = false;
       setBusy(null);
     }
   }

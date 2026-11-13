@@ -7,7 +7,7 @@
 // F2: `load()` (:77-83) has no stale-response guard and the component has no `key={cloneId}` (app/business/page.tsx:20,
 //     app/creator/business/page.tsx:9): clone A's late GET overwrites clone B's status, so B's editor shows A's profile
 //     and the next save posts B's cloneId with A's prefilled values.
-// Not wired into npm scripts or init.sh (orchestrator merges the known-red list). Offline: jsdom, global fetch stubbed
+// Promoted: runs in `npm run test:rules` (globs tests/rules). Offline: jsdom, global fetch stubbed
 // at the wire; nothing is sent anywhere.
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
@@ -101,12 +101,25 @@ test("F1a: while a story post is in flight, finishing another action must not un
   await act(async () => { parkedPosts.get("bio")?.resolve(Response.json({ ok: true })); });
   await tick(); await tick();
   assert.equal(storyFieldset()?.disabled, true, "story post still in flight: a second Post story must be impossible");
+  assert.deepEqual(posts.map(p => p.action), ["story"], "one lock: no other action starts while the story post is in flight");
 });
 
-test("F1b: a failed story must not be reported as Done. by a later action finishing after it", async () => {
+test("F1c: two story submits in the same batch send exactly one POST (lock taken before the first await)", async () => {
+  await mount("clone-a");
+  const form = document.querySelector("form")!;
+  await act(async () => {
+    form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+    form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true }));
+  });
+  await tick();
+  assert.deepEqual(posts.map(p => p.action), ["story"], "a same-batch double submit posted the (non idempotent) story twice");
+});
+
+test("F1b: while a story is in flight no later action starts, so a failed story is not overwritten by Done.", async () => {
   await mount("clone-a");
   await submitStory();
   await saveBio("new bio");
+  assert.deepEqual(posts.map(p => p.action), ["story"], "the bio save started while the story post was in flight");
   await act(async () => { parkedPosts.get("story")!.resolve(Response.json({ error: "story rejected by Telegram" }, { status: 400 })); });
   await tick();
   await act(async () => { parkedPosts.get("bio")?.resolve(Response.json({ ok: true })); });

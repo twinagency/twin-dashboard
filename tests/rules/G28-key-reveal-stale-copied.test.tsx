@@ -15,7 +15,7 @@
 // KeyManager.tsx. Everything else (useActionState, the form action, KeyReveal) is the real component. The test asserts
 // the real actions module was not loaded. Coupling: if KeyManager imports its actions under another specifier the
 // swap misses and the "fake in use" assertion fails loudly.
-// Not wired into npm scripts. Offline: jsdom; globalThis.fetch is a deny-all guard asserted empty in after().
+// Promoted: runs in `npm run test:rules` (globs tests/rules). Offline: jsdom; globalThis.fetch is a deny-all guard asserted empty in after().
 // Run: node --import tsx --test <this file>.
 import assert from "node:assert/strict";
 import * as nodeModule from "node:module";
