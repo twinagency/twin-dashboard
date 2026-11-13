@@ -275,8 +275,8 @@ export type PreviewCommand =
   | "send_manual_message"
   | "resolve_delivery_evidence";
 
-/** What provider evidence shows for an unresolved send. */
-export type DeliveryResolutionDecision = "delivered" | "not_delivered";
+/** What provider evidence shows for an unresolved send. Only an exact delivered message is reconciled (the route refuses anything else). */
+export type DeliveryResolutionDecision = "delivered";
 
 /**
  * A command's payload.
