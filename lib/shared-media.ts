@@ -33,14 +33,24 @@ export type SharedTransfer = {
   file_id: string; connection_revision: number; actor: string; job_id: string | null; media_id: string | null;
   status: string; processing: boolean; received_bytes: number; error_code: string | null;
 };
-// A receipt is history once it reaches one of these statuses: the same file may then be shared to the account again. Every
-// other receipt is live and blocks a new one; so does a retryable one held for provider cleanup. "complete" stays live, so a
-// repeated click never uploads a finished file twice. Mirrored exactly by the partial unique index in
-// supabase/migrations/20261113100300_shared_media_retry_after_failure.sql (tests/rules/G30b-shared-media-retry-index.test.mjs).
-export const RETRYABLE_SHARED_STATUSES = ["failed", "interrupted", "superseded", "expired"] as const;
+// A retry mints a new file_id and commandKey, so retrying a file that may already be in the vault uploads it twice. A receipt
+// is therefore history (the same file may be shared again) ONLY when its stored row proves the provider never received the
+// file: no vault media id and one of these exact (status, error_code) pairs. The backend's vault_media_worker.recover() writes
+// them only for a job still receiving or pending, before the worker ever claimed it, and neither status is ever left again;
+// sharedUploadProgress stores that lastError verbatim (no file error, no cleanup is possible on a job that never ran).
+// Every other receipt is LIVE and blocks a new one: active, complete, failed or complete-with-anomaly (provider_review_required),
+// provider_cleanup_required, interrupted (the worker was running), superseded by a binding change (may hit a running job),
+// expired by an operator cancel (null error_code), any unknown code. The same predicate is the route's lookup filter and the
+// partial unique index in supabase/migrations/20261113100300_shared_media_retry_after_failure.sql
+// (tests/rules/G30b-shared-media-retry-index.test.mjs, G30b-shared-media-retry-route.test.ts).
+export const RETRYABLE_SHARED_OUTCOMES = [["expired", "media_request_expired"], ["superseded", "media_connection_changed"]] as const;
 export const SHARED_CLEANUP_HOLD = "provider_cleanup_required";
+// Live = not retryable, written null-safe (two-valued for every row): status is NOT NULL, and a null media_id/error_code is
+// decided by its own term before any comparison.
 /** The live predicate as a PostgREST `.or()` filter. */
-export const LIVE_SHARED_FILTER = `status.not.in.(${RETRYABLE_SHARED_STATUSES.join(",")}),error_code.eq.${SHARED_CLEANUP_HOLD}`;
+export const LIVE_SHARED_FILTER = `media_id.not.is.null,error_code.is.null,and(${RETRYABLE_SHARED_OUTCOMES.map(([s, e]) => `or(status.neq.${s},error_code.neq.${e})`).join(",")})`;
+/** The same predicate as SQL, the partial index's WHERE. */
+export const LIVE_SHARED_SQL = `media_id is not null or error_code is null or (${RETRYABLE_SHARED_OUTCOMES.map(([s, e]) => `(status <> '${s}' or error_code <> '${e}')`).join(" and ")})`;
 export function sharedUploadProgress(row: SharedTransfer, job: UploadJob) {
   if (row.job_id && row.job_id !== job.jobId || job.files.length !== 1) throw Error("upload_mismatch");
   const file = job.files[0];
