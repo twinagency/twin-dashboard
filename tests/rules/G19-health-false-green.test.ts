@@ -70,12 +70,14 @@ test("G19 R2 A: an active clone with no bot token is a broken bot and turns the 
   for (const rows of [[CLONE, ACTIVE_NO_TOKEN], [ACTIVE_NO_TOKEN]]) {
     const fleet: Responder = c => (isRest(c, "clones") ? table(rows, c) : undefined);
     const telegram: Responder = c => (isTelegram(c, "getMe") ? (c.url.pathname.includes(BOT_TOKEN) ? getMe(c) : getMeRefused(c)) : undefined);
-    const r = await withWire(anyOf(fleet, telegram), async stub => {
-      const res = await as(null, () => route.GET!());
+    const GET = route.GET;
+    const r: { status: number; body: Body } = await withWire(anyOf(fleet, telegram), async (stub): Promise<{ status: number; body: Body }> => {
+      const res: Response = await as(null, () => GET());
       assert.equal(stub.to("api.telegram.org").length, rows.length - 1, "a tokenless clone is never pinged");
       return { status: res.status, body: await res.json() as Body };
     });
     assert.equal(r.status, 503, `an active clone with no bot token answered ${r.status}: a status-code monitor reads it as healthy`);
-    assert.ok(r.body.clones?.some(c => (c as unknown as { slug: string; telegram: { ok: boolean } }).slug === "no-token" && !(c as unknown as { telegram: { ok: boolean } }).telegram.ok));
+    const rows2 = (r.body.clones ?? []) as unknown as { slug: string; telegram: { ok: boolean } }[];
+    assert.ok(rows2.some(c => c.slug === "no-token" && !c.telegram.ok));
   }
 });
