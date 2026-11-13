@@ -223,6 +223,8 @@ jobs:
       # Regression rules plus the admin/public API guards; offline fixtures only.
       - name: Rules and API guards
         run: |
+          # The migration rules start a throwaway cluster from the runner's PostgreSQL; under CI none is a failure.
+          export W5_PG_BIN="$(ls -d /usr/lib/postgresql/*/bin | sort -V | tail -1)"
           npm run test:rules
           npm run test:api
           npm run test:public
