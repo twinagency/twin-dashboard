@@ -48,3 +48,10 @@ test("F8: after an unconfirmed pause, Enable AI replies stays disabled", async (
   assert.match(status(), /could not be confirmed|unconfirmed/);
   assert.equal(enable()?.disabled, true, "a STOP whose outcome is unconfirmed keeps the go disabled");
 });
+
+test("FA6: after an unconfirmed pause the notice line says why Enable is off and names the way out, not a refresh", async () => {
+  await control(call => call.method === "GET" ? controlRead() : http502());
+  await click(pause());
+  assert.match(status(), /Enable is off: the last pause was not confirmed\. Pause again/);
+  assert.doesNotMatch(enable()?.title ?? "", /refresh/i, "the hold names a refresh that does not clear it");
+});

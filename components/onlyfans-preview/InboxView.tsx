@@ -253,6 +253,7 @@ function ConversationList({
 function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder }: { detail: ConversationDetail; principal: string; handoverHistory?: Handover | null; loadingOlder: boolean; onLoadOlder: () => void }) {
   const remembers = principal !== "fixture" && principal !== "unavailable";
   const timeline = conversationTimeline(detail, handoverHistory);
+  const messages = timeline.filter(entry => entry.kind === "message").length;
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
   // Open on the newest message, the way the Telegram thread does: a bottom-anchored
@@ -261,7 +262,7 @@ function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder 
   const olderAnchor = useRef<{ height: number; top: number } | null>(null);
   const bottom = useRef(true);
   const previousThread = useRef("");
-  const previousLength = useRef(0);
+  const previousMessages = useRef(0);
   // Messages that arrived while the reader was scrolled up. They are never
   // dragged into view; the pill below says how many are waiting.
   const [unseen, setUnseen] = useState(0);
@@ -278,9 +279,9 @@ function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder 
       node.scrollTop = olderAnchor.current.top + node.scrollHeight - olderAnchor.current.height;
       olderAnchor.current = null;
     } else if (!olderAnchor.current && bottom.current) node.scrollTop = node.scrollHeight;
-    else if (!olderAnchor.current && timeline.length > previousLength.current) { const added = timeline.length - previousLength.current; setUnseen(count => count + added); }
-    previousLength.current = timeline.length;
-  }, [detail.conversationId, timeline.length, loadingOlder]);
+    else if (!olderAnchor.current && messages > previousMessages.current) { const added = messages - previousMessages.current; setUnseen(count => count + added); }
+    previousMessages.current = messages; // the pill counts messages, not handover or control events
+  }, [detail.conversationId, timeline.length, messages, loadingOlder]);
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
@@ -420,7 +421,7 @@ function Composer({
   const canEdit = !pending && (viewer.canManage || viewer.canChat === true);
   const media: ManualMedia | undefined = draft.selectedMedia.length ? {
     mediaIds: draft.selectedMedia.map(row => row.mediaId), previewIds: draft.mediaPaid ? draft.previewIds : [],
-    priceCents: draft.mediaPaid ? manualPriceCents(draft.mediaPrice) || -1 : 0, // paid needs a paid price: 0 is free, never a paid intent
+    priceCents: draft.mediaPaid ? manualPriceCents(draft.mediaPrice) ?? -1 : 0,
   } : undefined;
   const mediaProblem = media && !validManualMedia(media) ? "Set a price from USD 3.00 to 200.00 and leave at least one attachment locked, or choose Free." : null;
   const submittable = canSend && bodyProblem === null && !mediaProblem && (!!text.trim() || !!media);
@@ -819,9 +820,11 @@ export default function InboxView({
   onInboxSearchChange?: (search: InboxSearch) => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
-  // The fan panel holds the Reply control (Pause, Stop further contact, hold copy), so it starts open at every desktop width:
-  // a brake is never harder to reach than Send. Closing it never touches the selected conversation, which lives outside this component.
+  // The fan panel is a third column only where there is room for it (1280px+).
+  // Narrower desktops start with it closed and can open it; closing it never
+  // touches the selected conversation, which lives outside this component.
   const [profileOpen, setProfileOpen] = useState(true);
+  useEffect(() => { if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1279px)").matches) setProfileOpen(false); }, []);
   // Below lg the fan info tab opens as a sheet over the chat. The chat, its draft and
   // its scroll stay mounted underneath, so closing the sheet loses nothing.
   const [narrow, setNarrow] = useState(false);
@@ -834,6 +837,9 @@ export default function InboxView({
     return () => query.removeEventListener("change", sync);
   }, []);
   const sheetOpen = narrow && mobilePanel === "controls";
+  // The Reply control (Pause, Stop further contact, hold copy) renders once: in the fan panel or sheet while that shows,
+  // otherwise in the chat column under the thread, so a brake is displayed whenever Send is (G09).
+  const panelShowsReplyControl = narrow ? sheetOpen : profileOpen;
   useEffect(() => {
     if (!sheetOpen) return;
     sheetClose.current?.focus();
@@ -867,6 +873,32 @@ export default function InboxView({
   const syncNotice = inboxSyncNotice(activeAccount,
     conversations.status === "stale" ? conversations.freshness : null,
     detailState?.status === "stale" ? detailState.freshness : null);
+
+  const replyControl = activeAccount && detail && actionSet ? (
+    <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
+    {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
+    {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
+    <ActionColumn
+      engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
+      actionSet={actionSet}
+      viewer={viewer}
+      result={commandResult}
+      pending={commandPending}
+      pendingAction={pendingAction}
+      onRetry={onRetryCommand}
+      incident={detail.deliveryIncident}
+      onCommand={onCommand}
+      onResolve={(attemptId, decision, providerMessageId) =>
+        onCommand("resolve_delivery_evidence", {
+          kind: "delivery_resolution",
+          providerMessageId,
+          attemptId,
+          decision,
+        })
+      }
+    />
+    </section>
+  ) : null;
 
   return (
     <div className={`${styles.workspace} users-workspace lg:h-full`} data-of-surface="onlyfans-inbox">
@@ -945,6 +977,7 @@ export default function InboxView({
 
               <Thread detail={detail} principal={draftPrincipal} handoverHistory={handoverHistory} loadingOlder={loadingOlder} onLoadOlder={onLoadOlder} />
 
+              {!panelShowsReplyControl && replyControl ? <div className="of-chat-reply-control max-h-[40%] shrink-0 overflow-y-auto border-t border-line p-2" data-of-chat-reply-control>{replyControl}</div> : null}
               {actionSet ? (
                 <Composer
                   key={draftKey(draftPrincipal, activeAccount.accountId, detail.conversationId)}
@@ -996,29 +1029,7 @@ export default function InboxView({
               </div>
 
               <FanRelationship detail={detail} />
-              <section className="of-reply-control" aria-label="Reply control"><h2 className="of-section-heading">Reply control</h2>
-              {detail.summary.automationMode === "automated" ? <p className="of-reply-status" role="status">{effectiveAiStatus(detail.summary, activeAccount)}</p> : null}
-              {handover ?? <p className="of-reply-status" role="status">{detail.summary.takeoverState === "requested" ? "Takeover pending" : detail.summary.automationMode === "automated" ? "AI replies enabled" : detail.summary.automationMode === "human_controlled" ? "Manual control" : detail.summary.automationMode === "no_contact" ? "Further contact stopped" : "AI replies paused"}</p>}
-              <ActionColumn
-                engineAware={parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current"}
-                actionSet={actionSet}
-                viewer={viewer}
-                result={commandResult}
-                pending={commandPending}
-                  pendingAction={pendingAction}
-                onRetry={onRetryCommand}
-                incident={detail.deliveryIncident}
-                onCommand={onCommand}
-                onResolve={(attemptId, decision, providerMessageId) =>
-                  onCommand("resolve_delivery_evidence", {
-                    kind: "delivery_resolution",
-                    providerMessageId,
-                    attemptId,
-                    decision,
-                  })
-                }
-              />
-              </section>
+              {panelShowsReplyControl ? replyControl : null}
 
               <EngineStatus key={detail.conversationId} value={detail.engineStatus} accountId={detail.accountId} conversationId={detail.conversationId} onAction={onEngineAction} onLoadMore={onEngineLoadMore}
                 onTakeover={canSubmitCommand(viewer, actionSet, "request_takeover") ? () => onCommand("request_takeover", NO_PAYLOAD) : undefined} takeoverPending={commandPending} />

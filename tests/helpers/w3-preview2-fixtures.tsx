@@ -1,6 +1,6 @@
 /**
  * Synthetic InboxView fixtures for W3 lane 4 (ui-onlyfans-preview-2), built on lib/onlyfans-preview/fixtures. Import AFTER
- * ./w3-preview2-dom. Ids are synthetic ("acct-a", "conv-1", attempt "attempt-a1"); nothing cookie or token shaped.
+ * ./w3-preview1-dom. Ids are synthetic ("acct-a", "conv-1", attempt "attempt-a1"); nothing cookie or token shaped.
  */
 import React from "react";
 import { accounts, conversationDetails } from "../../lib/onlyfans-preview/fixtures";

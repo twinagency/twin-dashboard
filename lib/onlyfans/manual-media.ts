@@ -16,7 +16,7 @@ export function manualPriceCents(value: string): number | null {
   if (!/^(?:0|[1-9][0-9]{0,2})(?:\.[0-9]{1,2})?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
   const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
-  return cents === 0 || cents >= 300 && cents <= 20000 ? cents : null;
+  return cents >= 300 && cents <= 20000 ? cents : null;
 }
 export function canonicalManualMedia(value: ManualMedia): string {
   return JSON.stringify({ mediaIds: value.mediaIds, previewIds: value.previewIds, priceCents: value.priceCents });

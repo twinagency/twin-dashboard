@@ -53,7 +53,7 @@ test("control: an activate refused with 409 drops the retry and says refused", a
   assert.match(q("[data-of-connection-notice]")?.textContent ?? "", /Command refused/);
 });
 
-test("control: an activate with no usable reply (502) keeps 'Retry same command'", async () => {
+test("control: an activate with no usable reply (502) keeps its retry", async () => {
   backend({ write: http502 });
   await editor();
   await activate();
@@ -67,4 +67,55 @@ test("F21: after an unconfirmed activate, Pause outgoing stays enabled", async (
   await activate();
   assert.ok(q("[data-of-connection-retry]"), "the go is pending a retry");
   assert.equal(pause()?.disabled, false, "the stop must not be harder than the pending go");
+});
+
+/**
+ * A backend that applies commands to a revisioned connection: a write carrying the current revision lands and bumps it, a stale
+ * one is refused with 409. `lostActivate` lands the activate but loses its reply (502); `getFails` lists which GETs (0-based) fail.
+ */
+function landingBackend(opts: { lostActivate?: boolean; getFails?: number[]; pauseRefused?: boolean }) {
+  let current = { ...connection }, gets = 0;
+  serve(call => {
+    if (call.method === "GET") return (opts.getFails ?? []).includes(gets++) ? http502() : json({ schemaVersion: CONNECTION_SCHEMA, ok: true, connection: current });
+    const body = bodyOf(call), action = body.action as string;
+    if (body.expectedRevision !== current.revision || action === "pause" && opts.pauseRefused) return refused(409);
+    current = { ...current, revision: current.revision + 1, outgoingEnabled: action === "activate" };
+    if (action === "activate" && opts.lostActivate) return http502();
+    return json({ schemaVersion: CONNECTION_SCHEMA, ok: true, applied: true, accountId: ACCOUNT, commandKey: "c".repeat(64), recordedRevision: current.revision, action });
+  });
+  return { current: () => current };
+}
+const notice = () => q("[data-of-connection-notice]")?.textContent ?? "";
+
+test("FL1: an activate whose POST and refresh both fail (502, 502) leaves Pause outgoing on screen and enabled", async () => {
+  landingBackend({ lostActivate: true, getFails: [1] });
+  await editor();
+  await activate();
+  assert.ok(q("[data-of-connection-retry]"), "the go is pending a retry");
+  assert.ok(pause(), "Pause outgoing is gone while the retry of the go remains");
+  assert.equal(pause()?.disabled, false);
+});
+
+test("FA5: an unconfirmed activate that landed (refresh failed), then Pause: the pause is sent at the moved revision and recorded", async () => {
+  const server = landingBackend({ lostActivate: true, getFails: [1] });
+  await editor();
+  await activate();
+  assert.equal(server.current().outgoingEnabled, true, "the lost activate landed");
+  await click(pause());
+  const sent = posts().filter(call => bodyOf(call).action === "pause");
+  assert.deepEqual(sent.map(call => bodyOf(call).expectedRevision), [5], "pause sent at the stale revision and refused");
+  assert.equal(server.current().outgoingEnabled, false, "outgoing still enabled after Pause");
+  assert.match(notice(), /Pause recorded/);
+  assert.equal(q("[data-of-connection-retry]"), null, "a confirmed pause supersedes the pending go");
+});
+
+test("C1: a refused pause keeps the pending activate's unconfirmed state and its named retry", async () => {
+  landingBackend({ lostActivate: true, pauseRefused: true });
+  await editor();
+  await activate();
+  assert.equal(q("[data-of-connection-retry]")?.textContent, "Retry enabling outgoing", "the retry names the action it repeats");
+  await click(pause());
+  assert.match(notice(), /Command refused/);
+  assert.ok(q("[data-of-connection-retry]"), "the refusal of the stop dropped the go's uncertain state");
+  assert.equal(q<HTMLFieldSetElement>("[data-of-connection-activate]")?.closest("fieldset")?.disabled, true, "the go stays held");
 });

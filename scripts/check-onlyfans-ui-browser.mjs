@@ -56,8 +56,17 @@ try {
         if (width < 768) check(mobile.fields.every(size => size >= 16), `${section} fields trigger phone zoom at ${width}px`);
       }
       if (section === "inbox" && width >= 1024) {
-        // The fan panel holds the Reply control, so it starts open at every desktop width: a brake never hides while Send shows (G09).
-        check(await page.locator(".users-panel-profile").isVisible(), `Fan panel starts open at ${width}px`);
+        // Below 1280px the fan panel starts closed so the conversation is not squeezed into narrow columns; it opens on demand.
+        if (width < 1280) {
+          check(!(await page.locator(".users-panel-profile").isVisible()), `Fan panel starts closed at ${width}px`);
+          const wide = await page.locator(".users-panel-chat").boundingBox();
+          check(!!wide && wide.width >= 480, `Conversation keeps its width at ${width}px`);
+          // The Reply control moves under the thread while the panel is closed: a brake shows whenever Send does (G09).
+          check(await page.locator(".users-panel-chat [data-of-action=pause_automation]").isVisible(), `Pause AI shows beside Send with the fan panel closed at ${width}px`);
+          if (width === 1024) await page.screenshot({ path: path.join(shots, `g09-${width}-inbox-panel-closed.png`) });
+          await page.locator("[data-of-profile-toggle]").click();
+          await page.locator(".users-panel-profile").waitFor();
+        }
         const chat = await page.locator(".users-panel-chat").boundingBox();
         const fan = await page.locator(".users-panel-profile").boundingBox();
         const composer = await page.locator("[data-of-composer]").boundingBox();
@@ -72,8 +81,10 @@ try {
         const after = await page.locator(".users-panel-chat").boundingBox();
         check(!!before && !!after && after.width > before.width, `Chat widens when the fan panel is hidden at ${width}px`);
         check(await page.locator("[data-of-composer]").isVisible(), `Conversation stays selected after collapsing at ${width}px`);
+        check(await page.locator(".users-panel-chat [data-of-action=pause_automation]").isVisible(), `Pause AI stays visible after collapsing at ${width}px`);
         await page.locator("[data-of-profile-toggle]").click();
       }
+      if (section === "inbox" && width === 1024) await page.screenshot({ path: path.join(shots, `g09-${width}-inbox-panel-open.png`) });
       await page.screenshot({ path: path.join(shots, `${width}-${section}.png`), fullPage: true });
     }
   }
@@ -100,8 +111,13 @@ try {
   await page.setViewportSize({width:390,height:1000});
   await page.locator("[data-of-mobile-panel=controls]").click();
   check(await page.locator(".users-panel-profile").isVisible(), "Mobile fan panel remains reachable");
+  // This fan is already paused, so the Reply control shows the hold and keeps "No contact" under More actions.
+  check(await page.locator(".users-panel-profile .of-reply-control").isVisible(), "Mobile fan sheet holds the Reply control");
+  await page.screenshot({ path: path.join(shots, "g09-390-inbox-sheet-open.png") });
   await page.locator("[data-of-mobile-panel=chat]").click();
   check(await page.locator("[data-of-composer]").isVisible(), "Mobile composer remains reachable");
+  check(await page.locator(".users-panel-chat .of-reply-control").isVisible(), "Mobile chat shows the Reply control beside Send");
+  await page.screenshot({ path: path.join(shots, "g09-390-inbox-sheet-closed.png") });
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${origin}/onlyfans/settings/`, { waitUntil: "load" });
   await page.locator("[data-of-edit-persona]").fill("Retained unsaved synthetic persona");

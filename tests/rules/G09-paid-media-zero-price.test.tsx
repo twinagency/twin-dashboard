@@ -1,9 +1,9 @@
 // RULE G09 (W3 ui-onlyfans-preview-2 P7): paid media priced 0 is not sendable. A paid intent needs a price inside the backend's
 // paid bound (USD 3.00 to 200.00, twin-onlyfans-backend service/onlyfans_runtime/text_delivery.py:385); 0 means free there, so
 // sending it would deliver the paid intent as free. P8/P9 are not G09. Offline: jsdom, fetch stubbed, synthetic ids.
-import { inNextApp, json, mount, stubFetch } from "../helpers/w3-preview2-dom";
+import { close, json, mount, resetDom, stubFetch } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
-import test, { beforeEach } from "node:test";
+import test, { after, afterEach, beforeEach } from "node:test";
 import { clearDrafts, draftKey, writeDraft } from "../../lib/onlyfans/inbox-drafts";
 import type { VaultItem } from "../../lib/onlyfans/vault";
 import { PRINCIPAL, detailFor, inbox, liveAccount } from "../helpers/w3-preview2-fixtures";
@@ -20,9 +20,11 @@ function serveCatalogue(page: () => Response) {
 }
 
 const send = () => document.querySelector<HTMLButtonElement>("[data-of-send]");
-const show = () => mount(inNextApp(inbox({ account: A, detail: detailFor(A.accountId, CONV) })));
+const show = () => mount(inbox({ account: A, detail: detailFor(A.accountId, CONV) }));
 
 beforeEach(() => { clearDrafts(); serveCatalogue(() => contentPage([offer("11")])); });
+afterEach(resetDom);
+after(close);
 
 test("control: paid media at USD 5.00 with one locked attachment enables Send; free media enables Send", async () => {
   writeDraft(key, { selectedMedia: [photo], mediaPaid: true, mediaPrice: "5.00", body: "for you" });

@@ -11,7 +11,7 @@ for(const bad of [{...good,priceCents:299},{...good,priceCents:20001},{...good,p
 {...good,mediaIds:["11","11"]},{...good,mediaIds:[11]},{...good,previewIds:["11","13"]},
 {...good,previewIds:["99"]},{...good,priceCents:0},{...good,url:"https://bad.invalid"},
 {...good,mediaIds:["9223372036854775808"]},{...good,mediaIds:[]}])check(!validManualMedia(bad));
-for(const [v,c]of [["0",0],["0.00",0],["3.00",300],["12.34",1234],["200",20000]]){assert.equal(manualPriceCents(v),c);n++;}
+for(const [v,c]of [["0",null],["0.00",null],["3.00",300],["12.34",1234],["200",20000]]){assert.equal(manualPriceCents(v),c);n++;}
 for(const v of ["", "-1","2.99","200.01","1e2","3.001","NaN","00.30","$5","5,00"]){assert.equal(manualPriceCents(v),null);n++;}
 check(canonicalManualMedia(good)!==canonicalManualMedia({...good,priceCents:1300}));
 
