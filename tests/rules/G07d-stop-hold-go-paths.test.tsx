@@ -42,7 +42,7 @@ const controlAck = (call: Call): Response => {
 };
 
 /** `empty`: the account lists no conversations, so the inbox selects none. */
-async function inbox(operatorScope: string, answer: (call: Call) => Response | Promise<Response>, empty = false) {
+async function inbox(operatorScope: string, answer: (call: Call) => Response | Promise<Response>, empty = false, principal = PRINCIPAL) {
   const paused = <T extends { conversationId: string }>(s: T) => (s.conversationId === PAUSED_CONV ? { ...s, automationMode: "paused" } : s);
   serve((call: Call) => {
     if (call.method === "POST") return answer(call);
@@ -55,7 +55,7 @@ async function inbox(operatorScope: string, answer: (call: Call) => Response | P
     return json({ error: "fixture" }, 404);
   });
   const { default: OnlyFansWorkspace } = require("../../components/onlyfans-preview/OnlyFansWorkspace");
-  await mount(<OnlyFansWorkspace view="inbox" source="server" draftPrincipal={PRINCIPAL} operatorScope={operatorScope} canManage canChat />,
+  await mount(<OnlyFansWorkspace view="inbox" source="server" draftPrincipal={principal} operatorScope={operatorScope} canManage canChat />,
     `/onlyfans/inbox?account=${AVA}`);
 }
 const open = (conversationId: string) => click(q(`[data-of-conversation-id="${conversationId}"]`));
@@ -130,9 +130,9 @@ test("(b): an inbox visit with no conversation selected forgets another operator
 test("(c): a workspace switched from operator A to B drops A's unconfirmed send and its Retry; nothing of A's goes out under B", async () => {
   const workspace = (operatorScope: string) => {
     const { default: OnlyFansWorkspace } = require("../../components/onlyfans-preview/OnlyFansWorkspace");
-    return <OnlyFansWorkspace view="inbox" source="server" draftPrincipal={PRINCIPAL} operatorScope={operatorScope} canManage canChat />;
+    return <OnlyFansWorkspace view="inbox" source="server" draftPrincipal={`op-session:${operatorScope}`} operatorScope={operatorScope} canManage canChat />;
   };
-  await inbox("op-g07d-c-a", () => routeFailure(503, "unconfirmed", { schemaVersion: CONTROL_SCHEMA }));
+  await inbox("op-g07d-c-a", () => routeFailure(503, "unconfirmed", { schemaVersion: CONTROL_SCHEMA }), false, "op-session:op-g07d-c-a"); // the page passes ctx.actor and its planCKeyScope
   await open(HUMAN);
   await type(q("[data-of-composer]"), "operator A's message");
   await click(q("[data-of-send]"));

@@ -201,7 +201,13 @@ function useSelectionStore() {
 
 const UNCONFIRMED_NOTE = "The outcome is not confirmed. Refresh the conversation or retry this same request.";
 
-export default function OnlyFansWorkspace({
+type WorkspaceProps = Parameters<typeof WorkspaceForScope>[0];
+/** Keyed by operator scope: another operator in this tab (re-login, server refresh) gets fresh state, never the earlier one's result or Retry (G07d c). */
+export default function OnlyFansWorkspace(props: WorkspaceProps) {
+  return <WorkspaceForScope key={props.operatorScope ?? ""} {...props} />;
+}
+
+function WorkspaceForScope({
   view,
   source: sourceMode,
   connectionsConfigured = false,
