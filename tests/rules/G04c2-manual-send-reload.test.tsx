@@ -243,3 +243,39 @@ test("G04c2 #16: a held send is stored once, under a hash of its intent: the mes
   assert.equal(saved.split("unique text").length - 1, 1, saved);
   assert.ok(Object.keys(JSON.parse(saved)).every(name => /^[a-f0-9]{16}$/.test(name)), saved);
 });
+
+test("G04c2 #19: a 403 (read-only, team permission, origin) is not a session loss: the held send and its exact Retry stay", async () => {
+  await load("op-403", lostReply);
+  await send("hello fan");
+  const [sent] = posts().map(bodyOf);
+  await reloadPage();
+  await load("op-403", () => new Response(null, { status: 403 }));
+  await open();
+  await retry();
+  assert.equal(posts().length, 1, "control: the retry reached the route");
+  assert.ok(dom.window.sessionStorage.length > 0, "a 403 forgot the held send, though it proves nothing about the earlier attempt");
+  assert.ok(retryButton(), "a 403 dropped the held send's Retry");
+  await reloadPage();
+  await load("op-403", ack);
+  await open();
+  await retry();
+  assert.deepEqual(posts().map(bodyOf), [sent], "the retry after a 403 was not the exact send");
+});
+
+const controlAck = (call: Call): Response => {
+  const [, accountId, conversationId] = call.url.match(/accounts\/([^/]+)\/conversations\/([^/?]+)/)!;
+  return json({ schemaVersion: CONTROL_SCHEMA, ok: true, applied: true, commandKey: "d".repeat(64), accountId, conversationId,
+    action: bodyOf(call).action, recordedRevision: Number(bodyOf(call).expectedRevision) + 1 });
+};
+test("G04c2 #20: a control ack on the thread does not hide a held send: the composer stays locked and the exact Retry is offered", async () => {
+  await load("op-ctl", call => posts().length === 1 ? lostReply() : controlAck(call));
+  await send("hello fan");
+  const [sent] = posts().map(bodyOf);
+  await click(q('[data-of-action="release_takeover"]'));
+  assert.equal(bodyOf(posts()[1]).action, "release_takeover", "control: the control reached the route");
+  await type(q("[data-of-composer]"), "another message");
+  assert.ok(q<HTMLButtonElement>("[data-of-send]")?.disabled, "a control ack unlocked the composer while a send is held");
+  assert.ok(retryButton(), "a control ack hid the held send's Retry");
+  await retry();
+  assert.deepEqual(bodyOf(posts()[2]), sent, "the Retry after a control ack was not the exact send");
+});

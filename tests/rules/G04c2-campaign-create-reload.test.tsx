@@ -201,3 +201,19 @@ test("G04c2 #14: a session loss (401) forgets this scope's held create, in stora
   await load("op-a", "of-r-401", () => ack("of-r-401"));
   assert.ok(!locked() && !retryButton(), "a held create from before the session loss was restored");
 });
+
+test("G04c2 #19: a 403 (read-only, team permission, origin) is not a session loss: the held create stays in storage and is offered again", async () => {
+  await load("op-a", "of-r-403", lostReply, "Hello there");
+  await queue();
+  const [sent] = posts().map(bodyOf);
+  await reloadPage();
+  await load("op-a", "of-r-403", () => new Response(null, { status: 403 }));
+  await click(retryButton());
+  assert.equal(posts().length, 1, "control: the retry reached the route");
+  assert.equal(stored(), 1, "a 403 forgot the held create, though it proves nothing about the earlier attempt");
+  await reloadPage();
+  await load("op-a", "of-r-403", () => ack("of-r-403"));
+  assert.ok(locked() && retryButton(), "a 403 dropped the held create's retry");
+  await click(retryButton());
+  assert.deepEqual(posts().map(bodyOf), [sent], "the retry after a 403 was not the exact create");
+});

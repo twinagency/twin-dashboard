@@ -76,8 +76,10 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const catalogueRequest = useRef(false);
   const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const sessionLost = useCallback(() => {
-    forgetHeldKeys(operatorScope); // even when unmounted: a held write must not outlive the session (codex final)
+  const sessionLost = useCallback((status: number) => {
+    // Even when unmounted: a held write must not outlive the session (codex final). Only a 401 is a session loss; a 403 (read-only,
+    // permission, origin) proves nothing about the earlier attempt, so the held create stays (#19).
+    if (status === 401) forgetHeldKeys(operatorScope);
     if (!active.current) return;
     sessionDenied.current = true;
     setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
@@ -86,7 +88,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const read = useCallback(async (id?: string | null) => {
     try {
       const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return false; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return false; }
       if (!response.ok) throw new Error("Campaigns could not be refreshed. Check the account connection and try again.");
       const value: unknown = await response.json();
       if (!active.current || sessionDenied.current) return false;
@@ -102,7 +104,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
     try {
       const params = inboxSearchParams(false, query); if (cursor) params.set("cursor", cursor);
       const response = await readWithRecovery(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${params.size ? `?${params}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return; }
       if (!response.ok) throw new Error(`Synchronized conversations could not be loaded (HTTP ${response.status}) after bounded recovery. Retry; if this persists, ask the release owner to inspect the account list request.`);
       const value = await response.json();
       if (!Array.isArray(value.page?.items) || value.page.items.some((item: ConversationSummary) => item.accountId !== accountId || typeof item.conversationId !== "string" || !item.fan || typeof item.fan.displayName !== "string")) throw new Error("The audience response was invalid.");
@@ -114,7 +116,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
     if (catalogueRequest.current) return; catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
     try {
       const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return; }
       if (!response.ok) throw new Error("The saved content catalogue could not be loaded.");
       const value = await response.json(), parsed = parseWorkspace(value.workspace, accountId, "content");
       if (!parsed || parsed.section !== "content") throw new Error("The catalogue response was invalid.");
@@ -134,7 +136,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
     let outcome: "ack" | "refused" | null = null;
     try {
       const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(create ? { requestKey, ...request.body } : request.body) });
-      if ([401, 403].includes(response.status)) { outcome = "refused"; sessionLost(); return; } // settled below even if unmounted mid-flight
+      if ([401, 403].includes(response.status)) { outcome = "refused"; sessionLost(response.status); return; } // settled below even if unmounted mid-flight
       // campaignRefuse (lib/onlyfans/campaign-route.ts) labels every definite refusal outcome "refused"; a bare or non-JSON status (a proxy 503) may follow a forwarded write.
       if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome === "refused") { outcome = "refused"; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
       else if (response.ok) {

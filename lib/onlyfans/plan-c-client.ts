@@ -111,7 +111,7 @@ export const heldKeyStore = (kind: HeldKind, accountId: string, operatorScope?: 
 const HELD_KINDS = ["of-send-keys", "of-campaign-keys"] as const;
 type HeldKind = typeof HELD_KINDS[number];
 /**
- * On a session loss (401/403) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
+ * On a session loss (401; a 403 is not one, #19) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
  * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
  */
 export function forgetHeldKeys(operatorScope?: string) {

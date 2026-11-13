@@ -651,13 +651,14 @@ export default function OnlyFansWorkspace({
       try { result = await source.submitCommand(request); }
       catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request, note: UNCONFIRMED_NOTE }; }
       const refusal = result.simulated ? undefined : result.refusal;
-      if (sendKeys && refusal && [401, 403].includes(refusal.status)) forgetHeldKeys(operatorScope);
+      if (sendKeys && refusal?.status === 401) forgetHeldKeys(operatorScope); // a 403 (read-only, permission, origin) is no session loss (#19)
       const held = sendKeys?.settle(intent, result.simulated ? "refused" : result.outcome === "recorded" ? "ack" : result.outcome === "unconfirmed" ? "unconfirmed"
         : STALE_REFUSAL_CODES.includes(refusal?.code ?? "") ? "stale" : "refused");
       // A refusal does not prove an earlier unconfirmed attempt failed: the send stays held and its exact retry stays offered. Once this
-      // one is settled, the oldest other held send of the conversation is offered next.
-      if (sendKeys && !result.simulated && result.outcome !== "unconfirmed") result = held
-        ? { ...result, outcome: "unconfirmed", note: `${result.note} An earlier attempt is not confirmed, so retry this same request.` } : heldSend(accountId, conversationId) ?? result;
+      // one is settled, the oldest other held send of the conversation is offered next, after a control ack too (#20).
+      const next = !result.simulated && result.outcome !== "unconfirmed" && !held ? heldSend(accountId, conversationId) : null;
+      if (held && !result.simulated && result.outcome !== "unconfirmed") result = { ...result, outcome: "unconfirmed", note: `${result.note} An earlier attempt is not confirmed, so retry this same request.` };
+      else if (next) result = { ...next, note: `${result.note} ${next.note}` };
       const submitted = submittedDrafts.current.get(request.idempotencyKey);
       if (!result.simulated && result.outcome === "recorded" && result.intentId && submitted) {
         clearSubmittedDraft(draftId, submitted);
