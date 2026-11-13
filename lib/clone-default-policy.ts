@@ -143,6 +143,7 @@ export const DEFAULT_MODELS: Record<(typeof OPERATIONAL_DEFAULT_MODELS)[number],
   photo_reply_model: "qwen/qwen3-vl-32b-instruct",
 };
 // What /settings shows for a key the template lacks (mirrors useCloneConfig's `??`). Only use via effectiveCloneDefaults.
+// No spoil_options: an empty V2 menu means "ask the fan", so an unset template menu must never be written to a creator.
 export const CLONE_DEFAULT_FALLBACKS: Partial<Clone> = {
   ai_mode: "classic", push_level: "medium", media_caption_mode: "inline", price_guard_mode: "block", silence_fallback_mode: "on", variety_guard: "normal",
   smart_split: true, photos_enabled: true, video_vision_enabled: true, bundles_enabled: true, voice_enabled: true,
@@ -154,14 +155,14 @@ export const CLONE_DEFAULT_FALLBACKS: Partial<Clone> = {
   voice_style: 0.25, voice_speed: 0.95, paywall_prime_before: 3, discount_level_light_pct: 34, discount_level_medium_pct: 67,
   discount_level_max_pct: 100, discount_tier_share_none_pct: 50, discount_tier_share_low_pct: 60, discount_tier_share_mid_pct: 75,
   discount_tier_share_high_pct: 90, discount_tier_share_whale_pct: 100, discount_absolute_max_pct: 90, tip_max_stars: 100000,
-  bubble_delay_min_ms: 600, bubble_delay_max_ms: 1400, llm_max_tries: 3, spoil_options: DEFAULT_SPOIL_OPTIONS, ...DEFAULT_MODELS,
+  bubble_delay_min_ms: 600, bubble_delay_max_ms: 1400, llm_max_tries: 3, ...DEFAULT_MODELS,
 };
 
 // Fields a follower must receive together: a partial cascade could leave her min above the new max.
 export const CLONE_DEFAULT_GROUPS: readonly (readonly string[])[] = [
   ["response_wait_min", "response_wait_max"], ["bubble_delay_min_ms", "bubble_delay_max_ms"],
-  ["discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct", "discount_tier_share_none_pct",
-    "discount_tier_share_low_pct", "discount_tier_share_mid_pct", "discount_tier_share_high_pct", "discount_tier_share_whale_pct"],
+  ["discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct"],
+  ["discount_tier_share_none_pct", "discount_tier_share_low_pct", "discount_tier_share_mid_pct", "discount_tier_share_high_pct", "discount_tier_share_whale_pct"],
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -209,5 +209,22 @@ test("C3: Push and Switch apply the same effective template; Switch is one UPDAT
 test("every operational field has a built-in default or a form fallback", () => {
   const { OPERATIONAL_DEFAULT_TOGGLES: t, OPERATIONAL_DEFAULT_SELECTS: s, OPERATIONAL_DEFAULT_NUMBERS: n, OPERATIONAL_DEFAULT_JSON: j,
     OPERATIONAL_DEFAULT_MODELS: m, CLONE_DEFAULT_FALLBACKS: f } = policy;
-  for (const k of [...t, ...s, ...n, ...j, ...m]) assert.ok(k in BUILTIN_CLONE_DEFAULTS || k in f, `${k} has no fallback`);
+  const noFallback = new Set(["spoil_options"]); // engine-dependent: V2 empty menu = ask the fan
+  for (const k of [...t, ...s, ...n, ...j, ...m]) assert.ok(k in BUILTIN_CLONE_DEFAULTS || k in f || noFallback.has(k), `${k} has no fallback`);
+});
+
+test("codex P1: a changed discount level cascades the levels only, never her tier shares", async () => {
+  await templateSave(0);
+  seed(true);
+  clones.get(ID)!.discount_tier_share_none_pct = 40;
+  await templateSave(0, { discount_level_light_pct: "30" });
+  assert.deepEqual([clones.get(ID)!.discount_level_light_pct, clones.get(ID)!.discount_tier_share_none_pct], [30, 40]);
+});
+
+test("codex P2: Switch and Push never write a menu the template does not hold", async () => {
+  await templateSave(0);
+  for (const id of ["a", "b"]) clones.set(id, { id, uses_default_config: false, spoil_options: [] });
+  await (settings.setCloneUsesDefault as unknown as (id: string, v: boolean) => Promise<void>)("a", true);
+  await (settings.pushDefaultsToClones as unknown as (ids: string[]) => Promise<void>)(["b"]);
+  assert.deepEqual([clones.get("a")!.spoil_options, clones.get("b")!.spoil_options], [[], []]);
 });
