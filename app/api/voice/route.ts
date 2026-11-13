@@ -16,9 +16,10 @@ net.setDefaultAutoSelectFamily(false);
 
 export const runtime = "nodejs";
 
-// `${cloneId}:${fileId}` → audio bytes (or null = fetch failed). A voice note is
-// immutable per file_id, so 1h in memory is safe and saves Telegram round-trips.
-const cache = new Map<string, { at: number; body: ArrayBuffer | null; type: string }>();
+// `${cloneId}:${fileId}` → audio bytes. A voice note is immutable per file_id,
+// so 1h in memory is safe and saves Telegram round-trips. Failures are never
+// cached: one Telegram blip must not 404 the note for an hour.
+const cache = new Map<string, { at: number; body: ArrayBuffer; type: string }>();
 const TTL = 60 * 60 * 1000;
 
 async function read(req: NextRequest) {
@@ -34,7 +35,6 @@ async function read(req: NextRequest) {
   const key = `${clone}:${file}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) {
-    if (!hit.body) return new NextResponse(null, { status: 404 });
     return new NextResponse(hit.body, { headers: { "content-type": hit.type, "cache-control": "private, max-age=3600" } });
   }
 
@@ -55,7 +55,6 @@ async function read(req: NextRequest) {
     cache.set(key, { at: Date.now(), body, type });
     return new NextResponse(body, { headers: { "content-type": type, "cache-control": "private, max-age=3600" } });
   } catch {
-    cache.set(key, { at: Date.now(), body: null, type: "" });
     return new NextResponse(null, { status: 404 });
   }
 }

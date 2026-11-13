@@ -72,9 +72,6 @@ import type { PreviewSelectionState } from "@/lib/onlyfans-preview/selection";
 import {
   DEFAULT_CONTROLS,
   buildScenarios,
-  withAccountOverrides,
-  withDetailOverrides,
-  withSummaryOverrides,
 } from "@/lib/onlyfans-preview/scenarios";
 import type { PreviewControls } from "@/lib/onlyfans-preview/scenarios";
 import { fixtureAccountIdsForCreator } from "@/lib/onlyfans-preview/workspace";
@@ -281,43 +278,13 @@ export default function OnlyFansWorkspace({
 
   const scenarios = useMemo(() => buildScenarios(controls, viewer), [controls, viewer]);
 
-  const source = useMemo<OnlyFansDataSource>(() => {
-    const base = createOnlyFansDataSource({
+  // The developer overrides live in the fixture source's scenarios (buildScenarios), so its simulator sees them too.
+  const source = useMemo<OnlyFansDataSource>(() => createOnlyFansDataSource({
       mode: sourceMode === "fixture" ? "fixture" : "live",
       ...(sourceMode === "creator" ? { transport: createFetchOnlyFansTransport(undefined, "/creator-auth/onlyfans") } : {}),
       viewer,
       scenarios,
-    });
-    // The developer overrides only exist for fixture reads. Wrapping a live
-    // source in them would put controls on a live surface that change nothing.
-    if (sourceMode !== "fixture") return base;
-    return {
-      kind: base.kind,
-      label: base.label,
-      async listAccounts(scope) {
-        return mapState(await base.listAccounts(scope), (list) =>
-          list.map((account) => withAccountOverrides(account, controls)),
-        );
-      },
-      async getAccount(accountId, scope) {
-        return mapState(await base.getAccount(accountId, scope), (account) =>
-          withAccountOverrides(account, controls),
-        );
-      },
-      async listConversations(accountId, cursor, aiOnly, search) {
-        return mapState(await base.listConversations(accountId, cursor, aiOnly, search), (page) => ({
-          ...page,
-          items: page.items.map((summary) => withSummaryOverrides(summary, controls)),
-        }));
-      },
-      async getConversation(accountId, conversationId, cursor) {
-        return mapState(await base.getConversation(accountId, conversationId, cursor), (detail) =>
-          withDetailOverrides(detail, controls),
-        );
-      },
-      submitCommand: (request) => base.submitCommand(request),
-    };
-  }, [viewer, scenarios, controls, sourceMode]);
+    }), [viewer, scenarios, sourceMode]);
 
   // A different scope starts clean: changing the permission must not leave a
   // conversation, a thread or a draft from the previous scope reachable.

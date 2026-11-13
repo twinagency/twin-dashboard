@@ -16,10 +16,11 @@
 
 import {
   accounts as fixtureAccounts,
+  conversationDetails as fixtureDetails,
   conversationsByAccount as fixtureConversations,
 } from "./fixtures";
 import type { FixtureScenarios } from "./fixture-data-source";
-import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "./types";
+import { IN_FLIGHT, RECEIPTED } from "./actions";
 import type {
   AutomationMode,
   ConnectionHealth,
@@ -160,9 +161,6 @@ export function withSummaryOverrides(
  */
 const OUTCOMES_WITH_ATTEMPT: DeliveryOutcome[] = ["dispatching", "unknown", "partial", "failed"];
 
-/** Outcomes where the attempt is still an open question rather than a record. */
-const OUTCOMES_AWAITING_EVIDENCE: DeliveryOutcome[] = ["dispatching", "unknown"];
-
 const ATTEMPT_DETAIL: Partial<Record<DeliveryOutcome, string>> = {
   unknown:
     "The provider has not confirmed this send. Resolve it from provider evidence before anything else is sent to this fan.",
@@ -182,9 +180,12 @@ export function withDetailOverrides(
 
   const outcome = summary.delivery;
 
+  // A recorded attempt keeps its id, but its text describes its old outcome, so a changed outcome gets its own text: a
+  // refusal forced to "unknown" must read as unconfirmed, not refused.
   const incident = OUTCOMES_WITH_ATTEMPT.includes(outcome)
     ? detail.deliveryIncident
-      ? { ...detail.deliveryIncident, outcome }
+      ? { ...detail.deliveryIncident, outcome, detail: detail.deliveryIncident.outcome === outcome ? detail.deliveryIncident.detail
+          : ATTEMPT_DETAIL[outcome] ?? "A recorded attempt with no further detail." }
       : {
           attemptId: `of-attempt-preview-${summary.conversationId}`,
           outcome,
@@ -193,21 +194,25 @@ export function withDetailOverrides(
         }
     : null;
 
-  const awaitingEvidence = OUTCOMES_AWAITING_EVIDENCE.includes(outcome);
+  // The old attempt's id, when the override no longer records it: a settled bubble must not still point at it.
+  const droppedAttempt = detail.deliveryIncident && detail.deliveryIncident.attemptId !== incident?.attemptId
+    ? detail.deliveryIncident.attemptId : null;
 
   // Every outbound bubble follows the rollup, and a bubble that is still an open
   // question points at the attempt that has to settle it. A bubble the provider
   // never reached has no receipt at all.
   const messages = detail.messages.map((message) => {
     if (message.direction !== "outbound") return message;
-    const reachedProvider = !["none", "generating", "queued"].includes(outcome);
+    const reachedProvider = outcome !== "none" && !IN_FLIGHT.includes(outcome);
     return {
       ...message,
       delivery: outcome,
+      // Only a sent or retracted bubble has a receipt; any other outcome points at its recorded attempt, or nothing.
       evidenceRef: reachedProvider
-        ? awaitingEvidence
-          ? (incident?.attemptId ?? message.evidenceRef)
-          : (message.evidenceRef ?? `of-receipt-preview-${message.messageId}`)
+        ? RECEIPTED.includes(outcome)
+          ? message.evidenceRef !== null && message.evidenceRef !== droppedAttempt
+            ? message.evidenceRef : `of-receipt-preview-${message.messageId}`
+          : (incident?.attemptId ?? null)
         : null,
     };
   });
@@ -223,7 +228,7 @@ export function withDetailOverrides(
 export function buildScenarios(
   controls: PreviewControls,
   viewer: PreviewViewer,
-): FixtureScenarios | undefined {
+): FixtureScenarios {
   const visibleAccounts = fixtureAccounts.filter((account) =>
     viewer.scopedAccountIds.includes(account.accountId),
   );
@@ -241,26 +246,19 @@ export function buildScenarios(
   }
 
   if (controls.conversationRead !== "live") {
-    scenarios.conversation = (accountId, conversationId) =>
-      readState(controls.conversationRead, () => {
-        const list = fixtureConversations[accountId] ?? [];
-        const summary = list.find((item) => item.conversationId === conversationId) ?? list[0];
-        if (!summary) {
-          throw new Error("Scenario asked for a thread on an account with no conversations.");
-        }
-        return {
-          schemaVersion: ONLYFANS_PREVIEW_SCHEMA_VERSION,
-          conversationId,
-          accountId,
-          summary,
-          messages: [],
-          facts: [],
-          ownedMedia: [],
-          deliveryIncident: null,
-          freshness: STALE_FRESHNESS,
-        };
-      }) ?? undefined;
+    scenarios.conversation = (accountId, conversationId) => {
+      // Only this account's own thread is ever answered; anything else falls through to the data source's scope refusal.
+      // A stale read keeps the thread's messages behind its freshness warning instead of blanking them.
+      const detail = fixtureDetails[conversationId];
+      return detail && detail.accountId === accountId
+        ? readState(controls.conversationRead, () => ({ ...detail, freshness: STALE_FRESHNESS })) ?? undefined
+        : undefined;
+    };
   }
 
-  return Object.keys(scenarios).length === 0 ? undefined : scenarios;
+  // Always installed: each with* leaves a value alone when its control is unset, so no guard here can miss a new field.
+  scenarios.account = account => withAccountOverrides(account, controls);
+  scenarios.summary = summary => withSummaryOverrides(summary, controls);
+  scenarios.detail = detail => withDetailOverrides(detail, controls);
+  return scenarios;
 }
