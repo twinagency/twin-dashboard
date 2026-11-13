@@ -4,7 +4,20 @@
 Source: DeepSeek Flash triage @c9966fd8, full per-file table in `docs/fix/TRIAGE-FLASH.md` (measured: 303 run, 286 RED, 15 GREEN, 2 CRASH). Opus spot-check 5/5 rows reproduce (core-recent-history-blast GREEN #364; plan-c-client-non2xx-success, fans-min-spent, users-search-wildcard, moxy-route RED with the quoted assertions; measured).
 Opus corrections to Flash buckets: Flash had blk=0, but the lane findings tag these blockers: G01 PlanCConsole STOP/approve (preview-plan-c-status-ui B2-B4), G47 engine-status "mark completed" = purchase claim (B1), G48 server-only/token reach client (plan-c D3), G45 CI typecheck/suite wiring (harness-config F1), G44b moxy hardcoded creators + hides engagement (preview-shell-launch P1/P2) → all blk. G43 split: moxy-route projection/duplicate keys are dashboard-side → maj (G43a); only the relay commandKey contract stays relay-deferred (G43b). users-search-wildcard is maj by itself (unbounded scan), but its group G36 stays sec-money-maj.
 
-**Counts (files/groups): blk 27/5 · sec-money-maj 196/32 · maj 50/9 · minor 11/4 · relay-deferred 1/1 · fixed-by-team 0 · fixed-by-us 12 · GREEN-n/a 3 · CRASH 2 · in-flight 1 (W7).**
+**RECOUNT 2026-11-13 11:3xZ (unit = actionable root-cause GROUPS open, excluding relay-deferred and minor batches, per the owner 11:2xZ directive; inferred from the merged PR titles #372-#399 and this log):**
+- **Open actionable groups: 40.** This is under the gate of 50, so a review lane resumes.
+  - blk: 1 of 5 open (G45; #385 was a partial).
+  - sec-money-maj: 27 of 32 open. G02, G04 and G05 are partial; G05b is blocked on the backend.
+  - maj: 8 of 9 open. G06 is partial.
+  - Follow-ups kept, on send paths: 4 (G09b, G24b, G04c1b, G04c2-exp).
+- **Fixed-by-us (whole groups closed): 10.** G01, G47, G48, G44b, G18, G19, G30(+b), G24, G09, G03.
+- **Pre-resort items: 12.**
+- **In flight: G04c2 #400, G07c #401, G17.**
+- **Relay-deferred: 1 (G43b).** It blocks the send/relay re-enable.
+- **Minor batches: P-M1/2/3.** These, plus the other minors, moved to `.scratch/rwl-programme/POST-FIXMODE.md`.
+- **Gate per PR from #400:** check.sh fast plus Flash. Send, money, auth and relay paths also get one Codex final. A batch rwl runs every 4 merges or ~600 LOC.
+
+Old header (23:5x re-sort): **Counts (files/groups): blk 27/5 · sec-money-maj 196/32 · maj 50/9 · minor 11/4 · relay-deferred 1/1 · fixed-by-team 0 · fixed-by-us 12 · GREEN-n/a 3 · CRASH 2 · in-flight 1 (W7).**
 
 ### Order (one PR per root cause, ≤300 LOC; 2 slots, disjoint files)
 - slot 1: F0 check.sh (in flight) → then queue head. slot 2: W7 cascade (in flight) → then queue head.
@@ -494,3 +507,15 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - 09:47-10:5xZ: Claude API 403 (Cloudflare auth_failed) on all subagents; G04c2 r2 + G07c workers died twice. WIP checkpoints pushed: G04c2 7b55cadd (r2 red tests), G07c d4566eb5 (L3/L4 red + partial fix). API back ~10:5xZ (probe OK); both workers resumed.
 - G04c2 R2 ruling (Fable): held create must not disable campaign Pause/Cancel (blocker); release held entry only on allowlisted post-lookup backend codes, 2nd consecutive same-key refusal; no discard hatch; hold create only; purge scope on 401/403; drop keepRequests naming. G04c2b deferred: generic store<T>, move to held-keys.ts.
 - G07c (L3 403 withdraws STOP; L4 unconfirmed STOP not named, resume not held) worker on fix/g07c-launch-stop-hold.
+- 11:3xZ OWNER directive applied (FIX-MODE 11:2xZ):
+  - The per-PR rwl is dropped from #400/#401: the G04c2 R3 structure pass was stopped; the R3 Sonnet delta came back CLEAN.
+  - The header has been recounted by actionable groups: 40 open (inferred).
+  - Minors have moved to .scratch/rwl-programme/POST-FIXMODE.md.
+  - The batch-rwl counter starts at #400 (0/4 merges, 0/600 LOC).
+- STAGE MINUTES (measured, wall clock):
+  - #400 G04c2: fix r2 13 · fast 5.1 (worker) · R3 Sonnet delta 0.6 · codex final ~25 (find-to-done) · orchestrator fix of codex P2s (cross-kind purge, unmounted purge; red→green 25/25) 4 · fast 5.6 · Flash final (pending) · CI (pending).
+  - Codex final on #400: 6 findings. 2 P2 fixed (4eed5ecf). P1 24h expiry, P1 swallowed setItem, P2 malformed request entry and P3 in-memory streak all go to G04c2-exp (send path, kept in queue).
+- #401 G07c R1 (pre-directive, full lenses): Opus, codex, codex-da and Flash all returned CHANGES.
+  - Merged findings: Moxy/engagement go escapes the hold; go is live while STOP is in flight; reload drops the hold (3 lenses, so the deferral is reversed); stale-read clear; goDenied per account; hold re-derived in 3 places; stop-lane pending not cleared.
+  - Fix r1 is running. After it: fast + Flash + Codex final (send path).
+- G17 (admin paging/filters) slot refilled, worktree fix-g17 @32654df3. Gate: fast + Flash (no auth file touched).
