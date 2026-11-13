@@ -89,6 +89,7 @@ finish() {
   i=$(cnt infra)
   if (( i )); then v=INFRA; code=2; fi
   if (( f )); then v=RED; code=1; fi
+  if [ $v = GREEN ] && (( p == 0 )); then v=RED; code=1; fi # nothing passed is not GREEN
   env -i PATH="$PATH" node -e 'const [mode, sha, verdict, w, b] = process.argv.slice(1);
     const steps = require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean).map((l) => {
       const [name, status, secs, note] = l.split("\t");
@@ -173,23 +174,25 @@ if [ $MODE = exec ]; then
   step exec "${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} "$@"
   finish
 fi
+sandbox
 if (( PRE )); then
-  "${SANDBOX[@]}" true 2>/dev/null || infra preflight "no loopback-only network sandbox (sandbox-exec: macOS only, and not nestable)"
   [ -x node_modules/.bin/tsx ] || infra preflight "node_modules missing (deps not installed or symlink broken)"
   [ -f next-env.d.ts ] || infra preflight "next-env.d.ts missing (run next dev/build once)"
   [ -z "$(git status --porcelain)" ] || infra preflight "dirty tree: commit first"
 fi
-node --import tsx scripts/check-plan.ts "$MODE" >"$EV/rows.txt" 2>"$EV/logs/plan.log" ||
+# the planner runs node: scrubbed (no NODE_OPTIONS preload, BASH_ENV...) and sandboxed like a step
+"${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} node --import tsx scripts/check-plan.ts "$MODE" >"$EV/rows.txt" 2>"$EV/logs/plan.log" ||
   infra preflight "scripts/check-plan.ts failed: $(head -c 300 "$EV/logs/plan.log")"
 while IFS=$'\x1f' read -r n a why envs c; do
   pe=() # the row's own env, from ours, only if set
   for e in $envs; do
     [ -n "${!e+x}" ] && pe+=("$e=${!e}")
   done
-  if [ "$a" = run ]; then
-    step "$n" "${CLEAN[@]}" ${pe[@]+"${pe[@]}"} "${SANDBOX[@]}" sh -c "$c"
-  else
-    rec "$n" "$a" 0 "$why"
-  fi
+  case $MODE:$a in
+    fast:run | full:run) step "$n" "${CLEAN[@]}" ${pe[@]+"${pe[@]}"} ${BOX[@]+"${BOX[@]}"} sh -c "$c";;
+    *:skip | plan:plan) rec "$n" "$a" 0 "$why";;
+    *) rec "$n" fail 0 "unknown plan action '$a' in $MODE";;
+  esac
 done <"$EV/rows.txt"
+[ $OK != GREEN ] || grep -q $'^premerge\tpass\t' "$EV/timings.tsv" || rec premerge fail 0 "premerge did not pass: no GREEN without it"
 finish
