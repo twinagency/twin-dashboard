@@ -4,7 +4,8 @@
 // Replaced (module mocks, every one declared here; a test file may add more and must declare them in its own header):
 //  - `lib/onlyfans/route.ts`: it cannot be imported for real offline (plan-c-owner is server-only, the session stack reads cookies and
 //    Supabase). The mock carries route.ts's full runtime export surface; requestId/denialResponse/readResponse/badRequest are verbatim
-//    copies, and requireOnlyFansRead keeps route.ts's capability arithmetic verbatim (canManage/canChat from the grant, the write gate).
+//    copies, and authorizeOnlyFansRead keeps route.ts's capability arithmetic verbatim (canManage/canChat from the grant, the write
+//    gate); requireOnlyFansRead wraps it exactly as route.ts does.
 //    `routeMockDrift()` reads route.ts's source and reports export, requestId-pattern or capability-line drift; `call()` asserts it
 //    before a route is imported, so drift is an ERR_ASSERTION, never a link crash. The identity it returns is `state.identity`:
 //    the internal operator (no grant, actor `op-session:sha256(session cookie)`, exactly as route.ts derives it) unless a test sets a grant.
@@ -104,30 +105,37 @@ const denialResponse = (denial: Denial) => NextResponse.json({ ok: false, state:
 const CAPABILITY_LINES = [
   "const canManage = grant ? grant.canManage : true;",
   "const canChat = canManage || grant?.canChat === true;",
-  'if (options.write && !(options.capability === "chat" ? canChat : canManage)) return denialResponse({ ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." });',
+  'if (options.write && !(options.capability === "chat" ? canChat : canManage)) return { ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." };',
   'const purpose = configuredBackendPurpose("API");',
   "const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose) : fetch;",
-  'if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });',
+  'if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." };',
+  'return "ok" in ctx ? denialResponse(ctx) : ctx;',
   'const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);',
   "return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };",
 ];
 let realBackend: ((fetchImpl?: typeof fetch) => unknown) | null = null;
+type ReadOptions = { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean };
+const authorizeOnlyFansRead = async (options: ReadOptions = {}) => {
+  const grant = options.agency ? state.identity.grant : null;
+  const canManage = grant ? grant.canManage : true;
+  const canChat = canManage || grant?.canChat === true;
+  if (options.write && !(options.capability === "chat" ? canChat : canManage)) return { ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." } as Denial;
+  const purpose = configuredBackendPurpose("API");
+  // route.ts passes no fetchImpl, so agencyScopedFetch's default (the global fetch at call time) is this same wire.
+  const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose, globalThis.fetch) : globalThis.fetch;
+  if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." } as Denial;
+  const token = state.session;
+  const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
+  return { auth: { operatorSession: true, agency: !!grant, viewAs: false, ...(grant ? { agencyGrant: grant } : {}) },
+    backend: state.backend !== undefined ? state.backend : realBackend!(scopedFetch), fetch: scopedFetch, actor, pilotActor: null, canManage, canChat };
+};
 const routeMock = {
   PRIVATE_HEADERS,
   denialResponse,
-  requireOnlyFansRead: async (options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean } = {}) => {
-    const grant = options.agency ? state.identity.grant : null;
-    const canManage = grant ? grant.canManage : true;
-    const canChat = canManage || grant?.canChat === true;
-    if (options.write && !(options.capability === "chat" ? canChat : canManage)) return denialResponse({ ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." });
-    const purpose = configuredBackendPurpose("API");
-    // route.ts passes no fetchImpl, so agencyScopedFetch's default (the global fetch at call time) is this same wire.
-    const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose, globalThis.fetch) : globalThis.fetch;
-    if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });
-    const token = state.session;
-    const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
-    return { auth: { operatorSession: true, agency: !!grant, viewAs: false, ...(grant ? { agencyGrant: grant } : {}) },
-      backend: state.backend !== undefined ? state.backend : realBackend!(scopedFetch), fetch: scopedFetch, actor, pilotActor: null, canManage, canChat };
+  authorizeOnlyFansRead,
+  requireOnlyFansRead: async (options: ReadOptions = {}) => {
+    const ctx = await authorizeOnlyFansRead(options);
+    return "ok" in ctx ? denialResponse(ctx) : ctx;
   },
   readResponse: (result: { ok: boolean; body?: unknown } & Partial<Denial>) => result.ok
     ? NextResponse.json(result.body, { status: 200, headers: PRIVATE_HEADERS }) : denialResponse(result as Denial),
