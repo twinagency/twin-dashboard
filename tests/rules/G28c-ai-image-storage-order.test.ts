@@ -84,20 +84,21 @@ test("C1 widening: Locked to Free, storage ok: stage Free copy, write row, then 
   assert.deepEqual(blockedFetches, []);
 });
 
-test("C10: a failed profile_image_id unset is surfaced, after the image is already denied", async () => {
+test("C10: a failed profile_image_id unset is surfaced, after the image is already denied, and the takedown still runs", async () => {
   for (const act of [() => setImageStatus(IMAGE, "rejected"), () => setImageAccess(IMAGE, "locked", 50)]) {
     seed(freeRow, (c) => (c.method === "PATCH" && c.path === "/rest/v1/ai_models" ? dbDown : undefined));
     const result = await outcome(asAdmin(act));
     assert.notEqual(result, "resolved", "the model still points at the denied image as its profile pic");
     assert.equal(trace()[0].startsWith("PATCH db:ai_model_images"), true, `image deny must land before the profile unset (trace ${JSON.stringify(trace())})`);
+    assert.ok(trace().includes("DELETE storage:ai-public"), `the public takedown was skipped because the profile unset failed (trace ${JSON.stringify(trace())})`);
   }
   assert.deepEqual(blockedFetches, []);
 });
 
-test("C2: delete order is deny, count, public, private, recount, row; a failed private remove keeps the row", async () => {
+test("C2: delete order is deny (reject takedown), public variants, count, private, recount, row; a failed private remove keeps the row", async () => {
   seed(lockedRow);
   assert.equal(await outcome(asAdmin(() => deleteAiImage(IMAGE))), "resolved");
-  assert.deepEqual(trace(), [`PATCH db:ai_model_images {"status":"rejected"}`, `PATCH db:ai_models {"profile_image_id":null}`, "HEAD db:ai_model_purchases", "DELETE storage:ai-public", "DELETE storage:ai-private", "HEAD db:ai_model_purchases", "DELETE db:ai_model_images"]);
+  assert.deepEqual(trace(), [`PATCH db:ai_model_images {"status":"rejected"}`, `PATCH db:ai_models {"profile_image_id":null}`, "DELETE storage:ai-public", `PATCH db:ai_model_images {"public_path":null}`, "DELETE storage:ai-public", "HEAD db:ai_model_purchases", "DELETE storage:ai-private", "HEAD db:ai_model_purchases", "DELETE db:ai_model_images"]);
   seed(lockedRow, (c) => (c.method === "DELETE" && c.path === "/storage/v1/object/ai-private" ? down : undefined));
   const result = await outcome(asAdmin(() => deleteAiImage(IMAGE)));
   assert.notEqual(result, "resolved");

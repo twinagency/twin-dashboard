@@ -56,46 +56,58 @@ async function patchImage(id: string, fields: Partial<ImgRow>) {
   const { error } = await serviceClient().from("ai_model_images").update(fields).eq("id", id);
   if (error) throw new Error(nice(error));
 }
-async function unsetProfile(img: ImgRow) {
+/** Unset her profile pic if it is this image. Returns the failure instead of throwing, so a takedown carries on past it. */
+async function unsetProfile(img: ImgRow): Promise<string | null> {
   const { error } = await serviceClient().from("ai_models").update({ profile_image_id: null }).eq("id", img.model_id).eq("profile_image_id", img.id);
-  if (error) throw new Error(`Saved, but she still shows it as her profile pic: ${nice(error)}`);
+  return error ? `she still shows it as her profile pic (${nice(error)})` : null;
+}
+/** Withdraw an object whose row write failed. The DB error stays first; a failed withdrawal is appended, never hidden. */
+async function undoUpload(dbError: string, bucket: string, path: string, left: string): Promise<never> {
+  throw new Error(dbError + (await removeObjects(bucket, [path]).then(() => "", (e: Error) => `, and ${left} (${e.message})`)));
 }
 const exposure = (s: Pick<ImgRow, "status" | "access">) => (s.status !== "approved" ? 0 : s.access === "free" ? 2 : 1);
 /** Make the public bucket match the image's new state (`img` is the current row, `patch` the change): approved Free = the file,
  *  approved Locked = blurred preview, anything else = nothing. Ordered by direction so any failure leaves the LESS exposed state:
- *  narrowing writes the deny and unsets the profile pic first, keeping public_path as the record of the stale copy, then removes it,
- *  then records the new path. Widening stages the new copy, then writes the row, then removes the old copy. */
+ *  narrowing (by row state) writes the deny first (public_path still records the stale copy), then attempts every remaining step
+ *  and reports the failures together. Otherwise the new copy is staged before the row points at it, and a Locked target removes
+ *  any Free copy before its row write and unsets the profile pic, so a retry after a half-done narrowing converges too. */
 async function syncPublic(img: ImgRow, patch: Partial<Pick<ImgRow, "status" | "access" | "price_stars">> = {}): Promise<string | null> {
   const sb = serviceClient();
   const next = { ...img, ...patch };
-  const want = next.status === "approved" ? next.access : null;
   const ext = img.kind === "video" ? (img.storage_path.endsWith(".webm") ? "webm" : "mp4") : "jpg";
   const freePath = `${img.model_id}/${img.id}.${ext}`, blurPath = `${img.model_id}/${img.id}.blur.jpg`;
-  const keep = want === "free" ? freePath : want === "locked" ? blurPath : null;
+  const pathFor = (s: Pick<ImgRow, "status" | "access">) => (s.status !== "approved" ? null : s.access === "free" ? freePath : blurPath);
+  const keep = pathFor(next), allowed = pathFor(img);
   const stale = [freePath, blurPath].filter((p) => p !== keep);
   const stage = async () => {
     if (!keep) return;
     const dl = await sb.storage.from(PRIVATE).download(img.storage_path);
     if (dl.error || !dl.data) throw new Error("Original file is missing");
     const bytes = Buffer.from(await dl.data.arrayBuffer());
-    if (want === "free") await putObject(PUBLIC, freePath, bytes, img.kind === "video" ? (ext === "webm" ? "video/webm" : "video/mp4") : "image/jpeg");
+    if (keep === freePath) await putObject(PUBLIC, freePath, bytes, img.kind === "video" ? (ext === "webm" ? "video/webm" : "video/mp4") : "image/jpeg");
     else await putObject(PUBLIC, blurPath, await makeBlurredPreview(bytes, img.kind), "image/jpeg");
   };
   if (!keep || exposure(next) < exposure(img)) {
     if (Object.keys(patch).length) await patchImage(img.id, patch);
-    await unsetProfile(img);
-    try { await removeObjects(PUBLIC, stale); } catch (e) { throw new Error(`Saved, but the public copy is still up, try again. ${(e as Error).message}`); }
-    await stage();
-    if (keep !== img.public_path) await patchImage(img.id, { public_path: keep });
+    const errs = [await unsetProfile(img)];
+    const removed = await removeObjects(PUBLIC, stale).then(() => true, (e: Error) => { errs.push(`the public copy is still up (${e.message})`); return false; });
+    if (removed) {
+      try { await stage(); if (keep !== img.public_path) await patchImage(img.id, { public_path: keep }); }
+      catch (e) { errs.push(`the new preview is not ready (${(e as Error).message})`); }
+    }
+    const why = errs.filter(Boolean);
+    if (why.length) throw new Error(`Saved, but ${why.join(", and ")}. Try again`);
     return keep;
   }
+  if (keep === blurPath) await removeObjects(PUBLIC, stale); // a Free copy never outlives a row write that sells the image Locked
   await stage();
   try { await patchImage(img.id, { ...patch, public_path: keep }); } catch (e) {
-    // The row keeps its old state, so a new public copy it does not allow (e.g. Locked to Free) must not stay readable.
-    if (keep !== img.public_path) await removeObjects(PUBLIC, [keep]).catch(() => undefined);
+    // The row keeps its old state, so a new public copy that state does not allow (e.g. Locked to Free) must not stay readable.
+    if (keep !== allowed) await undoUpload(`Not saved (${(e as Error).message})`, PUBLIC, keep, "the new public copy is still up, try again");
     throw e;
   }
-  await removeObjects(PUBLIC, stale);
+  if (keep === blurPath) { const why = await unsetProfile(img); if (why) throw new Error(`Saved, but ${why}. Try again`); }
+  else await removeObjects(PUBLIC, stale);
   return keep;
 }
 
@@ -239,20 +251,19 @@ export async function deleteAiImage(imageId: string) {
   await requireAdmin();
   uuid(imageId);
   const img = await loadImage(imageId);
-  // Deny first: a rejected image is not for sale, so a purchase can no longer start while the delete runs. ai_model_purchases.image_id
-  // is ON DELETE CASCADE, so an unknown count (error or null) refuses, never reads as 0, and the count is re-asked right before the
-  // row delete. Then public copy, private original, row: each step is idempotent (not found = gone), so a retry finishes the job.
-  await patchImage(imageId, { status: "rejected" });
-  await unsetProfile(img);
+  // Deny first, through the same takedown as a reject: not for sale, no public copy, not her profile pic. ai_model_purchases.image_id
+  // is ON DELETE CASCADE, so an unknown count (error or null) refuses, never reads as 0, and it is asked again before each irreversible
+  // step. Then the other public variants, the private original, the row: each step is idempotent (not found = gone), so a retry finishes.
+  await syncPublic(img, { status: "rejected" });
   const bought = async (what: string) => {
     const { count, error } = await serviceClient().from("ai_model_purchases").select("id", { count: "exact", head: true }).eq("image_id", imageId);
     if (error || count == null) throw new Error("Could not check whether a fan bought this one. It is rejected, nothing was deleted");
     if (count > 0) throw new Error(`A fan bought this one, ${what}`);
   };
-  await bought("so it was rejected instead of deleted");
   await removeObjects(PUBLIC, [`${img.model_id}/${img.id}.jpg`, `${img.model_id}/${img.id}.mp4`, `${img.model_id}/${img.id}.webm`, `${img.model_id}/${img.id}.blur.jpg`]);
+  await bought("so it was rejected instead of deleted");
   await removeObjects(PRIVATE, [img.storage_path]);
-  await bought("while it was being deleted. The purchase is kept, but its files are already removed");
+  await bought("while it was being deleted. The purchase is kept, but its original file is already removed");
   const { error } = await serviceClient().from("ai_model_images").delete().eq("id", imageId);
   if (error) throw new Error(nice(error));
   refresh(img.model_id);
