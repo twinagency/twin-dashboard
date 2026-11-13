@@ -35,6 +35,7 @@ import {
   FORBIDDEN_COLUMNS,
   MAX_LIMIT,
 } from "../lib/api-read";
+import { RETIRED_FACT_COLUMNS, WRITABLE_FACT_COLUMNS } from "../app/clones/fact-columns";
 
 let passed = 0;
 const failures: string[] = [];
@@ -334,6 +335,10 @@ check("B11 clones/create takes an allowlist of keys and refuses the rest before 
   const m = src.match(/const CREATE_KEYS = new Set<string>\(\[([\s\S]*?)\]\)/);
   assert(m, "clones/create no longer declares the CREATE_KEYS allowlist");
   const keys = [...m[1].matchAll(/"([a-z0-9_]+)"/g)].map((k) => k[1]);
+  // G16c: the typed facts are spread in from the shared list, so scan that list too.
+  assert(!/\.\.\.(?!(?:WRITABLE|RETIRED)_FACT_COLUMNS\b)/.test(m[1]), "CREATE_KEYS spreads a list this check does not scan");
+  if (m[1].includes("...WRITABLE_FACT_COLUMNS")) keys.push(...WRITABLE_FACT_COLUMNS);
+  if (m[1].includes("...RETIRED_FACT_COLUMNS")) keys.push(...RETIRED_FACT_COLUMNS);
   for (const k of ["name", "bot_token", "status", "intake"]) assert(keys.includes(k), `${k} dropped from the create allowlist`);
   // A money-, tip-, paywall- or brake-shaped key in the allowlist is the bug this replaced.
   for (const k of keys) {
