@@ -41,8 +41,11 @@ export async function computeSuggestions(): Promise<Suggestion[]> {
         "discount_max_bundle,discount_max_credits,tips_enabled,spoil_options",
     )
     .eq("status", "active")
+    .order("name")
+    .order("id")
     .limit(50);
-  if (error) return [];
+  // A failed read must not look like "nothing to suggest"; the route answers 500.
+  if (error) throw new Error(error.message);
 
   const out: Suggestion[] = [];
   for (const c of (data ?? []) as unknown as CloneRow[]) {
