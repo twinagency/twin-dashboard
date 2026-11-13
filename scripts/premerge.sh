@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Pre-merge gate: typecheck, lint, tests for the touched area, promoted rules, known-reds.
-# Offline only (no dev server, no DB, no network). Children get a scrubbed env, nice 10.
+# Offline only (no dev server, no DB, no network). Children get a scrubbed env (dotenv at /dev/null, caller's TMPDIR), nice 10.
 # Base: PREMERGE_BASE (default origin/claude/commercial-dashboard-r2-20261111).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -10,7 +10,7 @@ SUITES=(test:offline test:api test:public test:rules) # npm suites run on every 
 BIN=node_modules/.bin
 LOG=$(mktemp -d /tmp/twin-premerge.XXXXXX)
 fail=0
-clean() { env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 "$@"; }
+clean() { env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test DOTENV_CONFIG_PATH=/dev/null ${TMPDIR:+"TMPDIR=$TMPDIR"} nice -n 10 "$@"; }
 pass() { printf 'PASS  %s\n' "$*"; }
 bad()  { printf 'FAIL  %s\n' "$*"; fail=1; }
 run() { local name=$1; shift; if clean "$@" >"$LOG/$name.log" 2>&1; then pass "$name"; else bad "$name (log $LOG/$name.log)"; fi; }
