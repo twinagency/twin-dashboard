@@ -33,6 +33,9 @@ const REASONS: Record<string, string> = {
   policy_changed: "Delivery permissions changed before sending.",
   expired: "The delivery request expired before sending.",
 };
+/** A write whose outcome is unconfirmed, per account. Module level so a remount (navigate away and back) keeps the exact retry; a reload does not (G04c). */
+const heldWrites = new Map<string, Write>();
+const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request before making another change.";
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
 
@@ -54,7 +57,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   const [detail, setDetail] = useState<{ campaign: Campaign; recipients: CampaignRecipient[] } | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [listReady, setListReady] = useState(false);
-  const [notice, setNotice] = useState(""), [retry, setRetry] = useState<Write | null>(null);
+  const [notice, setNotice] = useState(() => heldWrites.has(accountId) ? UNCONFIRMED_TEXT : ""), [retry, setRetry] = useState<Write | null>(() => heldWrites.get(accountId) ?? null);
   const [name, setName] = useState(initialDraft.name), [body, setBody] = useState(initialDraft.body), [scheduled, setScheduled] = useState(initialDraft.scheduled);
   const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">(initialDraft.audienceKind);
   const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set(initialDraft.fanIds));
@@ -70,7 +73,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   const sessionLost = useCallback(() => {
     if (!active.current) return;
     sessionDenied.current = true;
-    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); heldWrites.delete(accountId); forgetDraft(accountId);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
   }, [router, accountId]);
   const read = useCallback(async (id?: string | null) => {
@@ -118,20 +121,26 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
   async function write(request: Write) {
     if (sending.current || denied || readOnly) return; sending.current = true; setBusy(true); setNotice("");
-    let uncertain = true;
+    // Once any attempt went unconfirmed only a recorded ack releases the write: a later refusal does not prove the earlier attempt failed.
+    const wasHeld = heldWrites.get(accountId) === request; heldWrites.set(accountId, request);
+    let outcome: "ack" | "refused" | null = null;
     try {
       const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
-      if ([401, 403].includes(response.status)) { uncertain = false; sessionLost(); return; }
-      if ([400, 404, 409, 413, 503].includes(response.status)) { uncertain = false; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
+      if ([401, 403].includes(response.status)) { outcome = "refused"; heldWrites.delete(accountId); sessionLost(); return; } // released even if unmounted mid-flight
+      // campaignRefuse (lib/onlyfans/campaign-route.ts) labels every definite refusal outcome "refused"; a bare or non-JSON status (a proxy 503) may follow a forwarded write.
+      if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome === "refused") { outcome = "refused"; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
       else if (response.ok) {
         const ack = parseCampaignAck(await response.json(), { accountId, ...(request.kind === "change" ? { campaignId: request.campaignId, action: request.body.action, expectedRevision: request.body.expectedRevision } : {}) });
-        if (ack && active.current) { uncertain = false; setSelected(ack.campaignId); selection.current = ack.campaignId;
+        if (ack) outcome = "ack";
+        if (ack && active.current) { setSelected(ack.campaignId); selection.current = ack.campaignId;
           if (request.kind === "create") { setName(""); setBody(""); setScheduled(""); setFanIds(new Set()); setCatalogItemId(""); setFanQuery(""); forgetDraft(accountId); }
           setNotice(request.kind === "create" ? "Campaign saved. Recipient delivery is tracked below." : "Campaign change saved. Current delivery is being refreshed."); }
       }
     } catch { /* Keep exact original write identity for an explicit retry. */ }
     finally {
-      if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice("The outcome is not confirmed. Retry this same request before making another change."); await read(); if (selection.current) await read(selection.current); setBusy(false); }
+      const uncertain = outcome !== "ack" && (wasHeld || outcome !== "refused");
+      if (!uncertain) heldWrites.delete(accountId);
+      if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
       sending.current = false;
     }
   }
