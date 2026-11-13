@@ -6,13 +6,20 @@
 // Skipped, because the bundler erases them: whole `import type` / `export type` statements, and a brace list whose every
 // member is `type X` (`import { type A, type B } from`, no default). Specifiers resolve `@/` (tsconfig paths) and relative
 // paths to `.ts`, `.tsx`, `/index.ts`, `/index.tsx`; packages and other extensions are not walked.
-// A module whose first statement is "use server" is a boundary: Next sends the browser an action reference, not the module.
+// A module whose directive prologue holds "use server" is a boundary: Next sends the browser an action reference, not the module.
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+/** Server-only modules no browser graph may reach: the secret readers (ONLYFANS_*_TOKEN, SUPABASE_SERVICE_KEY, the service-role
+ *  clients) and the server-side route/transport layers built on them. Exact repo paths, so a browser-safe sibling such as
+ *  engine-operator-core.ts is not caught by a name. */
+export const SERVER_MODULES = ["lib/onlyfans/backend-transport.ts", "lib/onlyfans/plan-c-owner-core.ts", "lib/onlyfans/plan-c-owner.ts",
+  "lib/supabase.ts", "lib/supabase-service.ts", "lib/onlyfans/engine-operator.ts", "lib/onlyfans/plan-c-backend.ts", "lib/onlyfans/plan-c-guard.ts",
+  "lib/onlyfans/plan-c-route.ts", "lib/onlyfans/route.ts"];
 
 const parsed = new Map<string, ts.SourceFile>();
 function source(file: string, text?: string): ts.SourceFile {
@@ -22,10 +29,13 @@ function source(file: string, text?: string): ts.SourceFile {
   return sf;
 }
 
-/** The module's directive, if its first statement is a string-literal expression ("use client", "use server"). */
-export function directive(file: string): string | null {
-  const first = source(file).statements[0];
-  return first && ts.isExpressionStatement(first) && ts.isStringLiteral(first.expression) ? first.expression.text : null;
+/** "use client" or "use server" if the module's directive prologue (its leading run of string-literal statements) holds one. */
+export function directive(file: string, text?: string): string | null {
+  for (const statement of (text === undefined ? source(file) : source(file, text)).statements) {
+    if (!ts.isExpressionStatement(statement) || !ts.isStringLiteral(statement.expression)) break;
+    if (statement.expression.text === "use client" || statement.expression.text === "use server") return statement.expression.text;
+  }
+  return null;
 }
 
 /** Value specifiers of `text` (or of repo file `file`), in source order. */

@@ -10,7 +10,7 @@ import { PLAN_C_HEADER, PLAN_C_SCHEMA, newCommandKey, parsePlanCDrafts, parsePla
 import { planCConversationCommand, planCDraftCommand, planCOperatorOnly, planCReconcile } from "../../lib/onlyfans/plan-c-route";
 import { agencyOnlyFansRequest } from "../../lib/onlyfans/agency-scope";
 import { engineOperatorEvidenceRef } from "../../lib/onlyfans/engine-operator";
-import { importGraph } from "../helpers/import-graph";
+import { SERVER_MODULES, importGraph } from "../helpers/import-graph";
 import { MOCK_ACCOUNT, MOCK_TOKEN, createPlanCMock, seedDraft, seedOffer, type RawUnresolved } from "./plan-c-mock-backend";
 import { OPERATOR_ACTOR, createPlanCProxy } from "./plan-c-proxy";
 
@@ -306,13 +306,16 @@ test("agency identities cannot reach the Plan C page or routes even with manage 
 });
 
 // ── no token in the browser, no automatic approval ────────────────────────────
-const SERVER_ONLY = ["plan-c-backend", "plan-c-guard", "plan-c-route", "backend-transport", "lib/onlyfans/route", "engine-operator", "command-json"];
+// Exact paths: a name would also catch browser-safe siblings (engine-operator-core.ts). command-json.ts is browser-safe elsewhere
+// (SessionConnect) but has no business in the Plan C screen.
+const SERVER_ONLY = [...SERVER_MODULES, "lib/onlyfans/command-json.ts"];
 test("the browser import graph holds no server module, credential reader or token name", () => {
+  for (const file of SERVER_ONLY) assert.ok(read(file), `fixture: ${file} exists`);
   for (const entry of ["components/onlyfans-preview/PlanCConsole.tsx", "lib/onlyfans/plan-c-client.ts"]) {
     const graph = [...importGraph(entry).keys()];
     assert.ok(graph.includes("lib/onlyfans/plan-c.ts"));
     for (const file of graph) {
-      assert.ok(!SERVER_ONLY.some(name => file.includes(name)), `${entry} reaches ${file}`);
+      assert.ok(!SERVER_ONLY.includes(file), `${entry} reaches ${file}`);
       const source = read(file);
       assert.ok(!/process\.env/.test(source), `${file} reads the environment`);
       assert.ok(!/ONLYFANS_[A-Z_]*TOKEN|Bearer /.test(source), `${file} names a credential`);
