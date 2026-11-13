@@ -56,5 +56,8 @@ test("F4: commercial category HTTP check exits on its own within 8 s when its lo
     // A load crash is not "still red": throw a plain Error (no ERR_ASSERTION) so init.sh reports it as crashed.
     if (crash) throw new Error(`K3 child crashed on load (${crash}), not a hang or a clean exit\n${r.out.slice(-800)}`);
     assert.equal(r.signal, null, `killed by ${r.signal} after 8 s: process hung (status ${r.status})\n${r.out.slice(-800)}`);
+    // Exiting is not enough: a check that swallowed the failure and exited 0 would certify an HTTP check that never ran.
+    assert.notEqual(r.status, 0, `exited 0 without its log dir: a check that never ran reported success\n${r.out.slice(-800)}`);
+    assert.match(r.out, /ENOENT[\s\S]*evidence|evidence[\s\S]*ENOENT/, `exit does not name the missing log dir\n${r.out.slice(-800)}`);
   });
 });

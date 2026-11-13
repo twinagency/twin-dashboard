@@ -17,7 +17,7 @@
 // to missing or invalid fixtures pass F5-static. When K4 flips, run `npm run test:engine-browser` by hand before closing F5.
 // KNOWN RED: team's Claude owns the fix; not wired into npm scripts on purpose (init.sh reports it at window Close).
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -50,12 +50,18 @@ test("F5-build: first segment of test:engine-browser runs from a plain checkout 
   let created = out;
   while (created && !existsSync(path.dirname(created))) created = path.dirname(created);
   let r: RunResult | undefined;
-  try { r = await runScrubbed("sh", ["-c", segment], { timeoutMs: 60_000 }); }
-  finally {
+  const emptyOutputs: string[] = [];
+  try {
+    r = await runScrubbed("sh", ["-c", segment], { timeoutMs: 60_000 });
+    // A no-op build exiting 0 must not pass: the check half is unwired, so nothing downstream would notice.
+    if (out) for (const f of ["index.html", "app.js", "base.css"]) { const p = path.join(out, f); if (!existsSync(p) || statSync(p).size === 0) emptyOutputs.push(f); }
+  } finally {
     if (created && !preexisting) rmSync(created, { recursive: true, force: true });
     else t.diagnostic(out ? `build output dir ${out} pre-existed, left in place` : "no literal ENGINE_BROWSER_OUTPUT default: output dir not identifiable");
   }
   assert.equal(r?.status, 0, `\`${segment}\`: status ${r?.status} signal ${r?.signal}\n${r?.out.slice(-800)}`);
+  assert.ok(out, "no literal ENGINE_BROWSER_OUTPUT default: build output cannot be checked");
+  assert.deepEqual(emptyOutputs, [], `build exited 0 but left these outputs missing or empty in ${out}`);
 });
 
 test("F5-static: build and check fall back to relative in-repo output dirs and name no absolute /evidence path", () => {
