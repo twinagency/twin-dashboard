@@ -141,6 +141,11 @@ export default function AiChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId, message: question }),
       });
+      // The route answers {error} as JSON with 4xx/5xx before any stream; that body is not SSE and would parse to nothing.
+      if (!res.ok) {
+        const j = await res.json().catch(() => null);
+        throw new Error(typeof j?.error === "string" && j.error ? j.error : `The assistant request failed (${res.status}).`);
+      }
       if (!res.body) throw new Error("no response stream");
 
       const reader = res.body.getReader();

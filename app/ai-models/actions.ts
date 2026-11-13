@@ -39,7 +39,10 @@ async function putObject(bucket: string, path: string, bytes: Buffer, contentTyp
 }
 async function removeObjects(bucket: string, paths: (string | null | undefined)[]) {
   const list = paths.filter((p): p is string => !!p);
-  if (list.length) await serviceClient().storage.from(bucket).remove(list);
+  if (!list.length) return;
+  // A failed remove must not be read as removed: callers go on to record "no copy" (public_path null) or delete the row.
+  const { error } = await serviceClient().storage.from(bucket).remove(list);
+  if (error) throw new Error(`Could not remove the stored file: ${error.message}`);
 }
 
 type ImgRow = { id: string; model_id: string; kind: "photo" | "video"; storage_path: string; public_path: string | null; status: string; access: string; price_stars: number | null };
@@ -215,8 +218,10 @@ export async function deleteAiImage(imageId: string) {
   await requireAdmin();
   uuid(imageId);
   const img = await loadImage(imageId);
-  const { count } = await serviceClient().from("ai_model_purchases").select("id", { count: "exact", head: true }).eq("image_id", imageId);
-  if ((count ?? 0) > 0) throw new Error("A fan bought this one, reject it instead of deleting");
+  // Deleting the row cascades to ai_model_purchases, so an unknown count (error or null) refuses, it never reads as 0.
+  const { count, error: cerr } = await serviceClient().from("ai_model_purchases").select("id", { count: "exact", head: true }).eq("image_id", imageId);
+  if (cerr || count == null) throw new Error("Could not check whether a fan bought this one, nothing was deleted");
+  if (count > 0) throw new Error("A fan bought this one, reject it instead of deleting");
   await removeObjects(PRIVATE, [img.storage_path]);
   await removeObjects(PUBLIC, [`${img.model_id}/${img.id}.jpg`, `${img.model_id}/${img.id}.mp4`, `${img.model_id}/${img.id}.webm`, `${img.model_id}/${img.id}.blur.jpg`]);
   const { error } = await serviceClient().from("ai_model_images").delete().eq("id", imageId);
