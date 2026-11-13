@@ -1,5 +1,5 @@
 /**
- * DOM-free offline fetch for the G07a launch rules (W3 lane 2 ui-onlyfans-launch). No network: `stubFetch` replaces globalThis.fetch and answers every
+ * DOM-free offline fetch for the G07a/G07b launch rules (W3 lane 2 ui-onlyfans-launch). No network: `stubFetch` replaces globalThis.fetch and answers every
  * request from the test. Synthetic ids only.
  */
 export type Call = { url: string; method: string; raw: string | undefined };
@@ -20,3 +20,9 @@ export function stubFetch(answer: (url: string, method: string, n: number, raw: 
 }
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 export const html502 = () => new Response("<html><body>502 Bad Gateway</body></html>", { status: 502, headers: { "Content-Type": "text/html" } });
+/** A response the test releases itself, so a loading phase can be observed before the answer lands. */
+export function deferred() {
+  let resolve!: (response: Response) => void;
+  const promise = new Promise<Response>(done => { resolve = done; });
+  return { promise, resolve };
+}

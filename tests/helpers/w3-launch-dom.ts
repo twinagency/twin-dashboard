@@ -1,5 +1,5 @@
 /**
- * Offline jsdom harness for the G07a launch rules (W3 lane 2 ui-onlyfans-launch component tests). Copied from W1 lane 8's
+ * Offline jsdom harness for the G07a/G07b launch rules (W3 lane 2 ui-onlyfans-launch component tests). Copied from W1 lane 8's
  * tests/helpers/w1-8-dom.ts (branch rwl/W1-preview-shell-launch), not imported from it. Import it FIRST: it installs the DOM
  * globals before any component (or next/navigation) module loads. next/navigation hooks are satisfied by real Next context
  * providers (`inNextApp`), not module mocks. No network: fetch is stubbed by ./w3-launch-fetch (re-exported here). Synthetic ids only.
@@ -10,7 +10,7 @@ import { after, before } from "node:test";
 import React, { act } from "react";
 import { AppRouterContext, type AppRouterInstance } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { PathnameContext, SearchParamsContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
-export { html502, json, stubFetch } from "./w3-launch-fetch";
+export { deferred, html502, json, stubFetch } from "./w3-launch-fetch";
 const requireNative = createRequire(import.meta.url);
 const { JSDOM } = requireNative("jsdom");
 requireNative.extensions[".css"] = module => { module.exports = {}; };
@@ -51,6 +51,12 @@ export async function typeInto(element: Element | null | undefined, value: strin
     element.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
   });
   await settle();
+}
+/** Submits a form the way pressing Enter does. */
+export async function submit(form: Element | null | undefined) {
+  assert.ok(form, "form exists");
+  await act(async () => { form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
+  await settle(); await settle();
 }
 /** Visible text of the whole page, for copy checks that do not pin layout. */
 export const pageText = () => document.body.textContent ?? "";

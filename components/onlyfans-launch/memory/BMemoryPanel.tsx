@@ -19,7 +19,8 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
   return { state: "error", message: "error" in r ? r.error : "Memory is unavailable. Refresh the account." };
 }
 const FIELD_LABELS: Record<MemoryField, string> = { real_name: "Name", his_age: "Age", home_city: "City", home_country: "Country", hobbies: "Hobbies", occupation: "Occupation", fetishes: "Preferences", short_bio: "Saved profile", bullet_points: "Saved profile notes" };
-type Edit = { field: MemoryField; value: string; reason: string; error: string };
+/** `version` is the memory version the editor opened on: the correction carries it, and a newer read closes the editor. */
+type Edit = { field: MemoryField; value: string; reason: string; error: string; version: string };
 type PendingCorrection = { accountId: string; fanId: string; correction: MemoryCorrection };
 
 /** Native account-scoped memory. Archive recovery and stored-message processing remain separate. */
@@ -68,7 +69,9 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     if (reset) { setFanId(selectedFan); fanRef.current = selectedFan; setEdit(null); setNotice(""); setQuery(""); }
     setFan(loading);
     const l = toLoad(await readFanMemory(id, selectedFan, c.signal, search ?? (reset ? "" : queryRef.current)));
-    if (l && !c.signal.aborted && mine === fanEpoch.current && accountRef.current === id && fanRef.current === selectedFan) setFan(l);
+    if (!l || c.signal.aborted || mine !== fanEpoch.current || accountRef.current !== id || fanRef.current !== selectedFan) return;
+    setFan(l);
+    if (l.state === "ok") setEdit(e => e && e.version !== l.data.memory.version ? null : e);
   }, []);
   useEffect(() => {
     listCtl.current?.abort(); fanCtl.current?.abort(); commandCtl.current?.abort(); listEpoch.current++; fanEpoch.current++;
@@ -105,7 +108,7 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     const value = edit.value.trim(), reason = edit.reason.trim();
     const error = !reason ? "Give a reason for the audit record." : reason.length > 512 ? "Keep the reason within 512 characters." : operation === "set" && memoryValueError(edit.field, value) ? memoryValueError(edit.field, value)! : /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(reason) ? "Remove control characters." : "";
     if (error) { setEdit({ ...edit, error }); return; }
-    const command: PendingCorrection = { accountId, fanId, correction: { field: edit.field, operation, value: operation === "clear" ? null : value, expectedVersion: fan.data.memory.version, reason } };
+    const command: PendingCorrection = { accountId, fanId, correction: { field: edit.field, operation, value: operation === "clear" ? null : value, expectedVersion: edit.version, reason } };
     await sendCorrection(command);
   }
   async function backfill(selectedFan?: string) {
@@ -242,7 +245,7 @@ function FanFacts({ memory: m, manage, busy, edit, setEdit, onSave }: { memory: 
         <label htmlFor={`memory-reason-${field}`} className="text-xs">Reason for correction or clear</label><input id={`memory-reason-${field}`} maxLength={512} value={edit.reason} disabled={busy || !manage} onChange={e => setEdit({ ...edit, reason: e.target.value, error: "" })} className="min-h-11 w-full min-w-0 rounded-lg border border-line bg-transparent px-2" />
         {edit.error ? <p role="alert" className="text-warn">{edit.error}</p> : null}
         <div className="flex flex-wrap gap-2"><button type="button" className={bButton} disabled={!manage || busy} onClick={() => void onSave("set")}>Save value</button><button type="button" className={bButton} disabled={!manage || busy} onClick={() => void onSave("clear")}>Clear field</button><button type="button" className={bButton} disabled={busy} onClick={() => setEdit(null)}>Cancel</button></div>
-      </div> : <button type="button" className={`${bButton} mt-2`} disabled={!manage || busy} onClick={() => setEdit({ field, value, reason: "", error: "" })}>Correct {FIELD_LABELS[field].toLowerCase()}</button>}
+      </div> : <button type="button" className={`${bButton} mt-2`} disabled={!manage || busy} onClick={() => setEdit({ field, value, reason: "", error: "", version: m.version })}>Correct {FIELD_LABELS[field].toLowerCase()}</button>}
     </li>;
   })}</ul></div>;
 }

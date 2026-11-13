@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { parseNativeReadiness } from "@/lib/onlyfans/launch/native";
-import { bFetch } from "@/lib/onlyfans/launch/b-common";
+import { resumeHistory } from "@/lib/onlyfans/launch/memory/b-memory-client";
 import {
   Section,
   StateLine,
@@ -61,10 +61,8 @@ export default function ReadinessScreen({
   async function backfill() {
     if (busy || !manage) return;
     setBusy(true);
-    const q = await bFetch(
-      `/api/onlyfans-launch/memory/accounts/${encodeURIComponent(accountId)}/backfill`,
-      { method: "POST", body: {} },
-    );
+    // resumeHistory checks schema, ok, this accountId and `requested`; any other 2xx is unconfirmed, never a request.
+    const q = await resumeHistory(accountId);
     setBusy(false);
     setNotice(
       q.kind === "ok"
