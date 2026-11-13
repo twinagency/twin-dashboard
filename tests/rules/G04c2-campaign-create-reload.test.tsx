@@ -30,14 +30,25 @@ const UNCONFIRMED: Array<[string, Answer]> = [
   ["network error", lostReply],
 ];
 
+const RUNNING = "0a1b2c3d-1111-4222-8333-444455556677";
+/** A running campaign with no recipients yet, so its brakes (Pause, Cancel remaining) are offered. */
+const running = (accountId: string) => ({ campaignId: RUNNING, accountId, name: "Live note", body: "Hi", audience: { kind: "all_known", count: 0, snapshotHash: "a".repeat(64) },
+  scheduledAt: "2026-11-01T10:00:00.000Z", createdAt: "2026-11-01T10:00:00.000Z", updatedAt: "2026-11-01T10:00:00.000Z", status: "running", revision: 3,
+  counts: { pending: 0, queued: 0, dispatching: 0, accepted: 0, notAccepted: 0, unknown: 0, cancelled: 0, refused: 0, skipped: 0 }, recipientCount: 0,
+  deliveryMode: "individual_messages", offer: null, reporting: { replies: null, replyWindowHours: 24, purchases: null, refundedPurchases: null, revenueCents: null,
+    currency: null, ledgerAsOf: null, revenueStatus: "detail_required" } });
+const changeAck = (call: Call, accountId: string) => json({ schemaVersion: CAMPAIGN_SCHEMA, ok: true, commandKey: "d".repeat(64), accountId, campaignId: RUNNING,
+  action: bodyOf(call).action, recordedRevision: Number(bodyOf(call).expectedRevision) + 1 });
+
 /** A page load of the campaign manager for `operatorScope`, every create POST answered by `create`. `body` seeds the draft (first load only). */
-async function load(operatorScope: string, accountId: string, create: (call: Call) => Response | Promise<Response>, body?: string) {
+async function load(operatorScope: string, accountId: string, create: (call: Call) => Response | Promise<Response>, body?: string, change?: (call: Call) => Response | Promise<Response>) {
   serve((call: Call) => {
-    if (call.method === "POST") return create(call);
+    if (call.method === "POST") return call.url.includes(RUNNING) && change ? change(call) : create(call);
+    if (change && call.url.includes(`/campaigns/${RUNNING}`)) return json({ schemaVersion: CAMPAIGN_SCHEMA, ok: true, accountId, campaign: running(accountId), recipients: [] });
     if (call.url.includes("/workspace/content")) return json({ workspace: { schemaVersion: "of-workspace.v2", section: "content", accountId, asOf: "2026-11-01T10:00:00.000Z",
       lastCompleteSyncAt: null, historyRecoveryRequired: false, providerConnectionVerified: true, nextCursor: null, items: [] } });
     if (call.url.includes("/conversations")) return json({ page: { items: [], nextCursor: null } });
-    return json({ schemaVersion: CAMPAIGN_SCHEMA, ok: true, accountId, campaigns: [], truncated: false });
+    return json({ schemaVersion: CAMPAIGN_SCHEMA, ok: true, accountId, campaigns: change ? [running(accountId)] : [], truncated: false });
   });
   if (body !== undefined) {
     const { EMPTY_DRAFT, rememberDraft } = require("../../lib/onlyfans/campaign-audience");
@@ -52,6 +63,9 @@ const keys = () => posts().map(call => String(bodyOf(call).requestKey));
 const notice = () => q("[data-of-campaign-notice]")?.textContent ?? "";
 const retryButton = () => [...document.querySelectorAll<HTMLButtonElement>("[data-of-campaign-notice] button")].find(b => /Retry same request/.test(b.textContent ?? "")) ?? null;
 const locked = () => q<HTMLFieldSetElement>("[data-of-campaign-manager] fieldset")!.disabled;
+const brake = (label: RegExp) => [...document.querySelectorAll<HTMLButtonElement>("[data-of-campaign-detail] button")].find(b => label.test(b.textContent ?? "")) ?? null;
+const openRunning = () => click([...document.querySelectorAll<HTMLButtonElement>("button")].find(b => /Live note/.test(b.textContent ?? "")) ?? null);
+const stored = () => Object.keys(dom.window.sessionStorage).length;
 
 test("G04c2: after an unconfirmed create, a full reload restores the held create as the only action, and its retry is the exact request", async () => {
   for (const [label, first] of UNCONFIRMED) {
@@ -142,4 +156,43 @@ test("G04c2: another operator scope or another account sees no held create and n
   assert.ok(!locked() && !retryButton(), "another account was offered the held create");
   await queue();
   assert.notEqual(keys()[0], held, "another account reused the held key");
+});
+
+test("G04c2 #12: a held create never disables the campaign brakes: Pause and Cancel remaining stay usable, and the held create stays offered", async () => {
+  await load("op-a", "of-r-brake", lostReply, "Hello there", call => changeAck(call, "of-r-brake"));
+  await queue();
+  await reloadPage();
+  await load("op-a", "of-r-brake", () => ack("of-r-brake"), undefined, call => changeAck(call, "of-r-brake"));
+  assert.ok(locked() && retryButton(), "control: the held create is restored and locks the create form");
+  await openRunning();
+  assert.ok(brake(/^Pause$/) && !brake(/^Pause$/)!.disabled, "a held create disabled Pause on a running campaign");
+  assert.ok(brake(/^Cancel remaining$/) && !brake(/^Cancel remaining$/)!.disabled, "a held create disabled Cancel remaining");
+  await click(brake(/^Pause$/));
+  assert.deepEqual(posts().map(bodyOf), [{ action: "pause", expectedRevision: 3 }], "the brake did not reach the route");
+  assert.ok(locked() && retryButton(), "#15: an acknowledged pause dropped the held create from the retry slot");
+});
+
+test("G04c2 #13: a campaign change is never held in storage; its idempotency is its expectedRevision, and a refusal releases it", async () => {
+  await load("op-a", "of-r-change2", () => ack("of-r-change2"), undefined, lostReply);
+  await openRunning();
+  await click(brake(/^Pause$/));
+  assert.match(notice(), /outcome is not confirmed/, "control: the pause outcome is unknown");
+  assert.equal(stored(), 0, "a campaign change was written to storage, though it sends no requestKey");
+  await reloadPage();
+  await load("op-a", "of-r-change2", () => ack("of-r-change2"), undefined, refused);
+  assert.ok(!locked() && !retryButton(), "a reload restored a held change");
+});
+
+test("G04c2 #14: a session loss (401) forgets this scope's held create, in storage too: the key could not dedupe under a new sign-in", async () => {
+  await load("op-a", "of-r-401", lostReply, "Hello there");
+  await queue();
+  assert.equal(stored(), 1, "control: the held create is in storage");
+  await reloadPage();
+  await load("op-a", "of-r-401", () => new Response(null, { status: 401 }));
+  await click(retryButton());
+  assert.equal(posts().length, 1, "control: the retry reached the route");
+  assert.equal(stored(), 0, "the session loss left the held create (and its message text) in storage");
+  await reloadPage();
+  await load("op-a", "of-r-401", () => ack("of-r-401"));
+  assert.ok(!locked() && !retryButton(), "a held create from before the session loss was restored");
 });

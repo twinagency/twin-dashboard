@@ -201,3 +201,45 @@ test("G04c2: another operator scope or another account sees no held retry and ne
   await send("hello fan", HUMAN2);
   assert.notEqual(keys()[0], held, "another account reused the held key");
 });
+
+// #11: the controls route forwards the backend's refusal code (controls-backend.ts, route.ts). Only revision_changed is raised after the
+// backend looked the command key up and found no earlier commit (text_delivery.py prepare: prior lookup, then the revision check), so
+// only it may release a held send, and only twice in a row: a committed original in flight at the first refusal replays as an ack by
+// the second. A command_conflict means the original DID commit; an account or safety hold proves nothing; a bare 409 carries no code.
+const refusedWith = (code?: string) => () => routeFailure(409, "refused", { schemaVersion: CONTROL_SCHEMA, ...(code ? { code } : {}) });
+test("G04c2 #11: a held send stays held through a key conflict, an account hold or a bare 409; two revision refusals in a row release it", async () => {
+  await load("op-rev", lostReply);
+  await send("hello fan");
+  const [sent] = posts().map(bodyOf);
+  for (const code of ["command_conflict", "account_disabled", undefined, "revision_changed"]) {
+    await reloadPage();
+    await load("op-rev", refusedWith(code));
+    await open();
+    await retry();
+    assert.deepEqual(posts().map(bodyOf), [sent], String(code));
+    assert.ok(retryButton(), `${code}: one refusal released the held send`);
+  }
+  await retry();
+  assert.equal(retryButton(), null, "a second revision refusal in a row did not release the held send");
+  assert.equal(dom.window.sessionStorage.length, 0, "the released send stayed in storage");
+});
+
+test("G04c2 #14: a session loss (401) forgets this scope's held sends in storage: the key could not dedupe under a new sign-in", async () => {
+  await load("op-401", lostReply);
+  await send("hello fan");
+  assert.ok(dom.window.sessionStorage.length > 0, "control: the held send is in storage");
+  await reloadPage();
+  await load("op-401", () => new Response(null, { status: 401 }));
+  await open();
+  await retry();
+  assert.equal(posts().length, 1, "control: the retry reached the route");
+  assert.equal(dom.window.sessionStorage.length, 0, "the session loss left the held send (and its message text) in storage");
+});
+
+test("G04c2 #16: a held send is stored once, under a hash of its intent: the message text is not also the entry's name", async () => {
+  await load("op-hash", lostReply);
+  await send("hello fan, unique text");
+  const saved = Object.values(dom.window.sessionStorage).map(String).join("");
+  assert.equal(saved.split("unique text").length - 1, 1, saved);
+  assert.ok(Object.keys(JSON.parse(saved)).every(name => /^[a-f0-9]{16}$/.test(name)), saved);
+});
