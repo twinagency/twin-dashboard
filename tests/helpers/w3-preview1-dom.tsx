@@ -105,6 +105,16 @@ export async function rerender(element: React.ReactElement, pathname?: string) {
 }
 export async function unmount() { if (root) { const r = root; root = undefined; await act(async () => r.unmount()); } }
 export async function close() { await unmount(); dom.window.close(); }
+/**
+ * A full page reload, as far as module state goes: unmount, then drop every product module (repo files outside node_modules and tests)
+ * from the CommonJS cache so the next require() runs them again with empty module-level Maps. jsdom's sessionStorage is kept, as a
+ * reload keeps it. A dynamic import() does not see this (the ESM cache is separate), so callers re-require the component.
+ */
+export async function reloadPage() {
+  await unmount();
+  const repo = require("node:url").fileURLToPath(new URL("../..", import.meta.url));
+  for (const file of Object.keys(require.cache)) if (file.startsWith(repo) && !/\/(node_modules|tests)\//.test(file)) delete require.cache[file];
+}
 
 export const settle = async (ms = 30) => act(async () => { await new Promise(resolve => setTimeout(resolve, ms)); });
 export const q = <T extends Element = HTMLElement>(selector: string) => document.querySelector<T>(selector);

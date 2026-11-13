@@ -22,7 +22,7 @@ import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
 
 import type { OnlyFansDataSource } from "./data-source";
 import { commandPayloadProblem, intentRequestKey } from "./actions";
-import { controlActionFor, controlFields, controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
+import { controlActionFor, controlFields, controlRefusalCode, controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
@@ -161,7 +161,8 @@ export function createFetchOnlyFansTransport(
           const refusal = await response.json().catch(() => null);
           const label = refusal && typeof refusal === "object" ? (refusal as { outcome?: unknown }).outcome : undefined;
           if ([401, 403].includes(response.status) || (response.status === 503 ? label === "refused" : label !== "unconfirmed")) {
-            return result("refused", controlRefusalNote(response.status, refusal));
+            const code = response.status === 409 ? controlRefusalCode(refusal) : undefined;
+            return { ...result("refused", controlRefusalNote(response.status, refusal)), refusal: { status: response.status, ...(code ? { code } : {}) } };
           }
         }
         if (response.ok) {

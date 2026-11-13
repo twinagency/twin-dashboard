@@ -38,9 +38,16 @@ const text = (value: unknown, max: number): value is string => typeof value === 
 const integer = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0 && (value as number) < 2 ** 31 - 1;
 const timestamp = (value: unknown): value is string => typeof value === "string" && value.length <= 64 && /(?:Z|[+-]\d{2}:\d{2})$/.test(value) && Number.isFinite(Date.parse(value));
 const reference = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9._:-]{1,64}$/.test(value);
+/** A create without its requestKey: what the operator composed, checked before a key is taken for it. */
+export type CampaignPayload = Omit<CampaignCreate, "requestKey">;
 export function validCampaignCreate(value: unknown): value is CampaignCreate {
-  if (!campaignObject(value) || !exact(value, ["requestKey", "name", "body", "audience", "scheduledAt", ...(Object.hasOwn(value, "catalogItemId") ? ["catalogItemId"] : [])]) ||
-      !campaignId(value.requestKey) || typeof value.name !== "string" || value.name.length > 128 || !value.name.trim() ||
+  if (!campaignObject(value) || !campaignId(value.requestKey)) return false;
+  const { requestKey: _key, ...payload } = value;
+  return validCampaignPayload(payload);
+}
+export function validCampaignPayload(value: unknown): value is CampaignPayload {
+  if (!campaignObject(value) || !exact(value, ["name", "body", "audience", "scheduledAt", ...(Object.hasOwn(value, "catalogItemId") ? ["catalogItemId"] : [])]) ||
+      typeof value.name !== "string" || value.name.length > 128 || !value.name.trim() ||
       !text(value.body, 20_000) || !value.body.trim() || !(value.scheduledAt === null || timestamp(value.scheduledAt)) || !campaignObject(value.audience) ||
       (Object.hasOwn(value, "catalogItemId") && value.catalogItemId !== null && (!Number.isSafeInteger(value.catalogItemId) || (value.catalogItemId as number) <= 0))) return false;
   const audience = value.audience;

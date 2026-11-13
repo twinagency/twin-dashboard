@@ -2,8 +2,8 @@
 // 2: a 503 with no body or a non-JSON body (a proxy) was filed "refused" and the kept retry dropped, so the next Queue minted a new
 //    requestKey after a write that may have been forwarded. Only a body the route produced (campaignRefuse, outcome "refused") is a refusal.
 // 6: once a create is unconfirmed, a later refusal released it; only a recorded ack may release it.
-// 7: the held create lived in component state, so navigating away and back lost it. It now lives in a module store per account
-//    (in-page only; a reload drops it, G04c). Each test uses its own account so a held create never reaches the next test.
+// 7: the held create lived in component state, so navigating away and back lost it. It now lives in the key store per operator
+//    scope and account (sessionStorage when a scope is given, G04c2). Each test uses its own account so a held create never reaches the next test.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), real CampaignManager + Next contexts.
 import { bodyOf, button, calls, click, close, json, lostReply, mount, q, routeFailure, serve, submit, unmount, type Call } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
@@ -83,12 +83,15 @@ test("finding 7: navigating away and back keeps the held create and its requestK
   assert.equal(retry(), undefined, "the ack releases it");
 });
 
+// G04c2 #14: a session loss forgets the held create (lib/onlyfans/plan-c-client.ts forgetHeldKeys): the route folds the session actor
+// into the backend command key, so the held requestKey could not dedupe under a new sign-in anyway.
 test("a 401 on a held retry releases the held create, so a remount offers no stale Retry", async () => {
   queue("of-c6");
   await manager("of-c6", n => n === 0 ? lostReply() : new Response(null, { status: 401 }));
   await submit(q("[data-of-campaign-manager] form"));
   await click(retry());
+  assert.match(notice(), /Sign in again/);
   await unmount();
   await manager("of-c6", () => ack("of-c6"));
-  assert.equal(retry(), undefined, "the held create survived the session loss");
+  assert.ok(retry() === undefined, "the held create survived the session loss");
 });

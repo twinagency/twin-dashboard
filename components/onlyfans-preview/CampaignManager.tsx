@@ -6,15 +6,16 @@ import { useDashboardAccess } from "@/components/DashboardAccessProvider";
 import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 import { Card } from "@/components/ui/card";
 import { Info, inputCls } from "@/components/clone/fields";
-import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, parseCampaignAck, parseCampaignDetail, parseCampaignList,
-  validCampaignCreate, type Campaign, type CampaignAction, type CampaignChange, type CampaignCreate, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
+import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, campaignObject, parseCampaignAck, parseCampaignDetail, parseCampaignList, validCampaignPayload, type Campaign, type CampaignAction, type CampaignChange, type CampaignPayload, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
 import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
 import OnlyFansAvatar from "./OnlyFansAvatar";
 import { inboxSearchParams } from "@/lib/onlyfans/inbox-search";
 import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
+import { forgetHeldKeys, heldKeyStore } from "@/lib/onlyfans/plan-c-client";
+import { uuidRequestKey } from "@/lib/onlyfans-preview/actions";
 
-type Write = { kind: "create"; body: CampaignCreate } | { kind: "change"; campaignId: string; body: CampaignChange };
+type Write = { kind: "create"; body: CampaignPayload } | { kind: "change"; campaignId: string; body: CampaignChange };
 const inputClass = `${inputCls} disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink transition hover:bg-elev disabled:cursor-not-allowed disabled:opacity-50";
 const LABELS = { pending: "Waiting", queued: "Queued", dispatching: "Sending", accepted: "Accepted", notAccepted: "Not accepted", unknown: "Uncertain", cancelled: "Cancelled", refused: "Refused", skipped: "Skipped" };
@@ -33,19 +34,24 @@ const REASONS: Record<string, string> = {
   policy_changed: "Delivery permissions changed before sending.",
   expired: "The delivery request expired before sending.",
 };
-/** A write whose outcome is unconfirmed, per account. Module level so a remount (navigate away and back) keeps the exact retry; a reload does not (G04c). */
-const heldWrites = new Map<string, Write>();
+/**
+ * A stored create this build can resend unchanged. Held creates live in the key store (G04c2), per operator scope and account, across a
+ * reload but not a re-sign-in. A change is never stored: the route keys it by its expectedRevision, so it needs no requestKey.
+ */
+const heldWrite = (value: unknown): value is Write => campaignObject(value) && value.kind === "create" && validCampaignPayload(value.body);
 const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request before making another change.";
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
 
 /** The sender is always explicit. Without exactly one chosen account nothing can be queued. */
-export default function CampaignManager({ accountId, sender = null, readOnly = false }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean }) {
+export default function CampaignManager({ accountId, sender = null, readOnly = false, operatorScope }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean; operatorScope?: string }) {
   if (!accountId) return <div className="space-y-5" data-of-campaign-manager><Card className="p-4"><h2 className="font-semibold">New campaign</h2><p role="status" data-of-campaign-sender className="mt-2 text-sm font-medium">{NO_SENDER_TEXT}</p></Card></div>;
-  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} />;
+  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} operatorScope={operatorScope} />;
 }
 
-function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId: string; sender: Sender | null; readOnly: boolean }) {
+function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope }: { accountId: string; sender: Sender | null; readOnly: boolean; operatorScope?: string }) {
+  // A write in flight or unconfirmed, on an earlier page load or mount too, is the only action offered until its outcome is known.
+  const keys = heldKeyStore("of-campaign-keys", accountId, operatorScope), held = useRef(keys.pending().find(heldWrite) ?? null).current;
   const initialDraft = useRef(recallDraft(accountId)).current;
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
@@ -57,7 +63,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   const [detail, setDetail] = useState<{ campaign: Campaign; recipients: CampaignRecipient[] } | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [listReady, setListReady] = useState(false);
-  const [notice, setNotice] = useState(() => heldWrites.has(accountId) ? UNCONFIRMED_TEXT : ""), [retry, setRetry] = useState<Write | null>(() => heldWrites.get(accountId) ?? null);
+  const [notice, setNotice] = useState(held ? UNCONFIRMED_TEXT : ""), [retry, setRetry] = useState<Write | null>(held);
   const [name, setName] = useState(initialDraft.name), [body, setBody] = useState(initialDraft.body), [scheduled, setScheduled] = useState(initialDraft.scheduled);
   const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">(initialDraft.audienceKind);
   const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set(initialDraft.fanIds));
@@ -70,16 +76,19 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   const catalogueRequest = useRef(false);
   const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
   useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
-  const sessionLost = useCallback(() => {
+  const sessionLost = useCallback((status: number) => {
+    // Even when unmounted: a held write must not outlive the session (codex final). Only a 401 is a session loss; a 403 (read-only,
+    // permission, origin) proves nothing about the earlier attempt, so the held create stays (#19).
+    if (status === 401) forgetHeldKeys(operatorScope);
     if (!active.current) return;
     sessionDenied.current = true;
-    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); heldWrites.delete(accountId); forgetDraft(accountId);
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
-  }, [router, accountId]);
+  }, [router, accountId, operatorScope]);
   const read = useCallback(async (id?: string | null) => {
     try {
       const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return false; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return false; }
       if (!response.ok) throw new Error("Campaigns could not be refreshed. Check the account connection and try again.");
       const value: unknown = await response.json();
       if (!active.current || sessionDenied.current) return false;
@@ -95,7 +104,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     try {
       const params = inboxSearchParams(false, query); if (cursor) params.set("cursor", cursor);
       const response = await readWithRecovery(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${params.size ? `?${params}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return; }
       if (!response.ok) throw new Error(`Synchronized conversations could not be loaded (HTTP ${response.status}) after bounded recovery. Retry; if this persists, ask the release owner to inspect the account list request.`);
       const value = await response.json();
       if (!Array.isArray(value.page?.items) || value.page.items.some((item: ConversationSummary) => item.accountId !== accountId || typeof item.conversationId !== "string" || !item.fan || typeof item.fan.displayName !== "string")) throw new Error("The audience response was invalid.");
@@ -107,7 +116,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     if (catalogueRequest.current) return; catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
     try {
       const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
-      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if ([401, 403].includes(response.status)) { sessionLost(response.status); return; }
       if (!response.ok) throw new Error("The saved content catalogue could not be loaded.");
       const value = await response.json(), parsed = parseWorkspace(value.workspace, accountId, "content");
       if (!parsed || parsed.section !== "content") throw new Error("The catalogue response was invalid.");
@@ -121,12 +130,13 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
   async function write(request: Write) {
     if (sending.current || denied || readOnly) return; sending.current = true; setBusy(true); setNotice("");
-    // Once any attempt went unconfirmed only a recorded ack releases the write: a later refusal does not prove the earlier attempt failed.
-    const wasHeld = heldWrites.get(accountId) === request; heldWrites.set(accountId, request);
+    // The exact create is held with its requestKey; once any attempt went unconfirmed only a recorded ack releases it (keys.settle). The
+    // backend refusal code is not forwarded by the campaign routes (campaigns-backend.ts), so no refusal can prove a create did not commit.
+    const create = request.kind === "create", intent = JSON.stringify(request), requestKey = create ? uuidRequestKey(keys.keyFor(intent, request)) : null;
     let outcome: "ack" | "refused" | null = null;
     try {
-      const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
-      if ([401, 403].includes(response.status)) { outcome = "refused"; heldWrites.delete(accountId); sessionLost(); return; } // released even if unmounted mid-flight
+      const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(create ? { requestKey, ...request.body } : request.body) });
+      if ([401, 403].includes(response.status)) { outcome = "refused"; sessionLost(response.status); return; } // settled below even if unmounted mid-flight
       // campaignRefuse (lib/onlyfans/campaign-route.ts) labels every definite refusal outcome "refused"; a bare or non-JSON status (a proxy 503) may follow a forwarded write.
       if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome === "refused") { outcome = "refused"; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
       else if (response.ok) {
@@ -138,9 +148,9 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
       }
     } catch { /* Keep exact original write identity for an explicit retry. */ }
     finally {
-      const uncertain = outcome !== "ack" && (wasHeld || outcome !== "refused");
-      if (!uncertain) heldWrites.delete(accountId);
-      if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
+      const uncertain = create ? keys.settle(intent, outcome ?? "unconfirmed") : !outcome;
+      // The oldest held create stays offered whatever this write was, so a brake used meanwhile never hides it.
+      if (active.current && !sessionDenied.current) { setRetry(keys.pending().find(heldWrite) ?? (uncertain ? request : null)); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
       sending.current = false;
     }
   }
@@ -148,10 +158,11 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     event.preventDefault(); if (busy || retry || denied || readOnly || !sender) return;
     let scheduledAt: string | null = null;
     try { scheduledAt = scheduled ? new Date(scheduled).toISOString() : null; } catch { setNotice("Choose a valid schedule."); return; }
-    const request: CampaignCreate = { requestKey: crypto.randomUUID(), name, body, audience: audienceKind === "all_known" ? { kind: "all_known" } : { kind: "explicit", conversationIds: [...fanIds].sort() }, scheduledAt,
+    const create = { name, body, audience: audienceKind === "all_known" ? { kind: "all_known" as const } : { kind: "explicit" as const, conversationIds: [...fanIds].sort() }, scheduledAt,
       ...(catalogItemId ? { catalogItemId: Number(catalogItemId) } : {}) };
-    if (!validCampaignCreate(request)) { setNotice("Enter a name, message and at least one synchronized conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
-    void write({ kind: "create", body: request });
+    // Validated before a key is taken, so a refused draft never leaves a held key behind.
+    if (!validCampaignPayload(create)) { setNotice("Enter a name, message and at least one synchronized conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
+    void write({ kind: "create", body: create });
   }
   const locked = busy || !!retry || denied || readOnly;
   const campaign = detail?.campaign;
@@ -187,7 +198,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     {loading ? <p role="status" className="text-sm text-muted">Loading campaigns…</p> : !listReady ? <p className="text-sm text-muted">Campaign history is unavailable.</p> : !campaigns.length ? <p className="text-sm text-muted">No campaigns are recorded for this account.</p> : <div className="grid gap-3 md:grid-cols-2">{campaigns.map(item => <button type="button" key={item.campaignId} onClick={() => setSelected(item.campaignId)} className={`min-w-0 rounded-xl border p-4 text-left ${selected === item.campaignId ? "border-accent bg-accent/5" : "border-line bg-white"}`} data-of-campaign={item.campaignId}><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{item.name}</span><span className="rounded-full bg-elev px-2 py-1 text-xs capitalize text-muted">{item.status}</span></div><p className="mt-2 line-clamp-2 text-sm text-muted">{item.body}</p><p className="mt-3 text-xs text-muted">{item.recipientCount} recipients · {item.counts.accepted} accepted · {item.counts.unknown} uncertain</p><p className="mt-1 text-xs text-muted">Scheduled {when(item.scheduledAt)}</p></button>)}</div>}
     {truncated ? <p className="text-xs text-muted">Showing the latest 100 campaigns.</p> : null}
     {selected && !detail ? <p role="status" className="text-sm text-muted">Loading campaign detail…</p> : null}
-    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={locked} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
+    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={busy || denied || readOnly} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
       <p className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-elev p-3 text-sm">{campaign.body}</p>
       {campaign.offer ? <div className="mt-3 rounded-lg border border-line p-3 text-sm"><div className="font-semibold">{campaign.offer.label} · {formatRecordedMoney(campaign.offer.priceCents, campaign.offer.currency)}</div><p className="mt-1 text-xs text-muted">{campaign.offer.mediaIds.length} saved media · {campaign.offer.previewIds.length} free previews · Frozen catalogue terms</p></div> : null}
       <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-5">{RECIPIENT_STATUSES.map(status => <div key={status} className="rounded-lg border border-line p-3"><div className="text-xs text-muted">{LABELS[status]}</div><div className="mt-1 text-lg font-semibold">{campaign.counts[status]}</div></div>)}</div>
