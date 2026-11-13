@@ -57,10 +57,10 @@ function builder(table: string) {
     update(patch: Record<string, unknown>) { b.patch = patch; return b; },
     eq(key: string, value: unknown) { b.filters.push((r: Record<string, unknown>) => r[key] !== null && String(r[key]) === String(value)); return b; },
     is(key: string, value: null) { b.filters.push((r: Record<string, unknown>) => r[key] === value); return b; },
-    // Only the flat "col.eq.v,col.is.null" form setBlocked sends.
+    // Only the flat "col.eq.v,col.neq.v,col.is.null" form setBlocked sends.
     or(list: string) {
       const alts = list.split(",").map((p) => { const [k, op, ...v] = p.split("."); return { k, op, v: v.join(".") }; });
-      b.filters.push((r: Record<string, unknown>) => alts.some(({ k, op, v }) => op === "is" ? r[k] === null : op === "eq" ? r[k] !== null && String(r[k]) === v : assert.fail(`unsupported or filter ${list}`)));
+      b.filters.push((r: Record<string, unknown>) => alts.some(({ k, op, v }) => op === "is" ? r[k] === null : op === "eq" ? r[k] !== null && String(r[k]) === v : op === "neq" ? r[k] !== null && String(r[k]) !== v : assert.fail(`unsupported or filter ${list}`)));
       return b;
     },
     maybeSingle() { b.one = true; return b; },

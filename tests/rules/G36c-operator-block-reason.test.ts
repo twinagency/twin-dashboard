@@ -11,6 +11,7 @@ import test from "node:test";
 import { inNextRoute, installWire } from "../support/admin-wire";
 import { setBlocked } from "../../app/users/actions";
 import { scopeAgencyWrite } from "../../lib/agency-write";
+import { catalogueEligible } from "../../lib/catalogue-core";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 import { TOP_ONLYFANS_AGENCY } from "../../lib/partner-portals";
 
@@ -53,6 +54,7 @@ test("agency manager blocks a fan, then unblocks him (the dashboard block is an 
   // read as this operator block.
   assert.equal(row.blocked_reason, null, "the operator stamp survived the unblock");
   assert.equal(row.blocked_at, null);
+  assert.equal(catalogueEligible(row), true, "the catalogue gate (blocked_at) still locks out an unblocked fan");
   row.blocked = true; // a later reason-less block lands
   assert.match(await submit(manager, "false"), /^rejected/, "agency manager lifted a later reason-less block via a stale operator stamp");
   assert.equal(row.blocked, true);
@@ -113,6 +115,24 @@ test("a failed block write rejects, never reports success", async () => {
   assert.equal(row.blocked, false);
 });
 
+// Flash 6: lib/catalogue-core.ts and the bot's browse/catalogue/offer gates read blocked_at, so a lift that leaves it
+// set keeps the fan locked out. The minor gate is minor_flagged_at || reason "minor" (twin-bot src/safety.ts
+// isMinorGated), never blocked_at, and us_location is the block itself; a "minor" reason keeps blocked_at anyway.
+for (const [label, over, eligible] of [
+  ["a reason-less (legacy or admin) block", {}, true],
+  ["a us_location block", { blocked_reason: "us_location" }, true],
+  ["a minor-flagged block", { blocked_reason: "minor", minor_flagged_at: "2026-11-01T00:00:00Z" }, false],
+  ["a minor reason with no flag", { blocked_reason: "minor" }, false],
+] as const) {
+  test(`admin unblock of ${label}: the catalogue gate ${eligible ? "opens" : "stays shut"}`, async () => {
+    row = fan({ blocked: true, blocked_at: "2026-11-01T00:00:00Z", ...over });
+    assert.equal(await submit(null, "false"), "resolved");
+    assert.equal(row.blocked, false);
+    assert.equal(row.blocked_reason, over.blocked_reason ?? null, "a safety reason was cleared");
+    assert.equal(catalogueEligible(row), eligible, `blocked_at ${JSON.stringify(row.blocked_at)}`);
+  });
+}
+
 // TEST-CHANGE (r1 F1/F2): the admitted stamp is now one statement {blocked:true, blocked_reason, blocked_at} with a
 // blocked=eq.false filter (was a separate {blocked_reason, blocked_at} PATCH), plus the unblock clear; the old
 // stamp-only body is now refused.
@@ -139,6 +159,9 @@ test("the agency write scope admits only the exact conditional stamp and clear, 
     ["clearing without the minor condition", "&blocked_reason=eq.operator", clear],
     ["clearing the reason alone", clearQ, { blocked_reason: null }],
     ["blocked_at alone", stampQ, { blocked_at: at }],
+    // Flash F-major: both shapes the two-statement r0 admitted.
+    ["a standalone stamp on an already-blocked reason-less row", "", { blocked_reason: "operator", blocked_at: at }],
+    ["blocked:false combined with the stamp", "&or=(blocked_reason.is.null,blocked_reason.eq.operator)&minor_flagged_at=is.null", { blocked: false, blocked_reason: "operator", blocked_at: at }],
   ] as const) {
     await assert.rejects(scopeAgencyWrite(url(q), "PATCH", body, manager), /operator block reason/, label);
   }
