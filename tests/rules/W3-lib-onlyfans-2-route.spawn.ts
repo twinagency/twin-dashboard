@@ -1,6 +1,6 @@
 /**
- * Spawns tests/known-red/W3-lib-onlyfans-2-route.child.ts for one scenario (W3 lane lib-onlyfans-2). Shared by the
- * route, control-refusal-copy and upstream-401 known-red tests; the known-red glob `*.test.*` does not run this file.
+ * Spawns tests/rules/W3-lib-onlyfans-2-route.child.ts for one scenario (W3 lane lib-onlyfans-2). Shared by the
+ * G06 route tests (control-refusal-copy; upstream-401 later); the `*.test.*` glob does not run this file.
  */
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";

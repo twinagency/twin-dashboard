@@ -34,9 +34,9 @@ function assertKeptAndNotHidden(p: ReturnType<typeof parseConversations>, why: s
 
 test("X2: a row missing requiresAttention never reads as not needing attention", () => {
   const { requiresAttention: _omitted, ...missing } = row();
-  assertKeptAndNotHidden(parseConversations(page([missing, VALID]), "acc-a"), "b-automation.ts:40 reads a missing requiresAttention as false");
+  assertKeptAndNotHidden(parseConversations(page([missing, VALID]), "acc-a"), "b-automation.ts reads a missing requiresAttention as false");
 });
 
 test("X2: a row with a malformed requiresAttention never reads as not needing attention", () => {
-  assertKeptAndNotHidden(parseConversations(page([row({ requiresAttention: "yes" }), VALID]), "acc-a"), "b-automation.ts:40 reads a non-boolean requiresAttention as false");
+  assertKeptAndNotHidden(parseConversations(page([row({ requiresAttention: "yes" }), VALID]), "acc-a"), "b-automation.ts reads a non-boolean requiresAttention as false");
 });

@@ -27,5 +27,5 @@ test("control: incomplete coverage with no stamp parses", () => {
 
 test("C1C1: complete coverage without a coverage stamp is refused", () => {
   const p = parseFanFinancials(financials({ coverageAt: null }));
-  assert.ok(p === null || p.coverageComplete === false, "fan-financials.ts:7 accepts coverageComplete:true with coverageAt:null");
+  assert.ok(p === null || p.coverageComplete === false, "fan-financials.ts accepts coverageComplete:true with coverageAt:null");
 });

@@ -28,6 +28,6 @@ test("C1S5: the route's management-permission 403 is shown as a management refus
   assert.deepEqual(r.calls, [], "refused before any backend call");
   assert.match(JSON.stringify(r.body), /manag/i, "precondition: the route refused for lack of management, not another reason");
   const note = controlRefusalNote(r.status, r.body);
-  assert.notEqual(note, GENERIC_403, "controls.ts:82 403 list is missing route.ts:55's sentence, so the generic session note shows");
+  assert.notEqual(note, GENERIC_403, "controls.ts 403 list is missing route.ts:55's sentence, so the generic session note shows");
   assert.match(note, /manag/i, `the note does not say the action needs a manager: "${note}"`);
 });

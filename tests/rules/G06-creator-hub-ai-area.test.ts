@@ -20,6 +20,6 @@ test("control: a running sender with runtime and delivery enabled reads enabled"
 test("X1: a stopped sender never reads outgoing replies enabled", () => {
   for (const [state, reason] of [["stopped", null], ["stopped", "Sender stopped by operator."], ["unhealthy", null]] as const) {
     const area = aiArea(account(state, reason, new Date().toISOString()));
-    assert.ok(!area || !ENABLED.test(area.state), `creator-hub.ts:64 ignores sender.state "${state}": "${area?.state}"`);
+    assert.ok(!area || !ENABLED.test(area.state), `creator-hub.ts ignores sender.state "${state}": "${area?.state}"`);
   }
 });

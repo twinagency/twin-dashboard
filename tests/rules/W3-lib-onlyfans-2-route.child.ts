@@ -1,6 +1,6 @@
 /**
- * Child process for tests/known-red/W3-lib-onlyfans-2-route.test.ts (W3 lane lib-onlyfans-2). Spawned under
- * --experimental-test-module-mocks; the known-red glob `*.test.*` does not run it. Pattern: W1's
+ * Child process for the G06 route tests in tests/rules/ (W3 lane lib-onlyfans-2). Spawned under
+ * --experimental-test-module-mocks; the `*.test.*` glob does not run it. Pattern: W1's
  * tests/rules/core-route.child.ts (64622d30), adapted.
  * Drives the REAL handlers engagementSettings / engagementActions in lib/onlyfans/launch/b-native-routes.ts and
  * accountControls in lib/onlyfans/launch/account-controls-route.ts through bGate -> requireOnlyFansRead -> isAuthed ->

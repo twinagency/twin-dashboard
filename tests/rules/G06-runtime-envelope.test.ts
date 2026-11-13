@@ -49,20 +49,20 @@ test("control: readRuntime reaches the workspace settings route once", async () 
 test("F1: readRuntime reads the route's real envelope", async () => {
   const { value, calls } = await withRouteFetch(() => readRuntime("acc-a"));
   assert.equal(calls.length, 1);
-  assert.equal(value.kind, "ok", "b-automation.ts:47 parses the envelope as if it were the inner settings payload");
+  assert.equal(value.kind, "ok", "b-automation.ts parses the envelope as if it were the inner settings payload");
   if (value.kind === "ok") {
     assert.equal(value.data.runtimeEnabled, true);
     assert.equal(value.data.historyRecoveryRequired, true);
   }
 });
 
-// Through readRuntime, not parseRuntime (a fix may replace or delete it). readRuntime is "unavailable" for every payload
-// today (F1), so the full envelope must read ok first; otherwise a refused missing-flag read would prove nothing.
+// Through readRuntime, not parseRuntime (a fix may replace or delete it). readRuntime refused every payload before
+// the F1 fix, so the full envelope must read ok first; otherwise a refused missing-flag read would prove nothing.
 test("X2: readRuntime refuses a settings payload missing historyRecoveryRequired", async () => {
   const { historyRecoveryRequired: _omitted, ...missing } = SETTINGS;
   const full = await withRouteFetch(() => readRuntime("acc-a"));
   assert.equal(full.value.kind, "ok", "precondition (F1): readRuntime never reads the real envelope, so the missing flag cannot be checked");
   const { value, calls } = await withRouteFetch(() => readRuntime("acc-a"), { ...ENVELOPE, workspace: missing });
   assert.equal(calls.length, 1);
-  assert.notEqual(value.kind, "ok", "b-automation.ts:51 reads a missing historyRecoveryRequired as false (no recovery flagged)");
+  assert.notEqual(value.kind, "ok", "b-automation.ts reads a missing historyRecoveryRequired as false (no recovery flagged)");
 });
