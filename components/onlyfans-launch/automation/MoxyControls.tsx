@@ -27,9 +27,9 @@ export function MoxyStateSummary({ value }: { value: MoxyView }) {
   </>;
 }
 
-/** `goHold` (why go is held on this account) withdraws mode On only; Off and Preview stay live. */
-export default function MoxyControls({ accountId, manage, goHold, onOwnership }: {
-  accountId: string; manage: boolean; goHold: string | null; onOwnership: (selected: boolean | null) => void;
+/** `goHold` (why go is held on this account) withdraws mode On only; Off and Preview stay live. A 401/403 here calls `onDenied`. */
+export default function MoxyControls({ accountId, manage, goHold, onOwnership, onDenied }: {
+  accountId: string; manage: boolean; goHold: string | null; onOwnership: (selected: boolean | null) => void; onDenied: (accountId: string) => void;
 }) {
   const base = `/api/onlyfans-configuration/accounts/${encodeURIComponent(accountId)}/moxy`;
   const [value, setValue] = useState<MoxyView | null>(null), [error, setError] = useState("");
@@ -43,6 +43,7 @@ export default function MoxyControls({ accountId, manage, goHold, onOwnership }:
     setLoading(true); setError(""); onOwnership(null);
     try {
       const r = await fetch(base, { cache: "no-store", credentials: "same-origin", signal: AbortSignal.timeout(10000) });
+      if (r.status === 401 || r.status === 403) onDenied(accountId);
       const raw: unknown = await r.json();
       const data = r.ok ? parseMoxy(raw, accountId) : null;
       if (!mounted.current || mine !== epoch.current) return;
@@ -52,7 +53,7 @@ export default function MoxyControls({ accountId, manage, goHold, onOwnership }:
     } catch (e) {
       if (mounted.current && mine === epoch.current) { setValue(null); setServerManage(false); setError(e instanceof Error ? e.message : "Moxy controls are unavailable."); }
     } finally { if (mounted.current && mine === epoch.current) setLoading(false); }
-  }, [base, accountId, onOwnership]);
+  }, [base, accountId, onOwnership, onDenied]);
   useEffect(() => { mounted.current = true; setDraft(null); setFileName(""); setNotice(""); setBusy(false);
     void load(); return () => { mounted.current = false; epoch.current++; }; }, [load]);
   const editable = manage && serverManage && !loading && !busy;
@@ -79,6 +80,7 @@ export default function MoxyControls({ accountId, manage, goHold, onOwnership }:
     try {
       const r = await fetch(base, { method: "POST", credentials: "same-origin", cache: "no-store", headers: { "Content-Type": "application/json" },
         body: JSON.stringify(change), signal: AbortSignal.timeout(10000) });
+      if (r.status === 401 || r.status === 403) onDenied(accountId);
       const raw: unknown = await r.json();
       if (!mounted.current || mine !== epoch.current) return;
       if (r.ok && moxyAck(raw, accountId, change)) { setNotice("Moxy settings saved."); setDraft(null); setFileName(""); }

@@ -236,11 +236,14 @@ export default function EngagementPanel({
   manage,
   goHold,
   editPolicy,
+  onDenied,
 }: {
   accountId: string;
   manage: boolean;
   goHold: string | null;
   editPolicy: boolean;
+  /** A 401/403 from the engagement endpoints holds go on the account. */
+  onDenied: (accountId: string) => void;
 }) {
   const [cursor, setCursor] = useState<string | null>(null),
     [notice, setNotice] = useState(""),
@@ -269,6 +272,8 @@ export default function EngagementPanel({
     useCallback(pageParser(accountId), [accountId]),
     false,
   );
+  const deniedRead = settings.state.kind === "denied" || actions.state.kind === "denied";
+  useEffect(() => { if (deniedRead) onDenied(accountId); }, [deniedRead, accountId, onDenied]);
   // An identical retry is a brake only if every flag is off: it is not compared with the current read.
   const retryHeld = (p: EngagementPolicy) => goHold !== null && !brakeOnly(p, null);
   async function saveSettings(command: {
@@ -282,6 +287,7 @@ export default function EngagementPanel({
       method: "POST",
       body: command,
     });
+    if (r.kind === "denied" || r.kind === "readonly") onDenied(accountId);
     if (!mounted.current) return;
     setSettingsBusy(false);
     const recorded =
@@ -314,6 +320,7 @@ export default function EngagementPanel({
       method: "POST",
       body: { actionId, action },
     });
+    if (r.kind === "denied" || r.kind === "readonly") onDenied(accountId);
     if (!mounted.current) return;
     setBusy(false);
     const row =

@@ -3,7 +3,7 @@
 // says (AccountControls.tsx). Every STOP goes without a fingerprint (a stale one is refused by the backend exactly when STOP is needed) and
 // the route (account-controls-route.ts) pins it to the fingerprint it reads now, refusing with 503 and sending nothing when it cannot read
 // one. Pause and resume still carry the fingerprint the operator saw. A pause or resume in flight or unconfirmed never disables STOP, and
-// STOP and pause/resume report in separate lanes, so neither result hides the other's; pause/resume wait for every command in flight.
+// STOP and pause/resume report in separate lanes, so neither result hides the other's; resume waits for every command in flight; Pause waits only for its own lane, never for a STOP (G07d B11).
 // L1/L3/L4 of the same known-red file are not G07a and stay there.
 // Mounts the real BAutomationPanel inside real Next router contexts; the route half spawns tests/rules/W3-lib-onlyfans-2-route.child.ts.
 // Offline: jsdom, stub fetch, synthetic ids.
@@ -135,13 +135,13 @@ test("STOP recorded while a pause is still in flight: pause and resume stay bloc
   await unmount();
 });
 
-test("a pause recorded while a STOP is in flight is reported, and pause and resume wait for the STOP", async () => {
+test("a pause recorded while a STOP is in flight is reported, and Pause stays live while resume waits for the STOP", async () => {
   const h = held();
   const stub = await open({ stopPost: h.post });
   await pauseThenStop(stub);
   await h.answer("pause", recorded());
   assert.deepEqual({ pause: /recorded/i.test(controlNote()), pauseEnabled: enabled(/^Pause account$/), stop: stop() },
-    { pause: true, pauseEnabled: false, stop: { present: true, enabled: false } }, "the pause's recorded result is dropped while a STOP is newer");
+    { pause: true, pauseEnabled: true, stop: { present: true, enabled: false } }, "the pause's recorded result is dropped while a STOP is newer");
   await h.answer("emergency_stop", html502());
   assert.deepEqual({ pause: /recorded/i.test(controlNote()), stop: /unconfirmed|not confirmed/i.test(stopNote()), again: enabled(/^Send stop again$/) },
     { pause: true, stop: true, again: true });
@@ -159,7 +159,7 @@ test("one gate for every control: with no reason nothing can be confirmed; a STO
   assert.equal(enabled(/^Confirm emergency stop$/i), false, "Confirm emergency stop is enabled with a blank reason");
   await typeInto(reasonInput(), "Synthetic stop reason");
   await click(button(/^Confirm emergency stop$/i));
-  assert.deepEqual({ stop: stop().enabled, pause: enabled(/^Pause account$/), confirm: Boolean(button(/^Confirm/)) }, { stop: false, pause: false, confirm: true });
+  assert.deepEqual({ stop: stop().enabled, pause: enabled(/^Pause account$/), confirm: Boolean(button(/^Confirm/)) }, { stop: false, pause: true, confirm: true });
   await h.answer("emergency_stop", recorded());
   assert.deepEqual({ stop: stop().enabled, pause: enabled(/^Pause account$/), confirm: Boolean(button(/^Confirm/)) }, { stop: true, pause: true, confirm: false });
   await unmount();

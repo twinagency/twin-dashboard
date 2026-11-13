@@ -101,7 +101,7 @@ test("B1 inbox: a STOP held after render blocks hand back at submit, and blocks 
   const live = controlNode("release_takeover");
   holdStop(AVA); // another tab or the launch panel sent a STOP; this view has not re-rendered
   await click(live);
-  assert.equal(posts().length, 1, "a hand back already on screen went out after the STOP hold was set");
+  assert.equal(posts().length, 0, "a hand back already on screen went out after the STOP hold was set");
 });
 
 test("(a): a manual send whose key cannot be saved is refused visibly and not sent", async () => {

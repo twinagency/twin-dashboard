@@ -32,3 +32,7 @@ export function writeHold(accountId: string, hold: StopHold | null) {
     if (hold !== null) memory.set(accountId, hold);
   }
 }
+export const STOP_HELD_TEXT = "Held until the emergency stop is confirmed.";
+/** The one check every go of an account consults (launch panel, inbox hand back and resume, campaign create and Resume): why go is held
+ *  there by an unconfirmed STOP, or null. Brakes and a manual 1:1 send under takeover never read it. Read at submit too, not only at render. */
+export const stopHoldReason = (accountId: string) => (readHold(accountId) ? STOP_HELD_TEXT : null);

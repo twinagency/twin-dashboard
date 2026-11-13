@@ -104,8 +104,10 @@ export function availableActions(input: {
   viewer: PreviewViewer;
   /** Present when the detail read found a structured delivery incident. */
   deliveryIncident?: ConversationDetail["deliveryIncident"];
+  /** Why go is held on this account by an unconfirmed STOP (stop-hold.ts stopHoldReason). Withdraws resume and hand back only. */
+  goHold?: string | null;
 }): ActionSet {
-  const { account, summary, viewer, deliveryIncident = null } = input;
+  const { account, summary, viewer, deliveryIncident = null, goHold = null } = input;
   const held = isDeliveryHeld(summary.delivery, deliveryIncident);
   const hasIncident = deliveryIncident !== null;
   const available: ActionAvailability[] = [];
@@ -149,6 +151,8 @@ export function availableActions(input: {
     if (action === "resolve_delivery_evidence") {
       return !hasIncident ? "There is no unresolved delivery to resolve." : deliveryIncident && ["dispatching", "accepted_pending"].includes(deliveryIncident.outcome) ? "This send is still being processed. Wait for its receipt before resolving it." : null;
     }
+
+    if (goHold && (action === "resume_automation" || action === "release_takeover")) return goHold;
 
     // Then the unresolved hold, which withdraws only the actions that could
     // start another send. This hold never withdraws pausing, taking over or

@@ -63,6 +63,7 @@ import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onl
 import { fanContentHistory } from "@/lib/onlyfans/chat-content-history";
 import ChatContentPicker, { isSendableOffer, offerMediaSummary } from "./ChatContentPicker";
 import { Info } from "@/components/clone/fields";
+import { stopHoldReason } from "@/components/onlyfans-launch/automation/stop-hold";
 
 const PRIORITY_LABEL: Record<ConversationSummary["priority"], { label: string; tone: "pink" | "gold" | "slate" }> = {
   priority: { label: "Priority", tone: "pink" },
@@ -884,6 +885,7 @@ export default function InboxView({
           summary: detail.summary,
           viewer,
           deliveryIncident: detail.deliveryIncident,
+          goHold: stopHoldReason(activeAccount.accountId),
         })
       : null;
   const engineAware = detail ? parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current" : false;
