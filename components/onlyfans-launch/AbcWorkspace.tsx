@@ -20,20 +20,21 @@ export default function AbcWorkspace({ initialAccountId = null, initialScreen = 
   const { state, reload } = useJsonResource("/api/onlyfans/accounts", parseAccounts, false);
   const [accountId, setAccountId] = useState<string | null>(initialAccountId), [screen, setScreen] = useState<Screen>(initialScreen);
   const router = useRouter(), pathname = usePathname(), searchParams = useSearchParams();
+  const listed = (id: string | null) => state.kind === "ok" && state.data.some(a => a.accountId === id);
   const selectAccount = (next: string) => {
-    if (state.kind !== "ok" || !state.data.some(account => account.accountId === next)) return;
+    if (!listed(next)) return;
     setAccountId(next);
     const params = new URLSearchParams(searchParams.toString());
     params.set("account", next); params.delete("creator");
     router.replace(`${pathname}?${params.toString()}`, { scroll: false });
   };
   useEffect(() => {
-    if (state.kind === "ok" && initialAccountId) setAccountId(state.data.some(a => a.accountId === initialAccountId) ? initialAccountId : null);
+    if (state.kind === "ok" && initialAccountId) setAccountId(initialAccountId);
   }, [initialAccountId, state.kind]);
   // Only an account the list just answered with is shown or read: a stale ?account= never mounts a screen, nor does any id while the list is not ok.
-  const shown = state.kind === "ok" && accountId && state.data.some(a => a.accountId === accountId) ? accountId : null;
+  const shown = accountId && listed(accountId) ? accountId : null;
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  useEffect(() => { if (state.kind === "ok" && !initialAccountId && (!accountId || !state.data.some(a => a.accountId === accountId))) setAccountId(state.data[0]?.accountId ?? null); }, [state, accountId, initialAccountId]);
+  useEffect(() => { if (state.kind === "ok" && !initialAccountId && !listed(accountId)) setAccountId(state.data[0]?.accountId ?? null); }, [state, accountId, initialAccountId]);
   const onGo = useCallback((s: string) => { if ((SCREENS as string[]).includes(s)) setScreen(s as Screen); }, []);
   const onKey = (e: React.KeyboardEvent, i: number) => {
     const n = e.key === "ArrowRight" ? (i + 1) % SCREENS.length : e.key === "ArrowLeft" ? (i + SCREENS.length - 1) % SCREENS.length : e.key === "Home" ? 0 : e.key === "End" ? SCREENS.length - 1 : -1;

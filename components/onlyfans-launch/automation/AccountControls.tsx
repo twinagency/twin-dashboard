@@ -95,11 +95,13 @@ export default function AccountControls({
   async function submit() {
     if (!action || blocked(action)) return;
     // A STOP is a brake: it never carries the fingerprint this view read, which may be stale. The route pins it to the current one.
-    await send(
-      action === "emergency_stop"
-        ? { action, reason: reason.trim() }
-        : { action, expectedFingerprint: ready!.accountControl.fingerprint, reason: reason.trim() },
-    );
+    if (action === "emergency_stop") {
+      await send({ action, reason: reason.trim() });
+      return;
+    }
+    const expectedFingerprint = ready?.accountControl.fingerprint;
+    if (!expectedFingerprint) return;
+    await send({ action, expectedFingerprint, reason: reason.trim() });
   }
 
   return (
