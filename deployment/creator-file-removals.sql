@@ -1,5 +1,6 @@
 -- Service-only journal for creator-requested draft content removal. Apply after
 -- creator-upload-receipts.sql. The path tombstone prevents later reference reuse.
+begin;
 create table if not exists public.creator_file_removals (
   file_id uuid primary key,
   creator_account_id uuid not null references public.creator_accounts(id) on delete cascade,
@@ -125,3 +126,4 @@ revoke all on function public.guard_creator_file_lifecycle() from public,anon,au
 revoke all on function public.guard_creator_file_reference() from public,anon,authenticated;
 grant execute on function public.begin_creator_file_removal(uuid,uuid) to service_role;
 grant execute on function public.finish_creator_file_removal(uuid,uuid) to service_role;
+commit;
