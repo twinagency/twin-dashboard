@@ -27,6 +27,8 @@ try{
   // The preview component retries a transient failure twice (image load plus one probe each time) before it shows Retry, so six requests fail.
   if(suffix==='/previews/1'&&failPreview>0){failPreview-=1;return route.fulfill({status:503,body:''});}
   if(suffix.startsWith('/previews/'))return route.fulfill({status:200,contentType:'image/png',body:png});
+  // CategoryDrafts (e6721b84) reads the selected folder's agency price; read only, writes stay unexpected.
+  if(suffix==='/category-price/7'&&req.method()==='GET')return json(envelope({categoryPrice:{folderId:'7',name:'Outdoors',revision:1,priceCents:1200,currency:'USD',appliesTo:'single_asset',fingerprint:hash}}));
   if(suffix==='/uploads')return json(envelope({uploads:{schemaVersion:'of-vault-media.v1',accountId,maxFiles:40,maxFileBytes:4000*1024**2,chunkBytes:8*1024**2,enabled:true,jobs:[]}}));
   throw Error('Unexpected fixture request: '+req.method()+' '+suffix);
  });

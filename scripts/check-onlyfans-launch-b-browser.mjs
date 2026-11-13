@@ -480,16 +480,24 @@ function syntheticBackend() {
     m = p.match(/^\/api\/onlyfans\/accounts\/([^/]+)\/workspace\/settings$/);
     if (m)
       return send({
-        accountId: m[1],
-        section: "settings",
-        runtimeEnabled: state.controls[m[1]].enabled,
-        historyRecoveryRequired: true,
-        providerConnectionVerified: true,
-        deliveryPolicy: {
-          enabled: false,
-          mediaEnabled: false,
-          usedUnits: 0,
-          limitUnits: 100,
+        schemaVersion: "of-preview.v2",
+        workspace: {
+          schemaVersion: "of-workspace.v2",
+          section: "settings",
+          accountId: m[1],
+          asOf: "2026-11-12T10:00:00Z",
+          lastCompleteSyncAt: null,
+          runtimeEnabled: state.controls[m[1]].enabled,
+          historyRecoveryRequired: true,
+          providerConnectionVerified: true,
+          deliveryPolicy: {
+            revision: 1,
+            enabled: false,
+            mediaEnabled: false,
+            usedUnits: 0,
+            limitUnits: 100,
+          },
+          configuration: null,
         },
       });
     m = p.match(

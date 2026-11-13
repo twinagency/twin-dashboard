@@ -79,7 +79,7 @@ export function controlRefusalCode(value: unknown): string | undefined {
 /** Only known dashboard messages may be displayed; never echo upstream errors. */
 const DASHBOARD_CONTROL_REFUSALS: Record<number, readonly string[]> = {
   400: ["That conversation reference is invalid.", "That conversation control request is invalid.", "That conversation control is unavailable."],
-  403: ["Your team access is read-only.", "This change must be requested from this dashboard."],
+  403: ["Your team access is read-only.", "This change must be requested from this dashboard.", "This action requires management permission."],
   409: ["The conversation changed or has an active hold. Refresh before trying again."],
   413: ["That conversation control request is invalid."],
   503: ["Conversation controls are not configured."],
