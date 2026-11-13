@@ -60,6 +60,8 @@ try {
  const errors=[]; page.on("pageerror",error=>{errors.push(String(error));console.error("Browser:",String(error));});
  await page.goto(origin+"/onlyfans/inbox?scenario=accepted");
  const takeover=page.locator('[data-of-action="request_takeover"]'),composer=page.locator("[data-of-composer]");
+ // The post-command refresh can hold the composer for a moment after feedback renders; wait (bounded) so the send-lock read below is the settled state, not the pending one.
+ const composerSettled=()=>page.waitForFunction(()=>document.querySelector("[data-of-composer]")?.disabled===false,null,{timeout:5000});
  await takeover.waitFor({timeout:15000});
  assert.equal(await composer.isEnabled(),true);
  await composer.fill("Synthetic draft before takeover");
@@ -77,7 +79,7 @@ try {
  await page.goto(origin+"/onlyfans/inbox?scenario=refused");
  await takeover.waitFor();await page.locator("[data-of-composer-takeover]").click();
  await page.locator("[data-of-command-result]").waitFor();
- assert.equal(await composer.isEnabled(),true);
+ await composerSettled();assert.equal(await composer.isEnabled(),true);
  assert.equal(await page.locator("[data-of-send]").isDisabled(),true);
  const message=await page.locator("[data-of-command-result]").innerText();
  console.log("Observed refused-control message:",message.replace(/\s+/g," "));
@@ -88,14 +90,14 @@ try {
  await page.goto(origin+"/onlyfans/inbox?scenario=conflict");
  await page.locator("[data-of-composer-takeover]").waitFor();await page.locator("[data-of-composer-takeover]").click();
  await page.getByText("The conversation changed or has an active hold. Refresh before trying again.",{exact:true}).waitFor();
- assert.equal(await composer.isEnabled(),true);
+ await composerSettled();assert.equal(await composer.isEnabled(),true);
  assert.equal(await page.locator("[data-of-send]").isDisabled(),true);
  assert.equal(await page.evaluate(()=>window.__takeoverPosts.length),1);
  console.log("PASS conflict: one request, clear error, manual send remains locked");
  await page.goto(origin+"/onlyfans/inbox?scenario=held");
  await page.locator("[data-of-composer-takeover]").waitFor();await page.locator("[data-of-composer-takeover]").click();
  await page.getByText("Waiting for the current delivery to settle. Manual replies stay paused until handover completes.",{exact:true}).waitFor();
- assert.equal(await composer.isEnabled(),true);
+ await composerSettled();assert.equal(await composer.isEnabled(),true);
  assert.equal(await page.locator("[data-of-send]").isDisabled(),true);
  assert.equal(await page.locator("[data-of-attach-vault]").isEnabled(),true);
  assert.equal(await page.locator("[data-of-composer-takeover]").count(),0);
