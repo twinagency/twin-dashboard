@@ -58,7 +58,8 @@ test("rows per mode, literally: premerge first, && pairs grouped, NEEDS full onl
 
 test("plan() throws on separators it does not parse, npm runs it cannot follow, and unused NEEDS/OWNER entries", () => {
   const base = { "test:a": "node a.ts" };
-  for (const bad of ["node a.ts; node b.ts", "node a.ts || true", "node a.ts | tee x", "npm run nope", "npm run test:a -- --flag"]) {
+  const seps = ["node a.ts; node b.ts", "node a.ts || true", "node a.ts | tee x", "false & true", "node a.ts &", "false\ntrue"];
+  for (const bad of [...seps, "npm run nope", "npm run test:a -- --flag"]) {
     assert.throws(() => plan({ ...base, "test:b": bad }, [], {}, []), /cannot|no such script/, bad);
   }
   assert.throws(() => plan(base, [], { "gone.ts": ["x"] }, []), /gone\.ts/);
