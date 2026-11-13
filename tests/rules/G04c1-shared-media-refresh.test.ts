@@ -1,11 +1,14 @@
 // G04c1 (G30b F6 deferral): a held shared-media receipt answered from the row with zero backend calls, so the operator could never
-// learn that its provider job later completed (adopt it) or proved nothing was staged (retryable history), and the source was stuck.
+// learn that its provider job later completed (adopt it), and the source was stuck.
 // Fix: POST `{ kind, sourceId, action: "refresh" }` on the same route and gate re-reads the held receipt's provider job via the
-// backend's uploads read (read only, zero upstream writes; the one exception to G30b F3), persists it through sharedUploadProgress,
-// and the live predicate decides. A job missing upstream is not proof (it may have aged out of history): the row stays held.
-// Refresh covers both holds (a review hold and a cleanup hold). An active receipt (resume it instead) and a file with no live receipt
-// are refused 409 with zero upstream calls and no new receipt: refresh never starts, resumes or retries an upload.
-// Drives the real POST app/api/onlyfans-content/accounts/[accountId]/shared-media/route.ts through the G05 harness
+// backend's uploads read (read only, zero upstream writes; the one exception to G30b F3) and persists it through sharedUploadProgress
+// ONLY when the projection is adopted (complete with a vault media id) or still held and terminal. Any projection that would leave
+// the hold (a retryable pair, or an active status) is refused 503 with the row unchanged (R1 O1: a backend claim race can write a
+// transient expired, D5; a hold is better than a duplicate upload). A job missing upstream is not proof (it may have aged out of
+// history): the row stays held. Refresh covers both holds (a review hold and a cleanup hold). An active receipt (resume it instead),
+// a receipt with no job id, and a file with no live receipt are refused 409 with zero upstream calls and no new receipt: refresh
+// never starts, resumes or retries an upload. GET emits `held` from the STORED row, before its provider overlay (R1 O2).
+// Drives the real POST/GET app/api/onlyfans-content/accounts/[accountId]/shared-media/route.ts through the G05 harness
 // (tests/helpers/W3-api-onlyfans-plus7-harness.ts). Real: the route, lib/shared-media.ts, vault-media-backend over the fake wire.
 // Bypasses declared: `state.db` is tests/support/G30b-shared-route-fakes.ts sharedFakeDb (see its header);
 // `lib/onlyfans/vault-backend.ts` is mocked (connectionRevision 3). Synthetic values only.
@@ -73,20 +76,29 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 10 }, () => {
     assert.deepEqual(wire(), []);
   });
 
-  test("held + provider proves nothing was staged: becomes retryable history, a later POST creates a fresh receipt", async () => {
-    store.rows = [receipt({ status: "expired", error_code: null, job_id: JOB, received_bytes: 0 })]; // operator cancel: held
-    withJobs([job("expired", { receivedBytes: 0, status: "receiving" }, { lastError: "media_request_expired" })]);
-    const response = await check();
-    assert.equal(response.status, 200);
-    assert.deepEqual([store.rows[0].status, store.rows[0].error_code, store.rows[0].media_id], ["expired", "media_request_expired", null], "persisted the proof pair");
-    assert.equal(creates().length, 0, "refresh itself never creates");
-    upstream(answer);
-    const retry = await share();
-    assert.equal(retry.status, 200);
-    assert.equal(store.rows.length, 2, "history kept, fresh receipt added");
-    assert.notEqual(store.rows[1].file_id, FILE);
-    assert.equal(createdFile(), store.rows[1].file_id, "the create carries the fresh receipt's file");
-  });
+  // R1 O1: the projection would leave the hold (D5: a claim race can store a transient expired), so it is refused, never stored.
+  const leaving: Array<[string, ReturnType<typeof job>]> = [
+    ["expired/media_request_expired pair", job("expired", { receivedBytes: 0, status: "receiving" }, { lastError: "media_request_expired" })],
+    ["superseded/media_connection_changed pair", job("superseded", { receivedBytes: 0, status: "receiving" }, { lastError: "media_connection_changed" })],
+    ["receiving", job("receiving", { receivedBytes: 0, status: "receiving" })], ["pending", job("pending")], ["running", job("running")],
+  ];
+  for (const [held, over] of [["operator cancel", { status: "expired", error_code: null, received_bytes: 0 }], ["review hold", REVIEW]] as const) {
+    for (const [name, upstreamJob] of leaving) {
+      test(`${held} + provider reads ${name}: stays held, 503, row unchanged, a later POST makes no create`, async () => {
+        store.rows = [receipt({ ...over, job_id: JOB })];
+        const before = structuredClone(store.rows[0]);
+        withJobs([upstreamJob]);
+        const response = await check();
+        assert.equal(response.status, 503);
+        assert.equal(((await response.json()) as { ok: boolean }).ok, false);
+        assert.deepEqual(store.rows, [before], "row unchanged");
+        assert.deepEqual(wire(), [`GET ${UPLOADS}`], "only the uploads read: no chunk, no finish, no source read");
+        upstream(answer);
+        assert.equal((await share()).status, 200);
+        assert.deepEqual([store.rows.length, creates().length], [1, 0], "no fresh receipt, no upstream create");
+      });
+    }
+  }
 
   test("held + provider still failed: stays held, a later POST makes no create", async () => {
     store.rows = [receipt(REVIEW)];
@@ -110,21 +122,13 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 10 }, () => {
     assert.deepEqual(wire(), [`GET ${UPLOADS}`]);
   });
 
-  test("held receipt with no job id: still held, no create", async () => {
+  test("held receipt with no job id: refused 409 before any upstream read, row unchanged", async () => {
     store.rows = [receipt({ ...REVIEW, job_id: null })];
+    const before = structuredClone(store.rows[0]);
     const response = await check();
     assert.equal(response.status, 409);
-    assert.deepEqual(wire(), [`GET ${UPLOADS}`]);
-    assert.equal(store.rows[0].status, "failed");
-  });
-
-  test("held + provider job reports receiving: persisted, but refresh sends no chunk and no finish", async () => {
-    store.rows = [receipt({ status: "interrupted", error_code: "worker_interrupted_review_required", job_id: JOB })];
-    withJobs([job("receiving", { receivedBytes: 0, status: "receiving" })]);
-    const response = await check();
-    assert.equal(response.status, 200);
-    assert.equal(store.rows[0].status, "receiving");
-    assert.deepEqual(wire(), [`GET ${UPLOADS}`], "zero upstream writes, no source read");
+    assert.deepEqual(wire(), []);
+    assert.deepEqual(store.rows, [before]);
   });
 
   for (const read of [() => Response.json({ ok: false }, { status: 503 }), () => Response.json({ ok: false }, { status: 500 }), () => Response.json({ nonsense: true })]) {
@@ -210,4 +214,47 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 10 }, () => {
       assert.deepEqual(wire().filter(c => c === `GET ${UPLOADS}`), [], "no provider read past the gate");
     });
   }
+
+  const list = async () => ((await (await call(ROUTE, { accountId: "of-a" }, { query: `?creator=${C}` })).json()) as { transfers: Array<{ id: string; status: string; held: boolean }> }).transfers;
+  test("GET: a held receipt whose provider job reads complete is still held (held is the stored row, before the overlay)", async () => {
+    store.rows = [receipt(REVIEW)];
+    withJobs([job("complete", { status: "done", mediaId: "777" })]);
+    const [row] = await list();
+    assert.deepEqual([row.status, row.held], ["complete", true]);
+    assert.deepEqual(store.rows[0].status, "failed", "GET persists nothing");
+  });
+
+  for (const [name, over, held] of [
+    ["retryable history", { status: "expired", error_code: "media_request_expired", job_id: JOB }, false],
+    ["adopted", { status: "complete", media_id: "777", job_id: JOB }, false],
+    ["active", { status: "pending", job_id: JOB }, false],
+    ["cleanup hold", { status: "failed", error_code: "provider_cleanup_required", job_id: JOB }, true],
+    ["operator cancel", { status: "expired", error_code: null, job_id: JOB }, true],
+  ] as const) {
+    test(`GET: a ${name} receipt reads held=${held}`, async () => {
+      store.rows = [receipt(over)];
+      withJobs([]);
+      assert.equal((await list())[0].held, held);
+    });
+  }
+
+  // R1 O4: share and refresh on the same held row, interleaved at the route's await points (the fake db is in memory; the real
+  // row-lock race is the backend's, D5). Neither may create, and a refresh that would leave the hold stores nothing.
+  test("race: share and refresh on one held row, provider complete: adopted once, no create, one receipt", async () => {
+    store.rows = [receipt(REVIEW)];
+    withJobs([job("complete", { status: "done", mediaId: "777" })]);
+    const answers = await Promise.all([share(), check(), share(), check()]);
+    assert.deepEqual(answers.map(r => r.status), [200, 200, 200, 200]);
+    assert.deepEqual([store.rows.length, creates().length, store.rows[0].status, store.rows[0].media_id], [1, 0, "complete", "777"]);
+  });
+
+  test("race: share and refresh on one held row, provider reads a retryable pair: still held, no create, one receipt", async () => {
+    store.rows = [receipt(REVIEW)];
+    const before = structuredClone(store.rows[0]);
+    withJobs([job("expired", { receivedBytes: 0, status: "receiving" }, { lastError: "media_request_expired" })]);
+    const answers = await Promise.all([check(), share(), check(), share()]);
+    assert.deepEqual(answers.map(r => r.status), [503, 200, 503, 200]);
+    assert.deepEqual(store.rows, [before]);
+    assert.equal(creates().length, 0);
+  });
 }

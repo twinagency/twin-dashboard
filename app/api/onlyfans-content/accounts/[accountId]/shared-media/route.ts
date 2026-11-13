@@ -9,7 +9,7 @@ import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { creatorUuid } from "@/lib/staff-creator-scope";
 import { serviceClient } from "@/lib/supabase-service";
 import { isOperatorActor } from "@/lib/onlyfans/upload-permission";
-import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, LIVE_SHARED_FILTER, SHARED_CLEANUP_HOLD, type SharedTransfer } from "@/lib/shared-media";
+import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, LIVE_SHARED_FILTER, SHARED_CLEANUP_HOLD, SHARED_ACTIVE, sharedHeld, type SharedTransfer } from "@/lib/shared-media";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -17,7 +17,7 @@ export const maxDuration = 60;
 type Context = { params: Promise<{ accountId: string }> };
 const answer = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: PRIVATE_HEADERS });
 const refuse = (error: string, status = 409) => answer({ ok: false, error }, status);
-const active = new Set(["prepared", "receiving", "pending", "running"]);
+const active = new Set(SHARED_ACTIVE);
 
 async function access(request: NextRequest, context: Context, write = false) {
   const auth = await requireOnlyFansRead({ agency: true, write }); if (auth instanceof NextResponse) return auth;
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest, context: Context) {
   const current = await ctx.backend.uploads(ctx.accountId);
   const transfers = (rows.data as SharedTransfer[]).map(row => {
     const job = current.ok ? current.data.jobs.find(job => job.jobId === row.job_id) : null;
-    if (job) { try { return publicSharedTransfer({ ...row, ...sharedUploadProgress(row, job) }); } catch { return publicSharedTransfer({ ...row, error_code: "upload_mismatch" }); } }
+    if (job) { try { return publicSharedTransfer({ ...row, ...sharedUploadProgress(row, job) }, row); } catch { return publicSharedTransfer({ ...row, error_code: "upload_mismatch" }, row); } }
     return publicSharedTransfer(row);
   });
   return answer({ ok: true, creatorId: ctx.cloneId, accountId: ctx.accountId, enabled: current.ok && current.data.enabled, statusAvailable: current.ok, transfers });
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, context: Context) {
   let body: unknown; try { body = await readCommandJson(request); } catch { return refuse("Invalid media selection.", 400); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return refuse("Invalid media selection.", 400);
   const command = body as Record<string, unknown>;
-  // `action: "refresh"` only re-reads a held receipt's provider job (G04c1); it never starts, resumes or retries an upload.
+  // `action: "refresh"` only observes a held receipt's provider job (G04c1); it never starts, resumes or retries an upload.
   const keys = Object.keys(command).sort().join(","), refresh = keys === "action,kind,sourceId" && command.action === "refresh";
   if (!refresh && keys !== "kind,sourceId" || !sharedSourceKind(command.kind) || !creatorUuid(command.sourceId)) return refuse("Choose one saved photo or video.", 400);
   if (ctx.account.health !== "connected" || ctx.account.capabilities.manageContent !== "available") return refuse("Reconnect this account before sharing media.");
@@ -101,28 +101,40 @@ export async function POST(request: NextRequest, context: Context) {
     // Agency actors must match the backend's freshly verified grant. Owner sessions may resume an owner receipt after signing in
     // again, never an agency member's: the backend binds the job to its actor, so relaying it would attribute the write to them.
     if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !isOperatorActor(row.actor)) return refuse("This upload was started by another team member. Ask them to finish it.");
-    // Two holds. A cleanup hold continues into the job flow to observe the same job. Any other live terminal receipt (complete,
-    // or held for review because the file may already be in the vault) is answered from the row: no backend call, no upload.
-    // The one exception is an operator's refresh of a terminal receipt (either hold): it reads the provider job (read only, no
-    // upstream write) and persists it, and the live predicate then decides: adopted, retryable history, or still held.
-    if (!active.has(row.status) && row.error_code !== SHARED_CLEANUP_HOLD && !refresh) return answer({ ok: true, transfer: publicSharedTransfer(row) });
-    if (refresh && active.has(row.status)) return refuse("This upload is still in progress. Resume it to check its status.");
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
       const result = await db.from("shared_media_transfers").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", row!.id).eq("clone_id", cloneId).select("*").maybeSingle();
       if (result.error || !result.data) throw Error("receipt_unconfirmed"); row = result.data as SharedTransfer;
     };
+    // Observe a terminal receipt's provider job: one uploads read, zero upstream writes, no source read. Used by an operator's
+    // refresh (either hold) and by a cleanup hold's continuation. The projection is stored only if it is adopted or still held;
+    // anything that would leave the hold (a retryable pair, which a backend claim race can write transiently, or an active status)
+    // is refused with the row unchanged: a hold is better than a duplicate upload. A job missing upstream may have aged out of
+    // history, which proves nothing: the receipt stays held.
+    const observe = async (held: SharedTransfer) => {
+      if (active.has(held.status)) return refuse("This upload is still in progress. Resume it to check its status.");
+      if (!held.job_id) return refuse("This upload has no OnlyFans job to check. Review it in OnlyFans before retrying.");
+      const uploads = await backend.uploads(accountId); if (!uploads.ok || !uploads.data.enabled) return refuse("OnlyFans upload status is unavailable.", 503);
+      const job = uploads.data.jobs.find(job => job.jobId === held.job_id);
+      if (!job) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
+      const next = sharedUploadProgress(held, job);
+      if (!(next.status === "complete" && next.media_id) && !sharedHeld(next)) return refuse("OnlyFans has not settled this upload. It stays held for review. Check again later.", 503);
+      await save(next); return answer({ ok: true, transfer: publicSharedTransfer(row!) });
+    };
+    if (refresh || row.error_code === SHARED_CLEANUP_HOLD) return await observe(row);
+    // Any other live terminal receipt (complete, or held for review because the file may already be in the vault) is answered
+    // from the row: no backend call, no upload.
+    if (!active.has(row.status)) return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const uploads = await backend.uploads(accountId); if (!uploads.ok || !uploads.data.enabled) return refuse("OnlyFans upload status is unavailable.", 503);
     let job = uploads.data.jobs.find(job => job.jobId === row!.job_id);
-    // A job missing upstream may have aged out of history, which proves nothing: a held receipt stays held.
-    if (!job && (row.job_id || refresh)) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
+    if (!job && row.job_id) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
     if (!job) {
       const created = await backend.create(accountId, { files: [{ fileId: row.file_id, name: row.file_name, size: row.size_bytes }], expectedConnectionRevision: row.connection_revision, ...identity("create") });
       if (!created.ok) return refuse("Upload creation was not confirmed. Resume the same file to check it again.", created.status);
       job = created.upload;
     }
     await save(sharedUploadProgress(row, job));
-    if (!refresh && job.status === "receiving") {
+    if (job.status === "receiving") {
       const offset = job.files[0].receivedBytes;
       if (offset < row!.size_bytes) {
         if (offset % MAX_CHUNK_BYTES !== 0) throw Error("upload_mismatch");

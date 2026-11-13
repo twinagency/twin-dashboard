@@ -2,10 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Info } from "@/components/clone/fields";
 type Selection = { sourceId: string; kind: "photo" | "video" };
-type Transfer = Selection & { id: string; status: string; processing: boolean; mediaId: string | null; receivedBytes: number; sizeBytes: number; error: string | null };
+type Transfer = Selection & { id: string; held: boolean; status: string; processing: boolean; mediaId: string | null; receivedBytes: number; sizeBytes: number; error: string | null };
 type Account = { accountId: string; binding: { creatorId: string; handle: string }; health: string };
 const button = "min-h-11 rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
-const notHeld = ["prepared","receiving","pending","running","complete"];
 const labels: Record<string,string> = { prepared: "Ready to transfer", receiving: "Transferring saved file", pending: "Queued for OnlyFans", running: "Uploading to OnlyFans", complete: "Available in OnlyFans vault", failed: "Needs review", interrupted: "Interrupted — review required", superseded: "Connection changed", expired: "Cancelled or expired" };
 
 export default function SharedMediaPanel({ creatorId, selected }: { creatorId: string; selected: Selection[] }) {
@@ -62,9 +61,10 @@ export default function SharedMediaPanel({ creatorId, selected }: { creatorId: s
     running.current = true; controller.current = new AbortController(); setBusy(true); setNotice("Checking the upload status in OnlyFans…");
     try {
       const result = await request(endpoint(accountId), { kind: row.kind, sourceId: row.sourceId, action: "refresh" }), next = result.transfer as Transfer;
-      if (!result.ok || !next || next.id !== row.id) throw Error("Upload status could not be verified.");
+      // The answer is the file's live receipt, which may be a newer one than the row clicked.
+      if (!result.ok || !next || next.sourceId !== row.sourceId || next.kind !== row.kind) throw Error("Upload status could not be verified.");
       if (!live.current) return;
-      setTransfers(current => current.map(previous => previous.id === next.id ? next : previous));
+      setTransfers(current => [next, ...current.filter(previous => previous.id !== next.id)]);
       setNotice(`Upload status checked: ${labels[next.status] ?? "Needs review"}.`);
     } catch (error) { if (live.current) setNotice(error instanceof Error ? error.message : "Upload status could not be checked."); }
     finally { running.current = false; if (live.current) setBusy(false); }
@@ -78,7 +78,7 @@ export default function SharedMediaPanel({ creatorId, selected }: { creatorId: s
       <p className="text-xs text-muted">Up to 20 selected files, 64 MB each. Uses the saved Telegram-ready copy. OnlyFans prices and product settings are managed separately. Closing this page pauses file transfer; reselect the same files to resume.</p>
       <p className="text-xs text-muted">OnlyFans vault uploads use a temporary scheduled post that is removed after upload. If removal needs attention, this panel stops and asks you to review the account’s upload history. No fan messages are sent.</p>
       {notice && <p className="text-sm" role="status">{notice}</p>}
-      {!!transfers.length && <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">{transfers.map(row => <li key={row.id} className="rounded-lg border border-line p-3"><div className="flex flex-wrap justify-between gap-2"><span>{row.kind === "photo" ? "Photo" : "Video"} · {row.sourceId.slice(0,8)}</span><span>{row.status === "complete" && row.processing ? "Processing in OnlyFans" : labels[row.status] ?? "Needs review"}</span></div>{row.status === "receiving" && <progress className="mt-2 w-full" max={row.sizeBytes} value={row.receivedBytes} aria-label="Saved file transfer progress" />}{row.error && <p className="mt-1 text-muted">{row.error}</p>}{!notHeld.includes(row.status) && <div className="mt-2 flex items-center gap-1"><button type="button" className={button} disabled={busy || !accountId} onClick={() => void check(row)}>Check upload status</button><Info text="Reads this upload from OnlyFans without uploading anything. If OnlyFans finished it, it is marked available. If OnlyFans never received the file, you can add it again. Otherwise it stays held for review." /></div>}</li>)}</ul>}
+      {!!transfers.length && <ul className="max-h-64 space-y-2 overflow-y-auto text-sm">{transfers.map(row => <li key={row.id} className="rounded-lg border border-line p-3"><div className="flex flex-wrap justify-between gap-2"><span>{row.kind === "photo" ? "Photo" : "Video"} · {row.sourceId.slice(0,8)}</span><span>{row.status === "complete" && row.processing ? "Processing in OnlyFans" : labels[row.status] ?? "Needs review"}</span></div>{row.status === "receiving" && <progress className="mt-2 w-full" max={row.sizeBytes} value={row.receivedBytes} aria-label="Saved file transfer progress" />}{row.error && <p className="mt-1 text-muted">{row.error}</p>}{row.held && <div className="mt-2 flex items-center gap-1"><button type="button" className={button} disabled={busy || !accountId} onClick={() => void check(row)}>Check upload status</button><Info text="Reads this upload from OnlyFans without uploading anything. If OnlyFans finished it, it is marked available. If OnlyFans never received the file, you can add it again. Otherwise it stays held for review." /></div>}</li>)}</ul>}
     </div>}
   </section>;
 }
