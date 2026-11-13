@@ -57,7 +57,9 @@ export const GET = withAdmin(async (req) => {
   }
 
   // Keyset cursor on (created_at, id), minted below as nextCursor. Paging on
-  // created_at alone skipped every row sharing the boundary timestamp.
+  // created_at alone skipped every row sharing the boundary timestamp. Only the
+  // shape is checked, not provenance: a hand-built cursor narrows the read like
+  // ?before= does and cannot widen it past clone/fan.
   const rawCursor = params.get("cursor");
   const cursor = rawCursor ? decodeCursor(rawCursor) : null;
   if (rawCursor && !cursor) return jsonError("cursor must be a nextCursor from a previous page", 400);
@@ -92,5 +94,9 @@ export const GET = withAdmin(async (req) => {
     // Feed this back as ?cursor= to page further into the past. Null means
     // this page was not full, so the history ended.
     nextCursor: truncated && last ? encodeCursor(last) : null,
+    // Deprecated: kept so pagers written against ?before= keep working. It is
+    // the boundary created_at, so paging on it skips rows sharing that
+    // timestamp. Use nextCursor.
+    nextBefore: truncated && last && typeof last.created_at === "string" ? last.created_at : null,
   });
 });

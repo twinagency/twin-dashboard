@@ -53,12 +53,28 @@ test("G17: three messages on one timestamp page one at a time, none skipped or r
   assert.deepEqual(seen, [5, 6, 7, 8]);
 });
 
-test("G17: a cursor that is not one we minted is a 400, not a widened read", async () => {
+test("G17: a malformed cursor is a 400, not a widened read", async () => {
   const w = installWire({ tables: { clones: [fakeClone()], chat_history: [msg(1, "2026-11-01T10:00:00.000Z")] } });
   try {
     for (const bad of ["x", Buffer.from(JSON.stringify({ t: "2026-11-01T10:00:00Z", i: "1,id.gt.0" })).toString("base64url")]) {
       const res = await GET(adminRequest(`/api/admin/v1/chats?clone=${CLONE_ID}&cursor=${bad}`));
       assert.equal(res.status, 400);
     }
+  } finally { w.restore(); }
+});
+
+test("G17: a legacy pager on nextBefore still advances (deprecated field kept)", async () => {
+  const rows = [msg(1, "2026-11-01T10:00:00.000Z"), msg(2, "2026-11-01T10:01:00.000Z"), msg(3, "2026-11-01T10:02:00.000Z")];
+  const w = installWire({ tables: { clones: [fakeClone()], chat_history: rows } });
+  try {
+    const seen: number[] = [];
+    let q = "";
+    for (let i = 0; i < 5; i++) {
+      const body = await (await GET(adminRequest(`/api/admin/v1/chats?clone=${CLONE_ID}&fan=777&limit=2${q}`))).json();
+      seen.push(...body.messages.map((m: { id: number }) => m.id));
+      if (body.nextBefore == null) break;
+      q = `&before=${encodeURIComponent(body.nextBefore)}`;
+    }
+    assert.deepEqual(seen.sort((a, b) => a - b), [1, 2, 3]);
   } finally { w.restore(); }
 });
