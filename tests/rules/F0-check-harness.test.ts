@@ -3,7 +3,8 @@
  * and kills the step, as does leaving processes behind or an interrupt; steps run in the loopback-only network sandbox, /usr/bin's
  * (refused without, unless opted in to an inherited one the kernel confirms); steps get a scrubbed env (premerge.sh children:
  * F0-premerge-env.test.ts); a prod Supabase name in our env is refused; no KEY/TOKEN/SECRET/PASSWORD value reaches the evidence.
- * Drives the real scripts offline; sentinels are synthetic. Control: `exec true` is EXEC.
+ * Drives the real scripts offline; sentinels are synthetic. Control: `exec true` is EXEC. check.sh is macOS only (sandbox-exec): off
+ * macOS it refuses (INFRA), and only that and the env refusal, which runs first, are tested there; the rest skip.
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/F0-check-harness.test.ts
  */
 import assert from "node:assert/strict";
@@ -54,6 +55,8 @@ function start(args: string[], env: Record<string, string> = {}, { outer, cwd = 
   });
   return { child, done };
 }
+/** For a test that needs macOS: off it, check.sh refuses (INFRA) before running anything. */
+const MAC = { skip: process.platform !== "darwin" && "check.sh is a macOS dev-box harness (sandbox-exec)" };
 const run = (args: string[], env: Record<string, string> = {}, o: Opts = {}) => start(args, env, o).done;
 const verdict = (root: string): Verdict => JSON.parse(readFileSync(join(root, readdirSync(root)[0], "verdict.json"), "utf8"));
 const files = (d: string): string[] => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? files(join(d, f)) : [join(d, f)]));
@@ -71,7 +74,7 @@ function repoCopy(extra: Record<string, string> = {}) {
   return d;
 }
 
-test("control: exec true is EXEC", async () => {
+test("control: exec true is EXEC", MAC, async () => {
   const r = await run(["exec", "true"]);
   const v = verdict(r.root);
   assert.equal(r.code, 0, r.out);
@@ -80,7 +83,7 @@ test("control: exec true is EXEC", async () => {
   assert.match(r.out, /^EXEC exec @ \S+ pass=1 fail=0 skip=0 infra=0/m);
 });
 
-test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", async () => {
+test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", MAC, async () => {
   const r = await run(["exec", "false"]);
   assert.equal(r.code, 1, r.out);
   assert.equal(verdict(r.root).verdict, "RED");
@@ -94,7 +97,7 @@ test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown 
   }
 });
 
-test("a step that leaves a process behind fails and the process is killed", async () => {
+test("a step that leaves a process behind fails and the process is killed", MAC, async () => {
   const pidf = join(tmp("f0-pid-"), "pid");
   const r = await run(["exec", "sh", "-c", `sleep 300 & echo $! >${pidf}`]);
   assert.equal(r.code, 1, r.out);
@@ -102,7 +105,7 @@ test("a step that leaves a process behind fails and the process is killed", asyn
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "survivor still alive");
 });
 
-test("TERM to the harness kills the running step's process group", async () => {
+test("TERM to the harness kills the running step's process group", MAC, async () => {
   const pidf = join(tmp("f0-pid-"), "pid");
   const h = start(["exec", "sh", "-c", `echo $$ >${pidf}; exec sleep 300`]);
   assert.ok(await until(() => existsSync(pidf) && readFileSync(pidf, "utf8").trim() !== ""));
@@ -113,7 +116,7 @@ test("TERM to the harness kills the running step's process group", async () => {
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "step outlived the harness");
 });
 
-test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never a PATH shadow, and refuses (INFRA) without one", async () => {
+test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never a PATH shadow, and refuses (INFRA) without one", MAC, async () => {
   const shadow = tmp("f0-shadow-"); // drops the profile and runs the step bare
   writeFileSync(join(shadow, "sandbox-exec"), '#!/bin/sh\nshift 2\nexec "$@"\n');
   chmodSync(join(shadow, "sandbox-exec"), 0o755);
@@ -135,7 +138,7 @@ test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never
   }
 });
 
-test("steps get a scrubbed env: no inherited vars, dotenv pointed at /dev/null, a private TMPDIR", async () => {
+test("steps get a scrubbed env: no inherited vars, dotenv pointed at /dev/null, a private TMPDIR", MAC, async () => {
   const log = evidence((await run(["exec", "env"], { F0_LEAK: "sentinel-leak" })).root);
   assert.match(log, /^DOTENV_CONFIG_PATH=\/dev\/null$/m);
   assert.match(log, /^TMPDIR=.*twin-check/m);
@@ -156,7 +159,7 @@ test("a prod Supabase project or a non-loopback Supabase URL in our env is refus
   }
 });
 
-test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, or a JWT, is redacted; NEXT_PUBLIC_/PUBLISHABLE are not", async () => {
+test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, or a JWT, is redacted; NEXT_PUBLIC_/PUBLISHABLE are not", MAC, async () => {
   const dotenv = 'OPENROUTER_API_KEY="sentinel-or-key-1a2b"\nexport TELEGRAM_BOT_TOKEN=sentinel-bot-tok-3c4d\nNEXT_PUBLIC_X_KEY=sentinel-pub-5e6f\n';
   const ours = { DASHBOARD_PASSWORD: PW, DASHBOARD_SESSION_SECRET: "sentinel-sess-7a8b", STRIPE_PUBLISHABLE_KEY: "sentinel-pub-9c0d" };
   const said = `${PW} sentinel-sess-7a8b sentinel-pub-9c0d jwt eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZSJ9.c2lnbmF0dXJl`;
@@ -165,4 +168,15 @@ test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, o
   assert.equal(r.code, 0, r.out);
   for (const s of [PW, "sentinel-sess-7a8b", "sentinel-or-key-1a2b", "sentinel-bot-tok-3c4d", "eyJyb2xl"]) assert.ok(!log.includes(s), `${s}: ${log}`);
   for (const s of ["sentinel-pub-5e6f", "sentinel-pub-9c0d"]) assert.ok(log.includes(s), `${s}: ${log}`);
+});
+
+test("off macOS check.sh refuses (INFRA) after its env check and before any step: no sandbox-exec, no false GREEN", async () => {
+  const shim = tmp("f0-uname-"); // a Linux uname on macOS; on Linux the real one
+  writeFileSync(join(shim, "uname"), "#!/bin/sh\necho Linux\n");
+  chmodSync(join(shim, "uname"), 0o755);
+  const r = await run(["exec", "true"], { PATH: `${shim}:${process.env.PATH}` });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /infra preflight .*macOS only: steps need/);
+  assert.equal(verdict(r.root).verdict, "INFRA");
+  assert.ok(!r.out.includes("pass  exec"), r.out);
 });

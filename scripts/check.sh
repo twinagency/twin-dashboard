@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Test harness runner. Exit 0 EXEC, 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
 #   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+# macOS only: elsewhere INFRA after the env check, before anything runs.
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED).
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
 #   process group; leaving processes behind fails. Detached (setsid) descendants are unsupported: the sandbox limits the network
@@ -163,6 +164,7 @@ envguard() {
 # ---- modes ----
 echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s" | tee "$EV/run.log"
 envguard
+[ "$(uname -s)" = Darwin ] || infra preflight "macOS only: steps need /usr/bin/sandbox-exec"
 if [ $MODE = exec ]; then
   [ "$1" = -- ] && shift
   sandbox
