@@ -6,16 +6,23 @@ import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
+import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getAgencyOnboardingCreators } from "@/lib/agency-overview";
 import { signDashboardMedia } from "@/lib/media-signing-cache";
+import { isMoxy } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
 
+// Presentation-only roster for the Moxy Creators page. Existing agency
+// assignments, bot status, earnings and the creator switcher stay unchanged.
+const MOXY_VISIBLE_CREATOR_IDS = new Set([
+  "20ef9407-83f2-4351-8d3c-48cc0ed54e0b", // Riley Mae Lewis
+  "d2678dce-6a4e-4f1c-b54a-86057bba427c", // Kyla Yesenosky
+]);
+
 export default async function ClonesPage() {
-  // Which creators an agency sees is its assignment (supabaseAdmin is scoped
-  // to access.cloneIds for agency sessions), never an id list in code.
-  const [onboarding, { data, error }] = await Promise.all([
-    getAgencyOnboardingCreators(), supabaseAdmin
+  const [access, onboarding, { data, error }] = await Promise.all([
+    getDashboardAccess(), getAgencyOnboardingCreators(), supabaseAdmin
     .from("clones")
     .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake,intent_classic_promotions_enabled,intent_classic_promotions_enabled_at,intent_classic_promotion_version")
     .order("created_at", { ascending: true }),
@@ -29,7 +36,9 @@ export default async function ClonesPage() {
     );
   }
 
-  const clones = (data ?? []) as Partial<Clone>[];
+  const clones = ((data ?? []) as Partial<Clone>[]).filter(
+    (clone) => !isMoxy(access?.name) || (clone.id !== undefined && MOXY_VISIBLE_CREATOR_IDS.has(clone.id)),
+  );
   const cloneIds = clones.map((c) => c.id).filter(Boolean) as string[];
 
   const avatarUrlByCloneId = new Map<string, string>();
