@@ -5,19 +5,17 @@ import { guardDashboardAction } from "@/lib/agency-management";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
+import { setCredits as setCreditsChecked, deleteUser as deleteUserChecked } from "@/app/users/actions";
 
 // All actions operate on a single fan (user row) in the "Allie AI New" project.
 
+// Credits and the full wipe delegate to the canonical /users handlers (G36):
+// one validation (refuse, never coerce) and one row-keyed, fail-closed wipe.
 export async function setCredits(fd: FormData) {
   await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#setCredits", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
-  const credits = Math.max(0, Math.floor(Number(fd.get("credits")) || 0));
-  const { error } = await supabaseAdmin
-    .from("users")
-    .update({ message_credits: credits })
-    .eq("id", userId);
-  if (error) throw new Error(error.message);
+  await setCreditsChecked(fd);
   revalidatePath(`/clones/${cloneId}/fans/${userId}`);
 }
 
@@ -48,24 +46,9 @@ export async function toggleActive(fd: FormData) {
   revalidatePath(`/clones/${cloneId}/fans/${userId}`);
 }
 
-// Full wipe: the user row (cascades message_purchases + user_received_media via
-// FK on delete cascade) plus chat_history, which is keyed by (clone_id,
-// telegram_id) and has no FK so won't cascade on its own.
+// Full wipe: see deleteUser in app/users/actions.ts (history keyed by the row).
 export async function deleteUser(fd: FormData) {
   await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#deleteUser", [fd]);
-  const userId = String(fd.get("userId"));
-  const cloneId = String(fd.get("cloneId"));
-  const telegramId = String(fd.get("telegramId"));
-
-  await supabaseAdmin
-    .from("chat_history")
-    .delete()
-    .eq("clone_id", cloneId)
-    .eq("telegram_id", telegramId);
-
-  const { error } = await supabaseAdmin.from("users").delete().eq("id", userId);
-  if (error) throw new Error(error.message);
-
-  revalidatePath("/users");
+  await deleteUserChecked(fd);
   redirect("/users");
 }

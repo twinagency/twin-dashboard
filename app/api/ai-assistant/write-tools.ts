@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { resolveCloneRef } from "@/lib/clone-name-match";
+import { isFanCredits, MAX_FAN_CREDITS } from "@/lib/fan-credits";
 import type { OrToolDef } from "@/lib/openrouter";
 import {
   setStatus as setCloneStatusAction,
@@ -194,9 +195,9 @@ async function execRecompileClonePersona(args: Record<string, unknown>): Promise
 async function execSetFanCredits(args: Record<string, unknown>): Promise<unknown> {
   const userId = String(args.userId ?? "");
   // Exactly the number the approval card states (proposals.ts), or refused: never clamped to a different value.
-  const credits = typeof args.credits === "number" ? args.credits : NaN;
+  const credits = args.credits;
   if (!userId) return { error: "missing userId" };
-  if (!Number.isInteger(credits) || credits < 0) return { ok: false, error: "credits must be a whole number, 0 or more" };
+  if (!isFanCredits(credits)) return { ok: false, error: `credits must be a whole number from 0 to ${MAX_FAN_CREDITS}` };
   const { data: before } = await supabaseAdmin
     .from("users")
     .select("message_credits,clone_id")
@@ -231,8 +232,9 @@ async function execSetFanActive(args: Record<string, unknown>): Promise<unknown>
 
 async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown> {
   const userId = String(args.userId ?? "");
-  const blocked = args.blocked === true;
+  const blocked = args.blocked;
   if (!userId) return { error: "missing userId" };
+  if (typeof blocked !== "boolean") return { ok: false, error: "blocked must be true or false" };
   const { data } = await supabaseAdmin.from("users").select("clone_id").eq("id", userId).maybeSingle();
   if (!data) return noFan(userId);
   const label = await fanLabel(userId);
@@ -382,7 +384,7 @@ export const WRITE_TOOL_DEFS: OrToolDef[] = [
         type: "object",
         properties: {
           userId: { type: "string", description: "The fan's users.id UUID (look it up with queryTable first)." },
-          credits: { type: "integer", minimum: 0 },
+          credits: { type: "integer", minimum: 0, maximum: MAX_FAN_CREDITS },
         },
         required: ["userId", "credits"],
       },

@@ -46,7 +46,7 @@ export default async function FanDetailPage({
 
   if (cloneRes.error) throw new Error(cloneRes.error.message);
   if (userRes.error) throw new Error(userRes.error.message);
-  if (!cloneRes.data || !userRes.data) notFound();
+  if (!cloneRes.data || !userRes.data || userRes.data.clone_id !== id) notFound();
 
   const clone = cloneRes.data as { id: string; name: string };
   const u = userRes.data as any;
@@ -281,6 +281,9 @@ export default async function FanDetailPage({
                 name="credits"
                 type="number"
                 min={0}
+                max={1000000}
+                step={1}
+                required
                 defaultValue={u.message_credits}
                 className="w-32 rounded-md border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
               />
@@ -329,8 +332,6 @@ export default async function FanDetailPage({
             {/* Delete */}
             <MutationForm adminOnly action={deleteUser} className="ml-auto">
               <input type="hidden" name="userId" value={userId} />
-              <input type="hidden" name="cloneId" value={id} />
-              <input type="hidden" name="telegramId" value={u.telegram_id} />
               <ConfirmSubmit
                 message={`Permanently delete ${u.name ?? "this fan"}? This removes the user, their purchase records and entire chat history. This cannot be undone.`}
                 className="rounded-md border border-crit/30 bg-crit/10 px-3 py-2 text-sm font-medium text-crit hover:bg-crit/20 transition"

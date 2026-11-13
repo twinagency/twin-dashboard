@@ -226,6 +226,11 @@ const FAN_PAGE = 100;
 // used to do.
 const FAN_MAX = 1000;
 
+// Refill reads after the first slice. When the DB filter and fanMatches
+// disagree (the "_" wildcard did once), each read can add no visible fan; this
+// stops the loop walking the table. Leftovers stay behind "Load more".
+const MAX_REFILL_READS = FAN_MAX / FAN_PAGE;
+
 // The 24h Telegram messaging window, the only "active" that matters here.
 const REACHABLE_MS = 24 * 3600 * 1000;
 
@@ -281,7 +286,9 @@ export default async function FansPage({
       // so an all-digits search matches the id EXACTLY here where the old
       // in-memory version matched a substring of it. Names still match on
       // substring, which is what the box is actually used for.
-      const like = `*${qLower.replace(/[,()*]/g, "")}*`;
+      // `\ % _` are escaped so ILIKE matches them literally, as fanMatches
+      // does; unescaped, "_" matched every fan and the refill loop read the table.
+      const like = `*${qLower.replace(/[,()*]/g, "").replace(/[\\%_]/g, "\\$&")}*`;
       // Every identifier the operator might have in front of him, not just the
       // two names: he is as likely to be pasting a telegram id or a business
       // connection id out of a log as typing a name.
@@ -353,7 +360,7 @@ export default async function FansPage({
   // slice rather than hiding the remaining matching legacy conversations.
   let legacyHasMore = fetchedFans.length > showCount;
   let offset = fetchedFans.length;
-  while (matchingFans.length <= showCount && legacyHasMore) {
+  for (let refills = 0; matchingFans.length <= showCount && legacyHasMore && refills < MAX_REFILL_READS; refills++) {
     const next = await applyFilters(supabaseAdmin.from("users").select("*")).order(sortKey, { ascending: asc, nullsFirst: asc }).order("id", { ascending: true }).range(offset, offset + FAN_PAGE - 1);
     if (next.error) throw new Error("Could not load Telegram fans. Please retry.");
     const rows = next.data ?? [];
@@ -1614,6 +1621,9 @@ export default async function FansPage({
                     name="credits"
                     type="number"
                     min={0}
+                    max={1000000}
+                    step={1}
+                    required
                     defaultValue={selected.message_credits}
                     className="h-8 w-24 text-sm"
                   />
@@ -1710,7 +1720,8 @@ export default async function FansPage({
                     </button>
                   </MutationForm>
 
-                  <MutationForm action={setBlocked}>
+                  {/* A safety verdict (minor, US location) is lifted by an admin only; setBlocked refuses anyone else. */}
+                  <MutationForm adminOnly={selected.blocked && (!!selected.minor_flagged_at || selected.blocked_reason !== "operator")} action={setBlocked}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="blocked" value={selected.blocked ? "false" : "true"} />
                     <ConfirmSubmit
@@ -1763,8 +1774,6 @@ export default async function FansPage({
 
                   <MutationForm adminOnly action={deleteUser}>
                     <input type="hidden" name="userId" value={selected.id} />
-                    <input type="hidden" name="cloneId" value={selected.clone_id} />
-                    <input type="hidden" name="telegramId" value={selected.telegram_id} />
                     <ConfirmSubmit
                       message={`Permanently delete ${displayName(selected)}? This removes the user, their purchase records and entire chat history. This cannot be undone.`}
                       className="w-full rounded-md border border-crit/30 bg-crit/10 px-3 py-1.5 text-left text-xs font-medium text-crit transition hover:bg-crit/20"
