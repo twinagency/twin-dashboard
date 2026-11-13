@@ -38,7 +38,7 @@ export async function GET() {
   if (error) {
     return NextResponse.json(
       { supabase: { ok: false, ms: supabaseMs }, clones: [] },
-      { status: 200 },
+      { status: 503 },
     );
   }
 
@@ -50,15 +50,24 @@ export async function GET() {
     status: string;
   }[];
 
+  // Every active clone is expected to answer getMe; an active clone with no token is a broken bot and counts as down.
+  // Paused clones (incl. OnlyFans-only creators, created paused with bot_token "") are listed as skipped, so a retired
+  // token cannot hold the status code red forever.
+  const live = clones.filter((c) => c.status === "active");
+  const skipped = clones
+    .filter((c) => c.status !== "active")
+    .map((c) => ({ id: c.id, slug: c.slug, name: c.name, status: c.status, reason: "not active" }));
   const results = await Promise.all(
-    clones.map(async (c) => {
-      const tg = await timed(() => pingTelegram(c.bot_token));
+    live.map(async (c) => {
+      const tg = c.bot_token ? await timed(() => pingTelegram(c.bot_token)) : { ok: false, ms: 0 };
       return { id: c.id, slug: c.slug, name: c.name, status: c.status, telegram: tg };
     }),
   );
 
+  // A status-code monitor must see a dead active bot as unhealthy, not just the body.
   return NextResponse.json({
     supabase: { ok: true, ms: supabaseMs },
     clones: results,
-  });
+    skipped,
+  }, { status: results.every((r) => r.telegram.ok) ? 200 : 503 });
 }
