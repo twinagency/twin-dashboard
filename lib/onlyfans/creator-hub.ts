@@ -61,5 +61,7 @@ export function aiArea(account: OfAccount): HubArea | null {
   const runtime = account.runtime;
   if (!runtime) return null;
   const sender = runtime.sender.reason ? `. ${runtime.sender.reason}` : "";
-  return { state: (runtime.enabled ? runtime.deliveryEnabled ? "On, outgoing replies enabled" : "On, outgoing replies off" : "Off") + sender, checkedAt: runtime.sender.observedAt };
+  // Only a running sender sends; any other state means replies are not going out (ai-visibility.ts says the same per conversation).
+  const on = !runtime.deliveryEnabled ? "On, outgoing replies off" : runtime.sender.state === "running" ? "On, outgoing replies enabled" : "On, sender not running, replies are not going out";
+  return { state: (runtime.enabled ? on : "Off") + sender, checkedAt: runtime.sender.observedAt };
 }
