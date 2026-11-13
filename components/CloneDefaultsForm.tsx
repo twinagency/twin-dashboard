@@ -59,7 +59,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         }
       }}
       onSubmit={(event) => {
-        if (!window.confirm("Save this operational template and apply it now to every creator following the fleet default?")) {
+        if (!window.confirm("Save this operational template and apply the fields you changed to every creator following the fleet default?")) {
           event.preventDefault();
         }
       }}
@@ -140,7 +140,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           min={0}
           step={1}
           defaultValue={defaults.tip_credits_per_100_stars ?? 0}
-          hint="What a tip gives back in message credits, for new creators. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down, and set per creator on its own page."
+          hint="What a tip gives back in message credits. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down. Changing it here updates every creator following the fleet default. Saving other fields leaves each creator's own rate alone."
         />
       </div>
 
@@ -380,7 +380,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
               label={m.label}
               name={m.name}
               models={models}
-              defaultValue={(defaults[m.name as keyof Clone] as string) || m.def}
+              defaultValue={defaults[m.name as keyof Clone] as string}
               effectiveFor={m.name === "vision_model" ? describeVisionAnalysisModels : undefined}
             />
           ))}
