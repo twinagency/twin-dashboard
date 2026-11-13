@@ -1,9 +1,9 @@
-import { validManualMedia, type ManualMedia } from "@/lib/onlyfans/manual-media";
+import type { ManualMedia } from "@/lib/onlyfans/manual-media";
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredControlBackend } from "@/lib/onlyfans/controls-backend";
-import { CONTROL_SCHEMA, isControlAction } from "@/lib/onlyfans/controls";
+import { CONTROL_SCHEMA, controlFieldsProblem, isControlAction } from "@/lib/onlyfans/controls";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
 
@@ -40,13 +40,8 @@ export async function POST(request: NextRequest, context: {
     const resolution = body.action === "resolve_delivery_evidence";
     const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : []), ...(Object.hasOwn(body, "media") ? ["media"] : [])].sort().join(",");
     if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : resolution ? "action,attemptId,decision,expectedRevision,providerMessageId,requestKey" : "action,expectedRevision")) throw new Error();
-    if (resolution && (body.decision !== "delivered" || typeof body.attemptId !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(body.attemptId) ||
-        !Number.isSafeInteger(body.providerMessageId) || (body.providerMessageId as number) <= 0 || typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) throw new Error();
-    if (manual && (typeof body.body !== "string" || (!body.body.trim() && !Object.hasOwn(body, "media")) || new TextEncoder().encode(body.body).length > 4000 ||
-        typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey))) throw new Error();
-    if (manual && Object.hasOwn(body, "media") && (!validManualMedia(body.media) || Object.hasOwn(body, "catalogItemId"))) throw new Error();
-    if (manual && Object.hasOwn(body, "catalogItemId") && body.catalogItemId !== null &&
-        (!Number.isInteger(body.catalogItemId) || (body.catalogItemId as number) <= 0 || (body.catalogItemId as number) >= 2 ** 31)) throw new Error();
+    if (controlFieldsProblem(body.action, body) !== null || (resolution && (typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) ||
+        (manual && (typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey)))) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That conversation control request is invalid."); }
   const backend = configuredControlBackend(ctx.fetch);
   if (!backend) return refuse(503, "Conversation controls are not configured.");

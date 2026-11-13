@@ -1,5 +1,4 @@
 import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
-import { validManualMedia } from "../onlyfans/manual-media";
 // The live frontend read adapter.
 //
 // It speaks to the dashboard's read and scoped control handlers. Each handler
@@ -22,8 +21,8 @@ import { validManualMedia } from "../onlyfans/manual-media";
 // cannot reach its backend.
 
 import type { OnlyFansDataSource } from "./data-source";
-import { intentRequestKey } from "./actions";
-import { controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
+import { commandPayloadProblem, intentRequestKey } from "./actions";
+import { controlActionFor, controlFields, controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
@@ -144,27 +143,17 @@ export function createFetchOnlyFansTransport(
         recordedRevision?: number, intentId?: string): RecordedControlResult => ({ simulated: false,
         applied: outcome === "recorded", accepted: outcome === "recorded", outcome,
         request: command, note, recordedRevision, intentId });
-      const manualBody = command.command === "send_manual_message" && command.payload.kind === "manual_message" ? command.payload.body : null;
-      const manual = manualBody !== null;
-      const resolution = command.command === "resolve_delivery_evidence" && command.payload.kind === "delivery_resolution";
-      const action = manual ? "manual_message" : command.command;
-      if (resolution && (command.payload.kind !== "delivery_resolution" || command.payload.decision !== "delivered" || !/^[1-9][0-9]{0,15}$/.test(command.payload.providerMessageId ?? ""))) return result("refused", "An exact provider message ID is required for reconciliation.");
-      const attachments = command.payload.kind === "manual_message" ? command.payload.media : undefined;
-      if (manual && ((!manualBody!.trim() && !attachments) || new TextEncoder().encode(manualBody!).length > 4000 ||
-          (attachments !== undefined && (!validManualMedia(attachments) || (command.payload.kind === "manual_message" && command.payload.catalogItemId !== undefined))))) {
-        return result("refused", "Choose media or write a message. Check the attachment price and previews before sending.");
-      }
-      if (!manual && !resolution && (!isControlAction(action) || command.payload.kind !== "none")) {
-        return result("refused", "That action is not configured for this account.");
-      }
+      const manual = command.command === "send_manual_message", resolution = command.command === "resolve_delivery_evidence";
+      const action = controlActionFor(command.command);
+      if (!isControlAction(action)) return result("refused", "That action is not configured for this account.");
+      const problem = commandPayloadProblem(command.command, command.payload);
+      if (problem) return result("refused", problem);
       try {
         const response = await call(`/api/onlyfans-controls/accounts/${encodeURIComponent(command.accountId)}/conversations/${encodeURIComponent(command.conversationId)}`, {
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, expectedRevision: command.expectedRevision,
-            ...(resolution && command.payload.kind === "delivery_resolution" ? { attemptId: command.payload.attemptId, decision: command.payload.decision, providerMessageId: Number(command.payload.providerMessageId), requestKey: intentRequestKey(command.idempotencyKey) } : {}),
-            ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
-              ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}), ...(command.payload.media ? { media: command.payload.media } : {}) } : {}) }),
+            ...controlFields(command.payload), ...(resolution ? { requestKey: intentRequestKey(command.idempotencyKey) } : manual ? { requestKey: command.idempotencyKey } : {}) }),
         });
         // The route labels its own refusals "refused". A bare or non-JSON 503 (a proxy) may follow a forwarded write, so it stays
         // unconfirmed and Retry keeps the requestKey; so does any body the backend labelled "unconfirmed".

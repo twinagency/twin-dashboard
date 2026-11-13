@@ -7,7 +7,7 @@ import type { ConversationSummary } from "../lib/onlyfans-preview/types";
 async function main() {
   const account = accounts[0], viewer = operatorViewer();
   const detail = Object.values(conversationDetails).find(d => d.accountId === account.accountId)!;
-  const base: ConversationSummary = { ...detail.summary, revision: 0, automationMode: "paused", takeoverState: "none", delivery: "not_attempted" as ConversationSummary["delivery"] };
+  const base: ConversationSummary = { ...detail.summary, revision: 0, automationMode: "paused", takeoverState: "none", delivery: "none" };
   const rows = [base, { ...base, conversationId: "manual", revision: 3 }, { ...base, conversationId: "excluded", automationMode: "no_contact" as const },
     { ...base, conversationId: "takeover", takeoverState: "effective" as const }, { ...base, conversationId: "on", automationMode: "automated" as const },
     { ...base, conversationId: "later" }];

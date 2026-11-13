@@ -1,5 +1,6 @@
 /** Shared control contract. Browser code contains no service credentials. */
-import type { CommandRequest } from "../onlyfans-preview/types";
+import type { CommandPayload, CommandRequest, PreviewCommand } from "../onlyfans-preview/types";
+import { validManualMedia } from "./manual-media";
 
 export const CONTROL_SCHEMA = "of-controls.v1";
 export const CONTROL_HEADER = "X-OnlyFans-Control-Version";
@@ -99,4 +100,34 @@ export function controlRefusalNote(status: number, value: unknown): string {
   if (status === 413) return "This request is too large. Shorten the reply and try again.";
   if (status === 503) return "Conversation controls are unavailable. The server connection or configuration needs attention.";
   return "The change was not accepted. Refresh the conversation before trying again.";
+}
+
+/** A payload's fields as the controls route receives them. A provider id that is not plain decimal is sent as null, never coerced. */
+export function controlFields(payload: CommandPayload): Record<string, unknown> {
+  if (payload.kind === "delivery_resolution") return { attemptId: payload.attemptId, decision: payload.decision,
+    providerMessageId: /^[1-9][0-9]*$/.test(payload.providerMessageId ?? "") ? Number(payload.providerMessageId) : null };
+  return payload.kind === "manual_message" ? { body: payload.body, ...(payload.catalogItemId !== undefined ? { catalogItemId: payload.catalogItemId } : {}),
+    ...(payload.media ? { media: payload.media } : {}) } : {};
+}
+
+/** The controls route's action for a preview command; the one rename lives here. */
+export const controlActionFor = (command: PreviewCommand): ControlAction => command === "send_manual_message" ? "manual_message" : command;
+
+/** The longest manual message body in UTF-8 bytes, the route's own limit. */
+export const MAX_MANUAL_MESSAGE_BYTES = 4000;
+
+/** Why the controls route refuses those fields, or null when it accepts them. The route and commandPayloadProblem both call it. */
+export function controlFieldsProblem(action: ControlAction, f: Record<string, unknown>): string | null {
+  if (action === "resolve_delivery_evidence") {
+    if (f.decision !== "delivered") return "Only a delivery the provider evidence confirms can be reconciled.";
+    if (typeof f.attemptId !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(f.attemptId)) return "A delivery resolution needs the attempt it resolves.";
+    return Number.isSafeInteger(f.providerMessageId) && (f.providerMessageId as number) > 0 ? null : "An exact provider message ID is required for reconciliation.";
+  }
+  if (action !== "manual_message") return null;
+  const media = Object.hasOwn(f, "media"), item = f.catalogItemId;
+  if (typeof f.body !== "string" || (!f.body.trim() && !media)) return "A manual message needs some text or media.";
+  if (new TextEncoder().encode(f.body).length > MAX_MANUAL_MESSAGE_BYTES) return `That message is longer than the ${MAX_MANUAL_MESSAGE_BYTES} byte limit.`;
+  if (media && (!validManualMedia(f.media) || Object.hasOwn(f, "catalogItemId"))) return "Choose valid vault files and a message price.";
+  return item === undefined || item === null || (Number.isInteger(item) && (item as number) > 0 && (item as number) < 2 ** 31)
+    ? null : "Select a saved content item from this account.";
 }
