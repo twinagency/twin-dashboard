@@ -15,33 +15,77 @@ import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newComman
 
 export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: string };
 
-/** Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent. */
-export function createCommandKeyStore(random: () => string = newCommandKey) {
-  const keys = new Map<string, { key: string; held: boolean }>();
+/**
+ * Stored entries are named by this hash instead of the intent, which can hold a rejection reason, edited text or evidence, so that
+ * text is not written to storage verbatim. A 64-bit non-cryptographic hash: it does not hide a short or guessable intent.
+ */
+function intentHash(intent: string): string {
+  let a = 0x811c9dc5, b = 0x1b873593;
+  for (let i = 0; i < intent.length; i++) { const c = intent.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = Math.imul(b ^ c, 0x5bd1e995); }
+  return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
+}
+const KEEP_MS = 24 * 3600_000;
+type Entry = { key: string; held: boolean; at: number };
+/** Pending keys a `persistAs` store saved in this tab's sessionStorage. Anything malformed or older than a day is dropped. */
+function storedKeys(name: string | undefined, now: number): [string, Entry][] {
+  try {
+    const value: unknown = name ? JSON.parse(globalThis.sessionStorage?.getItem(name) ?? "{}") : {};
+    if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+    return Object.entries(value).flatMap(([hash, item]): [string, Entry][] => Array.isArray(item) && typeof item[0] === "string" && /^[a-f0-9]{64}$/.test(item[0])
+      && typeof item[1] === "number" && now - item[1] < KEEP_MS && /^[a-f0-9]{16}$/.test(hash) ? [[hash, { key: item[0], held: true, at: item[1] }]] : []);
+  } catch { return []; }
+}
+
+/**
+ * Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent.
+ * With `persistAs` (a name that carries the operator and account), every pending key is mirrored to this tab's sessionStorage
+ * under the intent's hash, so a reload by the same operator keeps it. Entries expire after a day, in memory and storage alike.
+ * There is no count cap: every entry is either an attempt in flight or a held key (its attempt was unconfirmed), and dropping
+ * either would let a retry act twice. Age alone bounds the store.
+ */
+export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now) {
+  // A key read back from an earlier page load had an unknown outcome there, so it is held.
+  const keys = new Map(storedKeys(persistAs, now()));
+  const save = () => {
+    const t = now();
+    for (const [hash, entry] of keys) if (t - entry.at >= KEEP_MS) keys.delete(hash);
+    if (persistAs) try {
+      if (keys.size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([hash, entry]) => [hash, [entry.key, entry.at]]))));
+      else globalThis.sessionStorage.removeItem(persistAs);
+    } catch { /* No storage: the in-memory key still covers this page load. */ }
+  };
   return {
-    keyFor(intent: string): string { let entry = keys.get(intent); if (!entry) keys.set(intent, entry = { key: random(), held: false }); return entry.key; },
+    keyFor(intent: string): string {
+      const hash = intentHash(intent);
+      let entry = keys.get(hash);
+      if (!entry) { keys.set(hash, entry = { key: random(), held: false, at: now() }); save(); }
+      return entry.key;
+    },
     /**
      * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
      * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
      */
     settle(intent: string, result: PlanCCommandResult) {
-      const entry = keys.get(intent);
-      if (result.ok) keys.delete(intent);
+      const hash = intentHash(intent), entry = keys.get(hash);
+      if (result.ok) keys.delete(hash);
       else if (result.outcome === "unconfirmed") { if (entry) entry.held = true; }
-      else if (!entry?.held) keys.delete(intent);
+      else if (!entry?.held) keys.delete(hash);
+      save();
     },
     size: () => keys.size,
   };
 }
 
 /**
- * One key store per account for the page's lifetime, so a remounted console (navigation, a new client) still holds the key of an
- * unconfirmed attempt. A full page reload still loses it; the backend's commandKey replay is the only guard across reloads.
+ * One key store per operator and account, so a remounted console (navigation, a new client) still holds the key of an unconfirmed
+ * attempt. It is also persisted in sessionStorage under the operator scope (lib/onlyfans/plan-c-route.ts planCKeyScope), so a
+ * reload in the same tab by the same operator does too; another operator signing in on that tab never sees it.
  */
 const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
-function accountKeyStore(accountId: string) {
-  let store = accountStores.get(accountId);
-  if (!store) accountStores.set(accountId, store = createCommandKeyStore());
+function accountKeyStore(accountId: string, operatorScope: string) {
+  const name = `plan-c-keys:${operatorScope}:${accountId}`;
+  let store = accountStores.get(name);
+  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, name));
   return store;
 }
 
@@ -49,9 +93,11 @@ const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURI
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });
 const invalid = (error: string): PlanCCommandResult => ({ ok: false, outcome: "refused", reload: false, error });
 
-export function createPlanCClient(options: { accountId: string; fetchImpl?: typeof fetch; keys?: ReturnType<typeof createCommandKeyStore> }) {
+/** Either the operator scope (the shared, persisted store) or an injected store; never neither. */
+export function createPlanCClient(options: { accountId: string; fetchImpl?: typeof fetch }
+  & ({ operatorScope: string; keys?: undefined } | { keys: ReturnType<typeof createCommandKeyStore>; operatorScope?: undefined })) {
   const { accountId } = options, fetchImpl = options.fetchImpl ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
-  const keys = options.keys ?? accountKeyStore(accountId);
+  const keys = options.keys ?? accountKeyStore(accountId, options.operatorScope);
   const init = { credentials: "same-origin", cache: "no-store", redirect: "error" } as const;
 
   async function read<T>(path: string, parse: (value: unknown) => T | null, what: string): Promise<PlanCReadOutcome<T>> {
@@ -108,7 +154,7 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
       send(conversationPath(conversationId, action), `conversation:${action}:${conversationId}:r${expectedRevision}`, commandKey => ({ expectedRevision, commandKey })),
     reconcile: async (item: PlanCUnresolvedItem, evidence: string) => {
       const problem = validateEvidenceRef(evidence); if (problem) return invalid(problem);
-      return send(`/unresolved/${encodeURIComponent(item.id)}/reconcile`, `reconcile:${item.id}:${evidence.trim()}`, commandKey => ({ commandKey, evidence: evidence.trim() }));
+      return send(`/unresolved/${encodeURIComponent(item.id)}/reconcile`, JSON.stringify(["reconcile", item.id, evidence.trim()]), commandKey => ({ commandKey, evidence: evidence.trim() }));
     },
   };
 }

@@ -37,7 +37,7 @@ async function render(element: React.ReactElement) {
 async function mount(options: Parameters<typeof createPlanCMock>[0] = {}, props: { canAct?: boolean; authorizationMode?: "supervised" | "autonomous" } = {}) {
   const mock = createPlanCMock(options), proxy = createPlanCProxy(mock);
   const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
-  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct={props.canAct ?? true} authorizationMode={props.authorizationMode} fetchImpl={proxy.fetch} />);
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} operatorScope="test-operator" canAct={props.canAct ?? true} authorizationMode={props.authorizationMode} fetchImpl={proxy.fetch} />);
   return { mock, proxy };
 }
 const draftEl = (index = 0) => all("[data-plan-c-draft]")[index];
@@ -100,7 +100,7 @@ test("confirmation waits until the refreshed lists arrive", async () => {
     if (blockReads && (init?.method ?? "GET") === "GET") await barrier;
     return proxy.fetch(input, init);
   }) as typeof fetch;
-  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct fetchImpl={delayed} />);
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} operatorScope="test-operator" canAct fetchImpl={delayed} />);
   blockReads = true;
   try {
     await click(within(draftEl(), "[data-plan-c-approve]"));
@@ -269,7 +269,7 @@ test("a backend that cannot be read shows an error with Retry and offers no cont
   const mock = createPlanCMock({ drafts: [seedDraft()] }); mock.faults.status = 503;
   const proxy = createPlanCProxy(mock);
   const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
-  await render(<PlanCConsole accountId={MOCK_ACCOUNT} canAct fetchImpl={proxy.fetch} />);
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} operatorScope="test-operator" canAct fetchImpl={proxy.fetch} />);
   assert.match(q("[data-plan-c-drafts-error]")?.textContent ?? "", /unavailable/); assert.match(q("[data-plan-c-unresolved-error]")?.textContent ?? "", /unavailable/);
   assert.equal(all("[data-plan-c-approve]").length, 0);
   assert.equal(all("[data-plan-c-draft]").length, 0, "an unreadable list is not shown as an empty queue");

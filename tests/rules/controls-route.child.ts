@@ -4,7 +4,7 @@
  * Drives the REAL route handlers under app/api/onlyfans-controls/accounts/[accountId]/ (requests/[requestId], the five Plan C routes)
  * and app/api/onlyfans/accounts/[accountId]/ (engine-status, engine/catalogue, engine/unresolved) over the fake wire and identity
  * setup in tests/rules/controls-wire.ts (see its header for exactly what is replaced).
- * Usage: controls-route.child.ts <requests | agency | plan-c-no-owner | upstream | validation>. Prints one JSON line. Synthetic values only.
+ * Usage: controls-route.child.ts <requests | agency | plan-c-no-owner | upstream | upload-actor | validation>. Prints one JSON line. Synthetic values only.
  */
 import { NextRequest } from "next/server";
 import type { AgencyIdentity } from "../../lib/agency-identity";
@@ -126,6 +126,7 @@ runChild<RouteScenarios>({
     "session A": await sendRequest(null, SESSION_A, CHAT_NOTE),
     "session A again": await sendRequest(null, SESSION_A, CHAT_NOTE),
     "session B": await sendRequest(null, SESSION_B, CHAT_NOTE),
+    "owner lookup 429": await (async () => { state.owner = "429"; try { return await sendRequest(null, SESSION_A, CHAT_NOTE); } finally { state.owner = "uuid"; } })(),
     "agency user 1": await sendRequest(CHAT_AGENCY, undefined, CHAT_NOTE),
     "agency user 2": await sendRequest(CHAT_AGENCY_2, undefined, CHAT_NOTE),
     "foreign origin": await sendRequest(null, SESSION_A, VALID_COMMAND, { ...SAME_ORIGIN, origin: "https://elsewhere.fixture.invalid" }),
@@ -157,6 +158,16 @@ runChild<RouteScenarios>({
       "note untrimmed": await sendRequest(null, SESSION_A, { ...VALID_COMMAND, note: " checked the vault" }),
       "note blank": await sendRequest(null, SESSION_A, { ...VALID_COMMAND, note: "" }),
     };
+  },
+  "upload-actor": async () => {
+    process.env.ONLYFANS_CONTENT_TOKEN = "synthetic-content-token";
+    const sync = await import("../../app/api/onlyfans-content/accounts/[accountId]/sync/[[...path]]/route");
+    const before = posts.length;
+    const request = new NextRequest(`${DASH}/api/onlyfans-content/accounts/of-a/sync/settings`,
+      { method: "POST", headers: SAME_ORIGIN, body: JSON.stringify({ requestId: REQUEST_ID, enabled: true, expectedRevision: 3 }) });
+    await acting(null, SESSION_A, () => sync.POST(request, { params: Promise.resolve({ accountId: "of-a", path: ["settings"] }) }));
+    const sent = posts.slice(before);
+    return { posts: sent.length, actor: typeof sent[0]?.body.actor === "string" ? sent[0].body.actor : null };
   },
   upstream: async () => ({ 500: await upstreamAt(500), 401: await upstreamAt(401), 403: await upstreamAt(403), 404: await upstreamAt(404), 409: await upstreamAt(409) }),
 });

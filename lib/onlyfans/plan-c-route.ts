@@ -7,6 +7,7 @@
 import { PLAN_C_MAX_BODY_BYTES, PLAN_C_SCHEMA, isPlanCCommandKey, isPlanCConversationAction, isPlanCDraftAction, isPlanCId, isPlanCRequestId,
   planCEvidenceRef, validateEditTexts, validateEvidenceRef, validateRejectReason, type PlanCDraftAction } from "./plan-c";
 import type { PlanCBackend } from "./plan-c-backend";
+import { createHash } from "node:crypto";
 import { isOperatorActor } from "./upload-permission";
 
 export type PlanCHttp = { status: number; body: Record<string, unknown> };
@@ -25,6 +26,9 @@ export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agenc
     return { ok: false, status: 403, error: "Plan C approvals are available to the operator only." };
   return { ok: true, actor: ctx.pilotActor };
 }
+
+/** Names the operator's saved Plan C command keys in the browser tab. A hash, so the backend actor never reaches the browser. */
+export const planCKeyScope = (actor: string) => createHash("sha256").update(`plan-c-keys:${actor}`).digest("hex").slice(0, 16);
 
 export const planCReadDrafts = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
   const result = await backend.drafts(accountId, actor);
