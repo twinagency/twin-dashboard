@@ -14,16 +14,17 @@ import { WRITE_TOOL_NAMES } from "./write-tools";
 //   1. The model calls a write tool.
 //   2. dispatchTool (route.ts) does NOT execute it. It records a Proposal and
 //      hands the model back a result saying "proposed, not applied".
-//   3. The proposal is streamed to the browser as an approval card.
+//   3. The proposal is stored on the turn's ai_messages row, then streamed to
+//      the browser as an approval card.
 //   4. Nothing happens until the operator presses Approve, which POSTs the
-//      proposal back to /api/ai-assistant/approve, and THAT is the only code
+//      proposal id back to /api/ai-assistant/approve, and THAT is the only code
 //      path in the assistant that can call executeWriteTool.
 //
 // The model is therefore structurally incapable of changing anything on its
 // own, no matter what it decides the prompt means.
 
 export type Proposal = {
-  /** Stable within one turn, so the client can key cards and mark them resolved. */
+  /** randomUUID: /approve finds exactly this card by it (proposals before 2026-11-13 have per-turn ids "p1", "p2"). */
   id: string;
   tool: string;
   args: Record<string, unknown>;

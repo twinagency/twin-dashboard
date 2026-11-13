@@ -8,7 +8,7 @@
  * Red: the proposal was persisted somewhere. Fix shapes accepted: ANY POST/PATCH to ANY table whose body holds the
  * tool name and its args (setCloneStatus, the clone id, "paused"), OR the reload through the real conversation
  * route shows it. Persisting in `finally`, a separate proposals table, or a text-less assistant row all pass.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-no-text-proposal.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-no-text-proposal.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-no-text-proposal.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1;
  * OpenRouter faked at the fetch boundary (scripted SSE: one setCloneStatus tool call, then an empty "stop" turn).
  */

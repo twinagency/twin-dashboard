@@ -12,7 +12,7 @@
  * Every plausible identifier is sent (conversationId, messageId, proposalId, id).
  * TEST-CHANGE NEEDED IF: the fix stores proposals somewhere other than ai_messages.meta.proposals (e.g. a new
  * table): seed that table in beforeEach instead; the store already serves any table name.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-approve-replay.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-approve-replay.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-approve-replay.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
 import { CLONE, OTHER_CLONE, inWorkStore, jsonRequest, startFakePostgrest, type FakePostgrest } from "./G18-harness";

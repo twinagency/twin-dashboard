@@ -8,7 +8,7 @@
  * count=exact). In the red cases the store has no users row, so the PATCH matches nothing, as in Postgres.
  * Fix shapes accepted: refuse on the pre-read, or check the PATCH's row count (representation or count); either
  * keeps the control green.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-fan-missing.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-fan-missing.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-fan-missing.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
 import { CLONE, FAN_ID, inWorkStore, startFakePostgrest, type FakePostgrest } from "./G18-harness";

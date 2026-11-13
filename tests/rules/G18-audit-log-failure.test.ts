@@ -10,7 +10,7 @@
  * system-log writer is fine as long as the failure reaches the caller.
  * The route call sends a stored proposal with every plausible identifier (as in the F1 test), so an F1 fix that
  * binds approve to stored proposals keeps the control green; the store is reseeded per call.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-audit-log-failure.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-audit-log-failure.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-audit-log-failure.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
 import { CLONE, inWorkStore, jsonRequest, startFakePostgrest, type FakePostgrest } from "./G18-harness";

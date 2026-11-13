@@ -80,7 +80,31 @@ async function logWrite(opts: { tool: string; summary: string; cloneId?: string 
   return error ? { ok: true, summary: opts.summary, auditLogged: false } : { ok: true, summary: opts.summary };
 }
 
+/** Best effort, never throws: a write that threw may or may not have landed, so the audit trail says so. */
+export async function logUnknownWrite(tool: string, args: Record<string, unknown>, summary: string): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin.from("system_logs").insert({
+      level: "warn",
+      source: "ai-assistant-write",
+      clone_id: null,
+      message: `Outcome unknown, the write threw: ${summary}`,
+      detail: { tool, args, outcome: "unknown" },
+    });
+    if (error) console.error("[ai-assistant-write] outcome-unknown log insert failed", error.message);
+  } catch (e) {
+    console.error("[ai-assistant-write] outcome-unknown log insert failed", e);
+  }
+}
+
 const noFan = (userId: string) => ({ ok: false, error: `no fan found with id "${userId}"` });
+
+// The fan actions update by id and report no row count, so a fan deleted between the pre-read and the update would
+// read as a success. Re-read after: a vanished fan is ok:false and no success audit row. A read error throws.
+async function fanGone(userId: string): Promise<boolean> {
+  const { data, error } = await supabaseAdmin.from("users").select("id").eq("id", userId).maybeSingle();
+  if (error) throw new Error(error.message);
+  return !data;
+}
 
 const FEATURE_LABELS: Record<CloneToggleField, string> = {
   photos_enabled: "Photos",
@@ -190,6 +214,7 @@ async function execSetFanCredits(args: Record<string, unknown>): Promise<unknown
   fd.set("userId", userId);
   fd.set("credits", String(credits));
   await setFanCreditsAction(fd);
+  if (await fanGone(userId)) return noFan(userId);
   const summary = `Set ${label}'s message credits to ${credits} (was ${before?.message_credits ?? "unknown"}).`;
   return logWrite({ tool: "setFanCredits", summary, cloneId: before?.clone_id ?? null, args });
 }
@@ -205,6 +230,7 @@ async function execSetFanActive(args: Record<string, unknown>): Promise<unknown>
   fd.set("userId", userId);
   fd.set("active", String(active));
   await toggleFanActiveAction(fd);
+  if (await fanGone(userId)) return noFan(userId);
   const summary = `${active ? "Reactivated" : "Deactivated"} fan ${label}.`;
   return logWrite({ tool: "setFanActive", summary, cloneId: data?.clone_id ?? null, args });
 }
@@ -220,6 +246,7 @@ async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown
   fd.set("userId", userId);
   fd.set("blocked", String(blocked));
   await setFanBlockedAction(fd);
+  if (await fanGone(userId)) return noFan(userId);
   const summary = blocked
     ? `Blocked fan ${label}, she will no longer reply to them.`
     : `Unblocked fan ${label}, she will reply to them again.`;
@@ -235,6 +262,7 @@ async function execResetFanCounters(args: Record<string, unknown>): Promise<unkn
   const fd = new FormData();
   fd.set("userId", userId);
   await resetFanCountersAction(fd);
+  if (await fanGone(userId)) return noFan(userId);
   const summary = `Reset ${label}'s lifetime usage counters (messages sent + purchased). Credit balance untouched.`;
   return logWrite({ tool: "resetFanCounters", summary, cloneId: data?.clone_id ?? null, args });
 }

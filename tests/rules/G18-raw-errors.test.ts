@@ -3,10 +3,11 @@
  * returns `e.message` of a failed write verbatim, so a raw PostgREST error (table/constraint/detail text) reaches the browser.
  * Control: a write that succeeds returns 200 ok. Red: a clones PATCH that fails with a PostgREST 500 answers with a body that
  * does not contain the raw database message. Any status is accepted; only the leaked text is asserted.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W7-P-picks-W4-ai-raw-errors.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-raw-errors.test.ts
  * DECLARED BYPASS: the W4 ai harness (PostgREST faked on 127.0.0.1, Next workAsyncStorage fake store).
  * FIXTURE CHANGE (G18, copied from tests/known-red/W7-P-picks-W4-ai-raw-errors.test.ts): the G18 replay fix (W4 F1) makes
  * approve run only a stored proposal, so the approval now names a conversation holding one (assertions unchanged).
+ * FIXTURE CHANGE (G18 rwl R1, F3): approve now names the card by proposalId, so the request carries proposalId "p1".
  */
 import { CLONE, inWorkStore, jsonRequest, startFakePostgrest, type FakePostgrest } from "./G18-harness";
 import assert from "node:assert/strict";
@@ -28,7 +29,7 @@ beforeEach(() => {
 async function approve() {
   const { POST } = await import("../../app/api/ai-assistant/approve/route");
   return inWorkStore(async () => {
-    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, tool: "setCloneStatus", args: ARGS }));
+    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, proposalId: "p1", tool: "setCloneStatus", args: ARGS }));
     return { status: res.status, text: await res.text() };
   });
 }

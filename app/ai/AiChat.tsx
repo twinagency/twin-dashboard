@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Check, Plus, Trash2, CheckCircle2, Loader2, MessageSquare } from "lucide-react";
+import { OUTCOME_UNKNOWN, storedCardState, type ClaimState } from "@/app/api/ai-assistant/claim-state";
 
 type WriteEvent = { summary: string };
 // Writes stopped auto-executing on 2026-07-31 (see api/ai-assistant/proposals.ts).
@@ -12,7 +13,8 @@ type WriteEvent = { summary: string };
 // them a proposal arrives here, renders nothing, and the operator is told a
 // change is waiting for a tap that does not exist anywhere on their screen.
 type Proposal = { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean };
-type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed"; error?: string };
+// unknown: /approve claimed it and the outcome is not known (or it is in flight, or applied elsewhere). Not approvable.
+type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed" | "unknown"; error?: string };
 type ChatTurn = {
   role: "user" | "assistant";
   content: string;
@@ -90,14 +92,17 @@ export default function AiChat() {
       if (!res.ok) throw new Error(j?.error ?? "failed to load conversation");
       setTurns(
         (j.messages ?? []).map(
-          (m: { role: "user" | "assistant"; content: string; meta: { writes?: WriteEvent[]; proposals?: Proposal[] } | null }) => ({
+          (m: {
+            role: "user" | "assistant";
+            content: string;
+            meta: { writes?: WriteEvent[]; proposals?: Proposal[]; claims?: Record<string, ClaimState> } | null;
+          }) => ({
             role: m.role,
             content: m.content,
             writes: m.meta?.writes,
-            // A reloaded proposal comes back approvable. It was never applied,
-            // so the operator can still act on it - that is the whole reason
-            // proposals are persisted rather than living only in this state.
-            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: "pending" as const })),
+            // A reloaded card takes its stored claim state: only a proposal /approve never claimed comes back
+            // approvable. An applied one is hidden (its Applied line shows), a claimed or unknown one is not approvable.
+            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: storedCardState(m.meta?.claims, p.id) })),
           }),
         ),
       );
@@ -244,9 +249,11 @@ export default function AiChat() {
       const res = await fetch("/api/ai-assistant/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, tool: target.tool, args: target.args }),
+        body: JSON.stringify({ conversationId, proposalId: target.id, tool: target.tool, args: target.args }),
       });
       const j = await res.json();
+      // Applied elsewhere, in flight, or outcome unknown: never offer Approve again.
+      if (j?.state === "applied" || j?.state === "unknown") return setProposalState("unknown", j.error);
       if (!res.ok || !j.ok) throw new Error(j?.error ?? "the change did not go through");
       setProposalState("approved");
       setTurns((cur) =>
@@ -361,6 +368,14 @@ export default function AiChat() {
                     )}
                     {t.proposals?.map((p) => {
                       if (p.state === "approved") return null;
+                      if (p.state === "unknown") {
+                        return (
+                          <div key={p.id} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted">
+                            <p className="font-medium text-ink">{p.summary}</p>
+                            <p>{p.error ?? OUTCOME_UNKNOWN}</p>
+                          </div>
+                        );
+                      }
                       if (p.state === "dismissed") {
                         return (
                           <div key={p.id} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted line-through">

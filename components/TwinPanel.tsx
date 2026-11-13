@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Mic, MicOff, Send, X } from "lucide-react";
+import { OUTCOME_UNKNOWN } from "@/app/api/ai-assistant/claim-state";
 
 // The slide-out the sidebar orb opens. This is the REAL assistant: it talks to
 // /api/ai-assistant, which is the same backend the /ai page used.
@@ -13,7 +14,8 @@ import { Check, Loader2, Mic, MicOff, Send, X } from "lucide-react";
 // to it is leaving whatever you were doing.
 
 type Proposal = { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean };
-type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed"; error?: string };
+// unknown: /approve claimed it and the outcome is not known (or it is in flight, or applied elsewhere). Not approvable.
+type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed" | "unknown"; error?: string };
 type Turn = {
   role: "user" | "assistant";
   content: string;
@@ -158,9 +160,11 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
       const res = await fetch("/api/ai-assistant/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, tool: target.tool, args: target.args }),
+        body: JSON.stringify({ conversationId, proposalId: target.id, tool: target.tool, args: target.args }),
       });
       const j = await res.json();
+      // Applied elsewhere, in flight, or outcome unknown: never offer Approve again.
+      if (j?.state === "applied" || j?.state === "unknown") return setState("unknown", j.error);
       if (!res.ok || !j.ok) throw new Error(j?.error ?? "the change did not go through");
       setState("approved");
       setTurns((cur) =>
@@ -317,6 +321,14 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
                       );
                     }
                     if (p.state === "approved") return null;
+                    if (p.state === "unknown") {
+                      return (
+                        <div key={p.id} className="rounded-xl border border-white/60 bg-white/40 px-3 py-2 text-[11px] text-ink/60">
+                          <p className="font-medium text-ink">{p.summary}</p>
+                          <p>{p.error ?? OUTCOME_UNKNOWN}</p>
+                        </div>
+                      );
+                    }
                     return (
                       <div
                         key={p.id}

@@ -5,7 +5,7 @@
  * while the tool still answers ok:true, opened "...?tab=paywall".
  * Static read of the page sources (the assistant's claims are checked against what the routes render).
  * Control: "/revenue" resolves and is a real page; "identity" is a clone tab CloneForm knows.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-nav-targets.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-nav-targets.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-nav-targets.test.ts)
  * DECLARED BYPASS: none (no network, no server action; harness imported only for the shared preamble).
  */
 import "./G18-harness";

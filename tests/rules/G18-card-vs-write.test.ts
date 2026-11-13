@@ -6,7 +6,7 @@
  * Control: credits 50 → card states 50 and the PATCH writes 50.
  * Red: whenever a PATCH users happens, the card must state the value that was written (a fix that refuses the
  * proposal or the write also passes: nothing written, nothing mis-stated).
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-card-vs-write.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-card-vs-write.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-card-vs-write.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
 import { CLONE, FAN_ID, inWorkStore, startFakePostgrest, type FakePostgrest } from "./G18-harness";

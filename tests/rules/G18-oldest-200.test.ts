@@ -10,7 +10,7 @@
  * transcript run oldest→newest). A half fix (desc + limit, no reverse) stays red.
  * Fix shapes accepted: any query shape (desc+limit+reverse, a count + offset, a range) as long as the returned rows
  * are right; nothing is asserted about the wire request.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-oldest-200.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-oldest-200.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-oldest-200.test.ts)
  * DECLARED BYPASS: none needed beyond the harness (PostgREST faked on 127.0.0.1; no server action runs).
  */
 import { startFakePostgrest, type FakePostgrest } from "./G18-harness";

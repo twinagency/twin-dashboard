@@ -14,7 +14,7 @@
  * directly (middleware does not run), so it would stay red; move it to a middleware-level request then.
  * conversations/[id] DELETE also has no Origin check but is not tested here: a cross-origin DELETE is always
  * preflighted (not a simple request) and the route sends no CORS headers [inferred], so it is not reachable this way.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-approve-origin.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-approve-origin.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-approve-origin.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1; OpenRouter
  * faked at the fetch boundary (one text-only turn).
  */

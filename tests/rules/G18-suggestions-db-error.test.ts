@@ -9,7 +9,7 @@
  * The fake is the harness's stateful store: it sorts STABLY by whatever `order` is requested, so ordering by a key
  * that is constant across rows (e.g. status) keeps the physical order and stays red; ordering by name or id, or
  * sorting in code, turns it green. No fix shape is encoded.
- * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/known-red/W4-api-ai-assistant-plus2-suggestions-db-error.test.ts
+ * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-suggestions-db-error.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-suggestions-db-error.test.ts)
  * DECLARED BYPASS: none beyond the harness (PostgREST faked on 127.0.0.1; no server action runs).
  */
 import { CLONE, startFakePostgrest, type FakePostgrest } from "./G18-harness";

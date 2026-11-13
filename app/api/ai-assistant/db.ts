@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { supabaseAdmin } from "@/lib/supabase";
+import type { ClaimState } from "./claim-state";
 
 // Conversation persistence for the /ai assistant (migration 048). Plain CRUD
 // against ai_conversations / ai_messages — not part of the model's own tool
@@ -16,8 +17,8 @@ export type AiMessageMeta = {
    * vanishing, which would look like the change had gone through.
    */
   proposals?: { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean }[];
-  /** Proposal ids claimed by /approve (each runs once), and the compare-and-swap counter guarding them. */
-  claimed?: string[];
+  /** What /approve did with each proposal id (claim-state.ts), and the compare-and-swap counter guarding meta. */
+  claims?: Record<string, ClaimState>;
   claimRev?: number;
 };
 
@@ -75,18 +76,23 @@ export async function appendMessage(
   role: "user" | "assistant",
   content: string,
   meta?: AiMessageMeta,
-): Promise<void> {
-  const { error } = await supabaseAdmin.from("ai_messages").insert({
-    conversation_id: conversationId,
-    role,
-    content,
-    meta: meta && (meta.tools?.length || meta.writes?.length || meta.proposals?.length) ? meta : null,
-  });
+): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from("ai_messages")
+    .insert({
+      conversation_id: conversationId,
+      role,
+      content,
+      meta: meta && (meta.tools?.length || meta.writes?.length || meta.proposals?.length) ? meta : null,
+    })
+    .select("id")
+    .single();
   if (error) throw new Error(error.message);
   await supabaseAdmin
     .from("ai_conversations")
     .update({ updated_at: new Date().toISOString() })
     .eq("id", conversationId);
+  return data.id;
 }
 
 export async function renameConversation(conversationId: string, title: string): Promise<void> {
@@ -103,58 +109,87 @@ export async function deleteConversation(conversationId: string): Promise<void> 
 
 type StoredProposal = NonNullable<AiMessageMeta["proposals"]>[number];
 export type ProposalClaim =
-  | { status: "claimed"; messageId: string; proposal: StoredProposal }
-  | { status: "missing" | "used" };
+  | { status: "ok"; messageId: string; proposal: StoredProposal }
+  | { status: "missing" }
+  | { status: "ambiguous" }
+  | { status: "taken"; state: ClaimState };
 
-/** Compare-and-swap on meta.claimRev: the update lands only if no other claim changed meta since the read. */
-async function casClaims(messageId: string, meta: AiMessageMeta, claimed: string[]): Promise<boolean> {
-  let q = supabaseAdmin
-    .from("ai_messages")
-    .update({ meta: { ...meta, claimed, claimRev: (meta.claimRev ?? 0) + 1 } })
-    .eq("id", messageId);
-  q = meta.claimRev == null ? q.is("meta->>claimRev", null) : q.eq("meta->>claimRev", String(meta.claimRev));
-  const { data, error } = await q.select("id");
-  if (error) throw new Error(error.message);
-  return (data ?? []).length === 1;
+/**
+ * Read-modify-write of one message's meta, with a compare-and-swap on meta.claimRev so a concurrent claim or a
+ * still-streaming turn adding a proposal cannot overwrite the other. `change` returns null to abort.
+ */
+async function updateMeta(
+  messageId: string,
+  change: (meta: AiMessageMeta) => AiMessageMeta | null,
+  columns: { content?: string } = {},
+): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabaseAdmin.from("ai_messages").select("meta").eq("id", messageId).maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!data) throw new Error("message not found");
+    const meta = (data.meta ?? {}) as AiMessageMeta;
+    const next = change(meta);
+    if (!next) return false;
+    let q = supabaseAdmin
+      .from("ai_messages")
+      .update({ ...columns, meta: { ...next, claimRev: (meta.claimRev ?? 0) + 1 } })
+      .eq("id", messageId);
+    q = meta.claimRev == null ? q.is("meta->>claimRev", null) : q.eq("meta->>claimRev", String(meta.claimRev));
+    const { data: hit, error: casError } = await q.select("id");
+    if (casError) throw new Error(casError.message);
+    if ((hit ?? []).length === 1) return true;
+  }
+  throw new Error("message meta update kept conflicting");
 }
 
 /**
- * Atomically claim the newest unclaimed stored proposal in this conversation with exactly this tool and args,
- * so /approve runs only what was proposed, and runs it once. "used": it matched, but was already claimed.
+ * The chat route stores its assistant turn as soon as the first proposal exists, before the card is streamed, then
+ * updates that same row as the turn goes on, so every card on screen is stored. Returns the row id.
  */
-export async function claimProposal(conversationId: string, tool: string, args: unknown): Promise<ProposalClaim> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data, error } = await supabaseAdmin
-      .from("ai_messages")
-      .select("id,meta")
-      .eq("conversation_id", conversationId)
-      .eq("role", "assistant")
-      .order("created_at", { ascending: false })
-      .limit(50);
-    if (error) throw new Error(error.message);
-    let used = false;
-    let hit: { id: string; meta: AiMessageMeta; proposal: StoredProposal } | null = null;
-    for (const row of (data ?? []) as { id: string; meta: AiMessageMeta | null }[]) {
-      for (const p of row.meta?.proposals ?? []) {
-        if (p.tool !== tool || !isDeepStrictEqual(p.args, args)) continue;
-        if (row.meta?.claimed?.includes(p.id)) used = true;
-        else hit ??= { id: row.id, meta: row.meta!, proposal: p };
-      }
-    }
-    if (!hit) return { status: used ? "used" : "missing" };
-    if (await casClaims(hit.id, hit.meta, [...(hit.meta.claimed ?? []), hit.proposal.id])) {
-      return { status: "claimed", messageId: hit.id, proposal: hit.proposal };
-    }
-  }
-  throw new Error("proposal claim kept conflicting");
+export async function saveTurn(
+  conversationId: string,
+  messageId: string | null,
+  content: string,
+  meta: Pick<AiMessageMeta, "tools" | "writes" | "proposals">,
+): Promise<string> {
+  if (!messageId) return appendMessage(conversationId, "assistant", content, meta);
+  await updateMeta(messageId, (m) => ({ ...m, ...meta }), { content });
+  return messageId;
 }
 
-/** Undo a claim whose write did not apply, so the operator can retry the same card. */
-export async function releaseProposal(messageId: string, proposalId: string): Promise<void> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const { data, error } = await supabaseAdmin.from("ai_messages").select("meta").eq("id", messageId).maybeSingle();
-    if (error || !data?.meta) return;
-    const meta = data.meta as AiMessageMeta;
-    if (await casClaims(messageId, meta, (meta.claimed ?? []).filter((id) => id !== proposalId))) return;
-  }
+/**
+ * Atomically claim exactly the stored proposal `proposalId` in this conversation, so /approve runs only what was
+ * proposed, with the stored args, once. tool+args must still equal the stored ones. "ambiguous": only for proposals
+ * stored before ids were UUIDs (per-turn "p1", "p2"), when that id with these args sits in more than one turn.
+ */
+export async function claimProposal(conversationId: string, proposalId: string, tool: string, args: unknown): Promise<ProposalClaim> {
+  const { data, error } = await supabaseAdmin
+    .from("ai_messages")
+    .select("id,meta")
+    .eq("conversation_id", conversationId)
+    .eq("role", "assistant")
+    .contains("meta", { proposals: [{ id: proposalId }] });
+  if (error) throw new Error(error.message);
+  const hits = ((data ?? []) as { id: string; meta: AiMessageMeta | null }[]).flatMap((row) => {
+    const p = row.meta?.proposals?.find((x) => x.id === proposalId);
+    return p && p.tool === tool && isDeepStrictEqual(p.args, args) ? [{ messageId: row.id, proposal: p }] : [];
+  });
+  if (!hits.length) return { status: "missing" };
+  if (hits.length > 1) return { status: "ambiguous" };
+  let taken: ClaimState | undefined;
+  const claimed = await updateMeta(hits[0].messageId, (meta) => {
+    taken = meta.claims?.[proposalId];
+    return taken ? null : { ...meta, claims: { ...meta.claims, [proposalId]: "claimed" } };
+  });
+  return claimed ? { status: "ok", ...hits[0] } : { status: "taken", state: taken! };
+}
+
+/** Record how a claimed write ended. null = released (the tool refused before writing), so the card can be retried. */
+export async function settleClaim(messageId: string, proposalId: string, state: "applied" | "unknown" | null): Promise<void> {
+  await updateMeta(messageId, (meta) => {
+    const claims = { ...meta.claims };
+    if (state) claims[proposalId] = state;
+    else delete claims[proposalId];
+    return { ...meta, claims };
+  });
 }
