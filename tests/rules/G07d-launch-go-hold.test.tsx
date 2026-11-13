@@ -1,3 +1,5 @@
+// TEST-CHANGE (G07d r1): hold fixtures (seed, clear, malformed value) moved from sessionStorage to localStorage, the store the
+//   hold now lives in for cross-tab reach (stop-hold.ts). Same key, same values, no assertion changed.
 // RULE G07d launch-go-hold (REVIEW.md inv 7: a STOP or a deny is never harder than a go, unknown-delivery holds win). rwl batch 1 B6, B11, B13.
 //   B11 an unknown STOP set `unconfirmed` and a STOP in flight filled `inFlight`, and either one disabled Pause account: a brake made harder by
 //       a brake. The STOP lane now holds go (resume) only; Pause waits only for its own lane.

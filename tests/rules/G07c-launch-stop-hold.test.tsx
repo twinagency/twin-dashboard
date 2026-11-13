@@ -1,3 +1,5 @@
+// TEST-CHANGE (G07d r1): hold fixtures (seed, clear, malformed value) moved from sessionStorage to localStorage, the store the
+//   hold now lives in for cross-tab reach (stop-hold.ts). Same key, same values, no assertion changed.
 // RULE G07c launch-stop-hold (regression guard; REVIEW.md inv 7: a STOP is never harder than a go, unknown-delivery holds win).
 // Promoted from known-red W3-ui-onlyfans-launch-stop-gating (findings L3, L4; L1/L2 are G07a), widened by the #401 R1 review.
 //   L3 a 401/403 on one conversation control withdrew `manage`, and `manage` gates Emergency stop. Now it holds only the go controls of

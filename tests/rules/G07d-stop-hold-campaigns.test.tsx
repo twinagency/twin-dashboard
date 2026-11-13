@@ -1,3 +1,5 @@
+// TEST-CHANGE (G07d r1): hold fixtures (seed, clear, malformed value) moved from sessionStorage to localStorage, the store the
+//   hold now lives in for cross-tab reach (stop-hold.ts). Same key, same values, no assertion changed.
 // RULE G07d stop-hold-campaigns (REVIEW.md inv 7: a STOP is never harder than a go, unknown-delivery holds win). rwl batch 1 B1, campaigns.
 //   components/onlyfans-preview/CampaignManager.tsx never read the unconfirmed STOP hold (components/onlyfans-launch/automation/stop-hold.ts),
 //   so a campaign create, its held retry and Resume of a paused campaign could start a mass send on an account whose STOP was unknown. All
