@@ -1,10 +1,11 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Info } from "@/components/clone/fields";
 import { createPlanCClient, type PlanCClient } from "@/lib/onlyfans/plan-c-client";
 import { canApprove, isExpired, minutesLeft, validateEditedParts, validateEvidenceRef, validateRejectReason,
   type PlanCCommandResult, type PlanCConversation, type PlanCConversationAction, type PlanCDraft, type PlanCReceipt, type PlanCUnresolvedItem } from "@/lib/onlyfans/plan-c";
 
-const usd = (cents: number | null, currency: string | null) => cents === null ? "no price" : `${currency ?? "USD"} ${(cents / 100).toFixed(2)}`;
+const usd = (cents: number | null, currency: string | null) => cents === null ? "no price" : currency ? `${currency} ${(cents / 100).toFixed(2)}` : `${(cents / 100).toFixed(2)} (currency unknown)`;
 const place = (conversationId: string, accountId: string) => `Fan ${conversationId.startsWith(`${accountId}:`) ? conversationId.slice(accountId.length + 1) : conversationId}`;
 const kindLabel = (kind: string) => ({ unknown_send: "Unknown send", unlinked_transaction: "Unlinked transaction", unreconciled_access: "Unreconciled access evidence" } as Record<string, string>)[kind] ?? kind.replace(/_/g, " ");
 
@@ -13,8 +14,23 @@ const CONVERSATION_COPY: Record<PlanCConversationAction, { label: string; confir
   takeover: { label: "Take over", confirm: "Confirm take over", help: "You write from now on. Pending drafts for this fan are invalidated." },
   handback: { label: "Hand back to engine", confirm: "Confirm hand back", help: "The engine may plan a new draft under the current pilot checks. It never sends an old draft." } };
 
-/** Two clicks: the button, then an explicit confirmation. Nothing here runs by itself. */
-function ConversationControls({ conversation, canAct, onCommand }: { conversation: PlanCConversation; canAct: boolean;
+/** What this page last saw of a STOP on a conversation. Any of them keeps approve and edit off for that fan. A recorded stop stays recorded. */
+type StopState = "unconfirmed" | "refused" | "recorded";
+const STOP_STATE: Record<StopState, string> = {
+  unconfirmed: "Stop unconfirmed. Approve and edit are off for this fan in this view.",
+  refused: "Stop not recorded. Approve and edit are off for this fan in this view.",
+  recorded: "Stop recorded. Approve and edit are off for this fan in this view." };
+const STOP_HINT = "Kept in this page only. Reloading the page clears it.";
+/** This page's record of a conversation: the newest revision a command recorded, and any stop. Cleared once, by a hand back. */
+/** `floor` (after a hand back): only a revision floor for a conversation still listed elsewhere; it does not keep the conversation listed. */
+type SessionRecord = { revision: number | null; stop?: StopState; floor?: true };
+
+/**
+ * Stop is one click with no revision gate in the UI. Take over and hand back need the button, then an explicit confirmation.
+ * Limits (lane 1): the wire still needs a revision (the proxy requires expectedRevision), so a Stop on a conversation without
+ * one sends nothing and says so; and the stop hold is page-local until the backend holds it.
+ */
+function ConversationControls({ conversation, canAct, stop, onCommand }: { conversation: PlanCConversation; canAct: boolean; stop: StopState | undefined;
   onCommand: (conversation: PlanCConversation, action: PlanCConversationAction) => Promise<PlanCCommandResult> }) {
   const [confirming, setConfirming] = useState<PlanCConversationAction | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
   const inflight = useRef(false);
@@ -27,27 +43,30 @@ function ConversationControls({ conversation, canAct, onCommand }: { conversatio
   };
   return <li className="rounded-lg border border-line p-3 text-sm" data-plan-c-conversation={conversation.conversationId}>
     <p className="font-semibold">{conversation.label} <span className="font-normal text-muted">({conversation.conversationId}{conversation.revision === null ? "" : `, revision ${conversation.revision}`})</span></p>
-    {conversation.revision === null ? <p className="text-xs text-muted">The backend did not report this conversation's revision, so it cannot be changed from here.</p> :
-      <div className="mt-2 flex flex-wrap gap-2">
-        {(Object.keys(CONVERSATION_COPY) as PlanCConversationAction[]).map(action => confirming === action ?
+    {stop ? <p className="mt-1 flex items-center gap-1 text-xs font-semibold" data-plan-c-stop-state={stop}>{STOP_STATE[stop]}<Info text={STOP_HINT} /></p> : null}
+    <div className="mt-2 flex flex-wrap gap-2">
+      <button type="button" className="of-control-button of-primary" disabled={busy || !canAct} data-plan-c-conversation-action="stop" onClick={() => void run("stop")}>{CONVERSATION_COPY.stop.label}</button>
+      {conversation.revision === null ? <span className="flex items-center gap-1 text-xs">Take over and hand back are unavailable<Info text="The backend did not report this conversation's revision, so it cannot be taken over or handed back from here." /></span> :
+        (["takeover", "handback"] as const).map(action => confirming === action ?
           <span key={action} className="flex flex-wrap items-center gap-2" data-plan-c-confirm={action}>
             <span className="text-xs text-muted">{CONVERSATION_COPY[action].help}</span>
             <button type="button" className="of-control-button of-primary" disabled={busy || !canAct} data-plan-c-conversation-confirm={action} onClick={() => void run(action)}>{busy ? "Saving…" : CONVERSATION_COPY[action].confirm}</button>
             <button type="button" className="of-control-button of-secondary" disabled={busy} onClick={() => setConfirming(null)}>Cancel</button>
           </span> :
           <button key={action} type="button" className="of-control-button of-secondary" disabled={busy || !canAct || confirming !== null} data-plan-c-conversation-action={action} onClick={() => setConfirming(action)}>{CONVERSATION_COPY[action].label}</button>)}
-      </div>}
+    </div>
     {message ? <p role="status" className="mt-1 text-xs">{message}</p> : null}
   </li>;
 }
 
-function DraftCard({ draft, accountId, now, canAct, autonomous, onApprove, onReject, onEdit }: { draft: PlanCDraft; accountId: string; now: number; canAct: boolean; autonomous: boolean;
+function DraftCard({ draft, accountId, now, canAct, autonomous, hold, onApprove, onReject, onEdit }: { draft: PlanCDraft; accountId: string; now: number; canAct: boolean; autonomous: boolean; hold: string | null;
   onApprove: (draft: PlanCDraft) => Promise<PlanCCommandResult>; onReject: (draft: PlanCDraft, reason: string) => Promise<PlanCCommandResult>;
   onEdit: (draft: PlanCDraft, parts: string[]) => Promise<PlanCCommandResult> }) {
   const [mode, setMode] = useState<"reject" | "edit" | null>(null), [reason, setReason] = useState(""), [texts, setTexts] = useState(() => draft.parts.map(part => part.text));
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
-  const expired = isExpired(draft, now), left = minutesLeft(draft.expiresAt, now);
+  const expired = isExpired(draft, now), left = minutesLeft(draft.expiresAt, now), held = !!hold;
   const inflight = useRef(false);
+  useEffect(() => { if (held) setMode(current => current === "edit" ? null : current); }, [held]);
   const run = async (action: () => Promise<PlanCCommandResult>, done: string) => {
     if (busy || inflight.current) return;
     inflight.current = true; setBusy(true); setMessage(null);
@@ -77,6 +96,7 @@ function DraftCard({ draft, accountId, now, canAct, autonomous, onApprove, onRej
     </ol>
     {draft.offer ? <p className="mt-1" data-plan-c-offer>Offer: product {draft.offer.productId ?? "unknown"} · {draft.offer.mediaCount} media · <strong>{usd(draft.offer.priceCents, draft.offer.currency)}</strong>
       {draft.offer.mediaIds.length ? <span className="break-all text-xs text-muted"> · media {draft.offer.mediaIds.join(", ")}</span> : null}</p> : null}
+    {hold ? <p className="mt-1 text-xs font-semibold" data-plan-c-hold>{hold}</p> : null}
     {draft.evidence ? <p className="mt-1 text-xs" data-plan-c-evidence><span className="font-semibold">Unresolved evidence:</span> {draft.evidence}</p> : null}
 
     <details className="mt-2" data-plan-c-context><summary className="cursor-pointer text-xs font-semibold">Recent conversation ({draft.messages.length})</summary>
@@ -96,15 +116,15 @@ function DraftCard({ draft, accountId, now, canAct, autonomous, onApprove, onRej
       {texts.map((value, index) => <label key={index} className="block text-xs">Part {index + 1} text{draft.parts[index].action === "offer" ? " (lead-in; the card line is rebuilt by the system)" : ""}
         <textarea aria-label={`Part ${index + 1} text`} className="mt-1 w-full rounded border border-line px-2 py-1 text-base" rows={3} maxLength={2000} value={value}
           onChange={event => setTexts(current => current.map((item, at) => at === index ? event.target.value : item))} /></label>)}
-      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), autonomous ? "Edit saved. Reloading for policy checks." : "Edit saved. Reloading the new version for approval.")}>Save edit</button>
+      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || held || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), autonomous ? "Edit saved. Reloading for policy checks." : "Edit saved. Reloading the new version for approval.")}>Save edit</button>
         <button type="button" className="of-control-button of-secondary" disabled={busy} onClick={() => { setMode(null); setTexts(draft.parts.map(part => part.text)); }}>Cancel</button></div>
       {editProblem && texts.some((value, index) => value !== draft.parts[index].text) ? <p className="text-xs text-muted">{editProblem}</p> : null}
     </div> : null}
 
     {mode === null ? <div className="mt-2 flex flex-wrap gap-2">
-      {!autonomous ? <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || !canApprove(draft, now)}
-        onClick={() => void run(() => onApprove(draft), `Approved version ${draft.draftVersion}. Delivery checks run before anything is sent.`)}>{draft.status === "approved" ? "Already approved" : "Approve this version"}</button> : null}
-      <button type="button" data-plan-c-edit className="of-control-button of-secondary" disabled={busy || !canAct} onClick={() => setMode("edit")}>Edit</button>
+      {!autonomous ? <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || held || !canApprove(draft, now)}
+        onClick={() => void (canApprove(draft, Date.now()) ? run(() => onApprove(draft), `Approved version ${draft.draftVersion}. Delivery checks run before anything is sent.`) : setMessage("This draft has expired. Nothing was sent."))}>{draft.status === "approved" ? "Already approved" : "Approve this version"}</button> : null}
+      <button type="button" data-plan-c-edit className="of-control-button of-secondary" disabled={busy || !canAct || held} onClick={() => setMode("edit")}>Edit</button>
       <button type="button" data-plan-c-reject className="of-control-button of-secondary" disabled={busy || !canAct} onClick={() => setMode("reject")}>Reject</button>
     </div> : null}
     {message ? <p role="status" className="mt-1 text-xs" data-plan-c-message-status>{message}</p> : null}
@@ -151,46 +171,77 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
   const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, fetchImpl }), [injected, accountId, fetchImpl]);
   const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
-  const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [held, setHeld] = useState<Record<string, number>>({}), [now, setNow] = useState(() => Date.now());
+  const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [session, setSession] = useState<Record<string, SessionRecord>>({}), [now, setNow] = useState(() => Date.now());
   const generation = useRef(0);
+  /** True only when both lists were read and are now on screen. */
   const reload = useCallback(async () => {
     const mine = ++generation.current;
     const [d, u] = await Promise.all([client.listDrafts(), client.listUnresolved()]);
-    if (mine !== generation.current) return;
+    if (mine !== generation.current) return false;
     setNow(Date.now());
     setDrafts(d.ok ? { kind: "ready", value: d.data.drafts } : { kind: "error", error: d.error });
     setReceipts(d.ok && d.data.receipts !== null ? { kind: "ready", value: d.data.receipts } :
       { kind: "error", error: d.ok ? "Receipt history is unavailable from this backend." : d.error });
     setUnresolved(u.ok ? { kind: "ready", value: u.data.items } : { kind: "error", error: u.error });
+    return d.ok && u.ok;
   }, [client]);
   useEffect(() => { void reload(); return () => { generation.current++; }; }, [reload]);
   useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(timer); }, []);
+  // Re-render the moment the next draft expires, so its approve turns off then and not on the next tick.
+  useEffect(() => {
+    const next = drafts.kind === "ready" ? Math.min(...drafts.value.map(draft => Date.parse(draft.expiresAt)).filter(at => at > Date.now())) : Infinity;
+    if (!Number.isFinite(next)) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(next - Date.now() + 10, 2 ** 31 - 1)); return () => clearTimeout(timer);
+  }, [drafts, now]);
 
   /** After any command the lists are re-read. A conflict says so and shows the current draft; it never retries on its own. */
   const settle = async (result: PlanCCommandResult, label: string) => {
     setNotice(result.ok ? null : result.reload ? result.error : null);
     setConfirmation(null);
-    await reload();
-    setConfirmation(result.ok ? `${label}${result.replayed ? " (this exact command had already been recorded)" : ""}. Lists reloaded.` : null);
+    const fresh = await reload();
+    setConfirmation(result.ok ? `${label}${result.replayed ? " (this exact command had already been recorded)" : ""}. ${fresh ? "Lists reloaded." : "The lists could not be reloaded, so what is shown may be out of date."}` : null);
     return result;
   };
   const conversations = useMemo<PlanCConversation[]>(() => {
     const byId = new Map<string, PlanCConversation>();
     const add = (conversationId: string, revision: number | null) => { const existing = byId.get(conversationId);
       if (!existing) byId.set(conversationId, { conversationId, revision, label: place(conversationId, accountId) });
-      else if (existing.revision === null && revision !== null) existing.revision = revision; };
+      else if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; };
     if (drafts.kind === "ready") for (const draft of drafts.value) add(draft.conversationId, draft.conversationRevision);
     if (unresolved.kind === "ready") for (const item of unresolved.value) if (item.conversationId) add(item.conversationId, item.conversationRevision);
-    for (const [conversationId, revision] of Object.entries(held)) add(conversationId, revision);
+    for (const [conversationId, record] of Object.entries(session)) if (!record.floor || byId.has(conversationId)) add(conversationId, record.revision);
     return [...byId.values()];
-  }, [drafts, unresolved, held, accountId]);
+  }, [drafts, unresolved, session, accountId]);
+
+  /** Why approve and edit are off for a fan: a stop this session sent, unresolved work for that fan, or unresolved work that could not be read. */
+  const holdFor = (conversationId: string): string | null => {
+    const stop = session[conversationId]?.stop;
+    if (stop) return STOP_STATE[stop];
+    if (unresolved.kind !== "ready") return "Unresolved work could not be read, so approve and edit are off.";
+    if (unresolved.value.some(item => item.conversationId === conversationId)) return "This fan has unresolved work, so approve and edit are off until it is resolved.";
+    return unresolved.value.some(item => item.conversationId === null && item.kind === "unknown_send")
+      ? "An unknown send for this account is unresolved, so approve and edit are off for every fan until it is resolved." : null;
+  };
+  /** Update this page's record of a conversation. A recorded stop never downgrades; a revision only moves forward. */
+  const record = (conversationId: string, stop: StopState | undefined, revision: number | null = null) => setSession(current => {
+    const was = current[conversationId];
+    return { ...current, [conversationId]: { revision: revision !== null && (was?.revision ?? -1) < revision ? revision : was?.revision ?? null,
+      stop: was?.stop === "recorded" ? "recorded" : stop ?? was?.stop } };
+  });
 
   const onConversation = async (conversation: PlanCConversation, action: PlanCConversationAction) => {
-    if (conversation.revision === null) return { ok: false, outcome: "refused", reload: false, error: "This conversation's revision is unknown." } as PlanCCommandResult;
+    // A stop holds this fan's approve from the click on, until the backend records it (or a hand back clears it).
+    if (action === "stop") record(conversation.conversationId, "unconfirmed");
+    if (conversation.revision === null) {
+      if (action === "stop") record(conversation.conversationId, "refused");
+      return { ok: false, outcome: "refused", reload: false, error: "Stop not sent: the backend did not report this conversation's revision. Reload, then stop again." } as PlanCCommandResult;
+    }
     const result = await settle(await client.conversationCommand(conversation.conversationId, action, conversation.revision), `${CONVERSATION_COPY[action].label} recorded for ${conversation.conversationId}`);
-    // A takeover leaves no draft to hang the hand back on, so remember it for this session. A hand back clears it.
-    if (result.ok && action === "takeover" && result.recordedRevision !== null) setHeld(current => ({ ...current, [conversation.conversationId]: result.recordedRevision! }));
-    if (result.ok && action === "handback") setHeld(current => { const next = { ...current }; delete next[conversation.conversationId]; return next; });
+    // A command may leave no draft carrying the new revision, so this page keeps the one the backend recorded. A hand back releases the stop only.
+    if (action === "stop") record(conversation.conversationId, result.ok ? "recorded" : result.outcome === "unconfirmed" ? "unconfirmed" : "refused", result.ok ? result.recordedRevision : null);
+    if (result.ok && action === "takeover") record(conversation.conversationId, undefined, result.recordedRevision);
+    if (result.ok && action === "handback") setSession(current => { const was = current[conversation.conversationId]?.revision ?? null, now = result.recordedRevision;
+      return { ...current, [conversation.conversationId]: { revision: now !== null && (was ?? -1) < now ? now : was, floor: true } }; });
     return result;
   };
 
@@ -206,7 +257,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
       {drafts.kind === "loading" ? <p role="status" className="text-sm text-muted">Loading drafts…</p> : null}
       {drafts.kind === "error" ? <p role="status" className="text-sm text-muted" data-plan-c-drafts-error>{drafts.error} <button type="button" className="underline" onClick={() => void reload()}>Retry</button></p> : null}
       {drafts.kind === "ready" ? drafts.value.length ? <ul className="mt-2 space-y-2">{drafts.value.map(draft =>
-        <DraftCard key={`${draft.requestId}:${draft.generation}:${draft.draftVersion}:${draft.status}`} draft={draft} accountId={accountId} now={now} canAct={canAct} autonomous={autonomous}
+        <DraftCard key={`${draft.requestId}:${draft.generation}:${draft.draftVersion}:${draft.status}`} draft={draft} accountId={accountId} now={now} canAct={canAct} autonomous={autonomous} hold={holdFor(draft.conversationId)}
           onApprove={async item => settle(await client.approveDraft(item), `Approved version ${item.draftVersion} for ${item.conversationId}`)} onReject={async (item, reason) => settle(await client.rejectDraft(item, reason), `Rejected version ${item.draftVersion} for ${item.conversationId}`)}
           onEdit={async (item, parts) => settle(await client.editDraft(item, parts), `Edit saved for ${item.conversationId}; the new version needs fresh policy checks`)} />)}</ul>
         : <p className="mt-2 text-sm" data-plan-c-no-drafts>{autonomous ? "No pilot drafts are pending." : "No drafts are waiting for approval."}</p> : null}
@@ -224,7 +275,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
     </section>
 
     <section aria-label="Conversation controls"><h2 className="font-semibold">Conversation controls</h2>
-      {conversations.length ? <ul className="mt-2 space-y-2">{conversations.map(conversation => <ConversationControls key={`${conversation.conversationId}:${conversation.revision}`} conversation={conversation} canAct={canAct} onCommand={onConversation} />)}</ul>
+      {conversations.length ? <ul className="mt-2 space-y-2">{conversations.map(conversation => <ConversationControls key={`${conversation.conversationId}:${conversation.revision}`} conversation={conversation} canAct={canAct} stop={session[conversation.conversationId]?.stop} onCommand={onConversation} />)}</ul>
         : <p className="mt-2 text-sm text-muted">No conversation has a draft or unresolved work right now.</p>}
     </section>
 

@@ -6,7 +6,8 @@
 // carrying the money-safe JSON the server actions parse.
 
 import { CATEGORY_LABELS, DEFAULT_CATEGORY_PRICING, MIN_PAID_MEDIA_PRICE_STARS, PRICING_CATEGORIES } from "@/lib/pricing";
-import { DEFAULT_SPOIL_OPTIONS, FieldLabel, SubCard, inputCls } from "./fields";
+import { FieldLabel, SubCard, inputCls } from "./fields";
+import { DEFAULT_SPOIL_OPTIONS } from "@/lib/clone-default-policy";
 import { V2_SPOIL_HINT, V2_SPOIL_LABEL } from "@/lib/v2-tips";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 
