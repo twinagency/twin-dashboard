@@ -4,7 +4,7 @@
  * `node --import tsx --test`.
  * Rules it holds to:
  *  - It drives the REAL route handlers under app/api/onlyfans-controls/accounts/[accountId]/plan-c/ -> planCGate ->
- *    requireOnlyFansRead -> isAuthed / planCOwnerActor -> plan-c-route -> plan-c-backend, with the real browser client in front.
+ *    authorizeOnlyFansRead -> isAuthed / planCOwnerActor -> plan-c-route -> plan-c-backend, with the real browser client in front.
  *  - Replaced, and only these: `next/headers` (no Next request scope offline; it hands back the operator session cookie, or none)
  *    and the `import "server-only"` line of lib/onlyfans/plan-c-owner.ts (Next's bundler makes it a no-op; the real core is
  *    re-exported). The wire is a fake `fetch`: the owner-session RPCs answer as Supabase would for a valid named owner, and the

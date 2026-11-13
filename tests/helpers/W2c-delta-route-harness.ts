@@ -101,7 +101,7 @@ export const REQUEST_ID = /^[A-Za-z0-9._:-]{1,64}$/;
 type Denial = { ok: false; status: number; state: string; code: string; error: string };
 const denialResponse = (denial: Denial) => NextResponse.json({ ok: false, state: denial.state, code: denial.code, error: denial.error },
   { status: denial.status, headers: PRIVATE_HEADERS });
-/** Lines of route.ts's requireOnlyFansRead the mock reproduces; drift if any is gone. */
+/** Lines of route.ts's authorizeOnlyFansRead core and requireOnlyFansRead wrapper the mock reproduces; drift if any is gone. */
 const CAPABILITY_LINES = [
   "const canManage = grant ? grant.canManage : true;",
   "const canChat = canManage || grant?.canChat === true;",

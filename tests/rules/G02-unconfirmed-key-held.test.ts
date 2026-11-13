@@ -34,7 +34,10 @@ test("finding 5: unconfirmed, then refused, then retry reuses the first key", as
   assert.equal(sent[2], sent[0], "a refusal after an unconfirmed attempt released the key; the retry could act twice");
 });
 
-test("finding 5: after the recorded ack the key is released", async () => {
-  const { held } = await run([lost, refused, recorded]);
+test("finding 5: a recorded ack clears the hold, so a later refusal releases the key again", async () => {
+  const { sent, outcomes, held } = await run([lost, recorded, refused, refused]);
+  assert.deepEqual(outcomes, ["unconfirmed", "recorded", "refused", "refused"], "precondition: the four answers were read as intended");
+  assert.equal(sent[1], sent[0], "the retry after the lost reply reuses the key");
+  assert.notEqual(sent[3], sent[2], "the hold outlived the recorded ack, so keys are never released for this intent again");
   assert.equal(held, 0);
 });

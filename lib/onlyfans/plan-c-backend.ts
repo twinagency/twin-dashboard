@@ -23,10 +23,10 @@ const record = (value: unknown): value is Record<string, unknown> => !!value && 
  */
 const denied = { outcome: "refused", reload: false, error: PLAN_C_REFUSED_TEXT } as const;
 const gone = { outcome: "refused", reload: true, error: PLAN_C_GONE_TEXT } as const;
-const REFUSED: Record<number, { outcome: "refused" | "conflict"; reload: boolean; error: string }> = {
-  400: denied, 401: denied, 403: denied, 405: denied, 413: denied, 422: denied,
-  404: gone, 410: gone, 409: { outcome: "conflict", reload: true, error: PLAN_C_CONFLICT_TEXT },
-};
+const REFUSED = new Map<number, Omit<Extract<PlanCCommandResult, { ok: false }>, "ok" | "outcome"> & { outcome: "refused" | "conflict" }>([
+  [400, denied], [401, denied], [403, denied], [405, denied], [413, denied], [422, denied],
+  [404, gone], [410, gone], [409, { outcome: "conflict", reload: true, error: PLAN_C_CONFLICT_TEXT }],
+]);
 
 export function createPlanCBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
@@ -46,7 +46,7 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   async function write(url: string, body: Record<string, unknown>, expect: { commandKey: string; accountId: string; action: string; requestId?: string; conversationId?: string; id?: string }): Promise<PlanCCommandResult> {
     try {
       const response = await call(url, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      const refused = Object.hasOwn(REFUSED, response.status) ? REFUSED[response.status] : null;
+      const refused = REFUSED.get(response.status);
       if (refused) { await response.body?.cancel(); return { ok: false, ...refused }; }
       if (response.ok) {
         const ack: unknown = await response.json();

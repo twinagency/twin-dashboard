@@ -17,19 +17,19 @@ export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: st
 
 /** Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent. */
 export function createCommandKeyStore(random: () => string = newCommandKey) {
-  const keys = new Map<string, string>(), held = new Set<string>();
+  const keys = new Map<string, { key: string; held: boolean }>();
   return {
-    keyFor(intent: string): string { let key = keys.get(intent); if (!key) { key = random(); keys.set(intent, key); } return key; },
+    keyFor(intent: string): string { let entry = keys.get(intent); if (!entry) keys.set(intent, entry = { key: random(), held: false }); return entry.key; },
     /**
      * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
      * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
      */
     settle(intent: string, result: PlanCCommandResult) {
-      if (result.ok) { keys.delete(intent); held.delete(intent); }
-      else if (result.outcome === "unconfirmed") held.add(intent);
-      else if (!held.has(intent)) keys.delete(intent);
+      const entry = keys.get(intent);
+      if (result.ok) keys.delete(intent);
+      else if (result.outcome === "unconfirmed") { if (entry) entry.held = true; }
+      else if (!entry?.held) keys.delete(intent);
     },
-    forget(intent: string) { keys.delete(intent); held.delete(intent); },
     size: () => keys.size,
   };
 }
