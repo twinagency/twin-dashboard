@@ -35,7 +35,7 @@ import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type 
 import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
-import { getMtprotoLimits, setMtprotoLimits } from "@/lib/mtproto/limits";
+import { setMtprotoLimits } from "@/lib/mtproto/limits";
 import { sanitizeFilters, sanitizeMessageVariants, uuidList, validateCaps } from "@/lib/mtproto/validate";
 import {
   cancelTelegramConnectionRequest,
@@ -238,11 +238,6 @@ export async function setMtprotoLimitsAction(fd: FormData): Promise<ActionResult
   } finally {
     revalidatePath("/mtproto-campaign/settings");
   }
-}
-
-export async function currentMtprotoLimits(): Promise<MtprotoLimits> {
-  await guardDashboardAction("app/mtproto-campaign/actions.ts#currentMtprotoLimits", []);
-  return getMtprotoLimits();
 }
 
 export async function setConnectionPausedAction(fd: FormData): Promise<ActionResult> {

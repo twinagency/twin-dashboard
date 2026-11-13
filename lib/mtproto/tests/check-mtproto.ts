@@ -23,7 +23,7 @@ import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "..
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "../global-live-arm";
-import { clampMtprotoLimits, getMtprotoLimits, setMtprotoLimits } from "../limits";
+import { clampMtprotoLimits, readMtprotoLimits, setMtprotoLimits } from "../limits";
 import { connectionFor, listConnections, setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "../connections";
 import { armLivePhraseOk, autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
 import { autoHaltsFor } from "../halt-server";
@@ -686,13 +686,14 @@ check("H6f clampMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends de
   eq(nonzero.firstDayMaxSends, 10, "nonzero firstDayMaxSends round-trips");
 });
 
-acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as defaults (never throws), writes validate, clamp and log config_change", async () => {
+acheck("H6e readMtprotoLimits/setMtprotoLimits: a missing row reads as defaults, an unreadable one THROWS (G50a), writes validate, clamp and log config_change", async () => {
   const db = freshDb();
   // No row at all yet (migration 169/171 not applied, or a fresh project):
   // reads as the built-in defaults, same safe fallback the worker itself uses.
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no row -> defaults");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no row -> defaults");
   db.fail("app_settings", "select", { message: "boom" });
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "an unreadable row never throws: reads as defaults, the safe side");
+  // G50a F5: defaults turn warm-up, min gap and the day-one cap OFF, so they are not "the safe side" of a failed read.
+  await rejects(readMtprotoLimits(), /could not read the current limits/);
   db.fail("app_settings", "select", null);
 
   // A write validates each provided field is a finite number in range BEFORE
@@ -700,13 +701,13 @@ acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as d
   await rejects(setMtprotoLimits({ hourlyCap: 9999 }, "operator"), /hourlyCap must be between/);
   await rejects(setMtprotoLimits({ hourlyCap: NaN }, "operator"), /hourlyCap must be a number/);
   await rejects(setMtprotoLimits({ jitterMinMs: 30_000, jitterMaxMs: 5_000 }, "operator"), /jitterMaxMs must not be smaller than jitterMinMs/);
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "every rejected write left the stored value untouched");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "every rejected write left the stored value untouched");
 
   const after = await setMtprotoLimits({ hourlyCap: 40, minSilenceHours: 12 }, "operator");
   eq(after.hourlyCap, 40, "hourlyCap updated");
   eq(after.minSilenceHours, 12, "minSilenceHours updated");
   eq(after.defaultDailyCap, MTPROTO_LIMITS_DEFAULTS.defaultDailyCap, "an untouched field keeps its prior (default) value");
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(after), "read-back matches the write");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(after), "read-back matches the write");
 
   const ev = eventsOf(db, "config_change").find((e) => e.detail.action === "set_mtproto_limits");
   assert(ev, "set_mtproto_limits event written");
@@ -723,7 +724,7 @@ acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as d
 
 acheck("H6g setMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends write, validate and default to off (0)", async () => {
   freshDb();
-  const fresh = await getMtprotoLimits();
+  const fresh = await readMtprotoLimits();
   eq(fresh.warmupHours, 0, "a fresh/unreadable row reads warmupHours as off");
   eq(fresh.minSendGapMinutes, 0, "a fresh/unreadable row reads minSendGapMinutes as off");
   eq(fresh.firstDayMaxSends, 0, "a fresh/unreadable row reads firstDayMaxSends as off");
@@ -742,7 +743,7 @@ acheck("H6g setMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends wri
   eq(disabledAgain.warmupHours, 0, "warmupHours can be written back to 0 (off)");
   eq(disabledAgain.minSendGapMinutes, 0, "minSendGapMinutes can be written back to 0 (off)");
   eq(disabledAgain.firstDayMaxSends, 0, "firstDayMaxSends can be written back to 0 (off)");
-  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(disabledAgain), "read-back matches the 0/off write");
+  eq(JSON.stringify(await readMtprotoLimits()), JSON.stringify(disabledAgain), "read-back matches the 0/off write");
 });
 
 acheck("H7 connection pause/cap write before/after events and reject bad input", async () => {

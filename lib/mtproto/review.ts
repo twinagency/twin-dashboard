@@ -86,6 +86,13 @@ export function redactText(text: string, name: string | null | undefined): strin
 }
 
 export async function computeDryRunSummary(runId: string): Promise<DryRunSummary> {
+  return (await readDryRun(runId)).summary;
+}
+
+/** The summary plus WHO the dry run saw (`clone_id:user_id`): every dry
+ *  episode (one per eligible fan, hold-out and over-cap too) and every fan its
+ *  scan excluded (a scan_excluded event). */
+export async function readDryRun(runId: string): Promise<{ summary: DryRunSummary; members: Set<string> }> {
   const ep = await selectAllRowsMtproto<DryEpisodeRow>(
     () =>
       mtDb()
@@ -97,11 +104,11 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
         .order("id", { ascending: true }) as any,
     { label: `dry-run episodes run=${runId}`, maxRows: 50_000, throwOnError: true },
   );
-  const ex = await selectAllRowsMtproto<{ detail: Record<string, unknown> | null }>(
+  const ex = await selectAllRowsMtproto<{ clone_id: string | null; user_id: string | null; detail: Record<string, unknown> | null }>(
     () =>
       mtDb()
         .from("reengage_events")
-        .select("detail")
+        .select("clone_id,user_id,detail")
         .eq("run_id", runId)
         .eq("event_type", "scan_excluded")
         .order("id", { ascending: true }) as any,
@@ -110,13 +117,18 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
 
   const excludedByReason: Record<string, number> = {};
   const bump = (k: string) => (excludedByReason[k] = (excludedByReason[k] ?? 0) + 1);
-  for (const e of ex.rows) bump(typeof e.detail?.reason === "string" ? (e.detail.reason as string) : "other");
+  const members = new Set<string>();
+  for (const e of ex.rows) {
+    bump(typeof e.detail?.reason === "string" ? (e.detail.reason as string) : "other");
+    if (e.clone_id && e.user_id) members.add(`${e.clone_id}:${e.user_id}`);
+  }
 
   let wouldSend = 0;
   let holdout = 0;
   const wouldSendRows: DryEpisodeRow[] = [];
   const byClone = new Map<string, number>();
   for (const r of ep.rows) {
+    if (r.user_id != null) members.add(`${r.clone_id}:${r.user_id}`);
     if (r.state === "holdout") holdout += 1;
     else if (r.state === "acked" && r.tg_message_id == null) {
       wouldSend += 1;
@@ -146,7 +158,7 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
         text: r.user_id == null ? "[text withheld: the fan was deleted, so the name cannot be removed]" : redactText(r.acked_text ?? r.prepared_text ?? "", names.get(r.user_id)),
       }));
 
-  return {
+  const summary: DryRunSummary = {
     runId,
     wouldSendCount: wouldSend,
     holdoutCount: holdout,
@@ -158,6 +170,7 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
     wouldSendByClone: [...byClone.entries()].map(([cloneId, count]) => ({ cloneId, count })),
     truncated: ep.truncated || ex.truncated,
   };
+  return { summary, members };
 }
 
 export function countsOf(s: DryRunCounts): DryRunCounts {
@@ -167,14 +180,14 @@ export function countsOf(s: DryRunCounts): DryRunCounts {
 /** The audience that passes every filter right now (before hold-out and
  *  caps): its size and a digest of WHO is in it (sorted clone:user keys), so
  *  an equal-size swap reads as changed. Throws when the read is incomplete. */
-export async function currentAudience(run: ReengageRun): Promise<{ size: number; digest: string }> {
+export async function currentAudience(run: ReengageRun): Promise<{ size: number; digest: string; members: string[] }> {
   const { preview: p, members } = await computeAudience(
     { ...run.filters, cloneIds: run.cloneIds },
     { dailyCap: run.dailyCap, runCap: run.runCap, holdoutPct: run.holdoutPct, allowRecontact: run.allowRecontact },
   );
   if (p.truncated) throw new Error("audience read was incomplete (row ceiling); cannot compare it to the reviewed dry run");
   const digest = hash("sha256", [...members].sort().join("\n"), "hex"); // one-shot: no .update( (check K11 scans this file)
-  return { size: p.eligible + p.holdout + p.excluded.cap_reached, digest };
+  return { size: p.eligible + p.holdout + p.excluded.cap_reached, digest, members };
 }
 
 export async function currentAudienceSize(run: ReengageRun): Promise<number> {
