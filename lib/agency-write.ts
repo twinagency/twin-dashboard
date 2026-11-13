@@ -62,7 +62,8 @@ export async function scopeAgencyWrite(input: URL, method: string, body: unknown
   for (const row of rows) {
     if (!row || typeof row!=="object" || Array.isArray(row) || Object.keys(row).some(key=>!rule.fields.includes(key))) throw new Error("Unsupported agency field");
     if (method === "PATCH" && ("clone_id" in row || "storage_path" in row || "bundle_id" in row)) throw new Error("Ownership and storage paths cannot be reassigned");
-    if (table === "users" && ("blocked_reason" in row || "blocked_at" in row) && !operatorStampWrite(url, row)) {
+    // Any unblock is a reason write too: lifting a block must be the exact operator clear, never a bare {blocked:false}.
+    if (table === "users" && ("blocked_reason" in row || "blocked_at" in row || row.blocked === false) && !operatorStampWrite(url, row)) {
       throw new Error("Only an operator block reason may be recorded");
     }
     if (table === "clones") {
