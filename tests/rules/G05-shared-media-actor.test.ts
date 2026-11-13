@@ -26,6 +26,8 @@
 //       account list and the uploads read carry none. A fix that learns the revision anywhere else stays red here and needs a TEST-CHANGE.
 // F8 (Flash R1): an agency session whose grant does not name ?creator= is refused 403 before the backend is consulted (no agency
 //       preflight, no account list): the real read backend over the wire is used for that test, so any upstream call shows.
+// F11 (Flash final): ?creator= in upper case and an upper-cased backend binding are the same creator as the lower-case grant;
+//       the route normalizes the id once, so the starter's own resume is not falsely refused.
 // Green since G05 (the B-C3 tests; B-C2 is not covered here). Runs in npm run test:rules.
 // Synthetic values only.
 import assert from "node:assert/strict";
@@ -146,5 +148,13 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 2 }, () => {
     const response = await share();
     assert.equal(response.status, 403);
     assert.deepEqual(calls.map(c => `${c.method} ${c.path}`), [], "the backend was consulted for a creator outside the grant");
+  });
+
+  test("F11: an upper-cased ?creator= and backend binding still reach the granted creator's receipt", async () => {
+    rows = [receipt(STARTER)]; agencySession(STARTER);
+    state.backend = { listAccounts: async () => ({ ok: true, data: [{ accountId: "of-a", binding: { creatorId: C.toUpperCase() }, health: "connected", capabilities: { manageContent: "available" } }] }) };
+    const response = await call(ROUTE, { accountId: "of-a" }, { body: { kind: "photo", sourceId: S }, query: `?creator=${C.toUpperCase()}` });
+    assert.notEqual(response.status, 403, "a granted creator was refused for its letter case");
+    assert.equal(creates().length, 1, "one upstream create");
   });
 }

@@ -21,14 +21,16 @@ const active = new Set(["prepared", "receiving", "pending", "running"]);
 
 async function access(request: NextRequest, context: Context, write = false) {
   const auth = await requireOnlyFansRead({ agency: true, write }); if (auth instanceof NextResponse) return auth;
-  const accountId = requestId((await context.params).accountId), cloneId = request.nextUrl.searchParams.get("creator");
-  if (!accountId || !creatorUuid(cloneId) || request.nextUrl.searchParams.size !== 1) return refuse("Choose a creator and connected account.", 400);
+  const accountId = requestId((await context.params).accountId), raw = request.nextUrl.searchParams.get("creator");
+  if (!accountId || !creatorUuid(raw) || request.nextUrl.searchParams.size !== 1) return refuse("Choose a creator and connected account.", 400);
+  // Grants, DB rows and storage paths hold lower-case ids; normalize once so letter case never decides access.
+  const cloneId = raw.toLowerCase();
   // A creator outside the agency grant is refused before the backend is consulted at all.
   if (auth.auth.agencyGrant && !auth.auth.agencyGrant.creatorIds.includes(cloneId)) return refuse("Creator access denied.", 403);
   // Bind both channels before consulting private source rows or receipts.
   const accounts = await auth.backend?.listAccounts({ creatorId: cloneId });
   if (!accounts?.ok) return refuse("Connected accounts could not be verified.", 503);
-  const account = accounts.data.find(a => a.accountId === accountId && a.binding.creatorId === cloneId);
+  const account = accounts.data.find(a => a.accountId === accountId && a.binding.creatorId.toLowerCase() === cloneId);
   if (!account) return refuse("Creator access denied.", 403);
   const backend = configuredVaultMediaBackend(auth.fetch), vault = configuredVaultBackend(auth.fetch);
   if (!backend || !vault || !auth.actor) return refuse("Media sharing is unavailable.", 503);
