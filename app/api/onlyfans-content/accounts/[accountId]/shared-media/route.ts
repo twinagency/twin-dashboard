@@ -66,7 +66,9 @@ export async function POST(request: NextRequest, context: Context) {
   let body: unknown; try { body = await readCommandJson(request); } catch { return refuse("Invalid media selection.", 400); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return refuse("Invalid media selection.", 400);
   const command = body as Record<string, unknown>;
-  if (Object.keys(command).sort().join(",") !== "kind,sourceId" || !sharedSourceKind(command.kind) || !creatorUuid(command.sourceId)) return refuse("Choose one saved photo or video.", 400);
+  // `action: "refresh"` only re-reads a held receipt's provider job (G04c1); it never starts, resumes or retries an upload.
+  const keys = Object.keys(command).sort().join(","), refresh = keys === "action,kind,sourceId" && command.action === "refresh";
+  if (!refresh && keys !== "kind,sourceId" || !sharedSourceKind(command.kind) || !creatorUuid(command.sourceId)) return refuse("Choose one saved photo or video.", 400);
   if (ctx.account.health !== "connected" || ctx.account.capabilities.manageContent !== "available") return refuse("Reconnect this account before sharing media.");
   const { db, cloneId, accountId, backend } = ctx;
   try {
@@ -77,6 +79,7 @@ export async function POST(request: NextRequest, context: Context) {
     const lookup = () => db.from("shared_media_transfers").select("*").eq("account_id", accountId).eq("source_kind", command.kind).eq("source_id", command.sourceId).or(LIVE_SHARED_FILTER).maybeSingle();
     let existing = await lookup(); if (existing.error) return refuse("Shared upload history is unavailable.", 503);
     let row = existing.data as SharedTransfer | null;
+    if (!row && refresh) return refuse("There is no held upload to check for this file.");
     if (!row) {
       const vault = await ctx.vault.get(accountId); if (!vault.ok || !vault.data.connectionRevision) return refuse("Refresh this account's connection before sharing media.");
       const url = await signedSource(db, source.data.storage_path, cloneId);
@@ -100,7 +103,10 @@ export async function POST(request: NextRequest, context: Context) {
     if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !isOperatorActor(row.actor)) return refuse("This upload was started by another team member. Ask them to finish it.");
     // Two holds. A cleanup hold continues into the job flow to observe the same job. Any other live terminal receipt (complete,
     // or held for review because the file may already be in the vault) is answered from the row: no backend call, no upload.
-    if (!active.has(row.status) && row.error_code !== SHARED_CLEANUP_HOLD) return answer({ ok: true, transfer: publicSharedTransfer(row) });
+    // The one exception is an operator's refresh of a terminal receipt (either hold): it reads the provider job (read only, no
+    // upstream write) and persists it, and the live predicate then decides: adopted, retryable history, or still held.
+    if (!active.has(row.status) && row.error_code !== SHARED_CLEANUP_HOLD && !refresh) return answer({ ok: true, transfer: publicSharedTransfer(row) });
+    if (refresh && active.has(row.status)) return refuse("This upload is still in progress. Resume it to check its status.");
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
       const result = await db.from("shared_media_transfers").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", row!.id).eq("clone_id", cloneId).select("*").maybeSingle();
@@ -108,14 +114,15 @@ export async function POST(request: NextRequest, context: Context) {
     };
     const uploads = await backend.uploads(accountId); if (!uploads.ok || !uploads.data.enabled) return refuse("OnlyFans upload status is unavailable.", 503);
     let job = uploads.data.jobs.find(job => job.jobId === row!.job_id);
-    if (!job && row.job_id) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
+    // A job missing upstream may have aged out of history, which proves nothing: a held receipt stays held.
+    if (!job && (row.job_id || refresh)) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
     if (!job) {
       const created = await backend.create(accountId, { files: [{ fileId: row.file_id, name: row.file_name, size: row.size_bytes }], expectedConnectionRevision: row.connection_revision, ...identity("create") });
       if (!created.ok) return refuse("Upload creation was not confirmed. Resume the same file to check it again.", created.status);
       job = created.upload;
     }
     await save(sharedUploadProgress(row, job));
-    if (job.status === "receiving") {
+    if (!refresh && job.status === "receiving") {
       const offset = job.files[0].receivedBytes;
       if (offset < row!.size_bytes) {
         if (offset % MAX_CHUNK_BYTES !== 0) throw Error("upload_mismatch");
