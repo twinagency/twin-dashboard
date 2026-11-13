@@ -15,7 +15,7 @@ async function open() {
     throw new TypeError(`unexpected fetch ${url}`);
   });
   const { default: MoxyControls } = await import("../../components/onlyfans-launch/automation/MoxyControls");
-  await mount(React.createElement(MoxyControls, { accountId: "of-a", manage: true, onOwnership: () => {} }));
+  await mount(React.createElement(MoxyControls, { accountId: "of-a", manage: true, goHold: null, onOwnership: () => {} }));
   await settle();
   return stub;
 }

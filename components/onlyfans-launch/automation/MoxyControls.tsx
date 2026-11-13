@@ -27,8 +27,9 @@ export function MoxyStateSummary({ value }: { value: MoxyView }) {
   </>;
 }
 
-export default function MoxyControls({ accountId, manage, onOwnership }: {
-  accountId: string; manage: boolean; onOwnership: (selected: boolean | null) => void;
+/** `goHold` (why go is held on this account) withdraws mode On only; Off and Preview stay live. */
+export default function MoxyControls({ accountId, manage, goHold, onOwnership }: {
+  accountId: string; manage: boolean; goHold: string | null; onOwnership: (selected: boolean | null) => void;
 }) {
   const base = `/api/onlyfans-configuration/accounts/${encodeURIComponent(accountId)}/moxy`;
   const [value, setValue] = useState<MoxyView | null>(null), [error, setError] = useState("");
@@ -56,7 +57,7 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
     void load(); return () => { mounted.current = false; epoch.current++; }; }, [load]);
   const editable = manage && serverManage && !loading && !busy;
   const settings = draft ?? (value?.engine === "moxy" ? value.settings : null);
-  const onReady = value?.engine === "moxy" && value.readiness.ready && draft === null;
+  const onReady = value?.engine === "moxy" && value.readiness.ready && draft === null && goHold === null;
 
   async function importSetup(file: File | undefined) {
     if (!file) return;
@@ -100,6 +101,7 @@ export default function MoxyControls({ accountId, manage, onOwnership }: {
         <span title="Off retains Moxy ownership and stops new Moxy work. Preview records decisions without sending. On requires current verified prerequisites." aria-label="Mode help" className="mb-3 cursor-help text-blue-700">ⓘ</span>
         <button type="button" className={nextMode === "off" ? dangerClass : buttonClass} disabled={!editable || !settings || nextMode === "on" && !onReady} onClick={() => void save()}>
           {busy ? "Saving…" : value.engine === "legacy" ? "Select Moxy" : "Save mode"}</button>
+        {goHold && nextMode === "on" ? <span title={goHold} aria-label="Moxy On held" className="mb-3 cursor-help text-blue-700">ⓘ</span> : null}
         {value.engine === "legacy" && !settings ? <span title="A creator setup file must be uploaded first." aria-label="Select Moxy help" className="mb-3 cursor-help text-blue-700">ⓘ</span> : null}</div>
       <details className="text-sm"><summary className="cursor-pointer font-medium">Creator setup</summary>
         <label className="mt-3 grid gap-2">Upload approved creator setup

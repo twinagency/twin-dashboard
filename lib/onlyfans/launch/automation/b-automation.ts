@@ -60,10 +60,15 @@ export type ActionRule = { action: Exclude<ControlAction, "manual_message" | "re
 const LABEL: Record<Exclude<ControlAction, "manual_message" | "resolve_delivery_evidence">, string> = { pause_automation: "Pause", resume_automation: "Resume automatic replies",
   request_takeover: "Take over", release_takeover: "Hand back", mark_no_contact: "Mark no-contact" };
 
-/** What this operator may do to this conversation right now. Read-only and no-contact fail closed. */
-export function actionRules(c: Pick<BConversation, "automationMode" | "takeoverState">, canManage: boolean): ActionRule[] {
-  const rule = (action: keyof typeof LABEL, ok: boolean, why: string): ActionRule => ({ action, label: LABEL[action],
-    enabled: canManage && ok, reason: !canManage ? "Your team access is read-only." : ok ? null : why, confirm: action === "mark_no_contact" });
+/** The go actions a hold withdraws. Every other action is a brake and a hold never touches it. */
+const GO: readonly ActionRule["action"][] = ["resume_automation", "release_takeover"];
+/** What this operator may do to this conversation right now. Read-only and no-contact fail closed; `hold` (why go is held) withdraws GO only. */
+export function actionRules(c: Pick<BConversation, "automationMode" | "takeoverState">, canManage: boolean, hold: string | null = null): ActionRule[] {
+  const rule = (action: keyof typeof LABEL, ok: boolean, why: string): ActionRule => {
+    const held = hold !== null && GO.includes(action);
+    return { action, label: LABEL[action], enabled: canManage && ok && !held,
+      reason: !canManage ? "Your team access is read-only." : !ok ? why : held ? hold : null, confirm: action === "mark_no_contact" };
+  };
   const dead = c.automationMode === "no_contact";
   const deadWhy = "No-contact cannot be undone from the dashboard.";
   return [

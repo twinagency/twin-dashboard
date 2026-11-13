@@ -32,6 +32,8 @@ export type RecordedControlResult = {
   note: string;
   recordedRevision?: number;
   intentId?: string;
+  /** A live refusal's HTTP status and the backend's allowlisted refusal code (controlRefusalCode), when the route forwarded one. */
+  refusal?: { status: number; code?: string };
 };
 export type ControlReply = { ok: true; ack: ControlAck } | {
   ok: false; status: number; outcome: "refused" | "unconfirmed"; error: string; code?: string;
@@ -70,6 +72,12 @@ export const CONTROL_REFUSAL_REASONS: Record<string, string> = {
   command_conflict: "This request key belongs to a different command. Review the existing outcome.",
   control_conflict: "This action is blocked by the current conversation state. Refresh reply ownership and check delivery details.",
 };
+/**
+ * The only refusal codes that may release a held manual send (G04c2 #11): ones the backend raises after its command-key lookup found
+ * no earlier commit. revision_changed: "control revision conflict" (backend refusals.py:5), raised at text_delivery.py:619, after the
+ * prior lookup at :565-570. Never command_conflict (the original did commit) or any account, safety or ownership hold.
+ */
+export const STALE_REFUSAL_CODES: readonly string[] = ["revision_changed"];
 export function controlRefusalCode(value: unknown): string | undefined {
   if (!value || typeof value !== "object" || Array.isArray(value)) return;
   const body = value as Record<string, unknown>;

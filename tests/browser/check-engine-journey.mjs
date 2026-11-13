@@ -3,15 +3,20 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { chromium } from "playwright";
-const dist = process.env.ENGINE_BROWSER_OUTPUT, shots = process.env.ENGINE_BROWSER_ARTIFACTS;
-if (!dist || !shots) throw new Error("Browser output and artifact directories are required");
+const root = path.resolve(import.meta.dirname, "../..");
+// Same default as build-engine-journey.mjs; screenshots land beside it under the git-ignored test-results/.
+const dist = path.resolve(root, process.env.ENGINE_BROWSER_OUTPUT ?? "test-results/engine-browser/dist");
+const shots = path.resolve(root, process.env.ENGINE_BROWSER_ARTIFACTS ?? "test-results/engine-browser/shots");
+// journey/sequence: committed snapshots written by the backend's PG tests (twin-onlyfans-backend service/tests,
+// test_engine_simulated_journey_pg.py and test_engine_sequence_pg.py with ENGINE_JOURNEY_ARTIFACT/ENGINE_SEQUENCE_ARTIFACT set).
+const fixtures = path.join(import.meta.dirname, "../contracts/fixtures");
 await fs.mkdir(shots, { recursive: true });
 const files = { "/": [path.join(dist,"index.html"), "text/html"], "/app.js": [path.join(dist,"app.js"), "text/javascript"],
   "/app.css": [path.join(dist,"app.css"), "text/css"], "/base.css": [path.join(dist,"base.css"), "text/css"],
-  "/journey.json": [process.env.ENGINE_JOURNEY_ARTIFACT || "/evidence/synthetic-journey-final.json", "application/json"],
-  "/sequence.json": [process.env.ENGINE_SEQUENCE_ARTIFACT || "/evidence/sequence-projection-final.json", "application/json"],
-  "/live.json": [path.join(import.meta.dirname, "../contracts/fixtures/engine-status-live.json"), "application/json"],
-  "/live-page2.json": [path.join(import.meta.dirname, "../contracts/fixtures/engine-status-live-page2.json"), "application/json"] };
+  "/journey.json": [process.env.ENGINE_JOURNEY_ARTIFACT || path.join(fixtures, "engine-journey.json"), "application/json"],
+  "/sequence.json": [process.env.ENGINE_SEQUENCE_ARTIFACT || path.join(fixtures, "engine-sequence.json"), "application/json"],
+  "/live.json": [path.join(fixtures, "engine-status-live.json"), "application/json"],
+  "/live-page2.json": [path.join(fixtures, "engine-status-live-page2.json"), "application/json"] };
 const server = http.createServer(async (req,res) => {
   try { const item = files[new URL(req.url,"http://localhost").pathname]; if (!item) throw new Error("not found");
     res.writeHead(200,{ "Content-Type": item[1], "Cache-Control":"no-store" }); res.end(await fs.readFile(item[0]));
@@ -43,7 +48,9 @@ try {
     const request=section.getByRole("button",{name:"Request responsibility"});
     await request.click(); check(await request.isDisabled(),"Pending action cannot be submitted twice");
     await section.getByText("Waiting for a team member to accept").waitFor();
-    await section.getByRole("button",{name:"Accept responsibility"}).click();
+    const accept=section.getByRole("button",{name:"Accept responsibility"});
+    check(await accept.isDisabled(),"A handover cannot be accepted before the conversation is taken over");
+    await section.locator("[data-engine-takeover]").click(); await accept.click();
     await section.getByText("Team member accepted responsibility").waitFor();
     const complete=section.getByRole("button",{name:"Mark completed"});
     check(await complete.isDisabled(),"Resolution requires a review note");

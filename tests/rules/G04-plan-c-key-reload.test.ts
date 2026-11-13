@@ -12,7 +12,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
-import type { PlanCCommandResult, PlanCUnresolvedItem } from "../../lib/onlyfans/plan-c";
+import type { PlanCUnresolvedItem } from "../../lib/onlyfans/plan-c";
 import { MOCK_ACCOUNT, parsedDraft, recordingFetch } from "./plan-c-fixtures";
 
 const store = new Map<string, string>();
@@ -23,20 +23,18 @@ const NAME = `plan-c-keys:operator-a:${MOCK_ACCOUNT}`;
 const INTENT = "draft:reject:req-1:1:v3:the fan asked for a refund";
 let n = 0;
 const mint = () => (++n).toString(16).padStart(64, "0");
-const unconfirmed: PlanCCommandResult = { ok: false, outcome: "unconfirmed", reload: true, error: "x" };
-const refused: PlanCCommandResult = { ok: false, outcome: "refused", reload: false, error: "x" };
 
 test("finding 6: a fresh store over the same storage (a reload) reuses the pending key, and holds it through a refusal", () => {
   store.clear();
   const before = createCommandKeyStore(mint, NAME);
   const key = before.keyFor(INTENT);
-  before.settle(INTENT, unconfirmed);
+  before.settle(INTENT, "unconfirmed");
   const after = createCommandKeyStore(mint, NAME);
   assert.equal(after.keyFor(INTENT), key, "a reload minted a new key for an intent whose outcome is unconfirmed");
-  after.settle(INTENT, refused);
+  after.settle(INTENT, "refused");
   assert.equal(after.keyFor(INTENT), key, "a refusal after a reload released a key whose earlier attempt may have committed");
   assert.equal(createCommandKeyStore(mint, NAME).keyFor(INTENT), key, "the refusal removed the held key from storage");
-  after.settle(INTENT, { ok: true, replayed: true, recordedVersion: null, recordedRevision: null });
+  after.settle(INTENT, "ack");
   assert.notEqual(createCommandKeyStore(mint, NAME).keyFor(INTENT), key, "a recorded ack releases the key");
 });
 
@@ -66,7 +64,7 @@ test("stale entries expire in memory and storage, and no pending or held key is 
   store.clear();
   const many = createCommandKeyStore(mint, NAME, () => clock);
   const first = many.keyFor("intent 0");
-  many.settle("intent 0", unconfirmed);
+  many.settle("intent 0", "unconfirmed");
   for (let i = 1; i < 60; i++) many.keyFor(`intent ${i}`);
   assert.equal(many.keyFor("intent 0"), first, "a held key was dropped");
   assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 60);
@@ -75,6 +73,16 @@ test("stale entries expire in memory and storage, and no pending or held key is 
   many.keyFor("intent 60");
   assert.equal(many.size(), 1, "day-old entries stayed in memory");
   assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 1);
+});
+
+test("G04c2 #10: the same store instance never hands out a day-old key; expiry is checked before the lookup", () => {
+  store.clear();
+  let clock = 0;
+  const live = createCommandKeyStore(mint, NAME, () => clock);
+  const key = live.keyFor(INTENT);
+  clock = 24 * 3600_000 + 1;
+  assert.notEqual(live.keyFor(INTENT), key, "a day-old key was reused by the instance that minted it");
+  assert.equal(live.size(), 1, "the day-old entry stayed beside the new one");
 });
 
 test("another operator's scope never reuses the key", async () => {

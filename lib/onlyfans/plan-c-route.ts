@@ -27,7 +27,7 @@ export function planCOperatorOnly(ctx: { auth: { operatorSession: boolean; agenc
   return { ok: true, actor: ctx.pilotActor };
 }
 
-/** Names the operator's saved Plan C command keys in the browser tab. A hash, so the backend actor never reaches the browser. */
+/** Names the operator's saved command keys (Plan C, and G04c2 fan-visible sends) in the browser tab. A hash, so the backend actor never reaches the browser. */
 export const planCKeyScope = (actor: string) => createHash("sha256").update(`plan-c-keys:${actor}`).digest("hex").slice(0, 16);
 
 export const planCReadDrafts = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
