@@ -86,8 +86,8 @@ test("finding 1: a definite refusal releases the key, so Retry prepares with a n
   } finally { await unmount(); uninstall(); }
 });
 
-test("finding 1: a lost reply or a bare 5xx keeps the key, so Retry repeats the same prepare", async () => {
-  for (const [label, first, id] of [["lost reply", lostReply, "202"], ["bare 502", http502, "203"]] as const) {
+test("finding 1: a lost reply or any 5xx (bare, or the route's own 502 after an upstream failure) keeps the key, so Retry repeats the same prepare", async () => {
+  for (const [label, first, id] of [["lost reply", lostReply, "202"], ["bare 502", http502, "203"], ["route 502 labelled refused (upstream timeout)", () => vaultFailure(502, "refused"), "208"]] as const) {
     try {
       await host(backend(id, [first, () => json(videoBody("pending", false, id))]), id);
       await openVideo();

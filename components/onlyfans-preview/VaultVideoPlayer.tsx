@@ -2,7 +2,7 @@
 import {useEffect,useState} from "react";
 import {parseVideo,type VideoState} from "@/lib/onlyfans/vault-media";
 
-/** A video's prepare key, kept while its outcome is unresolved (unprepared, pending, running, network error, 5xx) so a reopen or Retry repeats
+/** A video's prepare key, kept while its outcome is unresolved (unprepared, pending, running, network error, any 5xx: the route labels an upstream timeout "refused" though the prepare may have run) so a reopen or Retry repeats
  * that prepare. A definite refusal or a ready/failed video releases it, and the next prepare is a new one. In-page only, not across a reload.
  * Opening reads the recorded status first and prepares only a video that is not ready or already preparing. */
 const prepareKeys=new Map<string,string>();
@@ -17,7 +17,7 @@ export default function VaultVideoPlayer({accountId,mediaId,poster,readOnly=fals
       try{const response=await fetch(base,{method:prepare?"POST":"GET",credentials:"same-origin",cache:"no-store",redirect:"error",signal:AbortSignal.any([controller.signal,AbortSignal.timeout(15000)]),
         ...(prepare?{headers:{"Content-Type":"application/json"},body:JSON.stringify({requestId:prepareKey(base)})}:{})});
         const value=response.ok?parseVideo(await response.json(),accountId,mediaId):null;
-        if(value?!["unprepared","pending","running"].includes(value.status):prepare&&!response.ok&&(await response.json().catch(()=>null))?.outcome==="refused")prepareKeys.delete(base);
+        if(value?!["unprepared","pending","running"].includes(value.status):prepare&&response.status<500&&!response.ok&&(await response.json().catch(()=>null))?.outcome==="refused")prepareKeys.delete(base);
         if([401,403].includes(response.status)){if(live){setState(null);setPlaybackError("");setDenied(true);setNotice("Sign in again to play this video.");}live=false;controller.abort();return;}
         if(!value)throw Error([401,403].includes(response.status)?"Sign in again to play this video.":"This video could not be prepared. Sync the vault, then try again.");
         if(first&&!value.ready&&!["pending","running"].includes(value.status)){running=false;await read(true);return;}
