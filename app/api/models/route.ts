@@ -14,7 +14,7 @@ export async function GET() {
       const j = await r.json();
       // Cache only a real catalogue: a 429/5xx body has no `data` and must not pin [] for an hour.
       if (!r.ok || !Array.isArray(j?.data) || !j.data.length) throw new Error(`OpenRouter models ${r.status}`);
-      const models: OrModel[] = (j.data ?? [])
+      const models: OrModel[] = j.data
         .map((m: any) => ({
           id: m.id,
           name: m.name ?? m.id,

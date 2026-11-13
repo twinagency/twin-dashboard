@@ -14,11 +14,11 @@ export async function GET() {
       const j = await r.json();
       const rate = Number(j?.rates?.AUD);
       // Fall back uncached, so the first request after the API recovers gets the live rate.
-      if (!r.ok || !Number.isFinite(rate) || rate <= 0) return NextResponse.json({ usd_to_aud: AUD_PER_USD });
+      if (!r.ok || !Number.isFinite(rate) || rate <= 0) return NextResponse.json({ usd_to_aud: AUD_PER_USD, stale: true });
       cache = { at: Date.now(), rate };
     }
     return NextResponse.json({ usd_to_aud: cache.rate });
   } catch {
-    return NextResponse.json({ usd_to_aud: AUD_PER_USD });
+    return NextResponse.json({ usd_to_aud: AUD_PER_USD, stale: true });
   }
 }

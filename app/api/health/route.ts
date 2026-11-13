@@ -50,16 +50,23 @@ export async function GET() {
     status: string;
   }[];
 
+  // Only an active clone with a token is expected to answer getMe. Paused and OnlyFans-only clones (created paused with
+  // bot_token "") are listed as skipped, so a retired token cannot hold the status code red forever.
+  const live = clones.filter((c) => c.status === "active" && !!c.bot_token);
+  const skipped = clones
+    .filter((c) => !live.includes(c))
+    .map((c) => ({ id: c.id, slug: c.slug, name: c.name, status: c.status, reason: c.bot_token ? "not active" : "no bot token" }));
   const results = await Promise.all(
-    clones.map(async (c) => {
+    live.map(async (c) => {
       const tg = await timed(() => pingTelegram(c.bot_token));
       return { id: c.id, slug: c.slug, name: c.name, status: c.status, telegram: tg };
     }),
   );
 
-  // A status-code monitor must see a dead bot as unhealthy, not just the body.
+  // A status-code monitor must see a dead active bot as unhealthy, not just the body.
   return NextResponse.json({
     supabase: { ok: true, ms: supabaseMs },
     clones: results,
+    skipped,
   }, { status: results.every((r) => r.telegram.ok) ? 200 : 503 });
 }

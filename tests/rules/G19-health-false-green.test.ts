@@ -1,10 +1,9 @@
-// G19 (was KNOWN RED W4 api-business-connection-plus17 F14, severity polish): app/api/health/route.ts:38-43 answers a Supabase
-// failure with HTTP 200 (body supabase.ok:false), and :53-63 answers 200 when a clone's Telegram getMe says ok:false, so a
-// status-code monitor would stay green while the database or a bot is down.
-// No monitor or page is known to call this route (only the lib/app-mode.ts:48 allowlist names it), and in production
-// middleware redirects cookieless callers, so the impact is limited to an admin reading it by hand.
-// Fixed looks like: a dependency failure answers a non-200 (e.g. 503), keeping the body for humans; or the route is
-// deleted along with its allowlist entry, which this file also counts as fixed (loaded without a static import).
+// G19 regression guard (was KNOWN RED W4 api-business-connection-plus17 F14, severity polish; fixed in #392). Before the fix,
+// app/api/health/route.ts answered HTTP 200 on a Supabase failure (body supabase.ok:false) and when a bot's getMe failed, so
+// a status-code monitor stayed green while the database or a bot was down. Now: 503 on either, computed over active clones
+// with a bot token only; paused and OnlyFans-only clones are listed in `skipped` so a retired token cannot hold it red.
+// No monitor or page is known to call this route (only the lib/app-mode.ts allowlist names it). Deleting the route along
+// with its allowlist entry also counts as fixed (loaded without a static import).
 import assert from "node:assert/strict";
 import test from "node:test";
 import { anyOf, as, BOT_TOKEN, CLONE_A, isRest, isTelegram, json, optionalModule, pgError, table, withWire, type Responder } from "./G19-harness";
@@ -45,4 +44,23 @@ test("F14: clones read OK but a clone's Telegram getMe answering ok:false does n
   const r = await health(route.GET, clonesOk, getMeRefused);
   assert.ok(r.status < 200 || r.status > 299,
     `a refused bot answered HTTP ${r.status} (telegram.ok:${r.body.clones?.[0]?.telegram.ok}): a status-code monitor reads it as healthy`);
+});
+
+test("G19 R1 #1: paused clones and clones with no bot token are reported as skipped, not pinged, and do not turn the status red", async () => {
+  if (!route?.GET) return; // the route is gone: nothing can read it as healthy
+  // Statuses are "active" | "paused" (lib/types.ts:40); OnlyFans-only creators are created paused with bot_token ""
+  // (lib/onlyfans/connection-creators.ts:89). A retired bot's token answers getMe 401.
+  const PAUSED_DEAD = { id: "0f000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "paused-dead", name: "Paused Dead", bot_token: "1:DEAD_FIXTURE", status: "paused" };
+  const OF_ONLY = { id: "0f000002-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "of-only", name: "OF Only", bot_token: "", status: "paused" };
+  const ACTIVE_NO_TOKEN = { id: "0f000003-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "no-token", name: "No Token", bot_token: "", status: "active" };
+  const fleet: Responder = c => (isRest(c, "clones") ? table([CLONE, PAUSED_DEAD, OF_ONLY, ACTIVE_NO_TOKEN], c) : undefined);
+  const telegram: Responder = c => (isTelegram(c, "getMe") ? (c.url.pathname.includes(BOT_TOKEN) ? getMe(c) : getMeRefused(c)) : undefined);
+  const r = await withWire(anyOf(fleet, telegram), async stub => {
+    const res = await as(null, () => route.GET!());
+    assert.equal(stub.to("api.telegram.org").length, 1, "only the active clone with a token is pinged");
+    return { status: res.status, body: await res.json() as Body & { skipped?: { slug: string; status: string }[] } };
+  });
+  assert.equal(r.status, 200, `a mixed fleet with every active bot healthy answered ${r.status}`);
+  assert.deepEqual(r.body.clones?.map(c => (c as unknown as { slug: string }).slug), ["clone-a"]);
+  assert.deepEqual(r.body.skipped?.map(s => s.slug).sort(), ["no-token", "of-only", "paused-dead"]);
 });

@@ -1,8 +1,8 @@
-// G19 (was KNOWN RED W4 api-business-connection-plus17 F4): app/api/models/route.ts:12-23 never checks `r.ok`: an OpenRouter
-// error body without `data` (429/5xx JSON) is mapped to [], cached for an hour and answered 200 []. app/api/fx/route.ts:12-17
-// does the same with its static fallback rate: one failed FX call pins the fallback for an hour.
-// Fixed looks like: cache only an OK, non-empty upstream answer; on failure answer an error (e.g. 502) uncached, so the
-// first request after the upstream recovers serves the live catalogue / rate.
+// G19 regression guard (was KNOWN RED W4 api-business-connection-plus17 F4; fixed in #392). Before the fix,
+// app/api/models/route.ts never checked `r.ok`: an OpenRouter error body without `data` (429/5xx JSON) was mapped to [],
+// cached for an hour and answered 200 []. app/api/fx/route.ts likewise cached its static fallback rate for an hour.
+// Now only an OK, non-empty upstream answer is cached; models answers 502 and fx the fallback flagged `stale:true`, both
+// uncached, so the first request after the upstream recovers serves the live catalogue / rate.
 // Each test loads a FRESH copy of the route module (dropped from require.cache, helper freshModule) because both routes
 // keep a module-level cache, and each asserts its own upstream call count so a cache shared across modules (the S10 fix)
 // cannot make a test pass without asking the upstream.
@@ -81,7 +81,8 @@ test("F4: after an FX 503, the recovered live rate is served (the fallback is no
   const script = [() => json({ result: "error", "error-type": "unavailable" }, 503), () => json({ result: "success", rates: { AUD: LIVE_AUD } })];
   await withWire(upstream(FX, script), async stub => {
     const route = freshFx();
-    await call(route);
+    const fallback = await call(route);
+    assert.deepEqual(fallback.body, { usd_to_aud: AUD_PER_USD, stale: true }, "the fallback rate is flagged stale");
     const r = await call(route);
     assert.equal(stub.to(FX).length, 2, "the FX API was not asked again after the 503");
     assert.deepEqual(r.body, { usd_to_aud: LIVE_AUD });

@@ -1,7 +1,7 @@
-// G19 (was KNOWN RED W4 api-business-connection-plus17 F3): app/api/voice/route.ts:57-59 caches `body:null` for ANY failure
-// (Telegram 5xx/429, network, bad JSON) for an hour (:22,36-37), so one Telegram blip makes that voice note 404 for every
-// operator until the entry expires, even after Telegram recovers. Fixed looks like: failures are never cached (or only a
-// definitive "file not found", briefly), so the next request after recovery streams the audio.
+// G19 regression guard (was KNOWN RED W4 api-business-connection-plus17 F3; fixed in #392). Before the fix,
+// app/api/voice/route.ts cached `body:null` for ANY failure (Telegram 5xx/429, network, bad JSON) for an hour, so one
+// Telegram blip made that voice note 404 for every operator until the entry expired. Now failures are not cached, so the
+// next request after recovery streams the audio.
 // Not tested here (no clean assertion without reading module internals): the cache Map never evicts (F3 first half).
 import assert from "node:assert/strict";
 import test from "node:test";

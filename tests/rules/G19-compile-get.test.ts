@@ -1,10 +1,9 @@
-// G19 (was KNOWN RED W4 api-business-connection-plus17 F1): GET /api/compile?id= runs compileClone(id) for an internal admin
-// (access null) with no origin check (app/api/compile/route.ts:8-14). compileClone reads the clones row and UPDATEs
-// persona + the four live prompts (lib/compiler.ts:367-424), which the bot reads. The admin cookie is SameSite=Lax, so a
-// cross-site top-level GET carries it: any page the operator visits can recompile a live clone. POST already refuses an
-// untrusted Origin (:16). Fixed looks like: GET deleted (405) or origin-checked (403), with zero upstream calls; or the
-// whole route deleted (S13: CompileButton calls the server action), which this file counts as fixed only once
-// components/CompileButton.tsx (today :15 POSTs to it) no longer references /api/compile.
+// G19 regression guard (was KNOWN RED W4 api-business-connection-plus17 F1; fixed in #392 by removing GET). Before the fix,
+// GET /api/compile?id= ran compileClone(id) for an internal admin with no origin check. compileClone UPDATEs persona and the
+// live prompts the bot reads, and the SameSite=Lax admin cookie rides a cross-site top-level GET, so any page the operator
+// visited could recompile a live clone. POST refuses an untrusted Origin. Fixed means: GET absent (Next.js answers 405) while
+// POST stays and components/CompileButton.tsx POSTs, or GET origin-checked (403) with zero upstream calls, or the whole
+// route deleted once CompileButton no longer references /api/compile.
 // The route is loaded without a static import so a deleted route neither crashes this file nor breaks tsc.
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
@@ -35,14 +34,20 @@ test("control: POST with a cross-site Origin is refused 403 with zero upstream c
 
 test("F1: a cross-site GET as internal admin makes no upstream call and is refused (405 or 403)", async () => {
   // A deleted route or a deleted GET export: Next.js answers 404/405 before any handler code runs.
+  const button = fileURLToPath(new URL("../../components/CompileButton.tsx", import.meta.url));
+  const source = existsSync(button) ? readFileSync(button, "utf8") : "";
   if (!route) {
     // Deleting the route is only a fix if its one client stopped calling it; otherwise compiling breaks instead.
-    const button = fileURLToPath(new URL("../../components/CompileButton.tsx", import.meta.url));
-    const source = existsSync(button) ? readFileSync(button, "utf8") : "";
     assert.ok(!source.includes("/api/compile"), "app/api/compile/route is gone but components/CompileButton.tsx still calls /api/compile");
     return;
   }
-  if (!route.GET) return;
+  if (!route.GET) {
+    // No GET export: Next.js answers 405 itself. That is a fix only while compiling still works over POST and its one
+    // client (components/CompileButton.tsx) POSTs rather than relying on the removed GET.
+    assert.equal(typeof route.POST, "function", "app/api/compile/route lost GET and POST: compiling is gone");
+    assert.match(source, /fetch\("\/api\/compile",\s*\{\s*method:\s*"POST"/, "components/CompileButton.tsx no longer POSTs to /api/compile");
+    return;
+  }
   const GET = route.GET;
   await withWire(clonesRead, async stub => {
     const req = new NextRequest(`http://localhost/api/compile?id=${CLONE_A}`, { method: "GET", headers: CROSS_SITE });

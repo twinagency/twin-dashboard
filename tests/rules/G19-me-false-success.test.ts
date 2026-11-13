@@ -1,7 +1,7 @@
-// G19 (was KNOWN RED W4 api-business-connection-plus17 F2): GET /api/v1/me drops the clones query's `error`
-// (app/api/v1/me/route.ts:19), so a database failure answers 200 ok:true with model:null (clone key) or models:[]
-// (fleet key) on "the first call any client makes": the client concludes its key sees nothing. False success.
-// Fixed looks like: the error surfaces (throw, so withModelKey answers 500, or a 503), never ok:true with no model.
+// G19 regression guard (was KNOWN RED W4 api-business-connection-plus17 F2; fixed in #392). Before the fix, GET /api/v1/me
+// dropped the clones query's `error`, so a database failure answered 200 ok:true with model:null (clone key) or models:[]
+// (fleet key) on the first call any client makes, and the client concluded its key sees nothing. Now the error surfaces
+// (withModelKey answers 500); a 503 would also pass. Never ok:true with no model.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { anyOf, as, CLONE_A, isRest, modelKeyWire, pgError, table, withWire, type Call, type Responder } from "./G19-harness";
