@@ -429,3 +429,11 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - F0 R2: Opus structure 2 major (premerge env -i wipes scrub; mode semantics split TS/bash) + 5 minor → fixer on S1-S5,S7 + split core/live PRs.
 - 2026-11-13 owner "go": TRIAGE ON FLASH. Opus re-sort analyst stopped (left worktree queue-resort dirty with copied corpus only; needs --force to remove, not done). Triage delegated to DeepSeek Flash (worktree, read-only) → /tmp/triage-flash.md; Opus approves groups + spot-checks ~5 rows, then re-sorts this file.
 - W7 rwl R1 (a823a809): 1 blocker (template saved before follower UPDATE → failed cascade unretryable), 3 major (absent template keys never cascade incl brakes; reattach copy false; paired fields split per follower), 3 minor. Rejected: concurrent-save race (pre-existing, deferred), same-field creator override (intended), null uses_default_config (measured NOT NULL, 0/11). Decisions /tmp/w7c-findings.md; fixer R1 running.
+
+## 2026-11-13 progress
+- #374 W7 merged cfe3a2f5 (+317: product 87, tests 230; over cap by tests, flagged). Deferred: tip_max↔spoil group, useCloneConfig `??` hand copy, save race, UI screenshots at next restart.
+- F0: R3 final fix pass running (unpack, live like exec, LIVE=opt skip tests; opt=skip/req=INFRA for down/auth/refused).
+- G01: R1 REQUEST CHANGES (Save-edit bypass, stop revision dropped, dead fixtures); stop-hold durability + revision-free STOP deferred to backend lane 1. Fix round queued for next free slot.
+- G47: implementer running (incl. 7a-engine-note-and-accept, 7a-engine-page-race).
+- Flash psql tests used own initdb cluster on random loopback port (measured from code); stack/prod untouched.
+- Incident: F0 fixer pkill'd other sessions' premerge runs (pid 30666 /tmp/fix-f4, 41350, 56250, 57577). Owners rerun.
