@@ -17,9 +17,19 @@ export const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 /** Server-only modules no browser graph may reach: the secret readers (ONLYFANS_*_TOKEN, SUPABASE_SERVICE_KEY, the service-role
  *  clients) and the server-side route/transport layers built on them. Exact repo paths, so a browser-safe sibling such as
  *  engine-operator-core.ts is not caught by a name. */
-export const SERVER_MODULES = ["lib/onlyfans/backend-transport.ts", "lib/onlyfans/plan-c-owner-core.ts", "lib/onlyfans/plan-c-owner.ts",
+const NAMED_SERVER_MODULES = ["lib/onlyfans/backend-transport.ts", "lib/onlyfans/plan-c-owner-core.ts", "lib/onlyfans/plan-c-owner.ts",
   "lib/supabase.ts", "lib/supabase-service.ts", "lib/onlyfans/engine-operator.ts", "lib/onlyfans/plan-c-backend.ts", "lib/onlyfans/plan-c-guard.ts",
   "lib/onlyfans/plan-c-route.ts", "lib/onlyfans/route.ts"];
+
+/** A secret env name: *KEY, *TOKEN, *SECRET, *PASSWORD (anywhere in the name), never NEXT_PUBLIC_* or a publishable key. */
+export const SECRET_ENV = /process\.env(?:\.|\[\s*["'`])([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)/g;
+export const isSecretEnv = (name: string) => !name.startsWith("NEXT_PUBLIC_") && !name.includes("PUBLISHABLE");
+/** Every lib/ module whose text reads a secret env name. Text scan on purpose: a comment mention over-protects, never under-protects. */
+export function secretReaders(): string[] {
+  return sourceFiles("lib").filter(file => [...readFileSync(path.join(ROOT, file), "utf8").matchAll(SECRET_ENV)].some(m => isSecretEnv(m[1])));
+}
+/** Named server layers plus every derived secret reader, so a new reader is protected without editing a list (codex final P2). */
+export const SERVER_MODULES = [...new Set([...NAMED_SERVER_MODULES, ...secretReaders()])].sort();
 
 const parsed = new Map<string, ts.SourceFile>();
 function source(file: string, text?: string): ts.SourceFile {

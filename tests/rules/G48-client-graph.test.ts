@@ -13,7 +13,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { build } from "esbuild";
-import { ROOT, SERVER_MODULES, directive, importGraph, sourceFiles, valueSpecifiers } from "../helpers/import-graph";
+import { ROOT, SECRET_ENV, SERVER_MODULES, directive, importGraph, isSecretEnv, sourceFiles, valueSpecifiers } from "../helpers/import-graph";
 
 const TRANSPORT = "lib/onlyfans/backend-transport.ts";
 const CLIENTS = sourceFiles("app", "components", "lib").filter(file => directive(file) === "use client");
@@ -29,6 +29,11 @@ test("control: the walker parses value edges only, and finds known server paths"
   assert.equal(directive("x.ts", '"use strict"; "use client"; import "./a";'), "use client", "fixture: a directive later in the prologue counts");
   assert.equal(directive("x.ts", 'import "./a"; "use client";'), null, "fixture: a string after the prologue is not a directive");
   assert.deepEqual(SERVER_MODULES.filter(file => !sourceFiles("lib").includes(file)), [], "fixture: every listed server module exists");
+  for (const reader of ["lib/agency-session.ts", "lib/owner-auth.ts", "lib/onlyfans-managed-proxy/backend.ts", "lib/onlyfans/plan-c-owner-core.ts", "lib/openrouter.ts"])
+    assert.ok(SERVER_MODULES.includes(reader), `fixture: derived secret reader ${reader} is protected`);
+  const names = (text: string) => [...text.matchAll(SECRET_ENV)].map(m => m[1]).filter(isSecretEnv);
+  assert.deepEqual(names('process.env.SUPABASE_SERVICE_KEY; process.env["ONLYFANS_X_TOKEN"]; process.env.NEXT_PUBLIC_A_KEY; process.env.SUPABASE_PUBLISHABLE_KEY; process.env.NODE_ENV'),
+    ["SUPABASE_SERVICE_KEY", "ONLYFANS_X_TOKEN"], "fixture: secret names match, public and publishable names do not");
   assert.ok(CLIENTS.length > 200 && CLIENTS.includes("components/onlyfans-preview/EngineStatus.tsx"), `fixture: the scan finds the 'use client' modules (${CLIENTS.length})`);
 });
 
