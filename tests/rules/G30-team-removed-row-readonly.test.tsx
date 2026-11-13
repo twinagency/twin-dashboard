@@ -1,6 +1,7 @@
 // Rule (G30 R1, F1 follow-up): agency_team_command 'update' no longer reactivates a removed member (20261113100200), so
 // a Removed row on /agency/team must not offer an update form or a "Restore access" button that can only fail with a
-// conflict. It renders read-only with an ⓘ hint that Twin admin restores access. Active rows keep their form.
+// conflict. It renders read-only with an ⓘ hint that Twin admin restores access (/agency-admin, "Restore access").
+// Active rows keep their form, and the Remove control's ⓘ says removal is permanent for owners.
 // Real AgencyTeamForm in jsdom (7a-harness). Offline.
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -15,6 +16,12 @@ test("control: an active member keeps the update form with Save and Remove", asy
   await render(<AgencyTeamForm member={member(true)} {...props} />);
   assert.ok(q('form[action="/agency/team/manage"]'), "update form rendered");
   assert.deepEqual(all("button[name=operation]").map(b => b.getAttribute("value")), ["update", "remove"]);
+});
+
+test("the Remove control says removal is permanent for owners and only Twin admin restores", async () => {
+  await render(<AgencyTeamForm member={member(true)} {...props} />);
+  await click(q('[aria-label="More information"]'));
+  assert.match(text(), /Removing is permanent for owners\. Only Twin admin can restore access\./);
 });
 
 test("a removed member renders read-only: no form, no update or restore control, ⓘ says Twin admin restores", async () => {

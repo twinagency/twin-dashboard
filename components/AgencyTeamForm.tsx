@@ -15,6 +15,6 @@ export default function AgencyTeamForm({member,creators,managementAvailable,fixe
     {scope==="selected" && <fieldset className="max-h-48 overflow-auto rounded-xl border border-line p-3"><legend>Assigned creators</legend>{creators.map(c=><label key={c.id} className="!flex items-center gap-2"><input type="checkbox" name="creator_ids" value={c.id} defaultChecked={member?.creator_ids.includes(c.id)} className="!m-0 !w-auto"/>{c.name}</label>)}{!creators.length && <p>No creators assigned yet.</p>}</fieldset>}
     <p className="twin-help">No selected creators means no creator access. Team administration is reserved for delegated agency owners.</p>
     <button name="operation" value={member ? "update":"invite"} className="twin-primary-link">{member ? "Save access" : "Create invitation"}</button>
-    {member?.active && <button name="operation" value="remove" className="twin-outline-link">Remove access</button>}
+    {member?.active && <span className="inline-flex items-center gap-1"><button name="operation" value="remove" className="twin-outline-link">Remove access</button><Info text="Removing is permanent for owners. Only Twin admin can restore access."/></span>}
   </form>;
 }
