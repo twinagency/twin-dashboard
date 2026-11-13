@@ -34,7 +34,4 @@ export function moxyAck(v: unknown, accountId: string, change: MoxyChange): bool
   return record(v) && v.ok === true && v.schemaVersion === MOXY_SCHEMA && v.accountId === accountId &&
     record(v.moxy) && v.moxy.mode === change.mode && v.moxy.revision === change.expectedRevision + 1 && readiness(v.moxy.readiness);
 }
-export function starterSettings(creator: string): Record<string, unknown> {
-  return { creator_key: creator, products: [], sequences: {}, catalogue_bindings: {}, operational: {} };
-}
 
