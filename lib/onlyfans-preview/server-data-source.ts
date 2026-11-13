@@ -268,7 +268,7 @@ export function createServerOnlyFansDataSource(options: {
       return toState(
         await transport.readAccounts(scope ?? {}),
         (accounts) => accounts.length === 0,
-        (accounts) => oldestStale(accounts.map((account) => account.syncFreshness)),
+        (accounts) => oldestStale(accounts.map((account) => account?.syncFreshness)),
       );
     },
 
@@ -286,7 +286,7 @@ export function createServerOnlyFansDataSource(options: {
       return toState(
         await transport.readConversations(accountId, cursor ?? null, aiOnly, search),
         (page) => page.items.length === 0,
-        (page) => oldestStale(page.items.map((conversation) => conversation.freshness)),
+        (page) => oldestStale(page.items.map((conversation) => conversation?.freshness)),
       );
     },
 
@@ -294,7 +294,7 @@ export function createServerOnlyFansDataSource(options: {
       return toState(
         await transport.readConversation(accountId, conversationId, cursor),
         () => false,
-        (conversation) => conversation.freshness ?? null,
+        (conversation) => oldestStale([conversation.freshness]),
       );
     },
 

@@ -49,6 +49,7 @@ import {
 import { createFetchOnlyFansTransport } from "@/lib/onlyfans-preview/server-data-source";
 import { createOnlyFansDataSource } from "@/lib/onlyfans-preview/sources";
 import {
+  accountsLeft,
   applyAccounts,
   applyConversation,
   appendOlderConversation,
@@ -263,6 +264,17 @@ export default function OnlyFansWorkspace({
     details: new Set(),
   });
 
+  // An account that leaves scope forgets its requested reads, so a re-add issues a fresh read instead of
+  // waiting on one the selection refused.
+  const commitAccounts = useCallback((generation: number, result: Parameters<typeof applyAccounts>[2]) => {
+    const next = applyAccounts(ref.current, generation, result);
+    for (const accountId of accountsLeft(ref.current, next)) {
+      requested.current.conversations.delete(accountId);
+      for (const key of requested.current.details) if (key.startsWith(`${accountId}:`)) requested.current.details.delete(key);
+    }
+    commit(next);
+  }, [commit, ref]);
+
   // Permission is the viewer, and the viewer is derived, never supplied by the
   // page: a view-as session is always narrower and always read only. Its
   // account scope follows the requested creator, so the preview's read-only mode
@@ -310,12 +322,12 @@ export default function OnlyFansWorkspace({
     void source
       .listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId })
       .then((result) => {
-        if (!cancelled) commit(applyAccounts(ref.current, begun.generation, result));
+        if (!cancelled) commitAccounts(begun.generation, result);
       });
     return () => {
       cancelled = true;
     };
-  }, [source, commit, ref, requestedScope.creatorId, requestedScope.accountId]);
+  }, [source, commit, commitAccounts, ref, requestedScope.creatorId, requestedScope.accountId]);
 
   useEffect(() => {
     if (sourceMode !== "server") return;
@@ -326,11 +338,11 @@ export default function OnlyFansWorkspace({
       busy = true;
       try {
         const result = await source.listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId });
-        if (active && (result.status === "ready" || result.status === "stale" || result.status === "empty")) commit(applyAccounts(ref.current, generation, result));
+        if (active && (result.status === "ready" || result.status === "stale" || result.status === "empty")) commitAccounts(generation, result);
       } finally { busy = false; }
     }, 15000);
     return () => { active = false; clearInterval(timer); };
-  }, [sourceMode, source, requestedScope.creatorId, requestedScope.accountId, commit, ref]);
+  }, [sourceMode, source, requestedScope.creatorId, requestedScope.accountId, commit, commitAccounts, ref]);
 
   // Keep the selection inside the accounts the server actually returned.
   //
@@ -640,7 +652,7 @@ export default function OnlyFansWorkspace({
       setPendingAction(null);
       if (!result.simulated) {
         const accounts = await source.listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId });
-        commit(applyAccounts(ref.current, generation, accounts));
+        commitAccounts(generation, accounts);
         if (generation !== ref.current.scopeGeneration) return;
         requested.current.details.delete(`${request.accountId}:${request.conversationId}`);
         requested.current.conversations.delete(request.accountId);
@@ -663,10 +675,10 @@ export default function OnlyFansWorkspace({
         } else { commit({ ...ref.current }); }
       }
     } catch {
-      commit(applyAccounts(ref.current, generation, { status: "unavailable",
-        message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
+      commitAccounts(generation, { status: "unavailable",
+        message: "The conversation could not be refreshed. Reload the dashboard to read its current state." });
     } finally { commandBusy.current = false; setCommandPending(false); setPendingAction(null); }
-  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal]);
+  }, [commit, commitAccounts, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal]);
 
   const submitAction = useCallback(
     async (action: AvailableAction, payload: CommandPayload) => {

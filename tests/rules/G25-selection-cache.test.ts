@@ -33,7 +33,7 @@ import {
   appendConversations, appendOlderConversation, applyAccounts, applyConversation, applyConversationRefresh,
   applyConversations, cachedConversationIds, currentConversationState, initialSelectionState, isLoadingMore,
   nextConversationCursor, requestConversation, requestConversations, requestMoreConversations, selectAccount,
-  type PreviewSelectionState,
+  type PendingRequest, type PreviewSelectionState,
 } from "../../lib/onlyfans-preview/selection";
 import type { ConversationDetail, ConversationMessage, ConversationSummary, CursorPage, OfAccount, RequestState } from "../../lib/onlyfans-preview/types";
 
@@ -182,4 +182,49 @@ test("control: a failed CURRENT Load more clears the loading flag", () => {
   assert.equal(failed.applied, false);
   assert.equal(isLoadingMore(failed.state, A), false, "the only Load more in flight failed; the button must come back");
   assert.deepEqual(ids(failed.state), ["c1"], "a failed page keeps the rows already shown");
+});
+
+// Codex final P1 (G25): removing an account and re-adding it under the same scopeGeneration used to restart its request
+// counters, so a late reply issued before the removal carried the same sequence as the new request and applied over it.
+/** Accounts [A, B] with A selected, `issue` run on A, then A dropped and re-added under the same generation. */
+function reAdded(issue: (state: PreviewSelectionState) => PendingRequest, start?: PreviewSelectionState) {
+  let state = start ?? selectAccount(applyAccounts(initialSelectionState(), 0, { status: "ready", data: [account(A), account(B)] }), A);
+  const old = issue(state);
+  state = applyAccounts(old.state, old.generation, { status: "ready", data: [account(B)] });
+  state = selectAccount(applyAccounts(state, old.generation, { status: "ready", data: [account(A), account(B)] }), A);
+  return { old, state };
+}
+
+test("P1: a late list reply from before a remove and re-add is refused, and the new request still applies", () => {
+  const { old, state } = reAdded(s => requestConversations(s, A));
+  const fresh = requestConversations(state, A);
+  const late = applyConversations(fresh.state, A, old.generation, old.seq, page(["old-row"], null));
+  assert.equal(late.applied, false, "the pre-removal reply must not apply over the new request");
+  const applied = applyConversations(late.state, A, fresh.generation, fresh.seq, page(["new-row"], null));
+  assert.equal(applied.applied, true);
+  assert.deepEqual(ids(applied.state), ["new-row"]);
+});
+
+test("P1: a late list reply from before a remove and re-add is refused even before any new request", () => {
+  const { old, state } = reAdded(s => requestConversations(s, A));
+  const late = applyConversations(state, A, old.generation, old.seq, page(["old-row"], null));
+  assert.equal(late.applied, false);
+  assert.deepEqual(ids(late.state), []);
+});
+
+test("P1: a late detail reply from before a remove and re-add is refused", () => {
+  const { old, state } = reAdded(s => requestConversation(s, A, C), withList([C], null));
+  const fresh = requestConversation(state, A, C);
+  const late = applyConversation(fresh.state, A, C, old.generation, old.seq, thread(range(1, 5), null));
+  assert.equal(late.applied, false);
+  assert.equal(messageIds(late.state), null);
+});
+
+test("P1: a late Load older page from before a remove and re-add is refused", () => {
+  const { old, state } = reAdded(s => requestConversation(s, A, C, { background: true }), withThread());
+  const reopen = requestConversation(state, A, C);
+  const opened = applyConversation(reopen.state, A, C, reopen.generation, reopen.seq, thread(range(51, 100), "older-1")).state;
+  const late = appendOlderConversation(opened, A, C, old.generation, old.seq, thread(range(1, 50), "older-2"));
+  assert.equal(late.applied, false);
+  assert.equal(messageIds(late.state)?.length, 50, "only the re-opened head is stored");
 });

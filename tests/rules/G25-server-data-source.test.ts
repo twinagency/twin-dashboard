@@ -81,3 +81,24 @@ test("F10: a conversation row without freshness resolves to an error state inste
   assert.ok(!("rejected" in state), `listConversations rejected (${"rejected" in state ? state.rejected : ""})`);
   assert.equal(state.status, "error");
 });
+
+// Flash on #406: a detail row without freshness, and a null row in either list, must resolve to an error, never ready or a rejection.
+for (const [label, freshness] of [["missing", undefined], ["null", null]] as const) {
+  test(`Flash: a conversation detail with ${label} freshness resolves to an error state`, async () => {
+    const state = await settle(wire(detailBody(freshness)).source.getConversation("of-a", "42"));
+    assert.ok(!("rejected" in state), `getConversation rejected (${"rejected" in state ? state.rejected : ""})`);
+    assert.equal(state.status, "error");
+  });
+}
+
+test("Flash: a null accounts row resolves to an error state instead of rejecting", async () => {
+  const state = await settle(wire({ accounts: [accountRow("of-a"), null] }).source.listAccounts());
+  assert.ok(!("rejected" in state), `listAccounts rejected (${"rejected" in state ? state.rejected : ""})`);
+  assert.equal(state.status, "error");
+});
+
+test("Flash: a null conversations row resolves to an error state instead of rejecting", async () => {
+  const state = await settle(wire({ page: { items: [summaryRow("1"), null], nextCursor: null } }).source.listConversations("of-a"));
+  assert.ok(!("rejected" in state), `listConversations rejected (${"rejected" in state ? state.rejected : ""})`);
+  assert.equal(state.status, "error");
+});
