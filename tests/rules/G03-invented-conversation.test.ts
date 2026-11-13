@@ -20,3 +20,13 @@ test("finding 10: a draft without a conversationId is refused, not given an inve
   const { conversationId: _dropped, ...raw } = seedDraft();
   assert.equal(parsePlanCDraft(raw, MOCK_ACCOUNT), null);
 });
+
+// R2 FL4: the id IS `${accountId}:${fanId}` (twin-onlyfans-backend service/onlyfans_read/contract.py:126 conversation_id_for), so the
+// draft that is approved and the conversation that is stopped are the same fan. The lenient Stop pass keeps id + prefix only (G03-stop-targets).
+test("FL4: a draft whose conversationId is not `${accountId}:${fanId}`, or that has no fanId, is refused", () => {
+  assert.ok(parsePlanCDraft(seedDraft({ fanId: 900000000001 as never }), MOCK_ACCOUNT), "control: an integer fanId names the same fan");
+  const { fanId: _dropped, ...noFan } = seedDraft();
+  const refused: Record<string, unknown>[] = [seedDraft({ conversationId: `${MOCK_ACCOUNT}:900000000002` }), seedDraft({ conversationId: `${MOCK_ACCOUNT}:bogus` }), noFan,
+    seedDraft({ fanId: null as never, conversationId: CONVERSATION })];
+  for (const raw of refused) assert.equal(parsePlanCDraft(raw, MOCK_ACCOUNT), null, JSON.stringify({ fanId: raw.fanId, conversationId: raw.conversationId }));
+});

@@ -82,3 +82,20 @@ test("D6: priceCents and price_cents that disagree are refused, on the part and 
   const reply = seedDraft(); Object.assign(reply.parts[1], { priceCents: null, price_cents: 300 });
   assert.equal(parse(reply), null, "a null alias does not hide a price on a reply part");
 });
+
+// R2 S3: every alias pair is one term. Two set aliases that disagree are refused wherever they are read; null counts as set,
+// so a null beside a value is a disagreement too. The backend sends one alias per field (approval.py:157-161, operator_v2.py:235-246).
+test("S3: part aliases that disagree are refused for media, previews, product, text and index", () => {
+  const part = (extra: Record<string, unknown>) => { const raw = seedOffer(); Object.assign(raw.parts[1], extra); return raw; };
+  assert.ok(parse(part({ mediaIds: ["m1"], previewIds: [], productId: "fixture-photo-1", text: "Plan C fixture photo" })), "control: agreeing aliases parse");
+  for (const extra of [{ mediaIds: ["m2"] }, { media_ids: ["m1", "m2"], mediaIds: ["m2", "m1"] }, { previewIds: ["m1"] }, { productId: "other-product" },
+    { catalogItemId: "other-product" }, { text: "Something else" }, { partIndex: 3 }, { productId: null }, { mediaIds: null }])
+    assert.equal(parse(part(extra)), null, JSON.stringify(extra));
+});
+
+test("S3: draft-level aliases that disagree are refused", () => {
+  assert.equal(parse({ ...seedDraft(), fan_id: "900000000002" }), null);
+  assert.equal(parse({ ...seedDraft(), conversation_id: `${MOCK_ACCOUNT}:900000000002` }), null);
+  assert.equal(parse({ ...seedDraft(), version: 2 }), null);
+  assert.equal(parse({ ...seedDraft(), expires_at: new Date(Date.now() + 60 * 60_000).toISOString() }), null);
+});

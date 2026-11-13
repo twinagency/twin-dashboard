@@ -7,7 +7,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePlanCDrafts, planCStopTargets } from "../../lib/onlyfans/plan-c";
 import { createPlanCClient, createCommandKeyStore } from "../../lib/onlyfans/plan-c-client";
-import { createPlanCMock } from "../contracts/plan-c-mock-backend";
+import { createPlanCBackend } from "../../lib/onlyfans/plan-c-backend";
+import { MOCK_TOKEN, createPlanCMock } from "../contracts/plan-c-mock-backend";
 import { createPlanCProxy } from "../contracts/plan-c-proxy";
 import { MOCK_ACCOUNT, draftList, seedDraft } from "./plan-c-fixtures";
 
@@ -17,19 +18,19 @@ const bad = () => ({ ...seedDraft({ fanId: "900000000002" }), draftHash: "not-a-
 test("a list refused for one bad draft still yields every valid Stop target, and only conversationId plus revision", () => {
   const list = draftList([seedDraft(), bad()]);
   assert.equal(parsePlanCDrafts(list, MOCK_ACCOUNT), null, "control: the list itself is refused");
-  assert.deepEqual(planCStopTargets(list, MOCK_ACCOUNT), [{ conversationId: A, revision: 7 }, { conversationId: B, revision: 7 }]);
+  assert.deepEqual(planCStopTargets(list, MOCK_ACCOUNT), [{ conversationId: A, conversationRevision: 7 }, { conversationId: B, conversationRevision: 7 }]);
 });
 
 test("a list refused for size still yields its Stop targets, one per conversation at its highest revision", () => {
   const drafts = Array.from({ length: 201 }, (_, n) => seedDraft({ conversation: { revision: (n * 37) % 201, messages: [] } }));
   assert.equal(parsePlanCDrafts(draftList(drafts), MOCK_ACCOUNT), null);
-  assert.deepEqual(planCStopTargets(draftList(drafts), MOCK_ACCOUNT), [{ conversationId: A, revision: 200 }]);
+  assert.deepEqual(planCStopTargets(draftList(drafts), MOCK_ACCOUNT), [{ conversationId: A, conversationRevision: 200 }]);
 });
 
 test("a list without accountId yields account-prefixed targets; a list naming another account yields none", () => {
   const { accountId: _dropped, ...unscoped } = draftList([seedDraft()]);
   assert.equal(parsePlanCDrafts(unscoped, MOCK_ACCOUNT), null);
-  assert.deepEqual(planCStopTargets(unscoped, MOCK_ACCOUNT), [{ conversationId: A, revision: 7 }]);
+  assert.deepEqual(planCStopTargets(unscoped, MOCK_ACCOUNT), [{ conversationId: A, conversationRevision: 7 }]);
   assert.deepEqual(planCStopTargets(draftList([seedDraft()], { accountId: "other-account" }), MOCK_ACCOUNT), []);
   assert.deepEqual(planCStopTargets({ ...draftList([seedDraft()]), schemaVersion: "v1" }, MOCK_ACCOUNT), [], "another contract yields none");
 });
@@ -54,10 +55,27 @@ test("the proxy refusal carries the Stop targets to the client, which re-checks 
   const client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl: createPlanCProxy(mock).fetch, keys: createCommandKeyStore() });
   const read = await client.listDrafts();
   assert.equal(read.ok, false);
-  assert.deepEqual(!read.ok && read.stopTargets, [{ conversationId: A, revision: 7 }, { conversationId: B, revision: 7 }]);
+  assert.deepEqual(!read.ok && read.stopTargets, [{ conversationId: A, conversationRevision: 7 }, { conversationId: B, conversationRevision: 7 }]);
   const tampered = createPlanCClient({ accountId: MOCK_ACCOUNT, keys: createCommandKeyStore(), fetchImpl: (async () => Response.json(
-    { schemaVersion: "of-engine-operator.v2", ok: false, error: "x", stopTargets: [{ conversationId: "other-account:1", revision: 1 }, { conversationId: A, revision: 3 }] },
+    { schemaVersion: "of-engine-operator.v2", ok: false, error: "x", drafts: [{ conversationId: "other-account:1", conversationRevision: 1 }, { conversationId: A, conversationRevision: 3 },
+      { conversationId: B, conversationRevision: 2 ** 31 }] },
     { status: 502 })) as typeof fetch });
   const second = await tampered.listDrafts();
-  assert.deepEqual(!second.ok && second.stopTargets, [{ conversationId: A, revision: 3 }]);
+  assert.deepEqual(!second.ok && second.stopTargets, [{ conversationId: A, conversationRevision: 3 }], "re-checked by the same conversationRef");
+});
+
+// R2 S1: one wire shape. Stop targets come from `drafts` rows only; a backend cannot hand the proxy a `stopTargets` list of its own.
+test("the server reads Stop targets from the backend's drafts only, never from a stopTargets key it sends", async () => {
+  const answer = (body: unknown) => createPlanCBackend({ baseUrl: "https://backend.invalid", token: MOCK_TOKEN, fetchImpl: (async () => Response.json(body)) as typeof fetch })
+    .drafts(MOCK_ACCOUNT);
+  const forged = await answer({ ...draftList([bad()]), drafts: undefined, stopTargets: [{ conversationId: A, conversationRevision: 3 }] });
+  assert.deepEqual(!forged.ok && forged.stopTargets, []);
+  const refused = await answer(draftList([bad()]));
+  assert.deepEqual(!refused.ok && refused.stopTargets, [{ conversationId: B, conversationRevision: 7 }], "control");
+});
+
+test("the lenient pass is not tied to fanId: a draft with no or another fanId still yields its Stop target", () => {
+  const { fanId: _dropped, ...noFan } = seedDraft();
+  assert.deepEqual(planCStopTargets(draftList([noFan, seedDraft({ fanId: "900000000009", conversationId: B })]), MOCK_ACCOUNT),
+    [{ conversationId: A, conversationRevision: 7 }, { conversationId: B, conversationRevision: 7 }]);
 });

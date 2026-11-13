@@ -52,7 +52,8 @@ test("D2: a fan message over 20000 UTF-8 bytes refuses the list and keeps its St
   for (const body of ["x".repeat(20_001), "é".repeat(10_001)]) {
     const result = await readWithFanMessage(body);
     assert.equal(result.status, 502, `${body.length} chars`);
-    assert.equal(result.body.drafts, undefined, "no draft is shown");
-    assert.deepEqual(result.body.stopTargets, [{ conversationId: `${MOCK_ACCOUNT}:${LONG_FAN}`, revision: 7 }, { conversationId: `${MOCK_ACCOUNT}:${OTHER_FAN}`, revision: 7 }]);
+    assert.equal(result.body.ok, false, "no draft is shown");
+    // The refusal's rows are its Stop targets only (plan-c-route.ts planCReadDrafts), never a draft.
+    assert.deepEqual(result.body.drafts, [{ conversationId: `${MOCK_ACCOUNT}:${LONG_FAN}`, conversationRevision: 7 }, { conversationId: `${MOCK_ACCOUNT}:${OTHER_FAN}`, conversationRevision: 7 }]);
   }
 });

@@ -311,8 +311,8 @@ test("autonomous mode shows policy authorization and no per-message approve butt
 // R1 D1: a refused draft list keeps the brake. Stop and take over stay for every conversation the raw list names validly;
 // hand back is not offered for them (the engine would plan where the operator cannot read the drafts).
 const brokenDraft = () => ({ ...seedDraft({ fanId: "900000000002" }), draftHash: "not-a-hash" });
-async function mountRefused(drafts: ReturnType<typeof seedDraft>[], dropAccount = false) {
-  const mock = createPlanCMock({ drafts });
+async function mountRefused(drafts: ReturnType<typeof seedDraft>[], dropAccount = false, unresolved: Parameters<typeof createPlanCMock>[0] = {}) {
+  const mock = createPlanCMock({ drafts, ...unresolved });
   const upstream = mock.fetch;
   const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const response = await upstream(input, init);
@@ -342,4 +342,12 @@ test("D1: a list refused for a missing accountId keeps Stop for its account-pref
   await mountRefused([seedDraft()], true);
   assert.ok(q("[data-plan-c-drafts-error]")); assert.equal(all("[data-plan-c-draft]").length, 0);
   assert.deepEqual(actionsOf(controlsFor("900000000001")), ["stop", "takeover"]);
+});
+
+// R2 S4: stopOnly is per conversation and order-free. A conversation that unresolved work (read fine) also names keeps hand back.
+test("D1: with the draft list refused, a conversation also named by readable unresolved work keeps hand back", async () => {
+  await mountRefused([seedDraft(), brokenDraft()], false, { unresolved: [{ id: "open_request:1", kind: "open_request", owner: "operator", nextStep: "review",
+    summary: "x", conversationId: `${MOCK_ACCOUNT}:900000000002`, revision: 7, createdAt: new Date().toISOString() }] });
+  assert.deepEqual(actionsOf(controlsFor("900000000001")), ["stop", "takeover"]);
+  assert.deepEqual(actionsOf(controlsFor("900000000002")), ["stop", "takeover", "handback"]);
 });

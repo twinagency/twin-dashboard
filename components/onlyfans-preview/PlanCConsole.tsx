@@ -25,12 +25,14 @@ const STOP_HINT = "Kept in this page only. Reloading the page clears it.";
 /** `floor` (after a hand back): only a revision floor for a conversation still listed elsewhere; it does not keep the conversation listed. */
 type SessionRecord = { revision: number | null; stop?: StopState; floor?: true };
 
+/** `stopOnly`: known only while the draft list is refused, so Stop and take over but no hand back: the engine would plan where no draft can be read. */
+type Conversation = PlanCConversation & { stopOnly: boolean };
 /**
  * Stop is one click with no revision gate in the UI. Take over and hand back need the button, then an explicit confirmation.
  * Limits (lane 1): the wire still needs a revision (the proxy requires expectedRevision), so a Stop on a conversation without
  * one sends nothing and says so; and the stop hold is page-local until the backend holds it.
  */
-function ConversationControls({ conversation, canAct, stop, onCommand }: { conversation: PlanCConversation; canAct: boolean; stop: StopState | undefined;
+function ConversationControls({ conversation, canAct, stop, onCommand }: { conversation: Conversation; canAct: boolean; stop: StopState | undefined;
   onCommand: (conversation: PlanCConversation, action: PlanCConversationAction) => Promise<PlanCCommandResult> }) {
   const [confirming, setConfirming] = useState<PlanCConversationAction | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
   const inflight = useRef(false);
@@ -163,7 +165,7 @@ function UnresolvedRow({ item, accountId, canAct, onReconcile }: { item: PlanCUn
   </li>;
 }
 
-type Load<T> = { kind: "loading" } | { kind: "error"; error: string } | { kind: "ready"; value: T };
+type Load<T, Failure = unknown> = { kind: "loading" } | { kind: "error"; error: string } & Failure | { kind: "ready"; value: T };
 
 /**
  * Plan C approvals. Reads and writes go through this dashboard's own routes; the backend token never reaches the browser.
@@ -172,8 +174,7 @@ type Load<T> = { kind: "loading" } | { kind: "error"; error: string } | { kind: 
 export default function PlanCConsole({ accountId, operatorScope, canAct, authorizationMode = "supervised", client: injected, fetchImpl }: { accountId: string; operatorScope: string; canAct: boolean; authorizationMode?: "supervised" | "autonomous"; client?: PlanCClient; fetchImpl?: typeof fetch }) {
   const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, operatorScope, fetchImpl }), [injected, accountId, operatorScope, fetchImpl]);
-  const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
-  const [stopTargets, setStopTargets] = useState<PlanCStopTarget[]>([]);
+  const [drafts, setDrafts] = useState<Load<PlanCDraft[], { stopTargets: PlanCStopTarget[] }>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
   const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [session, setSession] = useState<Record<string, SessionRecord>>({}), [now, setNow] = useState(() => Date.now());
   const generation = useRef(0);
   /** True only when both lists were read and are now on screen. */
@@ -182,8 +183,7 @@ export default function PlanCConsole({ accountId, operatorScope, canAct, authori
     const [d, u] = await Promise.all([client.listDrafts(), client.listUnresolved()]);
     if (mine !== generation.current) return false;
     setNow(Date.now());
-    setDrafts(d.ok ? { kind: "ready", value: d.data.drafts } : { kind: "error", error: d.error });
-    setStopTargets(d.ok ? [] : d.stopTargets ?? []);
+    setDrafts(d.ok ? { kind: "ready", value: d.data.drafts } : { kind: "error", error: d.error, stopTargets: d.stopTargets });
     setReceipts(d.ok && d.data.receipts !== null ? { kind: "ready", value: d.data.receipts } :
       { kind: "error", error: d.ok ? "Receipt history is unavailable from this backend." : d.error });
     setUnresolved(u.ok ? { kind: "ready", value: u.data.items } : { kind: "error", error: u.error });
@@ -206,21 +206,18 @@ export default function PlanCConsole({ accountId, operatorScope, canAct, authori
     setConfirmation(result.ok ? `${label}${result.replayed ? " (this exact command had already been recorded)" : ""}. ${fresh ? "Lists reloaded." : "The lists could not be reloaded, so what is shown may be out of date."}` : null);
     return result;
   };
-  const conversations = useMemo<PlanCConversation[]>(() => {
-    const byId = new Map<string, PlanCConversation>();
-    const add = (conversationId: string, revision: number | null) => { const existing = byId.get(conversationId);
-      if (!existing) byId.set(conversationId, { conversationId, revision, label: place(conversationId, accountId) });
-      else if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; };
+  const conversations = useMemo<Conversation[]>(() => {
+    const byId = new Map<string, Conversation>();
+    // stopOnly holds only while every source of the conversation is: one readable draft or unresolved item gives it hand back.
+    const add = (conversationId: string, revision: number | null, stopOnly = false) => { const existing = byId.get(conversationId);
+      if (!existing) byId.set(conversationId, { conversationId, revision, label: place(conversationId, accountId), stopOnly });
+      else { existing.stopOnly &&= stopOnly; if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; } };
     if (drafts.kind === "ready") for (const draft of drafts.value) add(draft.conversationId, draft.conversationRevision);
     if (unresolved.kind === "ready") for (const item of unresolved.value) if (item.conversationId) add(item.conversationId, item.conversationRevision);
-    // With the draft list refused, a conversation known only from its Stop targets or this page's commands gets Stop and take over,
-    // never hand back: the engine would plan where no draft can be read.
-    const readable = new Set(byId.keys());
-    for (const target of stopTargets) add(target.conversationId, target.revision);
-    for (const [conversationId, record] of Object.entries(session)) if (!record.floor || byId.has(conversationId)) add(conversationId, record.revision);
-    if (drafts.kind === "error") for (const conversation of byId.values()) if (!readable.has(conversation.conversationId)) conversation.stopOnly = true;
+    if (drafts.kind === "error") for (const target of drafts.stopTargets) add(target.conversationId, target.conversationRevision, true);
+    for (const [conversationId, record] of Object.entries(session)) if (!record.floor || byId.has(conversationId)) add(conversationId, record.revision, drafts.kind === "error");
     return [...byId.values()];
-  }, [drafts, unresolved, stopTargets, session, accountId]);
+  }, [drafts, unresolved, session, accountId]);
 
   /** Why approve and edit are off for a fan: a stop this session sent, unresolved work for that fan, or unresolved work that could not be read. */
   const holdFor = (conversationId: string): string | null => {
