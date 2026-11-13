@@ -76,10 +76,12 @@ export function formPost(path: string, fields: Record<string, string>) {
 
 import { workAsyncStorage } from "next/dist/server/app-render/work-async-storage.external";
 import { workUnitAsyncStorage } from "next/dist/server/app-render/work-unit-async-storage.external";
-/** Run fn as if inside a Next dynamic request (headers() returns `requestHeaders`). */
+import { RequestCookies } from "next/dist/server/web/spec-extension/cookies";
+/** Run fn as if inside a Next dynamic request (headers() returns `requestHeaders`, cookies() its `cookie` header). */
 export function inRequest<T>(requestHeaders: Record<string, string>, fn: () => T): T {
   const workStore = { route: "/test", forceStatic: false, dynamicShouldError: false, isStaticGeneration: false } as any;
-  const unit = { type: "request", phase: "render", headers: new Headers(requestHeaders) } as any;
+  const headers = new Headers(requestHeaders);
+  const unit = { type: "request", phase: "render", headers, cookies: new RequestCookies(headers) } as any;
   return workAsyncStorage.run(workStore, () => workUnitAsyncStorage.run(unit, fn));
 }
 /** Run fn as if inside a server action, so revalidatePath/revalidateTag record their tags instead of throwing

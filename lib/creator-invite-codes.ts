@@ -36,6 +36,14 @@ export function hashInviteCode(code: string): string {
   return createHash("sha256").update(code.trim().toUpperCase(), "utf8").digest("hex");
 }
 
+// A just-minted code reaches its page in this cookie, never in the redirect URL:
+// a query string lands in browser history and access logs, and a hand-crafted
+// ?created= would render as a freshly minted code. httpOnly, scoped to the one
+// page that shows it, and gone after a minute.
+export const INVITE_FLASH_COOKIE = "twin_invite_created";
+export const inviteFlashCookie = (path: string) =>
+  ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "strict" as const, path, maxAge: 60 });
+
 /** The invite URL an agency sends its creators. */
 export function inviteUrl(origin: string, code: string): string {
   return `${origin}/creator/signup?code=${encodeURIComponent(code)}`;
