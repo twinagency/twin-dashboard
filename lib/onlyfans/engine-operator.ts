@@ -1,21 +1,14 @@
 import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
 import { isEngineEnvironment, type EngineEnvironment } from "./engine-status";
+import { ENGINE_OPERATOR_HEADER, ENGINE_OPERATOR_SCHEMA, engineActionNeedsNote, type EngineOperatorAction, type EngineOperatorResult } from "./engine-operator-core";
 
-export const ENGINE_OPERATOR_SCHEMA = "of-engine-operator.v1";
-export const ENGINE_OPERATOR_HEADER = "X-OnlyFans-Engine-Operator-Version";
-/** `mark_reconciled` is not served by the backend yet (NEEDS-BACKEND.md). The dashboard only offers it for a row that declares support. */
-export type EngineOperatorAction = "request_handover" | "accept_handover" | "complete" | "decline" | "mark_reconciled";
-export const ENGINE_OPERATOR_ACTIONS: readonly EngineOperatorAction[] = ["request_handover", "accept_handover", "complete", "decline", "mark_reconciled"];
-export const isEngineOperatorAction = (value: unknown): value is EngineOperatorAction =>
-  typeof value === "string" && (ENGINE_OPERATOR_ACTIONS as readonly string[]).includes(value);
-/** Actions that end or close a request and so must carry what the person checked. */
-export const engineActionNeedsNote = (action: EngineOperatorAction) => action === "complete" || action === "decline" || action === "mark_reconciled";
+export * from "./engine-operator-core";
+
 /** The audit string stored with a resolution. Synthetic only in the simulation; a real operator string everywhere else. */
 export function engineOperatorEvidenceRef(environment: EngineEnvironment, note: string): string {
   return environment === "simulation" ? `synthetic:operator:${note}` : `operator:${environment}:${note}`;
 }
 export { isEngineEnvironment };
-export type EngineOperatorResult = { ok: true } | { ok: false; outcome: "refused" | "unconfirmed"; error: string };
 type Submission = { accountId: string; conversationId: string; requestId: string; action: EngineOperatorAction;
   expectedRevision: number; commandKey: string; actor: string; note?: string; environment?: EngineEnvironment };
 

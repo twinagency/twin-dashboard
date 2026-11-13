@@ -8,7 +8,7 @@ import { agencyGrant, agencyScopedFetch } from "./agency-scope";
 import { configuredBackendPurpose } from "./backend-transport";
 import type { AgencyIdentity } from "@/lib/agency-identity";
 import { isAuthed } from "@/lib/auth";
-import { planCOwnerActor } from "./plan-c-owner";
+import { planCOwnerActor } from "./plan-c-owner-core";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import { configuredOnlyFansBackend, type OnlyFansBackend } from "./backend";
