@@ -8,7 +8,7 @@
  */
 import { mock } from "node:test";
 import { NextRequest } from "next/server";
-import { planCOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 
@@ -25,7 +25,7 @@ async function main(bodies: unknown[]): Promise<number[]> {
     headers: async () => new Headers(),
   } });
   mock.module(new URL("../../lib/view-as-banner.ts", import.meta.url).href, { namedExports: { getViewAsBannerInfo: async () => null } });
-  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { planCOwnerActor: realOwnerActor } });
+  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor } });
   globalThis.fetch = (async (input: RequestInfo | URL) => new URL(String(input)).origin === SUPABASE &&
     new URL(String(input)).pathname.endsWith("/dashboard_owner_session_verify") ? Response.json(true) : Response.json({ ok: false }, { status: 404 })) as typeof fetch;
   const { POST } = await import("../../app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/route");
