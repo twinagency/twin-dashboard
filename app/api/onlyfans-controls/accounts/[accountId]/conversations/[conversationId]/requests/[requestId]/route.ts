@@ -12,7 +12,11 @@ const refuse = (status: number, error: string) => answer({ schemaVersion: ENGINE
 
 export async function POST(request: NextRequest, context: { params: Promise<{ accountId: string; conversationId: string; requestId: string }> }) {
   const ctx = await requireOnlyFansRead({ agency: true, write: true, capability: "chat" });
-  if (ctx instanceof NextResponse) return ctx;
+  // Raised before any upstream call, so nothing was applied: tagged as this route's refusal, never left to the client to infer.
+  if (ctx instanceof NextResponse) {
+    const denial = await ctx.json().catch(() => null) as { error?: unknown } | null;
+    return refuse(ctx.status, typeof denial?.error === "string" ? denial.error : "This action was refused.");
+  }
   if (!ctx.canChat || !ctx.actor) return refuse(403, "Your team access is read-only.");
   if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
       request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
