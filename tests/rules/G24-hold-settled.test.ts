@@ -16,10 +16,17 @@ const goOffered = (delivery: DeliveryOutcome, outcome?: DeliveryOutcome) => [
   ...offered({ delivery, shape: PAUSED, incident: outcome ? incident(outcome) : undefined }),
 ].filter(action => (GO as readonly string[]).includes(action));
 
-test("control: a sent rollup with no incident, or beside a failed incident, offers send, hand back and resume", () => {
+test("control: a sent rollup with no incident offers send, hand back and resume", () => {
   assert.deepEqual([...new Set(goOffered("sent"))].sort(), [...GO].sort());
-  assert.deepEqual([...new Set(goOffered("sent", "failed"))].sort(), [...GO].sort());
 });
+
+// Flash final: the backend raises an incident only while its attempt pointer stands and refuses sends until then, whatever the
+// incident's outcome (onlyfans_read/projections.py delivery_incident, onlyfans_runtime/store.py Store._unresolved).
+for (const outcome of ["failed", "refused", "sent"] as const) {
+  test(`a recorded incident reporting "${outcome}" holds every go action`, () => {
+    assert.deepEqual(goOffered("sent", outcome), []);
+  });
+}
 
 test("#1: a rollup outcome this build does not know holds every go action, with no incident", () => {
   assert.deepEqual(goOffered(UNKNOWN_TO_THIS_BUILD), []);

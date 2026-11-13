@@ -38,7 +38,8 @@ test("isDeliveryHeld: a held or unrecognised incident holds and the delivery hol
       .filter(a => ["send_manual_message", "release_takeover"].includes(a)), [], outcome);
   }
   assert.equal(isDeliveryHeld("sent", null), false);
-  assert.equal(isDeliveryHeld("sent", { outcome: "failed" }), false);
+  // Flash final: any recorded incident holds, failed included (backend store.py Store._unresolved refuses while the pointer stands).
+  assert.equal(isDeliveryHeld("sent", { outcome: "failed" }), true);
   const stops = offered({ delivery: "sent", shape: AUTOMATED, incident: incident("unknown") });
   for (const stop of ["pause_automation", "request_takeover", "mark_no_contact"]) assert.ok(stops.includes(stop as never), `${stop} missing: ${stops}`);
 });

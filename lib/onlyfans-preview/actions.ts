@@ -70,14 +70,15 @@ export const UNRESOLVED_HOLDS: AvailableAction[] = ["send_manual_message", "resu
 
 /**
  * The one held rule, for availableActions and every control outside it: the rollup is neither settled nor in flight, or a
- * recorded incident has not settled. An incident reporting queued or generating holds, because the backend counts both as
- * unresolved (onlyfans_read/contract.py UNRESOLVED_OUTCOMES). A held thread loses UNRESOLVED_HOLDS and nothing else.
+ * delivery incident is recorded. The backend raises an incident only while a send is unresolved (onlyfans_read/projections.py
+ * delivery_incident) and refuses new sends while its attempt pointer stands, whatever outcome the incident reports, failed
+ * included (onlyfans_runtime/store.py Store._unresolved). A held thread loses UNRESOLVED_HOLDS and nothing else.
  */
 export function isDeliveryHeld(
   delivery: DeliveryOutcome,
   deliveryIncident?: Pick<NonNullable<ConversationDetail["deliveryIncident"]>, "outcome"> | null,
 ): boolean {
-  return (!SETTLED.includes(delivery) && !IN_FLIGHT.includes(delivery)) || (deliveryIncident != null && !SETTLED.includes(deliveryIncident.outcome));
+  return (!SETTLED.includes(delivery) && !IN_FLIGHT.includes(delivery)) || deliveryIncident != null;
 }
 
 /** Which account capability each action needs. */
