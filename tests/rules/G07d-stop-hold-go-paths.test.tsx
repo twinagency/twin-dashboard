@@ -7,9 +7,12 @@
 //      visible refusal, and nothing is sent.
 //   (b) an inbox visit without a selected conversation never ran enterHeldScope, so a previous operator scope's held message text stayed in
 //      this tab's storage. The workspace now enters its scope on mount: other scopes go, this scope's own holds stay.
+//   (c) the inbox page rendered OnlyFansWorkspace unkeyed, so after a same-tab re-login (A to B) and a server refresh the mounted workspace
+//      kept A's unconfirmed send and its Retry while A's held key was purged: B's Retry sent A's message under a new key. The workspace
+//      now keys its state by operator scope (as CampaignManager does), so B starts clean.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), the real OnlyFansWorkspace and CampaignManager.
 //   node --import tsx --test tests/rules/G07d-stop-hold-go-paths.test.tsx
-import { bodyOf, calls, click, close, dom, json, mount, q, reloadPage, routeFailure, serve, type, type Call } from "../helpers/w3-preview1-dom";
+import { bodyOf, calls, click, close, dom, json, mount, q, reloadPage, rerender, routeFailure, serve, type, type Call } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after, beforeEach } from "node:test";
 import { createRequire } from "node:module";
@@ -122,4 +125,21 @@ test("(b): an inbox visit with no conversation selected forgets another operator
   assert.equal(calls.some(c => /\/conversations\/[^/?]+$/.test(new URL(c.url, "https://fixture.invalid").pathname)), false, "control: no conversation is selected");
   assert.deepEqual(Object.keys(real).filter(k => k.startsWith("of-send-keys:")).sort(), [`of-send-keys:op-g07d-new:${AVA}`],
     "the previous operator scope's held message text outlived the scope change");
+});
+
+test("(c): a workspace switched from operator A to B drops A's unconfirmed send and its Retry; nothing of A's goes out under B", async () => {
+  const workspace = (operatorScope: string) => {
+    const { default: OnlyFansWorkspace } = require("../../components/onlyfans-preview/OnlyFansWorkspace");
+    return <OnlyFansWorkspace view="inbox" source="server" draftPrincipal={PRINCIPAL} operatorScope={operatorScope} canManage canChat />;
+  };
+  await inbox("op-g07d-c-a", () => routeFailure(503, "unconfirmed", { schemaVersion: CONTROL_SCHEMA }));
+  await open(HUMAN);
+  await type(q("[data-of-composer]"), "operator A's message");
+  await click(q("[data-of-send]"));
+  assert.equal(posts().length, 1, "control: A's send went out once");
+  assert.ok(Boolean(q("[data-of-retry-control]")), "control: A's unconfirmed send offers its exact retry");
+  await rerender(workspace("op-g07d-c-b"), `/onlyfans/inbox?account=${AVA}`); // same tab, B signed in, server component refreshed
+  assert.equal(Boolean(q("[data-of-retry-control]")), false, "operator B is offered A's Retry");
+  assert.equal(document.body.textContent?.includes("operator A's message") ?? false, false, "A's message text is on B's screen");
+  assert.equal(posts().length, 1, "something of A's went out under B");
 });
