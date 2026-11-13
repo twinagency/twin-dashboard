@@ -37,7 +37,7 @@ test("command keys are random 64-hex values, one per intent, and stay stable unt
   const a = keys.keyFor("approve:x:v1"); assert.match(a, HEX64);
   assert.equal(keys.keyFor("approve:x:v1"), a, "the same intent reuses its key");
   assert.notEqual(keys.keyFor("approve:x:v2"), a, "a different version is a different intent");
-  keys.settle("approve:x:v1", { ok: true, replayed: false, recordedVersion: 1, recordedRevision: null }); assert.notEqual(keys.keyFor("approve:x:v1"), a);
+  keys.settle("approve:x:v1", "ack"); assert.notEqual(keys.keyFor("approve:x:v1"), a);
   assert.throws(() => newCommandKey(() => { throw new Error("no entropy"); }), /no entropy/, "never falls back to a guessable key");
 });
 
