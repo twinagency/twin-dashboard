@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 
-/** Resolve a named active owner, not a shared password-admin session. Only the server sees service credentials. */
-export async function planCOwnerActor(token: string | undefined, fetcher: typeof fetch = fetch): Promise<string | null> {
+/**
+ * Resolve a named active owner, not a shared password-admin session. Only the server sees service credentials.
+ * "unavailable" only when a retry could answer differently (5xx, timeout, network); every other miss is a stable null.
+ */
+export async function namedOwnerActor(token: string | undefined, fetcher: typeof fetch = fetch): Promise<string | null | "unavailable"> {
   if (!token || !/^owner_[a-f0-9]{64}$/.test(token)) return null;
   const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_KEY;
   if (!url || !key) return null;
@@ -11,9 +14,15 @@ export async function planCOwnerActor(token: string | undefined, fetcher: typeof
       method: "POST", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
       body: JSON.stringify({ p_session_hash: sessionHash }), cache: "no-store", signal: AbortSignal.timeout(8000),
     });
-    if (!response.ok) return null;
+    if (!response.ok) return response.status >= 500 ? "unavailable" : null;
     const id: unknown = await response.json();
     if (typeof id !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)) return null;
     return `op-session:${createHash("sha256").update(`twin-plan-c-named-owner-v1:${id}`).digest("hex")}`;
-  } catch { return null; }
+  } catch { return "unavailable"; }
+}
+
+/** The named owner's actor, or null on any miss. */
+export async function planCOwnerActor(token: string | undefined, fetcher: typeof fetch = fetch): Promise<string | null> {
+  const actor = await namedOwnerActor(token, fetcher);
+  return actor === "unavailable" ? null : actor;
 }

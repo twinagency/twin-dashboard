@@ -2,7 +2,7 @@
 import { createHash } from "node:crypto";
 import { cookies } from "next/headers";
 import { SESSION_COOKIE } from "@/lib/session";
-import { planCOwnerActor } from "../plan-c-owner";
+import { namedOwnerActor } from "../plan-c-owner";
 import { NextRequest } from "next/server";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
@@ -154,7 +154,9 @@ export async function memoryFan(
   )
     return invalid();
   const named = internalOperator(g.ctx.auth)
-    ? await planCOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
+    ? await namedOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
+  // The key hashes the actor: a lookup that may answer differently on retry refuses before upstream, never re-keys.
+  if (named === "unavailable") return unavailable();
   const actor = named ?? g.ctx.actor!;
   const r = await call(g.accountId, `${base}/corrections`, "POST", {
     ...body,

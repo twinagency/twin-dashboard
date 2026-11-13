@@ -17,7 +17,7 @@
  */
 import { mock } from "node:test";
 import { NextRequest } from "next/server";
-import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor, planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
 import { CONVERSATION, MOCK_ACCOUNT, parsedDraft } from "./plan-c-fixtures";
@@ -28,7 +28,7 @@ async function main(scenario: string) {
   Object.assign(process.env, { SUPABASE_URL: "https://supabase.fixture.invalid", SUPABASE_SERVICE_KEY: "fixture-service-key",
     ONLYFANS_API_BASE_URL: "https://backend.fixture.invalid", ONLYFANS_CONTROL_TOKEN: "synthetic-control-token" });
   const session = scenario === "client-denied" ? undefined : OWNER_SESSION;
-  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { planCOwnerActor } });
+  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor, planCOwnerActor } });
   mock.module("next/headers", { namedExports: {
     cookies: async () => ({ get: (name: string) => name === SESSION_COOKIE && session ? { name, value: session } : undefined, getAll: () => [], has: () => false }),
     headers: async () => new Headers(),

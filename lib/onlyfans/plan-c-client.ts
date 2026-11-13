@@ -15,11 +15,30 @@ import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newComman
 
 export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: string };
 
-/** Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent. */
-export function createCommandKeyStore(random: () => string = newCommandKey) {
-  const keys = new Map<string, { key: string; held: boolean }>();
+/** Pending keys a `persistAs` store saved in this tab's sessionStorage; anything malformed is dropped. */
+function storedKeys(name: string | undefined): [string, string][] {
+  try {
+    const value: unknown = name ? JSON.parse(globalThis.sessionStorage?.getItem(name) ?? "{}") : {};
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? Object.entries(value).filter((entry): entry is [string, string] => typeof entry[1] === "string" && /^[a-f0-9]{64}$/.test(entry[1])) : [];
+  } catch { return []; }
+}
+
+/**
+ * Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent.
+ * With `persistAs`, every pending key is mirrored to sessionStorage under that name, so a reload keeps it.
+ */
+export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string) {
+  // A key read back from an earlier page load had an unknown outcome there, so it is held.
+  const keys = new Map(storedKeys(persistAs).map(([intent, key]) => [intent, { key, held: true }]));
+  const save = () => {
+    if (persistAs) try {
+      if (keys.size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([intent, entry]) => [intent, entry.key]))));
+      else globalThis.sessionStorage.removeItem(persistAs);
+    } catch { /* No storage: the in-memory key still covers this page load. */ }
+  };
   return {
-    keyFor(intent: string): string { let entry = keys.get(intent); if (!entry) keys.set(intent, entry = { key: random(), held: false }); return entry.key; },
+    keyFor(intent: string): string { let entry = keys.get(intent); if (!entry) { keys.set(intent, entry = { key: random(), held: false }); save(); } return entry.key; },
     /**
      * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
      * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
@@ -29,19 +48,20 @@ export function createCommandKeyStore(random: () => string = newCommandKey) {
       if (result.ok) keys.delete(intent);
       else if (result.outcome === "unconfirmed") { if (entry) entry.held = true; }
       else if (!entry?.held) keys.delete(intent);
+      save();
     },
     size: () => keys.size,
   };
 }
 
 /**
- * One key store per account for the page's lifetime, so a remounted console (navigation, a new client) still holds the key of an
- * unconfirmed attempt. A full page reload still loses it; the backend's commandKey replay is the only guard across reloads.
+ * One key store per account, so a remounted console (navigation, a new client) still holds the key of an unconfirmed attempt,
+ * and persisted per account in sessionStorage, so a reload in the same tab does too.
  */
 const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
 function accountKeyStore(accountId: string) {
   let store = accountStores.get(accountId);
-  if (!store) accountStores.set(accountId, store = createCommandKeyStore());
+  if (!store) accountStores.set(accountId, store = createCommandKeyStore(newCommandKey, `plan-c-keys:${accountId}`));
   return store;
 }
 
