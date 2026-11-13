@@ -124,7 +124,8 @@ export function availableActions(input: {
     }
 
     const capability = account.capabilities[REQUIRED_CAPABILITY[action]];
-    // A stop is our own state, not a provider write, so a degraded session never blocks it. Not configured still does.
+    // A stop stays offered on a degraded session (it is the safe direction); the backend may still refuse it, and that
+    // refusal is shown as not accepted. Not configured still hides it.
     const stop = action === "pause_automation" || action === "mark_no_contact";
     if (capability !== "available" && !(stop && capability === "unavailable")) {
       return capability === "not_configured"
