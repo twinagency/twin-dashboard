@@ -66,15 +66,21 @@ async function fanLabel(userId: string): Promise<string> {
   return data?.stated_name || data?.name || (data?.telegram_id ? `Fan ${data.telegram_id}` : userId);
 }
 
+// Logs an applied write and returns the tool's result. supabase-js does not throw on an insert error, so a
+// failed audit row is reported as auditLogged:false instead of looking exactly like a logged write.
 async function logWrite(opts: { tool: string; summary: string; cloneId?: string | null; args: Record<string, unknown> }) {
-  await supabaseAdmin.from("system_logs").insert({
+  const { error } = await supabaseAdmin.from("system_logs").insert({
     level: "info",
     source: "ai-assistant-write",
     clone_id: opts.cloneId ?? null,
     message: opts.summary,
     detail: { tool: opts.tool, args: opts.args },
   });
+  if (error) console.error("[ai-assistant-write] audit log insert failed", error.message);
+  return error ? { ok: true, summary: opts.summary, auditLogged: false } : { ok: true, summary: opts.summary };
 }
+
+const noFan = (userId: string) => ({ ok: false, error: `no fan found with id "${userId}"` });
 
 const FEATURE_LABELS: Record<CloneToggleField, string> = {
   photos_enabled: "Photos",
@@ -107,8 +113,7 @@ async function execSetCloneFeature(args: Record<string, unknown>): Promise<unkno
   const { id, name } = await resolveCloneId(idOrName);
   await setCloneToggle(id, field, enabled);
   const summary = `Turned ${enabled ? "ON" : "OFF"} ${FEATURE_LABELS[field]} for ${name}.`;
-  await logWrite({ tool: "setCloneFeature", summary, cloneId: id, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setCloneFeature", summary, cloneId: id, args });
 }
 
 const DIAL_LABELS: Record<CloneDialField, string> = {
@@ -142,8 +147,7 @@ async function execSetCloneDial(args: Record<string, unknown>): Promise<unknown>
   const { id, name } = await resolveCloneId(idOrName);
   await setCloneDial(id, field, value);
   const summary = `Set ${name}'s ${DIAL_LABELS[field]} dial to "${value}".`;
-  await logWrite({ tool: "setCloneDial", summary, cloneId: id, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setCloneDial", summary, cloneId: id, args });
 }
 
 async function execSetCloneStatus(args: Record<string, unknown>): Promise<unknown> {
@@ -153,8 +157,7 @@ async function execSetCloneStatus(args: Record<string, unknown>): Promise<unknow
   const { id, name } = await resolveCloneId(idOrName);
   await setCloneStatusAction(id, status);
   const summary = `Set ${name}'s status to ${status}.`;
-  await logWrite({ tool: "setCloneStatus", summary, cloneId: id, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setCloneStatus", summary, cloneId: id, args });
 }
 
 async function execRecompileClonePersona(args: Record<string, unknown>): Promise<unknown> {
@@ -162,8 +165,7 @@ async function execRecompileClonePersona(args: Record<string, unknown>): Promise
   const { id, name } = await resolveCloneId(idOrName);
   await compileCloneAction(id);
   const summary = `Recompiled ${name}'s persona from her current intake answers.`;
-  await logWrite({ tool: "recompileClonePersona", summary, cloneId: id, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "recompileClonePersona", summary, cloneId: id, args });
 }
 
 // NOTE: updateFeedbackStatus lived here until 2026-07-31. The Feedback page and
@@ -173,22 +175,23 @@ async function execRecompileClonePersona(args: Record<string, unknown>): Promise
 
 async function execSetFanCredits(args: Record<string, unknown>): Promise<unknown> {
   const userId = String(args.userId ?? "");
-  const credits = Math.max(0, Math.floor(Number(args.credits)));
+  // Exactly the number the approval card states (proposals.ts), or refused: never clamped to a different value.
+  const credits = typeof args.credits === "number" ? args.credits : NaN;
   if (!userId) return { error: "missing userId" };
-  if (!Number.isFinite(credits)) return { error: "credits must be a number" };
+  if (!Number.isInteger(credits) || credits < 0) return { ok: false, error: "credits must be a whole number, 0 or more" };
   const { data: before } = await supabaseAdmin
     .from("users")
     .select("message_credits,clone_id")
     .eq("id", userId)
     .maybeSingle();
+  if (!before) return noFan(userId);
   const label = await fanLabel(userId);
   const fd = new FormData();
   fd.set("userId", userId);
   fd.set("credits", String(credits));
   await setFanCreditsAction(fd);
   const summary = `Set ${label}'s message credits to ${credits} (was ${before?.message_credits ?? "unknown"}).`;
-  await logWrite({ tool: "setFanCredits", summary, cloneId: before?.clone_id ?? null, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setFanCredits", summary, cloneId: before?.clone_id ?? null, args });
 }
 
 async function execSetFanActive(args: Record<string, unknown>): Promise<unknown> {
@@ -196,14 +199,14 @@ async function execSetFanActive(args: Record<string, unknown>): Promise<unknown>
   const active = args.active === true;
   if (!userId) return { error: "missing userId" };
   const { data } = await supabaseAdmin.from("users").select("clone_id").eq("id", userId).maybeSingle();
+  if (!data) return noFan(userId);
   const label = await fanLabel(userId);
   const fd = new FormData();
   fd.set("userId", userId);
   fd.set("active", String(active));
   await toggleFanActiveAction(fd);
   const summary = `${active ? "Reactivated" : "Deactivated"} fan ${label}.`;
-  await logWrite({ tool: "setFanActive", summary, cloneId: data?.clone_id ?? null, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setFanActive", summary, cloneId: data?.clone_id ?? null, args });
 }
 
 async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown> {
@@ -211,6 +214,7 @@ async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown
   const blocked = args.blocked === true;
   if (!userId) return { error: "missing userId" };
   const { data } = await supabaseAdmin.from("users").select("clone_id").eq("id", userId).maybeSingle();
+  if (!data) return noFan(userId);
   const label = await fanLabel(userId);
   const fd = new FormData();
   fd.set("userId", userId);
@@ -219,21 +223,20 @@ async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown
   const summary = blocked
     ? `Blocked fan ${label}, she will no longer reply to them.`
     : `Unblocked fan ${label}, she will reply to them again.`;
-  await logWrite({ tool: "setFanBlocked", summary, cloneId: data?.clone_id ?? null, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "setFanBlocked", summary, cloneId: data?.clone_id ?? null, args });
 }
 
 async function execResetFanCounters(args: Record<string, unknown>): Promise<unknown> {
   const userId = String(args.userId ?? "");
   if (!userId) return { error: "missing userId" };
   const { data } = await supabaseAdmin.from("users").select("clone_id").eq("id", userId).maybeSingle();
+  if (!data) return noFan(userId);
   const label = await fanLabel(userId);
   const fd = new FormData();
   fd.set("userId", userId);
   await resetFanCountersAction(fd);
   const summary = `Reset ${label}'s lifetime usage counters (messages sent + purchased). Credit balance untouched.`;
-  await logWrite({ tool: "resetFanCounters", summary, cloneId: data?.clone_id ?? null, args });
-  return { ok: true, summary };
+  return logWrite({ tool: "resetFanCounters", summary, cloneId: data?.clone_id ?? null, args });
 }
 
 // NOTE: startTestRun lived here until 2026-07-31, wrapping lib/test-runs.ts.

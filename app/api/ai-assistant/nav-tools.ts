@@ -14,7 +14,6 @@
 
 /** Every page the assistant is allowed to send you to, with what it is for. */
 export const NAV_TARGETS: { path: string; label: string; what: string }[] = [
-  { path: "/", label: "Overview", what: "the fleet-wide home dashboard" },
   { path: "/revenue", label: "Earnings", what: "revenue, Star income, top spenders" },
   { path: "/sales-health", label: "Sales Health", what: "conversation-led offer delivery, purchases, block reasons, and inventory readiness" },
   { path: "/users", label: "Fans", what: "the fan list across every clone" },
@@ -30,7 +29,8 @@ export const NAV_TARGETS: { path: string; label: string; what: string }[] = [
 ];
 
 /** Tabs that live on a clone's own page, reached as /clones/<id>?tab=<tab>. */
-export const CLONE_TABS = ["identity", "ppvs", "media", "paywall", "onboarding"] as const;
+// Only tabs components/CloneForm.tsx resolves (ALL_TABS or LEGACY_TAB); an unknown one silently lands on Identity.
+export const CLONE_TABS = ["identity", "ppvs", "media", "money"] as const;
 
 const NAV_PATHS = new Set(NAV_TARGETS.map((t) => t.path));
 

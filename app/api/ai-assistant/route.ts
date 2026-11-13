@@ -6,6 +6,7 @@ import { NAV_TOOL_DEFS, NAV_TOOL_NAMES, resolveNavTool } from "./nav-tools";
 import { describeProposal, type Proposal } from "./proposals";
 import { createConversation, appendMessage, getConversationMessages } from "./db";
 import { CLONE_TOGGLE_FIELDS, CLONE_DIAL_FIELDS } from "@/app/clones/toggle-fields";
+import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -130,6 +131,8 @@ function stripEmDashes(text: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Same-origin only (lib/form-origin.ts): a cross-origin text/plain POST needs no preflight and costs a model call.
+  if (!trustedFormOrigin(req)) return Response.json({ error: "origin not allowed" }, { status: 403 });
   let body: { conversationId?: string; message?: string };
   try {
     body = await req.json();
@@ -237,7 +240,8 @@ export async function POST(req: NextRequest) {
           send({ type: "correction", text: cleaned });
         }
 
-        if (assistantText.trim()) {
+        // A text-less turn with a proposal is still stored: /approve only runs stored proposals.
+        if (assistantText.trim() || proposals.length) {
           await appendMessage(finalConversationId, "assistant", assistantText, {
             tools: [...toolsUsed],
             writes,
