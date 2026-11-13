@@ -13,6 +13,7 @@ import OnlyFansAvatar from "./OnlyFansAvatar";
 import { inboxSearchParams } from "@/lib/onlyfans/inbox-search";
 import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
+import { heldKeyStore, uuidRequestKey } from "@/lib/onlyfans/plan-c-client";
 
 type Write = { kind: "create"; body: CampaignCreate } | { kind: "change"; campaignId: string; body: CampaignChange };
 const inputClass = `${inputCls} disabled:opacity-50`;
@@ -33,19 +34,23 @@ const REASONS: Record<string, string> = {
   policy_changed: "Delivery permissions changed before sending.",
   expired: "The delivery request expired before sending.",
 };
-/** A write whose outcome is unconfirmed, per account. Module level so a remount (navigate away and back) keeps the exact retry; a reload does not (G04c). */
+/** A write whose outcome is unconfirmed, per account. Module level so a remount (navigate away and back) keeps the exact retry; a reload
+ * drops it, but a create's requestKey is held across the reload in the key store (G04c2), so the same campaign queued again reuses it. */
 const heldWrites = new Map<string, Write>();
 const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request before making another change.";
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
+/** A create names its held key by its whole payload: the same campaign reuses the key, any change gets a new one. */
+const createIntent = (create: Omit<CampaignCreate, "requestKey">) => JSON.stringify([create.name, create.body, create.audience, create.scheduledAt, create.catalogItemId ?? null]);
 
 /** The sender is always explicit. Without exactly one chosen account nothing can be queued. */
-export default function CampaignManager({ accountId, sender = null, readOnly = false }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean }) {
+export default function CampaignManager({ accountId, sender = null, readOnly = false, operatorScope }: { accountId: string | null; sender?: Sender | null; readOnly?: boolean; operatorScope?: string }) {
   if (!accountId) return <div className="space-y-5" data-of-campaign-manager><Card className="p-4"><h2 className="font-semibold">New campaign</h2><p role="status" data-of-campaign-sender className="mt-2 text-sm font-medium">{NO_SENDER_TEXT}</p></Card></div>;
-  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} />;
+  return <CampaignManagerForAccount key={accountId} accountId={accountId} sender={sender} readOnly={readOnly} operatorScope={operatorScope} />;
 }
 
-function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId: string; sender: Sender | null; readOnly: boolean }) {
+function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope }: { accountId: string; sender: Sender | null; readOnly: boolean; operatorScope?: string }) {
+  const createKeys = heldKeyStore("of-campaign-keys", accountId, operatorScope);
   const initialDraft = useRef(recallDraft(accountId)).current;
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
@@ -139,6 +144,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     } catch { /* Keep exact original write identity for an explicit retry. */ }
     finally {
       const uncertain = outcome !== "ack" && (wasHeld || outcome !== "refused");
+      if (request.kind === "create") createKeys.settle(createIntent(request.body), outcome === "ack" ? { ok: true } : { ok: false, outcome: outcome ?? "unconfirmed" });
       if (!uncertain) heldWrites.delete(accountId);
       if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
       sending.current = false;
@@ -148,10 +154,11 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     event.preventDefault(); if (busy || retry || denied || readOnly || !sender) return;
     let scheduledAt: string | null = null;
     try { scheduledAt = scheduled ? new Date(scheduled).toISOString() : null; } catch { setNotice("Choose a valid schedule."); return; }
-    const request: CampaignCreate = { requestKey: crypto.randomUUID(), name, body, audience: audienceKind === "all_known" ? { kind: "all_known" } : { kind: "explicit", conversationIds: [...fanIds].sort() }, scheduledAt,
+    const create = { name, body, audience: audienceKind === "all_known" ? { kind: "all_known" as const } : { kind: "explicit" as const, conversationIds: [...fanIds].sort() }, scheduledAt,
       ...(catalogItemId ? { catalogItemId: Number(catalogItemId) } : {}) };
-    if (!validCampaignCreate(request)) { setNotice("Enter a name, message and at least one synchronized conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
-    void write({ kind: "create", body: request });
+    // Validated before a key is taken, so a refused draft never leaves a held key behind.
+    if (!validCampaignCreate({ requestKey: uuidRequestKey("0".repeat(32)), ...create })) { setNotice("Enter a name, message and at least one synchronized conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
+    void write({ kind: "create", body: { requestKey: uuidRequestKey(createKeys.keyFor(createIntent(create))), ...create } });
   }
   const locked = busy || !!retry || denied || readOnly;
   const campaign = detail?.campaign;

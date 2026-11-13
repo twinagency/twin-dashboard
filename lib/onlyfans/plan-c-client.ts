@@ -67,7 +67,7 @@ export function createCommandKeyStore(random: () => string = newCommandKey, pers
      * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
      * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
      */
-    settle(intent: string, result: PlanCCommandResult) {
+    settle(intent: string, result: PlanCCommandResult | { ok: true } | { ok: false; outcome: string }) {
       const hash = intentHash(intent), entry = keys.get(hash);
       if (result.ok) keys.delete(hash);
       else if (result.outcome === "unconfirmed") { if (entry) entry.held = true; }
@@ -84,12 +84,19 @@ export function createCommandKeyStore(random: () => string = newCommandKey, pers
  * reload in the same tab by the same operator does too; another operator signing in on that tab never sees it.
  */
 const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
-function accountKeyStore(accountId: string, operatorScope: string) {
-  const name = `plan-c-keys:${operatorScope}:${accountId}`;
+/**
+ * The same store for any write whose double could reach a fan (G04c2: a manual send, a campaign create): one per kind, operator scope
+ * and account. Persisted only with an operator scope; without one it still covers a remount, never a reload.
+ */
+export function heldKeyStore(kind: string, accountId: string, operatorScope?: string) {
+  const name = `${kind}:${operatorScope ?? ""}:${accountId}`;
   let store = accountStores.get(name);
-  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, name));
+  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, operatorScope ? name : undefined));
   return store;
 }
+const accountKeyStore = (accountId: string, operatorScope: string) => heldKeyStore("plan-c-keys", accountId, operatorScope);
+/** A 64-hex store key in the UUID shape the controls and campaign routes take as `requestKey`. */
+export const uuidRequestKey = (key: string) => `${key.slice(0, 8)}-${key.slice(8, 12)}-${key.slice(12, 16)}-${key.slice(16, 20)}-${key.slice(20, 32)}`;
 
 const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c`;
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });

@@ -92,6 +92,7 @@ import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { EngineActionHandler, EnginePageLoader } from "./EngineStatus";
 import { submitEngineOperatorCommand } from "@/lib/onlyfans/engine-operator-client";
+import { heldKeyStore, uuidRequestKey } from "@/lib/onlyfans/plan-c-client";
 import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
@@ -201,6 +202,7 @@ export default function OnlyFansWorkspace({
   canChat = false,
   draftPrincipal = "fixture",
   agencyViewer = false,
+  operatorScope,
 }: {
   view: OnlyFansView;
   /**
@@ -214,6 +216,8 @@ export default function OnlyFansWorkspace({
   canChat?: boolean;
   draftPrincipal?: string;
   agencyViewer?: boolean;
+  /** Names this operator's held send keys in the tab's sessionStorage (planCKeyScope); without it a reload drops them. */
+  operatorScope?: string;
 }) {
   const submittedDrafts = useRef(new Map<string, InboxDraft>());
   const searchParams = useSearchParams();
@@ -610,8 +614,13 @@ export default function OnlyFansWorkspace({
    * second check before submission. The backend separately verifies permission,
    * scope, revision and delivery holds in its canonical transaction.
    */
-  const executeCommand = useCallback(async (request: CommandRequest) => {
+  const executeCommand = useCallback(async (command: CommandRequest) => {
     if (commandBusy.current) return;
+    // A manual send reaches the fan, so its requestKey is held per operator and account across a reload, named by the intent (the
+    // conversation, revision and payload digest): the same send reuses it, a changed one gets a new one. Only a recorded ack releases it.
+    const intent = createCommandRequest(command).idempotencyKey;
+    const sendKeys = command.payload.kind === "manual_message" ? heldKeyStore("of-send-keys", command.accountId, operatorScope) : null;
+    const request = sendKeys ? { ...command, idempotencyKey: uuidRequestKey(sendKeys.keyFor(intent)) } : command;
     const draftId = draftKey(draftPrincipal, request.accountId, request.conversationId);
     if (request.payload.kind === "manual_message" && !submittedDrafts.current.has(request.idempotencyKey)) {
       const draft = readDraft(draftId);
@@ -627,6 +636,7 @@ export default function OnlyFansWorkspace({
       try { result = await source.submitCommand(request); }
       catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request,
         note: "The outcome is not confirmed. Refresh the conversation or retry this same request." }; }
+      sendKeys?.settle(intent, !result.simulated && result.outcome === "recorded" ? { ok: true } : { ok: false, outcome: result.simulated ? "refused" : result.outcome });
       const submitted = submittedDrafts.current.get(request.idempotencyKey);
       if (!result.simulated && result.outcome === "recorded" && result.intentId && submitted) {
         clearSubmittedDraft(draftId, submitted);
@@ -666,7 +676,7 @@ export default function OnlyFansWorkspace({
       commit(applyAccounts(ref.current, generation, { status: "unavailable",
         message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
     } finally { commandBusy.current = false; setCommandPending(false); setPendingAction(null); }
-  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal]);
+  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal, operatorScope]);
 
   const submitAction = useCallback(
     async (action: AvailableAction, payload: CommandPayload) => {
@@ -689,9 +699,8 @@ export default function OnlyFansWorkspace({
         expectedRevision: detail.summary.revision,
         payload,
       });
-      // One explicit click has one identity. An uncertain retry keeps this
-      // request; a later intentional repeat of the same text gets a new one.
-      if (action === "send_manual_message") request.idempotencyKey = crypto.randomUUID();
+      // A manual send's requestKey is assigned by executeCommand from the held key store: an uncertain retry, even after a reload,
+      // keeps it; after a recorded ack an intentional repeat of the same text gets a new one.
       if (!canSubmitCommand(actionViewer, actionSet, action)) {
         setCommandResult({
           simulated: true,
