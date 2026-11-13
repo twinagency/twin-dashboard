@@ -41,6 +41,27 @@ export async function POST(req: NextRequest) {
   if (current.error || (current.data ?? []).some((row) => row.clone_id && !access.cloneIds.includes(row.clone_id))) return back();
 
   if (cloneId && (!isUuid(cloneId) || !access.cloneIds.includes(cloneId))) return back();
+
+  // The RPC also deletes every OTHER creator's link to the target clone, and a
+  // clone can be shared by several agencies: each creator already on it must be
+  // one of this agency's. Checked outside the RPC's transaction (see G26 r1).
+  if (cloneId) {
+    const holders = await serviceClient()
+      .from("creator_clone_links")
+      .select("creator_account_id")
+      .eq("clone_id", cloneId)
+      .neq("creator_account_id", creatorAccountId);
+    if (holders.error) return back();
+    const others = [...new Set((holders.data ?? []).map((row) => row.creator_account_id))];
+    if (others.length) {
+      const own = await serviceClient()
+        .from("creator_agency_assignments")
+        .select("creator_account_id")
+        .eq("agency_id", access.id)
+        .in("creator_account_id", others);
+      if (own.error || others.some((id) => !(own.data ?? []).some((row) => row.creator_account_id === id))) return back();
+    }
+  }
   await serviceClient().rpc("link_creator_platform_profile",{p_account_id:creatorAccountId,p_clone_id:cloneId||null});
   return back();
 }
