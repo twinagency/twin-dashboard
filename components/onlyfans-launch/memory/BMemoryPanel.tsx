@@ -22,6 +22,8 @@ const FIELD_LABELS: Record<MemoryField, string> = { real_name: "Name", his_age: 
 /** `version` is the memory version the editor opened on: the correction carries it, and a newer read closes the editor. */
 type Edit = { field: MemoryField; value: string; reason: string; error: string; version: string };
 type PendingCorrection = { accountId: string; fanId: string; correction: MemoryCorrection };
+const UNCONFIRMED = "The correction outcome is unconfirmed. Current memory is being refreshed. You may retry the identical correction.";
+const CLOSED = "Memory changed. Your correction was closed; reopen it to apply it to the new version.";
 
 /** Native account-scoped memory. Archive recovery and stored-message processing remain separate. */
 export default function BMemoryPanel({ canManage = false, canRecover = canManage, operator = false, initialAccountId, selectedAccountId, selectedFanId, part = "all" }: { canManage?: boolean; canRecover?: boolean; operator?: boolean; initialAccountId?: string; selectedAccountId?: string; selectedFanId?: string; part?: "all" | "facts" | "diagnostics" }) {
@@ -33,7 +35,8 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
   const [notice, setNotice] = useState(""), [paging, setPaging] = useState(false), [busy, setBusy] = useState(false), [permissionDenied, setPermissionDenied] = useState(false);
   const [pending, setPending] = useState<PendingCorrection | null>(null);
   const accountRef = useRef(accountId), fanRef = useRef(fanId), queryRef = useRef(query);
-  accountRef.current = accountId; fanRef.current = fanId; queryRef.current = query;
+  const editRef = useRef(edit);
+  accountRef.current = accountId; fanRef.current = fanId; queryRef.current = query; editRef.current = edit;
   const accountsCtl = useRef<AbortController | null>(null), listCtl = useRef<AbortController | null>(null), fanCtl = useRef<AbortController | null>(null), commandCtl = useRef<AbortController | null>(null);
   const listEpoch = useRef(0), fanEpoch = useRef(0);
   const manage = canManage && !permissionDenied;
@@ -66,12 +69,15 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
   }, []);
   const loadFan = useCallback(async (id: string, selectedFan: string, reset = false, search?: string) => {
     fanCtl.current?.abort(); const c = new AbortController(); fanCtl.current = c; const mine = ++fanEpoch.current;
-    if (reset) { setFanId(selectedFan); fanRef.current = selectedFan; setEdit(null); setNotice(""); setQuery(""); }
+    if (reset) { setFanId(selectedFan); fanRef.current = selectedFan; editRef.current = null; setEdit(null); setNotice(""); setQuery(""); }
     setFan(loading);
     const l = toLoad(await readFanMemory(id, selectedFan, c.signal, search ?? (reset ? "" : queryRef.current)));
     if (!l || c.signal.aborted || mine !== fanEpoch.current || accountRef.current !== id || fanRef.current !== selectedFan) return;
     setFan(l);
-    if (l.state === "ok") setEdit(e => e && e.version !== l.data.memory.version ? null : e);
+    // A newer version closes the editor and always says so, replacing any earlier notice; an unconfirmed outcome is kept in front of it.
+    if (l.state === "ok" && editRef.current && editRef.current.version !== l.data.memory.version) {
+      editRef.current = null; setEdit(null); setNotice(n => n === UNCONFIRMED ? `${UNCONFIRMED} ${CLOSED}` : CLOSED);
+    }
   }, []);
   useEffect(() => {
     listCtl.current?.abort(); fanCtl.current?.abort(); commandCtl.current?.abort(); listEpoch.current++; fanEpoch.current++;
@@ -91,10 +97,10 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     setBusy(false);
     if (r.kind === "stale") return;
     if (r.kind === "ok") {
-      setPending(null); setEdit(null); setNotice(r.data.replayed ? "The same correction was already recorded. Reading current memory." : "Correction recorded. Reading current memory.");
+      setPending(null); editRef.current = null; setEdit(null); setNotice(r.data.replayed ? "The same correction was already recorded. Reading current memory." : "Correction recorded. Reading current memory.");
       await loadFan(command.accountId, command.fanId);
     } else if (r.kind === "unconfirmed") {
-      setPending(command); setNotice("The correction outcome is unconfirmed. Current memory is being refreshed. You may retry the identical correction.");
+      setPending(command); setNotice(UNCONFIRMED);
       await loadFan(command.accountId, command.fanId);
     } else {
       setPending(null);

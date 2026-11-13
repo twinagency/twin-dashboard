@@ -2,7 +2,10 @@
 // W3-ui-onlyfans-launch-draft-loss. PersonalityScreen keeps the ReviewEditor mounted (disabled) through the re-read, so a 422 refusal
 // followed by an unchanged re-read (same revision, loading phase committed) leaves the typed tone in the editor. The re-read is a deferred response the test
 // releases itself, after asserting it was issued (2 GETs) and its "Loading personality" phase rendered. Refusals carry no new revision:
-// a real 409 brings one and the revision-keyed remount then rightly shows the server copy.
+// a real 409 brings one and the revision-keyed remount then rightly shows the server copy. A failed (500) or pending (503) re-read keeps
+// the draft too, disabled, with the read error and Retry shown. Switching accounts never paints of-a's tone, revision or binding under of-b: the
+// shared useJsonResource (a-shared.tsx) returns loading, not the old url's data, in the render where the url changes. The screen is
+// mounted without a key, since AbcWorkspace's key remount would hide the leak.
 // Controls: refusal shown with one POST, and 502 -> identical retry offered and the hold kept, for personality and engagement settings.
 // The engagement-settings half of L8 is not G07b and stays in the known-red file.
 // Mounts the real PersonalityScreen (real ConfigurationEditor, its read answered 503) and the real EngagementPanel (editPolicy on,
@@ -13,7 +16,7 @@ import { access, followUps, launchEnvelope, personality, personalityHistory, set
 import { LAUNCH_SCHEMA } from "../../lib/onlyfans/launch/a-types";
 import assert from "node:assert/strict";
 import test from "node:test";
-import React from "react";
+import React, { act } from "react";
 
 const ABC = "/api/onlyfans-launch/abc/accounts/of-a";
 const REFUSAL = "Synthetic refusal: the personality review was not accepted.";
@@ -36,13 +39,13 @@ async function openPersonality(post: () => Response) {
 const tone = () => document.querySelector<HTMLTextAreaElement>("#personality-tone");
 const TONE = "Edited tone the operator typed";
 /** Types, saves, checks the re-read is in flight and rendered as loading, then releases it. */
-async function editAndSavePersonality(p: Awaited<ReturnType<typeof openPersonality>>) {
+async function editAndSavePersonality(p: Awaited<ReturnType<typeof openPersonality>>, reread = () => json(launchEnvelope(personality()))) {
   assert.equal(String(tone()?.value), "Short, warm replies.", "editor shows the saved review");
   await typeInto(tone(), TONE);
   await click(button(/^Save complete review as a new draft$/));
   assert.equal(p.stub.calls.filter(c => c.method === "GET" && c.url === `${ABC}/personality`).length, 2, "the save re-read the personality");
   assert.equal(pageText().includes("Loading personality"), true, "the re-read's loading phase committed");
-  p.reread.resolve(json(launchEnvelope(personality())));
+  p.reread.resolve(reread());
   await settle(); await settle();
 }
 
@@ -66,6 +69,56 @@ test("control: personality save answers 502, the identical retry is offered and 
 test("L8 personality: after a 422 refusal and an unchanged re-read, the typed tone is still in the editor", async () => {
   await editAndSavePersonality(await openPersonality(refused422));
   assert.equal(String(tone()?.value), TONE, "refused save replaced the draft with the server copy (PersonalityScreen.tsx:452,485)");
+  await unmount();
+});
+
+for (const [what, reread, error] of [
+  ["503 (pending)", () => json({ error: "Synthetic: personality backend unavailable." }, 503), "Synthetic: personality backend unavailable."],
+  ["500 (error)", () => json({ error: "Synthetic: personality read failed." }, 500), "Synthetic: personality read failed."],
+] as const) {
+  test(`L8 personality: after a 422 refusal the re-read answers ${what}, the typed tone stays, disabled, with the read error and Retry shown`, async () => {
+    await editAndSavePersonality(await openPersonality(refused422), reread);
+    const retry = button(/^Retry$/);
+    assert.deepEqual({ tone: String(tone()?.value), disabled: Boolean(tone()?.disabled), error: pageText().includes(error), retry: Boolean(retry && !retry.disabled) },
+      { tone: TONE, disabled: true, error: true, retry: true }, "a failed re-read dropped the draft (PersonalityScreen.tsx shown/lastOk)");
+    await unmount();
+  });
+}
+
+test("personality account switch: of-a's tone, revision and binding never render under of-b, and of-b's read is what shows", async () => {
+  const ABC_B = "/api/onlyfans-launch/abc/accounts/of-b", readB = deferred();
+  const b = structuredClone(personality());
+  b.revision = 5; b.bindingId = "binding-b"; b.document.review.persona = "Tone of account B.";
+  const stub = stubFetch((url, method) => {
+    for (const base of [ABC, ABC_B]) {
+      const acct = base === ABC ? "of-a" : "of-b";
+      if (url === `${base}/access`) return json(access(true, acct));
+      if (url === `${base}/personality`) return base === ABC ? json(launchEnvelope(personality())) : readB.promise;
+      if (url.startsWith(`${base}/personality/history`)) return json(launchEnvelope(personalityHistory(), acct));
+    }
+    if (url.startsWith("/api/onlyfans-configuration/")) return json({ error: "Not in this fixture." }, 503);
+    throw new TypeError(`unexpected fetch ${method} ${url}`);
+  });
+  const { default: PersonalityScreen } = await import("../../components/onlyfans-launch/personality/PersonalityScreen");
+  let switchTo: (id: string) => void = () => {};
+  function Host() { const [id, setId] = React.useState("of-a"); switchTo = setId; return React.createElement(PersonalityScreen, { accountId: id }); }
+  await mount(inNextApp(React.createElement(Host), "/onlyfans/launch"));
+  assert.equal(String(tone()?.value), "Short, warm replies.", "of-a's review shows first");
+  // Every DOM change from the switch on is sampled, so a single commit that paints of-a under of-b is caught even if a later one hides it.
+  const leaks: string[] = [];
+  const sample = () => { const t = tone(); if (t?.value === "Short, warm replies.") leaks.push("tone");
+    if (/Personality revision 1\b/.test(document.body.textContent ?? "")) leaks.push("revision"); };
+  const observer = new (document.defaultView!.MutationObserver)(sample);
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true });
+  await act(async () => { switchTo("of-b"); }); await settle(); await settle();
+  sample();
+  assert.equal(stub.calls.some(c => c.url === `${ABC_B}/personality`), true, "of-b's personality was requested");
+  assert.deepEqual({ leaks: [...new Set(leaks)], editor: Boolean(tone()) }, { leaks: [], editor: false }, "of-a's personality rendered under of-b");
+  readB.resolve(json(launchEnvelope(b, "of-b")));
+  await settle(); await settle();
+  observer.disconnect();
+  assert.deepEqual({ leaks: [...new Set(leaks)], tone: String(tone()?.value), revision: /Personality revision 5\b/.test(pageText()) },
+    { leaks: [], tone: "Tone of account B.", revision: true });
   await unmount();
 });
 

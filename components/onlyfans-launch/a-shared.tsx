@@ -17,9 +17,13 @@ export type Load<T> =
 /** The base for every proxy call. */
 export const launchBase = (accountId: string) => `/api/onlyfans-launch/abc/accounts/${encodeURIComponent(accountId)}`;
 
-/** Reads one resource. A response for an earlier account or request can never overwrite a newer one. */
+const LOADING = { kind: "loading" } as const;
+/** Reads one resource. A response for an earlier account or request can never overwrite a newer one, and a state read for another
+ * url is never returned: on a url change the caller sees loading in the same render, not the old url's data. */
 export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null, unwrap = true) {
-  const [state, setState] = useState<Load<T>>({ kind: "loading" });
+  const [held, setHeld] = useState<{ url: string; load: Load<T> }>({ url, load: LOADING });
+  const setState = useCallback((load: Load<T>) => setHeld({ url, load }), [url]);
+  const state: Load<T> = held.url === url ? held.load : LOADING;
   const [lastSuccess, setLastSuccess] = useState<{ url: string; checkedAt: string } | null>(null);
   const [attempt, setAttempt] = useState(0);
   const generation = useRef(0), controller = useRef<AbortController | null>(null);
@@ -43,7 +47,7 @@ export function useJsonResource<T>(url: string, parse: (v: unknown) => T | null,
       if (mine !== generation.current || (e as Error)?.name === "AbortError") return;
       setState({ kind: "error", error: "This could not be read. Check your connection and retry." });
     }
-  }, [url, parse, unwrap]);
+  }, [url, parse, unwrap, setState]);
   useEffect(() => { void load(); return () => { generation.current++; controller.current?.abort(); }; }, [load]);
   return { state, reload: load, lastSuccess: lastSuccess?.url === url ? lastSuccess : null, attempt };
 }

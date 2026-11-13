@@ -439,17 +439,22 @@ export default function PersonalityScreen({
   const [retry, setRetry] = useState<unknown | null>(null),
     [notice, setNotice] = useState(""),
     [sending, setSending] = useState(false);
-  // The editor stays mounted (disabled) through a re-read, so an unchanged revision keeps the typed draft; a new one remounts it.
+  // The editor stays mounted (disabled) through a loading, failed or pending re-read of THIS account, so an unchanged revision keeps
+  // the typed draft and a new one remounts it. useJsonResource never returns another url's state, so lastOk is always this account's
+  // read; a denied read hides it.
   const lastOk = useRef<{ accountId: string; data: Personality } | null>(null);
   useEffect(() => {
     if (state.kind === "ok") lastOk.current = { accountId, data: state.data };
+    else if (lastOk.current?.accountId !== accountId) lastOk.current = null;
   }, [state, accountId]);
-  const shown =
+  const view =
     state.kind === "ok"
       ? state.data
-      : state.kind === "loading" && lastOk.current?.accountId === accountId
+      : state.kind !== "denied" && lastOk.current?.accountId === accountId
         ? lastOk.current.data
         : null;
+  const editable =
+    state.kind === "ok" && manage === true && retry === null && !sending;
   async function submit(command: unknown): Promise<Post> {
     setSending(true);
     const r = await postCommand(accountId, command);
@@ -493,11 +498,11 @@ export default function PersonalityScreen({
             Your team access is read-only.
           </p>
         ) : null}
-        {shown ? (
+        {view ? (
           <ReviewEditor
-            key={`${accountId}-${shown.bindingId}-${shown.revision}`}
-            p={shown}
-            enabled={manage === true && retry === null && !sending && state.kind === "ok"}
+            key={`${accountId}-${view.bindingId}-${view.revision}`}
+            p={view}
+            enabled={editable}
             submit={submit}
           />
         ) : null}
