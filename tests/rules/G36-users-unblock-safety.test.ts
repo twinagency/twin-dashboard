@@ -57,6 +57,12 @@ function builder(table: string) {
     update(patch: Record<string, unknown>) { b.patch = patch; return b; },
     eq(key: string, value: unknown) { b.filters.push((r: Record<string, unknown>) => r[key] !== null && String(r[key]) === String(value)); return b; },
     is(key: string, value: null) { b.filters.push((r: Record<string, unknown>) => r[key] === value); return b; },
+    // Only the flat "col.eq.v,col.is.null" form setBlocked sends.
+    or(list: string) {
+      const alts = list.split(",").map((p) => { const [k, op, ...v] = p.split("."); return { k, op, v: v.join(".") }; });
+      b.filters.push((r: Record<string, unknown>) => alts.some(({ k, op, v }) => op === "is" ? r[k] === null : op === "eq" ? r[k] !== null && String(r[k]) === v : assert.fail(`unsupported or filter ${list}`)));
+      return b;
+    },
     maybeSingle() { b.one = true; return b; },
     single() { b.one = true; return b; },
     then(resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) {
@@ -92,9 +98,14 @@ test("control: admin unblock of a minor-flagged fan writes blocked:false (docume
   assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
 });
 
-// TEST-CHANGE: the plain block is now blocked_reason "operator" (was null). Null is admin-only (Fable, G36 r1), see below.
-test("control: agency manager unblock of a plain operator block writes blocked:false", async () => {
-  row = plainBlock(); writes.length = 0;
+// TEST-CHANGE (G36c): the control seeded blocked_reason "operator", a state the dashboard never created, which hid that
+// a dashboard block was admin-only to lift. It now blocks through setBlocked first, as the same agency manager.
+test("control: agency manager blocks a fan, then his unblock writes blocked:false", async () => {
+  row = { ...noReasonBlock(), blocked: false }; writes.length = 0;
+  const block = new FormData(); block.set("userId", FAN); block.set("blocked", "true");
+  await withDashboardAccess(manager, () => actions.setBlocked(block));
+  assert.equal(row.blocked_reason, "operator");
+  writes.length = 0;
   await withDashboardAccess(manager, () => actions.setBlocked(unblock()));
   assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
 });
