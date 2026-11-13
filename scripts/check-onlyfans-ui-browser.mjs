@@ -56,14 +56,8 @@ try {
         if (width < 768) check(mobile.fields.every(size => size >= 16), `${section} fields trigger phone zoom at ${width}px`);
       }
       if (section === "inbox" && width >= 1024) {
-        // Below 1280px the fan panel starts closed so the conversation is not squeezed into narrow columns; it opens on demand.
-        if (width < 1280) {
-          check(!(await page.locator(".users-panel-profile").isVisible()), `Fan panel starts closed at ${width}px`);
-          const wide = await page.locator(".users-panel-chat").boundingBox();
-          check(!!wide && wide.width >= 480, `Conversation keeps its width at ${width}px`);
-          await page.locator("[data-of-profile-toggle]").click();
-          await page.locator(".users-panel-profile").waitFor();
-        }
+        // The fan panel holds the Reply control, so it starts open at every desktop width: a brake never hides while Send shows (G09).
+        check(await page.locator(".users-panel-profile").isVisible(), `Fan panel starts open at ${width}px`);
         const chat = await page.locator(".users-panel-chat").boundingBox();
         const fan = await page.locator(".users-panel-profile").boundingBox();
         const composer = await page.locator("[data-of-composer]").boundingBox();

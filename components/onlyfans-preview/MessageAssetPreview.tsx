@@ -25,6 +25,7 @@ export default function MessageAssetPreview({accountId, conversationId, messageI
         await new Promise(r=>setTimeout(r,step.delayMs));
       }
     })();
+    return()=>{active=false;controller.abort();if(objectUrl)URL.revokeObjectURL(objectUrl);};
   },[path,play,retry]);
   if(error)return <MediaPreviewState state={error} onRetry={()=>setRetry(n=>n+1)}/>;
   if(!url)return <span role="status" className="text-xs">Loading {play?"video":"preview"}…</span>;

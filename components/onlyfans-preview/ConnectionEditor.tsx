@@ -332,7 +332,7 @@ export default function ConnectionEditor({ accountId,creatorId,creatorName,initi
           {creatorId && creatorName ? <AdminOnlyFansSignIn creators={[{id:creatorId,name:creatorName}]} accountId={accountId} /> : null}
           <button type="button" className={buttonClass} disabled={busy} onClick={() => void refresh()} data-of-connection-refresh>Refresh status</button>
           {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry || state === "retrying" || state === "checking" && data.verifiedAt !== null} onClick={() => void send({ action: "verify", payload: {}, expectedRevision: data.revision })} data-of-connection-verify>Request verification</button> : null}
-          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy || hasRetry} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
+          {data.status !== "unconfigured" ? <button type="button" className={buttonClass} disabled={busy} onClick={() => void send({ action: "pause", payload: {}, expectedRevision: data.revision })} data-of-connection-pause>Pause outgoing</button> : null}
         </div>
         <form className="mt-5" autoComplete="off" onSubmit={event => { event.preventDefault(); saveCapture(); }}>
           <fieldset disabled={busy || hasRetry} className="min-w-0 space-y-3">

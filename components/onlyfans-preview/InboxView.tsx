@@ -278,7 +278,7 @@ function Thread({ detail, principal, handoverHistory, loadingOlder, onLoadOlder 
       node.scrollTop = olderAnchor.current.top + node.scrollHeight - olderAnchor.current.height;
       olderAnchor.current = null;
     } else if (!olderAnchor.current && bottom.current) node.scrollTop = node.scrollHeight;
-    else if (!olderAnchor.current && timeline.length > previousLength.current) setUnseen(count => count + timeline.length - previousLength.current);
+    else if (!olderAnchor.current && timeline.length > previousLength.current) { const added = timeline.length - previousLength.current; setUnseen(count => count + added); }
     previousLength.current = timeline.length;
   }, [detail.conversationId, timeline.length, loadingOlder]);
 
@@ -420,7 +420,7 @@ function Composer({
   const canEdit = !pending && (viewer.canManage || viewer.canChat === true);
   const media: ManualMedia | undefined = draft.selectedMedia.length ? {
     mediaIds: draft.selectedMedia.map(row => row.mediaId), previewIds: draft.mediaPaid ? draft.previewIds : [],
-    priceCents: draft.mediaPaid ? manualPriceCents(draft.mediaPrice) ?? -1 : 0,
+    priceCents: draft.mediaPaid ? manualPriceCents(draft.mediaPrice) || -1 : 0, // paid needs a paid price: 0 is free, never a paid intent
   } : undefined;
   const mediaProblem = media && !validManualMedia(media) ? "Set a price from USD 3.00 to 200.00 and leave at least one attachment locked, or choose Free." : null;
   const submittable = canSend && bodyProblem === null && !mediaProblem && (!!text.trim() || !!media);
@@ -819,11 +819,9 @@ export default function InboxView({
   onInboxSearchChange?: (search: InboxSearch) => void;
 }) {
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
-  // The fan panel is a third column only where there is room for it (1280px+).
-  // Narrower desktops start with it closed and can open it; closing it never
-  // touches the selected conversation, which lives outside this component.
+  // The fan panel holds the Reply control (Pause, Stop further contact, hold copy), so it starts open at every desktop width:
+  // a brake is never harder to reach than Send. Closing it never touches the selected conversation, which lives outside this component.
   const [profileOpen, setProfileOpen] = useState(true);
-  useEffect(() => { if (typeof window.matchMedia === "function" && window.matchMedia("(max-width: 1279px)").matches) setProfileOpen(false); }, []);
   // Below lg the fan info tab opens as a sheet over the chat. The chat, its draft and
   // its scroll stay mounted underneath, so closing the sheet loses nothing.
   const [narrow, setNarrow] = useState(false);
