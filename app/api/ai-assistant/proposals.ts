@@ -24,7 +24,7 @@ import { WRITE_TOOL_NAMES } from "./write-tools";
 // own, no matter what it decides the prompt means.
 
 export type Proposal = {
-  /** randomUUID: /approve finds exactly this card by it (proposals before 2026-11-13 have per-turn ids "p1", "p2"). */
+  /** randomUUID: /approve finds exactly this card by it (older proposals have per-turn ids "p1", "p2": legacy, never approvable, lib/ai-claim-state.ts). */
   id: string;
   tool: string;
   args: Record<string, unknown>;

@@ -112,7 +112,6 @@ type StoredProposal = NonNullable<AiMessageMeta["proposals"]>[number];
 export type ProposalClaim =
   | { status: "ok"; messageId: string; proposal: StoredProposal }
   | { status: "missing" }
-  | { status: "ambiguous" }
   | { status: "taken"; state: ClaimState };
 
 /**
@@ -160,8 +159,8 @@ export async function saveTurn(
 
 /**
  * Atomically claim exactly the stored proposal `proposalId` in this conversation, so /approve runs only what was
- * proposed, with the stored args, once. tool+args must still equal the stored ones. "ambiguous": only for proposals
- * stored before ids were UUIDs (per-turn "p1", "p2"), when that id with these args sits in more than one turn.
+ * proposed, with the stored args, once. tool+args must still equal the stored ones. `proposalId` is a UUID
+ * (the route refuses legacy per-turn ids first), so it names one stored proposal.
  */
 export async function claimProposal(conversationId: string, proposalId: string, tool: string, args: unknown): Promise<ProposalClaim> {
   const { data, error } = await supabaseAdmin
@@ -176,7 +175,6 @@ export async function claimProposal(conversationId: string, proposalId: string, 
     return p && p.tool === tool && isDeepStrictEqual(p.args, args) ? [{ messageId: row.id, proposal: p }] : [];
   });
   if (!hits.length) return { status: "missing" };
-  if (hits.length > 1) return { status: "ambiguous" };
   let taken: ClaimState | undefined;
   const claimed = await casUpdateMessage(hits[0].messageId, (meta) => {
     taken = meta.claims?.[proposalId];

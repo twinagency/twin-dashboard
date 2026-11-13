@@ -10,6 +10,7 @@
  * system-log writer is fine as long as the failure reaches the caller.
  * The route call sends a stored proposal with every plausible identifier (as in the F1 test), so an F1 fix that
  * binds approve to stored proposals keeps the control green; the store is reseeded per call.
+ * FIXTURE CHANGE (G18 legacy ids): new proposals' ids "p1"/"p2" are now UUIDs, since /approve refuses non-UUID (legacy) ids; assertions unchanged.
  * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-audit-log-failure.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-audit-log-failure.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
@@ -32,7 +33,7 @@ function arrange(logFails: boolean) {
   pg.seed("ai_conversations", [{ id: CONV, title: "t", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" }]);
   pg.seed("ai_messages", [{
     id: MSG, conversation_id: CONV, role: "assistant", content: "Queued a pause.", created_at: "2026-11-01T00:00:00Z",
-    meta: { proposals: [{ id: "p1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true }] },
+    meta: { proposals: [{ id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true }] },
   }]);
   pg.respond((c) => (logFails && c.table === "system_logs" && c.method === "POST"
     ? { status: 500, body: { code: "XX000", message: "system_logs insert failed (test)", details: null, hint: null } }
@@ -53,7 +54,7 @@ async function approveRoute(logFails: boolean): Promise<{ status: number; body: 
   arrange(logFails);
   const { POST } = await import("../../app/api/ai-assistant/approve/route");
   return inWorkStore(async () => {
-    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, messageId: MSG, proposalId: "p1", id: "p1", tool: "setCloneStatus", args: ARGS }));
+    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, messageId: MSG, proposalId: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS }));
     return { status: res.status, body: await res.json().catch(() => null) };
   });
 }

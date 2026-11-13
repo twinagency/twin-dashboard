@@ -12,6 +12,7 @@
  * Every plausible identifier is sent (conversationId, messageId, proposalId, id).
  * TEST-CHANGE NEEDED IF: the fix stores proposals somewhere other than ai_messages.meta.proposals (e.g. a new
  * table): seed that table in beforeEach instead; the store already serves any table name.
+ * FIXTURE CHANGE (G18 legacy ids): new proposals' ids "p1"/"p2" are now UUIDs, since /approve refuses non-UUID (legacy) ids; assertions unchanged.
  * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-approve-replay.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-approve-replay.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1.
  */
@@ -22,7 +23,7 @@ import { after, before, beforeEach, test } from "node:test";
 const CONV = "44444444-4444-4444-8444-444444444444";
 const MSG = "55555555-5555-4555-8555-555555555555";
 const ARGS = { clone: CLONE.id, status: "paused" };
-const PROPOSAL = { id: "p1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true };
+const PROPOSAL = { id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true };
 
 let pg: FakePostgrest;
 before(async () => { pg = await startFakePostgrest(); });
@@ -43,7 +44,7 @@ async function approve(body: Record<string, unknown>) {
     return { status: res.status, json: await res.json().catch(() => null) };
   });
 }
-const ids = { conversationId: CONV, messageId: MSG, proposalId: "p1", id: "p1" };
+const ids = { conversationId: CONV, messageId: MSG, proposalId: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1" };
 const approvalBody = { ...ids, tool: "setCloneStatus", args: ARGS };
 const clonePatches = () => pg.writes("PATCH", "clones");
 

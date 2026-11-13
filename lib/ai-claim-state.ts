@@ -12,9 +12,15 @@ export type Proposal = { id: string; tool: string; args: Record<string, unknown>
 // unknown: claimed and the outcome is not known (or it is in flight). Not approvable. approved: hidden, its Applied line shows.
 export type ProposalCard = Proposal & { state: "pending" | "approving" | "approved" | "dismissed" | "unknown"; error?: string };
 
-/** How a claim renders, on a reload (stored meta.claims) and after a live /approve 409 (its raw `state`) alike. */
-export function cardState(claim: ClaimState | null | undefined): "pending" | "approved" | "unknown" {
-  return claim === "applied" ? "approved" : claim ? "unknown" : "pending";
+/** Only the chat route mints UUID proposal ids. Older proposals have per-turn ids ("p1") and no claims, so whether they ran is unknowable. */
+export const isLegacyProposalId = (id: string) => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+export const LEGACY_CARD = "This card was created before approval tracking. Ask the assistant again to make this change.";
+
+/** How a claim renders, on a reload (stored meta.claims, plus the card's id) and after a live /approve 409 (its raw `state`) alike. */
+export function cardState(claim: ClaimState | null | undefined, proposalId?: string): "pending" | "approved" | "unknown" {
+  if (claim) return claim === "applied" ? "approved" : "unknown";
+  return proposalId !== undefined && isLegacyProposalId(proposalId) ? "unknown" : "pending";
 }
 
 /**

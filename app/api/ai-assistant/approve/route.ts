@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { executeWriteTool, logUnknownWrite } from "../write-tools";
 import { describeProposal, isApprovableWrite } from "../proposals";
 import { appendMessage, claimProposal, releaseClaim, settleClaim, type ProposalClaim } from "../db";
-import { OUTCOME_UNKNOWN } from "@/lib/ai-claim-state";
+import { isLegacyProposalId, LEGACY_CARD, OUTCOME_UNKNOWN } from "@/lib/ai-claim-state";
 import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
   }
   if (typeof conversationId !== "string" || !conversationId || typeof proposalId !== "string" || !proposalId) {
     return Response.json({ ok: false, error: "missing conversationId or proposalId" }, { status: 400 });
+  }
+
+  // A proposal stored before UUID ids may already have run (its Applied line is not tied to it): never claim it.
+  if (isLegacyProposalId(proposalId)) {
+    return Response.json({ ok: false, error: LEGACY_CARD, state: "unknown" }, { status: 409 });
   }
 
   // Only the stored proposal with this id runs, with its STORED args, and the claim is atomic, so a replayed
@@ -97,8 +102,6 @@ function claimRefusal(claim: Exclude<ProposalClaim, { status: "ok" }>): Response
   switch (claim.status) {
     case "missing":
       return Response.json({ ok: false, error: "this proposal was not found in this conversation, nothing was changed" }, { status: 404 });
-    case "ambiguous":
-      return Response.json({ ok: false, error: "this older card matches more than one stored proposal, nothing was changed" }, { status: 409 });
     case "taken":
       return Response.json(
         { ok: false, error: claim.state === "applied" ? "this change was already applied" : OUTCOME_UNKNOWN, state: claim.state },

@@ -14,6 +14,7 @@
  * directly (middleware does not run), so it would stay red; move it to a middleware-level request then.
  * conversations/[id] DELETE also has no Origin check but is not tested here: a cross-origin DELETE is always
  * preflighted (not a simple request) and the route sends no CORS headers [inferred], so it is not reachable this way.
+ * FIXTURE CHANGE (G18 legacy ids): new proposals' ids "p1"/"p2" are now UUIDs, since /approve refuses non-UUID (legacy) ids; assertions unchanged.
  * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-approve-origin.test.ts (copied from tests/known-red/W4-api-ai-assistant-plus2-approve-origin.test.ts)
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header); PostgREST faked on 127.0.0.1; OpenRouter
  * faked at the fetch boundary (one text-only turn).
@@ -25,7 +26,7 @@ import { after, before, beforeEach, test } from "node:test";
 const CONV = "efefefef-efef-4fef-8fef-efefefefefef";
 const MSG = "12121212-1212-4212-8212-121212121212";
 const ARGS = { clone: CLONE.id, status: "paused" };
-const APPROVAL = { conversationId: CONV, messageId: MSG, proposalId: "p1", id: "p1", tool: "setCloneStatus", args: ARGS };
+const APPROVAL = { conversationId: CONV, messageId: MSG, proposalId: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS };
 const TRUSTED = { origin: "http://127.0.0.1", "content-type": "application/json" };
 const CROSS = { origin: "https://evil.example", "content-type": "text/plain;charset=UTF-8" };
 
@@ -38,7 +39,7 @@ beforeEach(() => {
   pg.seed("ai_conversations", [{ id: CONV, title: "t", created_at: "2026-11-01T00:00:00Z", updated_at: "2026-11-01T00:00:00Z" }]);
   pg.seed("ai_messages", [{
     id: MSG, conversation_id: CONV, role: "assistant", content: "Queued a pause.", created_at: "2026-11-01T00:00:00Z",
-    meta: { proposals: [{ id: "p1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true }] },
+    meta: { proposals: [{ id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS, summary: `PAUSE clone ${CLONE.id}.`, heavy: true }] },
   }]);
 });
 

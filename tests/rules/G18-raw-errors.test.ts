@@ -3,11 +3,12 @@
  * returns `e.message` of a failed write verbatim, so a raw PostgREST error (table/constraint/detail text) reaches the browser.
  * Control: a write that succeeds returns 200 ok. Red: a clones PATCH that fails with a PostgREST 500 answers with a body that
  * does not contain the raw database message. Any status is accepted; only the leaked text is asserted.
+ * FIXTURE CHANGE (G18 legacy ids): new proposals' ids "p1"/"p2" are now UUIDs, since /approve refuses non-UUID (legacy) ids; assertions unchanged.
  * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-raw-errors.test.ts
  * DECLARED BYPASS: the W4 ai harness (PostgREST faked on 127.0.0.1, Next workAsyncStorage fake store).
  * FIXTURE CHANGE (G18, copied from tests/known-red/W7-P-picks-W4-ai-raw-errors.test.ts): the G18 replay fix (W4 F1) makes
  * approve run only a stored proposal, so the approval now names a conversation holding one (assertions unchanged).
- * FIXTURE CHANGE (G18 rwl R1, F3): approve now names the card by proposalId, so the request carries proposalId "p1".
+ * FIXTURE CHANGE (G18 rwl R1, F3): approve now names the card by proposalId, so the request carries proposalId "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1".
  */
 import { CLONE, inWorkStore, jsonRequest, startFakePostgrest, type FakePostgrest } from "./G18-harness";
 import assert from "node:assert/strict";
@@ -23,13 +24,13 @@ beforeEach(() => {
   pg.reset();
   pg.seed("clones", [{ ...CLONE, status: "active" }]);
   pg.seed("ai_messages", [{ id: "f2f2f2f2-f2f2-4f2f-8f2f-f2f2f2f2f2f2", conversation_id: CONV, role: "assistant", content: "Queued a pause.",
-    created_at: "2026-11-01T00:00:00Z", meta: { proposals: [{ id: "p1", tool: "setCloneStatus", args: ARGS, summary: "PAUSE", heavy: true }] } }]);
+    created_at: "2026-11-01T00:00:00Z", meta: { proposals: [{ id: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS, summary: "PAUSE", heavy: true }] } }]);
 });
 
 async function approve() {
   const { POST } = await import("../../app/api/ai-assistant/approve/route");
   return inWorkStore(async () => {
-    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, proposalId: "p1", tool: "setCloneStatus", args: ARGS }));
+    const res = await POST(jsonRequest("/api/ai-assistant/approve", { conversationId: CONV, proposalId: "e1e1e1e1-e1e1-4e1e-8e1e-e1e1e1e1e1e1", tool: "setCloneStatus", args: ARGS }));
     return { status: res.status, text: await res.text() };
   });
 }

@@ -99,7 +99,7 @@ export default function AiChat() {
             content: m.content,
             writes: m.meta?.writes,
             // A reloaded card takes its stored claim state through the same mapping as a live 409 (lib/ai-claim-state.ts).
-            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: cardState(m.meta?.claims?.[p.id]) })),
+            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: cardState(m.meta?.claims?.[p.id], p.id) })),
           }),
         ),
       );
