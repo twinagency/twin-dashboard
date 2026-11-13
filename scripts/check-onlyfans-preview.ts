@@ -586,13 +586,14 @@ async function main() {
   group("8. A command carries its account, its payload and a content identity");
   {
     const source = createFixtureOnlyFansDataSource({ viewer: operatorViewer() });
-    const conversationId = "of-conv-ava-1001";
+    // G24: the simulator gates on availableActions and the revision, so the send targets the taken-over thread at its own revision.
+    const conversationId = "of-conv-ava-1003";
     const message = (body: string, accountId = AVA) =>
       createCommandRequest({
         command: "send_manual_message",
         accountId,
         conversationId,
-        expectedRevision: 42,
+        expectedRevision: 9,
         payload: { kind: "manual_message", body },
       });
 
@@ -674,10 +675,12 @@ async function main() {
         accountId: AVA,
         conversationId: "of-conv-ava-1002",
         expectedRevision: 17,
-        payload: { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "delivered" },
+        payload: { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "delivered", providerMessageId: "123" },
       }),
     );
     check("a delivery decision is accepted", resolution.accepted === true);
+    check("a delivery decision without a provider message id is refused, like the live adapter",
+      commandPayloadProblem("resolve_delivery_evidence", { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "delivered" }) !== null);
     check(
       "the decision survives into the modelled command",
       resolution.request.payload.kind === "delivery_resolution" &&

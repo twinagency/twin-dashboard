@@ -8,7 +8,7 @@ import type { InboxSearch } from "../onlyfans/inbox-search";
 
 import { isAiChatting } from "../onlyfans/ai-visibility";
 import type { OnlyFansDataSource } from "./data-source";
-import { commandPayloadProblem, isDeliveryUnresolved } from "./actions";
+import { availableActions, commandPayloadProblem } from "./actions";
 import { NO_PAYLOAD } from "./types";
 import {
   accounts as fixtureAccounts,
@@ -127,17 +127,17 @@ export function createFixtureOnlyFansDataSource(
 
     async listAccounts(scope?: AccountScopeRequest) {
       await wait(latencyMs);
-      if (scenarios.accounts) return scenarios.accounts;
-      const visible = fixtureAccounts.filter((account) => inScope(viewer, account.accountId));
-    if (visible.length === 0) return { status: "empty" };
-    // The creator is a request, so it narrows what the viewer may already read.
-    // A creator this viewer cannot see yields nothing, and nothing is said about
-    // whether that creator exists.
-    const requested = scope?.creatorId ?? null;
-    const scoped = requested
-      ? visible.filter((account) => account.binding.creatorId === requested)
-      : visible;
-    return scoped.length === 0 ? { status: "empty" } : { status: "ready", data: scoped };
+      // The creator is a request, so it narrows what the viewer may already read.
+      // A creator this viewer cannot see yields nothing, and nothing is said about
+      // whether that creator exists. A scenario's rows narrow the same way.
+      const requested = scope?.creatorId ?? null;
+      const narrow = (list: OfAccount[]) => list.filter((account) =>
+        inScope(viewer, account.accountId) && (!requested || account.binding.creatorId === requested));
+      const override = scenarios.accounts;
+      if (override && override.status !== "ready" && override.status !== "stale") return override;
+      const scoped = narrow(override ? override.data : fixtureAccounts);
+      if (scoped.length === 0) return { status: "empty" };
+      return override ? { ...override, data: scoped } : { status: "ready", data: scoped };
     },
 
   async getAccount(accountId: string, scope?: AccountScopeRequest) {
@@ -163,17 +163,15 @@ export function createFixtureOnlyFansDataSource(
     async getConversation(accountId: string, conversationId: string) {
       await wait(latencyMs);
       if (!inScope(viewer, accountId)) return scopeDenied();
-      const override = scenarios.conversation?.(accountId, conversationId);
-      if (override) return override;
       const detail = fixtureDetails[conversationId];
-      // A conversation id belonging to another account must never resolve here.
+      // A conversation id belonging to another account must never resolve here, a scenario's included.
       if (!detail || detail.accountId !== accountId) return scopeDenied();
-      return { status: "ready", data: detail };
+      return scenarios.conversation?.(accountId, conversationId) ?? { status: "ready", data: detail };
     },
 
     async submitCommand(request: CommandRequest): Promise<SimulatedCommandResult> {
       await wait(latencyMs);
-      return simulateCommand(request);
+      return simulateCommand(request, viewer);
     },
   };
 }
@@ -187,7 +185,7 @@ export function createFixtureOnlyFansDataSource(
  * wrong account, or carrying a payload that does not belong to the command. A
  * simulation that accepts anything teaches the wrong contract.
  */
-export function simulateCommand(request: CommandRequest): SimulatedCommandResult {
+export function simulateCommand(request: CommandRequest, viewer: PreviewViewer): SimulatedCommandResult {
   const refuse = (reason: string): SimulatedCommandResult => ({
     simulated: true,
     applied: false,
@@ -208,7 +206,7 @@ export function simulateCommand(request: CommandRequest): SimulatedCommandResult
   // names one account and a conversation that belongs to another is refused
   // rather than quietly modelled.
   const binding = fixtureAccounts.find((account) => account.accountId === request.accountId);
-  if (!binding) {
+  if (!binding || !inScope(viewer, request.accountId)) {
     return refuse("This account is not available in the current view.");
   }
   const conversation = fixtureDetails[request.conversationId];
@@ -219,8 +217,16 @@ export function simulateCommand(request: CommandRequest): SimulatedCommandResult
     return refuse("That conversation belongs to a different account.");
   }
 
-  if (request.command === "send_manual_message" && isDeliveryUnresolved(conversation.summary.delivery)) {
-    return refuse("An earlier send is unresolved. Resolve its outcome before sending anything else.");
+  if (request.expectedRevision !== conversation.summary.revision) {
+    return refuse("This conversation changed since it was loaded. Refresh it before trying again.");
+  }
+
+  // The same gate the controls use, so the pretend backend refuses what the UI would not offer: a held send, a send to
+  // a no-contact fan, a resume during an unknown delivery.
+  const actions = availableActions({ account: binding, summary: conversation.summary, viewer,
+    deliveryIncident: conversation.deliveryIncident });
+  if (!actions.available.some((entry) => entry.action === request.command)) {
+    return refuse(actions.blocked.find((entry) => entry.action === request.command)?.reason ?? "That action is not offered here.");
   }
 
   const described =
