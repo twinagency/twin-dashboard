@@ -32,7 +32,9 @@ export const planCKeyScope = (actor: string) => createHash("sha256").update(`pla
 
 export const planCReadDrafts = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
   const result = await backend.drafts(accountId, actor);
-  return result.ok ? { status: 200, body: { schemaVersion: PLAN_C_SCHEMA, ok: true, ...result.data } } : { status: result.status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, error: result.error } };
+  return result.ok ? { status: 200, body: { schemaVersion: PLAN_C_SCHEMA, ok: true, ...result.data } }
+    // A refusal's `drafts` are only its Stop targets, in the draft row shape, so the client reads them with the same planCStopTargets.
+    : { status: result.status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, error: result.error, drafts: result.stopTargets } };
 };
 export const planCReadUnresolved = async (backend: PlanCBackend, accountId: string, actor?: string): Promise<PlanCHttp> => {
   const result = await backend.unresolved(accountId, actor);

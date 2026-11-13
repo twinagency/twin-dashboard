@@ -20,7 +20,16 @@ export const isPlanCDraftAction = (value: unknown): value is PlanCDraftAction =>
 export const isPlanCConversationAction = (value: unknown): value is PlanCConversationAction => (PLAN_C_CONVERSATION_ACTIONS as readonly string[]).includes(value as string);
 
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
-const pick = (source: Record<string, unknown>, ...keys: string[]): unknown => { for (const key of keys) if (source[key] !== undefined) return source[key]; return undefined; };
+const CONFLICT = Symbol("aliases disagree");
+const same = (a: unknown, b: unknown) => a === b || (typeof a === "object" && a !== null && JSON.stringify(a) === JSON.stringify(b));
+/**
+ * One term, sent under any of its aliases. Two set aliases that disagree (priceCents 300 beside price_cents 20000) give CONFLICT, which
+ * no check below accepts, never "first one wins". null counts as set: a null beside a value is a disagreement, not an absence.
+ */
+const pick = (source: Record<string, unknown>, ...keys: string[]): unknown => {
+  const values = keys.map(key => source[key]).filter(value => value !== undefined);
+  return values.every(value => same(value, values[0])) ? values[0] : CONFLICT;
+};
 const intIn = (value: unknown, min: number, max: number): value is number => typeof value === "number" && Number.isInteger(value) && value >= min && value <= max;
 const text = (value: unknown, max: number): value is string => typeof value === "string" && value.length <= max;
 const isoDate = (value: unknown): value is string => typeof value === "string" && value.length <= 40 && !Number.isNaN(Date.parse(value));
@@ -37,7 +46,7 @@ export function newCommandKey(random: (bytes: Uint8Array) => Uint8Array = bytes 
 }
 
 // ── Drafts ─────────────────────────────────────────────────────────────────────
-export type PlanCPart = { index: number; action: string; text: string; priceCents: number | null; currency: string | null;
+export type PlanCPart = { index: number; action: "reply" | "offer"; text: string; priceCents: number | null; currency: string | null;
   mediaIds: string[]; previewIds: string[]; productId: string | null };
 export type PlanCMessage = { who: string; text: string; at: string | null };
 export type PlanCOffer = { productId: string | null; mediaCount: number; mediaIds: string[]; priceCents: number | null; currency: string | null };
@@ -49,7 +58,7 @@ export type PlanCDraft = {
   parts: PlanCPart[];
   offer: PlanCOffer | null;
   expiresAt: string;
-  fanId: string | null;
+  fanId: string;
   conversationId: string;
   conversationRevision: number | null;
   messages: PlanCMessage[];
@@ -73,19 +82,35 @@ function strings(value: unknown, maxItems: number, maxLength = 64): string[] | n
   }
   return out;
 }
-const optionalCents = (value: unknown) => value === undefined || value === null ? null : intIn(value, 0, 20_000_00) ? value : undefined;
-const optionalCurrency = (value: unknown) => value === undefined || value === null ? null : typeof value === "string" && /^[A-Z]{3}$/.test(value) ? value : undefined;
+/**
+ * Offer money terms, the backend's own: 300..20,000 cents (twin-onlyfans-backend fans_api_adapter/protocol.py:252,
+ * db/onlyfans_offer_import_models.py:290) and USD only (conversation_engine/approval.py:53). Nothing outside is shown.
+ */
+const PLAN_C_PRICE_MIN_CENTS = 300;
+const PLAN_C_PRICE_MAX_CENTS = 20_000;
+const PLAN_C_CURRENCY = "USD";
+const absent = (value: unknown) => value === undefined || value === null;
+const productId = (value: unknown): string | null | undefined =>
+  absent(value) ? null : typeof value === "string" && ID.test(value) ? value : intIn(value, 0, 2 ** 53 - 1) ? String(value) : undefined;
 
+/** A part is a reply (no money, no media, no product) or an offer (an in-bounds USD price). Anything else is refused. */
 function parsePart(raw: unknown, position: number): PlanCPart | null {
   if (typeof raw === "string") return raw.length <= 4000 ? { index: position, action: "reply", text: raw, priceCents: null, currency: null, mediaIds: [], previewIds: [], productId: null } : null;
   if (!record(raw)) return null;
   const body = pick(raw, "text", "body"), index = pick(raw, "partIndex", "part_index", "index") ?? position, action = pick(raw, "action") ?? "reply";
-  const price = optionalCents(pick(raw, "priceCents", "price_cents")), currency = optionalCurrency(pick(raw, "currency"));
+  const price = pick(raw, "priceCents", "price_cents"), currency = pick(raw, "currency");
   const media = strings(pick(raw, "mediaIds", "media_ids"), 50), previews = strings(pick(raw, "previewIds", "preview_ids"), 50);
-  const product = pick(raw, "productId", "product_id", "catalogItemId", "catalog_item_id");
-  if (!text(body, 4000) || !intIn(index, 0, 1000) || !text(action, 32) || !action || price === undefined || currency === undefined || !media || !previews ||
-      !(product === undefined || product === null || (typeof product === "string" && ID.test(product)) || intIn(product, 0, 2 ** 53 - 1))) return null;
-  return { index, action, text: body, priceCents: price, currency, mediaIds: media, previewIds: previews, productId: product === undefined || product === null ? null : String(product) };
+  const product = productId(pick(raw, "productId", "product_id", "catalogItemId", "catalog_item_id"));
+  if (!text(body, 4000) || !intIn(index, 0, 1000) || !media || !previews || product === undefined) return null;
+  if (action === "offer") {
+    // Deliverable only: a catalogue item (approval.py:146), 1..35 unique media and previews that are unique, inside it and not all
+    // of it, so at least one medium (twin-onlyfans-backend service/onlyfans_runtime/media_delivery.py:15,23,25,63-64).
+    if (!intIn(price, PLAN_C_PRICE_MIN_CENTS, PLAN_C_PRICE_MAX_CENTS) || currency !== PLAN_C_CURRENCY || product === null || media.length > 35 ||
+        new Set(media).size !== media.length || new Set(previews).size !== previews.length || previews.length >= media.length || !previews.every(id => media.includes(id))) return null;
+    return { index, action, text: body, priceCents: price, currency, mediaIds: media, previewIds: previews, productId: product };
+  }
+  if (action !== "reply" || !absent(price) || !absent(currency) || media.length || previews.length || product !== null) return null;
+  return { index, action, text: body, priceCents: null, currency: null, mediaIds: [], previewIds: [], productId: null };
 }
 
 function parseMessages(value: unknown): PlanCMessage[] | null {
@@ -95,10 +120,24 @@ function parseMessages(value: unknown): PlanCMessage[] | null {
   for (const item of value.slice(-PLAN_C_MESSAGES_MAX)) {
     if (!record(item)) return null;
     const who = pick(item, "direction", "from", "role", "sender") ?? "message", body = pick(item, "text", "body"), at = pick(item, "at", "createdAt", "created_at", "sentAt");
-    if (!text(who, 32) || !(body === undefined || body === null || text(body, 4000)) || !(at === undefined || at === null || isoDate(at))) return null;
-    out.push({ who, text: typeof body === "string" ? body : "[no text]", at: typeof at === "string" ? at : null });
+    // Fan text is shown whole, never shortened (its end can be what the decision turns on). The backend stores at most 20000 UTF-8 bytes
+    // per message (twin-onlyfans-backend service/onlyfans_runtime/store.py:82) and sends it as stored (operator_v2.py:168); longer is refused.
+    if (!text(who, 32) || !(body === undefined || body === null || (typeof body === "string" && new TextEncoder().encode(body).length <= 20_000)) ||
+        !(at === undefined || at === null || isoDate(at))) return null;
+    out.push({ who, text: typeof body !== "string" ? "[no text]" : body, at: typeof at === "string" ? at : null });
   }
   return out;
+}
+
+/**
+ * The conversation a draft row names: its id, in this account's id space, and the revision it carries (nested first, as
+ * operator_v2.py:241 sends it). null: refuse. The one reading of it, for a draft and for a Stop target alike.
+ */
+function conversationRef(raw: Record<string, unknown>, accountId: string): { conversationId: string; conversationRevision: number | null } | null {
+  const conversationId = pick(raw, "conversationId", "conversation_id");
+  const revision = pick(record(raw.conversation) ? raw.conversation : {}, "revision") ?? pick(raw, "conversationRevision", "conversation_revision");
+  if (typeof conversationId !== "string" || !ID.test(conversationId) || !conversationId.startsWith(`${accountId}:`) || !(absent(revision) || intIn(revision, 0, 2 ** 31 - 2))) return null;
+  return { conversationId, conversationRevision: typeof revision === "number" ? revision : null };
 }
 
 /** One draft. Returns null for anything that does not meet the contract: a half-read draft must never be offered for approval. */
@@ -114,45 +153,53 @@ export function parsePlanCDraft(raw: unknown, accountId: string): PlanCDraft | n
   for (const [position, part] of rawParts.entries()) { const parsed = parsePart(part, position); if (!parsed) return null; parts.push(parsed); }
   if (new Set(parts.map(part => part.index)).size !== parts.length) return null;
   parts.sort((a, b) => a.index - b.index);
-  let conversationId = pick(raw, "conversationId", "conversation_id");
-  const fan = typeof fanId === "number" && Number.isInteger(fanId) ? String(fanId) : fanId;
-  if (fan !== undefined && fan !== null && !(typeof fan === "string" && /^[0-9]{1,19}$/.test(fan))) return null;
-  if (conversationId === undefined) conversationId = typeof fan === "string" ? `${accountId}:${fan}` : undefined;
-  if (typeof conversationId !== "string" || !ID.test(conversationId) || !conversationId.startsWith(`${accountId}:`)) return null;
+  // The backend always names the conversation and the fan, and the id is `${accountId}:${fanId}` (operator_v2.py:238-239,
+  // twin-onlyfans-backend service/onlyfans_read/contract.py:126): the draft approved and the conversation stopped are one fan.
+  const ref = conversationRef(raw, accountId), fan = typeof fanId === "number" && Number.isInteger(fanId) ? String(fanId) : fanId;
+  if (!ref || !(typeof fan === "string" && /^[0-9]{1,19}$/.test(fan)) || ref.conversationId !== `${accountId}:${fan}`) return null;
   const nested = record(raw.conversation) ? raw.conversation : {};
-  const revision = pick(nested, "revision") ?? pick(raw, "conversationRevision", "conversation_revision");
-  if (!(revision === undefined || revision === null || intIn(revision, 0, 2 ** 31 - 2))) return null;
   const messages = parseMessages(pick(nested, "messages") ?? pick(raw, "messages", "recentMessages"));
   const evidenceRaw = pick(raw, "evidence", "unresolvedEvidence", "unresolved_evidence");
   const evidence = evidenceRaw === undefined || evidenceRaw === null ? null : typeof evidenceRaw === "string" ? evidenceRaw : Array.isArray(evidenceRaw) && evidenceRaw.every(item => typeof item === "string") ? evidenceRaw.join("; ") : undefined;
   if (!messages || evidence === undefined || (evidence !== null && evidence.length > 2000)) return null;
   const approvedBy = pick(raw, "approvedBy", "actor"), approvedAt = pick(raw, "approvedAt", "decidedAt");
   if (!(approvedBy === undefined || approvedBy === null || text(approvedBy, 128)) || !(approvedAt === undefined || approvedAt === null || isoDate(approvedAt))) return null;
-  const draftAction = pick(raw, "action");
-  if (!(draftAction === undefined || draftAction === "reply" || draftAction === "offer")) return null;
-  const action = draftAction ?? (parts.some(part => part.action === "offer") ? "offer" : "reply");
-  // Draft-level fields win; otherwise summarise the offer parts. Never invent a price or a quantity.
-  const offerParts = parts.filter(part => part.action === "offer");
-  const declared = record(raw.offer) ? raw.offer : record(raw.product) ? raw.product : {};
-  const mediaIds = strings(pick(declared, "mediaIds", "media_ids") ?? pick(raw, "mediaIds", "media_ids") ?? (offerParts.length ? offerParts.flatMap(part => part.mediaIds) : undefined), 200);
-  const declaredCount = pick(declared, "mediaCount", "media_count") ?? pick(raw, "mediaCount", "media_count");
-  const declaredPrice = optionalCents(pick(declared, "priceCents", "price_cents") ?? pick(raw, "priceCents", "price_cents") ?? offerParts.find(part => part.priceCents !== null)?.priceCents);
-  const declaredCurrency = optionalCurrency(pick(declared, "currency") ?? pick(raw, "currency") ?? offerParts.find(part => part.currency)?.currency);
-  const productRaw = pick(declared, "productId", "product_id", "id") ?? pick(raw, "productId", "product_id") ?? offerParts.find(part => part.productId)?.productId;
-  if (!mediaIds || declaredPrice === undefined || declaredCurrency === undefined || !(declaredCount === undefined || declaredCount === null || intIn(declaredCount, 0, 1000)) ||
-      !(productRaw === undefined || productRaw === null || (typeof productRaw === "string" && ID.test(productRaw)) || intIn(productRaw, 0, 2 ** 53 - 1))) return null;
-  const offer: PlanCOffer | null = action === "offer" || offerParts.length || mediaIds.length || declaredPrice !== null
-    ? { productId: productRaw === undefined || productRaw === null ? null : String(productRaw), mediaIds,
-        mediaCount: typeof declaredCount === "number" ? declaredCount : mediaIds.length, priceCents: declaredPrice, currency: declaredCurrency } : null;
-  return { requestId, generation, draftVersion: version, draftHash: hash, status, action, parts, offer, expiresAt, fanId: typeof fan === "string" ? fan : null,
-    conversationId, conversationRevision: typeof revision === "number" ? revision : null, messages,
+  const offer = parseOfferTerms(raw, parts);
+  if (offer === undefined) return null;
+  const action = offer ? "offer" : "reply";
+  return { requestId, generation, draftVersion: version, draftHash: hash, status, action, parts, offer, expiresAt, fanId: fan, ...ref, messages,
     evidence: evidence ?? null, approvedBy: typeof approvedBy === "string" ? approvedBy : null, approvedAt: typeof approvedAt === "string" ? approvedAt : null };
+}
+
+/**
+ * The offer is the terms of the one offer part that is sent (the backend allows one: engine.py:486, approval.py:574). Every
+ * draft-level term the backend also sent must agree with that part exactly; a reply draft carries none. undefined: refuse.
+ */
+function parseOfferTerms(raw: Record<string, unknown>, parts: PlanCPart[]): PlanCOffer | null | undefined {
+  const offerParts = parts.filter(part => part.action === "offer");
+  if (offerParts.length > 1 || !(raw.action === undefined || raw.action === (offerParts.length ? "offer" : "reply"))) return undefined;
+  const blocks = [raw.offer, raw.product];
+  if (!blocks.every(block => absent(block) || record(block))) return undefined;
+  const sources = [...blocks.filter(record), raw];
+  // One value per source (CONFLICT when its own aliases disagree), each checked against the offer part.
+  const declared = (...keys: string[]) => sources.map(source => pick(source, ...keys)).filter(value => value !== undefined);
+  const price = declared("priceCents", "price_cents"), currency = declared("currency"), count = declared("mediaCount", "media_count");
+  const media = declared("mediaIds", "media_ids"), product = [...blocks.filter(record).map(block => pick(block, "productId", "product_id", "id")), pick(raw, "productId", "product_id")]
+    .filter(value => value !== undefined);
+  const head = offerParts[0];
+  if (!head) return [...blocks, ...price, ...currency, ...count, ...media, ...product].every(absent) ? null : undefined;
+  const offer: PlanCOffer = { productId: head.productId, mediaCount: head.mediaIds.length, mediaIds: head.mediaIds, priceCents: head.priceCents, currency: head.currency };
+  const sameMedia = (value: unknown) => { const ids = strings(value, 200); return !!ids && JSON.stringify(ids) === JSON.stringify(offer.mediaIds); };
+  if (!price.every(value => value === offer.priceCents) || !currency.every(value => value === offer.currency) || !count.every(value => value === offer.mediaCount) ||
+      !product.every(value => productId(value) === offer.productId) || !media.every(sameMedia)) return undefined;
+  return offer;
 }
 
 /** The list is refused as a whole if any draft breaks the contract or the scope: a mixed page is not shown. */
 export function parsePlanCDrafts(value: unknown, accountId: string): PlanCDraftList | null {
   if (!record(value) || value.schemaVersion !== PLAN_C_SCHEMA || value.ok === false || !Array.isArray(value.drafts) || value.drafts.length > 200) return null;
-  if (value.accountId !== undefined && value.accountId !== accountId) return null;
+  // The backend always names the account (engine_approval_api.py:153); a list that does not is not tied to this one.
+  if (value.accountId !== accountId) return null;
   const drafts: PlanCDraft[] = [];
   for (const raw of value.drafts) { const draft = parsePlanCDraft(raw, accountId); if (!draft) return null; drafts.push(draft); }
   if (new Set(drafts.map(draft => `${draft.requestId}:${draft.generation}`)).size !== drafts.length) return null;
@@ -174,6 +221,24 @@ export function parsePlanCDrafts(value: unknown, accountId: string): PlanCDraftL
   return { accountId, drafts, receipts };
 }
 
+/** A conversation the operator can still stop when the draft list was refused. It is never a draft, and hand back is not offered for it. */
+export type PlanCStopTarget = { conversationId: string; conversationRevision: number };
+/**
+ * The brake survives a refused list: approvals stay whole-list strict, so this lenient pass reads only Stop targets from `drafts`, the
+ * backend's raw list or the proxy's refusal, whose rows are these targets in the draft row shape. Each is read by conversationRef, as a
+ * readable draft's is, but is never tied to fanId, and carries its own integer revision. A list without accountId is still scoped: the
+ * read went to this account's route, the id must carry its prefix, and the backend re-derives the id before any command (engine_approval_api.py:182). A list naming
+ * another account, or another contract, yields nothing.
+ */
+export function planCStopTargets(value: unknown, accountId: string): PlanCStopTarget[] {
+  if (!record(value) || value.schemaVersion !== PLAN_C_SCHEMA || !absent(value.accountId) && value.accountId !== accountId || !Array.isArray(value.drafts)) return [];
+  const targets = new Map<string, PlanCStopTarget>();
+  for (const ref of value.drafts.map(raw => record(raw) ? conversationRef(raw, accountId) : null))
+    if (ref && ref.conversationRevision !== null && (targets.get(ref.conversationId)?.conversationRevision ?? -1) < ref.conversationRevision)
+      targets.set(ref.conversationId, { conversationId: ref.conversationId, conversationRevision: ref.conversationRevision });
+  return [...targets.values()];
+}
+
 // ── Unresolved work ───────────────────────────────────────────────────────────
 export type PlanCUnresolvedItem = { id: string; kind: string; owner: string; nextStep: string; summary: string | null;
   conversationId: string | null; conversationRevision: number | null; createdAt: string | null };
@@ -181,7 +246,7 @@ export type PlanCUnresolvedList = { accountId: string; items: PlanCUnresolvedIte
 
 export function parsePlanCUnresolved(value: unknown, accountId: string): PlanCUnresolvedList | null {
   if (!record(value) || value.schemaVersion !== PLAN_C_SCHEMA || value.ok === false || !Array.isArray(value.items) || value.items.length > 500) return null;
-  if (value.accountId !== undefined && value.accountId !== accountId) return null;
+  if (value.accountId !== accountId) return null; // engine_approval_api.py:165
   const items: PlanCUnresolvedItem[] = [];
   for (const raw of value.items) {
     if (!record(raw)) return null;
