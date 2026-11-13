@@ -6,6 +6,8 @@ import { creatorUuid, staffCreatorIds } from "@/lib/staff-creator-scope";
 export const UPLOAD_PERMISSION_VERSION = "of-upload-permission.v1";
 const uuid = "[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}";
 const agencyActor = new RegExp(`^agency-user:(${uuid}):(${uuid})$`);
+/** The internal operator's actor: the owner-session token hash. The one shape every write path admits as "the operator". */
+export const isOperatorActor = (actor: unknown): actor is string => typeof actor === "string" && /^op-session:[a-f0-9]{64}$/.test(actor);
 
 export async function currentUploadPermission(actor: string, creatorId: string, db: SupabaseClient = serviceClient()): Promise<boolean> {
   if (!creatorUuid(creatorId)) return false;
@@ -14,7 +16,7 @@ export async function currentUploadPermission(actor: string, creatorId: string, 
     // checked by the same live authority as verifyOwnerSession, without a key
     // or raw browser session entering the worker. Legacy shared-password hashes
     // have no revocable identity and therefore cannot pass this authority.
-    if (/^op-session:[a-f0-9]{64}$/.test(actor)) {
+    if (isOperatorActor(actor)) {
       const result = await db.rpc("dashboard_owner_session_verify", { p_session_hash: actor.slice("op-session:".length) });
       return !result.error && result.data === true;
     }

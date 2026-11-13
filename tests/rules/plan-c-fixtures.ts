@@ -1,5 +1,5 @@
 /**
- * Shared Plan C fixtures for tests/rules/G02-*.test.ts. Not a test file (the rules glob is *.test.*).
+ * Shared Plan C fixtures for tests/rules/G02-*.test.ts and G05-plan-c-gate-scope.test.ts. Not a test file (the rules glob is *.test.*).
  *
  * Rules these fixtures hold to:
  *  - Every draft is FULLY scoped (`conversationId: "<account>:<fan>"`), so a test depends only on the rule it names.
@@ -62,7 +62,7 @@ const spawnTsx = (file: string, args: string[] = [], flags: string[] = []) =>
  * --experimental-test-module-mocks, and returns its JSON line. Memoized per scenario.
  */
 const childRuns = new Map<string, unknown>();
-export function planCRouteChild<T>(scenario: "client-refused" | "client-denied"): T {
+export function planCRouteChild<T>(scenario: "client-refused" | "client-denied" | "scope"): T {
   if (childRuns.has(scenario)) return childRuns.get(scenario) as T;
   const child = spawnTsx(fileURLToPath(new URL("./plan-c-route.child.ts", import.meta.url)), [scenario], ["--experimental-test-module-mocks", "--no-warnings"]);
   const line = child.stdout.trim().split("\n").at(-1) ?? "";

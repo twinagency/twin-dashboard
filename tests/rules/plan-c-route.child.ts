@@ -8,19 +8,22 @@
  *  - Replaced, and only these: `next/headers` (no Next request scope offline; it hands back the operator session cookie, or none)
  *    and the `import "server-only"` line of lib/onlyfans/plan-c-owner.ts (Next's bundler makes it a no-op; the real core is
  *    re-exported). The wire is a fake `fetch`: the owner-session RPCs answer as Supabase would for a valid named owner, and the
- *    backend's pilot-scope scopes this actor to MOCK_ACCOUNT only (403 for anything else).
- *  - Any POST that reaches the backend is counted and answered 502, so a regression that sends upstream shows as posts > 0.
- *  - Synthetic values only. Prints one JSON line: { outcome, keys, posts, status }.
- * Usage: plan-c-route.child.ts <client-refused | client-denied>
+ *    backend's pilot-scope scopes this actor to MOCK_ACCOUNT only (503 for "of-down", a scope outage; 403 for anything else).
+ *  - Any POST that reaches the backend is counted and answered 502, so a regression that sends upstream shows as posts > 0
+ *    (`scope` alone acks it, so its in-scope control can succeed).
+ *  - Synthetic values only. Prints one JSON line: { outcome, keys, posts, status }, or for `scope` { [accountId or "accountId action"]: { status, outcome, posts } }.
+ * Usage: plan-c-route.child.ts <client-refused | client-denied | scope>
  *  client-refused the browser client, signed in, STOPs a conversation of another account
  *  client-denied  the browser client with NO session approves a draft
+ *  scope          G05-plan-c-gate-scope: signed in, STOP on MOCK_ACCOUNT and on "of-b" straight through the route, plus
+ *                 STOP and takeover on "of-down" (keys "of-down stop", "of-down takeover")
  */
 import { mock } from "node:test";
 import { NextRequest } from "next/server";
 import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
-import { CONVERSATION, MOCK_ACCOUNT, parsedDraft } from "./plan-c-fixtures";
+import { CONVERSATION, KEY, MOCK_ACCOUNT, PLAN_C_SCHEMA, parsedDraft } from "./plan-c-fixtures";
 
 const OWNER_SESSION = `owner_${"1".repeat(64)}`, DASH = "https://dash.fixture.invalid";
 
@@ -45,8 +48,14 @@ async function main(scenario: string) {
     if (!m) return Response.json({ ok: false }, { status: 404 });
     const accountId = decodeURIComponent(m[1]), rest = decodeURIComponent(m[2]);
     if (method === "GET" && rest === "pilot-scope")
-      return accountId === MOCK_ACCOUNT ? Response.json({ ok: true, accountId, config: { authorization_mode: "supervised" } }) : Response.json({ ok: false, code: "out_of_scope" }, { status: 403 });
-    if (method === "POST") { posts.push(`${accountId} ${rest}`); return Response.json({ ok: false }, { status: 502 }); }
+      return accountId === MOCK_ACCOUNT ? Response.json({ ok: true, accountId, config: { authorization_mode: "supervised" } })
+        : accountId === "of-down" ? Response.json({ ok: false }, { status: 503 }) : Response.json({ ok: false, code: "out_of_scope" }, { status: 403 });
+    if (method === "POST") {
+      posts.push(`${accountId} ${rest}`);
+      if (scenario !== "scope") return Response.json({ ok: false }, { status: 502 });
+      const body = JSON.parse(String(init.body)), [, target, action] = rest.split("/");
+      return Response.json({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId, conversationId: target, action, commandKey: body.commandKey, recordedRevision: 8, replayed: false });
+    }
     return Response.json({ ok: false }, { status: 404 });
   }) as typeof fetch;
 
@@ -67,6 +76,17 @@ async function main(scenario: string) {
     return response;
   }) as typeof fetch;
 
+  if (scenario === "scope") {
+    const out: Record<string, { status: number; outcome: unknown; posts: number }> = {};
+    for (const [name, accountId, action] of [[MOCK_ACCOUNT, MOCK_ACCOUNT, "stop"], ["of-b", "of-b", "stop"], ["of-down stop", "of-down", "stop"], ["of-down takeover", "of-down", "takeover"]]) {
+      const before = posts.length, conversationId = `${accountId}:1`;
+      const response = await routeFetch(`/api/onlyfans-controls/accounts/${accountId}/plan-c/conversations/${encodeURIComponent(conversationId)}/${action}`,
+        { method: "POST", body: JSON.stringify({ commandKey: KEY, expectedRevision: 7 }) });
+      const body = await response.json() as Record<string, unknown>;
+      out[name] = { status: response.status, outcome: body.outcome, posts: posts.length - before };
+    }
+    return out;
+  }
   const keys = createCommandKeyStore(), client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl: routeFetch, keys });
   const result = scenario === "client-refused" ? await client.conversationCommand(`of-b:${CONVERSATION.split(":")[1]}`, "stop", 7)
     : scenario === "client-denied" ? await client.approveDraft(parsedDraft()) : null;
