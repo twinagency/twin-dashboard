@@ -32,6 +32,16 @@ export async function scopeBundleItems(input: URL, agency: AgencyIdentity): Prom
   return url;
 }
 
+/** setBlocked's two agency reason writes, exactly (G36c): the one-statement stamp on a fan it flips, never over a
+ * safety reason or minor flag, and the unblock that clears an operator stamp only. Anything else is refused. */
+function operatorStampWrite(url: URL, row: Record<string, unknown>): boolean {
+  const q = url.searchParams;
+  if (Object.keys(row).sort().join() !== "blocked,blocked_at,blocked_reason" || q.get("minor_flagged_at") !== "is.null") return false;
+  if (row.blocked === true) return row.blocked_reason === "operator" && typeof row.blocked_at === "string"
+    && q.get("blocked") === "eq.false" && q.get("or") === "(blocked_reason.is.null,blocked_reason.eq.operator)";
+  return row.blocked === false && row.blocked_reason === null && row.blocked_at === null && q.get("blocked_reason") === "eq.operator";
+}
+
 /** Restrict both the old row (mandatory AND) and the submitted owner/fields.
  * No upserts, RPC mutations, ledger edits, credential edits or re-parenting. */
 export async function scopeAgencyWrite(input: URL, method: string, body: unknown, agency: AgencyIdentity): Promise<URL> {
@@ -52,9 +62,7 @@ export async function scopeAgencyWrite(input: URL, method: string, body: unknown
   for (const row of rows) {
     if (!row || typeof row!=="object" || Array.isArray(row) || Object.keys(row).some(key=>!rule.fields.includes(key))) throw new Error("Unsupported agency field");
     if (method === "PATCH" && ("clone_id" in row || "storage_path" in row || "bundle_id" in row)) throw new Error("Ownership and storage paths cannot be reassigned");
-    // setBlocked's operator stamp only: never another reason, never over a safety reason or a minor flag (G36c).
-    if (table === "users" && ("blocked_reason" in row || "blocked_at" in row) && (row.blocked_reason !== "operator" || typeof row.blocked_at !== "string"
-      || url.searchParams.get("or") !== "(blocked_reason.is.null,blocked_reason.eq.operator)" || url.searchParams.get("minor_flagged_at") !== "is.null")) {
+    if (table === "users" && ("blocked_reason" in row || "blocked_at" in row) && !operatorStampWrite(url, row)) {
       throw new Error("Only an operator block reason may be recorded");
     }
     if (table === "clones") {
