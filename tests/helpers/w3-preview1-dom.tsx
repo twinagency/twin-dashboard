@@ -13,7 +13,8 @@ const { JSDOM } = require("jsdom");
 export const dom = new JSDOM('<div id="root"></div>', { url: "https://fixture.invalid/onlyfans/accounts" });
 // `self` is a window global; next/link reads it (requestIdleCallback) when a <Link> mounts.
 Object.assign(globalThis, { window: dom.window, self: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, Event: dom.window.Event,
-  MouseEvent: dom.window.MouseEvent, React, IS_REACT_ACT_ENVIRONMENT: true });
+  MouseEvent: dom.window.MouseEvent, KeyboardEvent: dom.window.KeyboardEvent, Element: dom.window.Element, Node: dom.window.Node,
+  getComputedStyle: dom.window.getComputedStyle, React, IS_REACT_ACT_ENVIRONMENT: true });
 // jsdom has no layout: scrolling is a no-op here (ConnectionEditor scrolls itself into view on open).
 dom.window.HTMLElement.prototype.scrollIntoView = function scrollIntoView() {};
 require.extensions[".css"] = (module: { exports: unknown }) => { module.exports = {}; };
@@ -28,8 +29,9 @@ export function NextShell({ pathname = "/onlyfans/accounts", children }: { pathn
     <SearchParamsContext.Provider value={new URLSearchParams(query)}>{children}</SearchParamsContext.Provider></PathnameContext.Provider></AppRouterContext.Provider>;
 }
 
-/** One recorded request. `body` is the parsed JSON body of a write, or null; read fields through `bodyOf`. */
-export type Call = { method: string; url: string; body: unknown };
+/** One recorded request. `body` is the parsed JSON body of a write, or null; read fields through `bodyOf`. `raw` is the body
+ * string as sent, `signal` the request's abort signal. */
+export type Call = { method: string; url: string; body: unknown; raw: string | undefined; signal: AbortSignal | undefined };
 /** The recorded JSON body as a field map. Throws when the call is missing or sent no JSON object, so a body assertion
  * can never pass vacuously (undefined === undefined). */
 export const bodyOf = (call: Call | undefined): Record<string, unknown> => {
@@ -41,15 +43,25 @@ export const bodyOf = (call: Call | undefined): Record<string, unknown> => {
 export const calls: Call[] = [];
 export const posts = () => calls.filter(call => call.method !== "GET");
 type Handler = (call: Call) => Response | Promise<Response>;
-/** Installs the fetch stub. Every request is recorded; the handler answers it. Anything not under fixture.invalid fails the test. */
+/**
+ * Installs the fetch stub. Every request is recorded; the handler answers it. Anything not under fixture.invalid fails the test.
+ * Aborts behave like fetch: an already-aborted signal sends (and records) nothing, and aborting rejects a pending answer.
+ */
 export function serve(handler: Handler) {
   calls.length = 0;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input), "https://fixture.invalid");
     assert.equal(url.host, "fixture.invalid", "no request leaves the fixture origin");
-    const call: Call = { method: init?.method ?? "GET", url: url.pathname + url.search, body: typeof init?.body === "string" ? JSON.parse(init.body) : null };
+    const signal = init?.signal ?? undefined, aborted = () => new DOMException("aborted", "AbortError");
+    if (signal?.aborted) throw aborted();
+    const raw = typeof init?.body === "string" ? init.body : undefined;
+    const call: Call = { method: init?.method ?? "GET", url: url.pathname + url.search, body: raw === undefined ? null : JSON.parse(raw), raw, signal };
     calls.push(call);
-    return handler(call);
+    return new Promise<Response>((resolve, reject) => {
+      signal?.addEventListener("abort", () => reject(aborted()), { once: true });
+      // Chain, never resolve(handler()): resolving with a pending promise locks this one in and the abort could no longer reject it.
+      Promise.resolve().then(() => handler(call)).then(resolve, reject);
+    });
   }) as typeof fetch;
 }
 export const json = (value: unknown, status = 200) => Response.json(value, { status });
@@ -118,3 +130,64 @@ export async function submit(form: Element | null | undefined) {
   await act(async () => { form.dispatchEvent(new dom.window.Event("submit", { bubbles: true, cancelable: true })); });
   await settle();
 }
+
+// ---- G09 additions (formerly w3-preview2-dom.ts). Tests that use them register `afterEach(resetDom)`. ----
+
+// matchMedia: jsdom has none. Width-only evaluation of "(max-width: Npx)" / "(min-width: Npx)" against `viewport.width`.
+export const viewport = { width: 1440 };
+dom.window.matchMedia = (query: string) => {
+  const max = /max-width:\s*(\d+)px/.exec(query), min = /min-width:\s*(\d+)px/.exec(query);
+  const matches = (!max || viewport.width <= Number(max[1])) && (!min || viewport.width >= Number(min[1]));
+  return { matches, media: query, onchange: null, addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false };
+};
+const SCROLL_PROPS = ["scrollHeight", "clientHeight", "scrollTop"] as const;
+/**
+ * jsdom has no layout. Gives every element matching `selector` a scroll box: fixed scrollHeight/clientHeight and a settable
+ * scrollTop, as accessors on HTMLElement.prototype backed by a per-node WeakMap. `resetDom` removes them.
+ */
+export function stubScrollBox(selector: string, geometry: { scrollHeight: number; clientHeight: number }) {
+  const tops = new WeakMap<Element, number>(), proto = dom.window.HTMLElement.prototype, boxed = (node: Element) => node.matches(selector);
+  Object.defineProperty(proto, "scrollHeight", { configurable: true, get(this: Element) { return boxed(this) ? geometry.scrollHeight : 0; } });
+  Object.defineProperty(proto, "clientHeight", { configurable: true, get(this: Element) { return boxed(this) ? geometry.clientHeight : 0; } });
+  Object.defineProperty(proto, "scrollTop", { configurable: true, get(this: Element) { return tops.get(this) ?? 0; },
+    set(this: Element, value: number) { if (boxed(this)) tops.set(this, value); } });
+}
+/** Unmounts, restores the viewport width and removes the scroll-box stub. */
+export async function resetDom() {
+  await unmount();
+  viewport.width = 1440;
+  for (const name of SCROLL_PROPS) Reflect.deleteProperty(dom.window.HTMLElement.prototype, name);
+}
+
+const BREAKPOINTS: Record<string, number> = { sm: 640, md: 768, lg: 1024, xl: 1280, "2xl": 1536 };
+const DISPLAY = /^(hidden|block|inline|inline-block|flex|inline-flex|grid|inline-grid|contents|table|flow-root)$/;
+/** The Tailwind display an element's own classes give it at `width` ("hidden" or a visible display), or null if none applies. */
+function displayAt(element: Element, width: number): string | null {
+  // Tailwind order: unprefixed, then max-* variants, then min-width variants ascending; a later match wins.
+  let base: string | null = null, max: string | null = null;
+  const min: [number, string][] = [];
+  for (const token of (element.getAttribute("class") ?? "").split(/\s+/).filter(Boolean)) {
+    const [variant, utility] = token.includes(":") ? [token.slice(0, token.lastIndexOf(":")), token.slice(token.lastIndexOf(":") + 1)] : ["", token];
+    if (!DISPLAY.test(utility)) continue;
+    if (variant === "") base = utility;
+    else if (variant.startsWith("max-") && BREAKPOINTS[variant.slice(4)] !== undefined) { if (width < BREAKPOINTS[variant.slice(4)]) max = utility; }
+    else if (BREAKPOINTS[variant] !== undefined) { if (width >= BREAKPOINTS[variant]) min.push([BREAKPOINTS[variant], utility]); }
+  }
+  min.sort((a, b) => a[0] - b[0]);
+  return min.length ? min[min.length - 1][1] : max ?? base;
+}
+/**
+ * True when `element` would be display:none at viewport `width`: it or an ancestor has the `hidden` attribute, or its Tailwind
+ * display utilities resolve to `hidden`. `data-profile` on the inbox layout only changes grid columns (InboxView.module.css), so
+ * it is ignored. jsdom cannot compute Tailwind, which is why this reads class tokens.
+ */
+export function hiddenAt(element: Element, width: number): boolean {
+  for (let node: Element | null = element; node; node = node.parentElement) {
+    if (node.hasAttribute("hidden")) return true;
+    if (displayAt(node, width) === "hidden") return true;
+  }
+  return false;
+}
+
+/** A request that stays in flight for the rest of the test. */
+export const never = () => new Promise<Response>(() => {});

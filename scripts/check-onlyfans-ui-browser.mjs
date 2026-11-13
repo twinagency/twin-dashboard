@@ -61,6 +61,9 @@ try {
           check(!(await page.locator(".users-panel-profile").isVisible()), `Fan panel starts closed at ${width}px`);
           const wide = await page.locator(".users-panel-chat").boundingBox();
           check(!!wide && wide.width >= 480, `Conversation keeps its width at ${width}px`);
+          // The Reply control moves under the thread while the panel is closed: a brake shows whenever Send does (G09).
+          check(await page.locator(".users-panel-chat [data-of-action=pause_automation]").isVisible(), `Pause AI shows beside Send with the fan panel closed at ${width}px`);
+          if (width === 1024) await page.screenshot({ path: path.join(shots, `g09-${width}-inbox-panel-closed.png`) });
           await page.locator("[data-of-profile-toggle]").click();
           await page.locator(".users-panel-profile").waitFor();
         }
@@ -78,8 +81,10 @@ try {
         const after = await page.locator(".users-panel-chat").boundingBox();
         check(!!before && !!after && after.width > before.width, `Chat widens when the fan panel is hidden at ${width}px`);
         check(await page.locator("[data-of-composer]").isVisible(), `Conversation stays selected after collapsing at ${width}px`);
+        check(await page.locator(".users-panel-chat [data-of-action=pause_automation]").isVisible(), `Pause AI stays visible after collapsing at ${width}px`);
         await page.locator("[data-of-profile-toggle]").click();
       }
+      if (section === "inbox" && width === 1024) await page.screenshot({ path: path.join(shots, `g09-${width}-inbox-panel-open.png`) });
       await page.screenshot({ path: path.join(shots, `${width}-${section}.png`), fullPage: true });
     }
   }
@@ -106,8 +111,28 @@ try {
   await page.setViewportSize({width:390,height:1000});
   await page.locator("[data-of-mobile-panel=controls]").click();
   check(await page.locator(".users-panel-profile").isVisible(), "Mobile fan panel remains reachable");
+  // This fan is already paused: the sheet's Reply control keeps "No contact" under More actions; the chat row shows it directly.
+  check(await page.locator(".users-panel-profile .of-reply-control").isVisible(), "Mobile fan sheet holds the Reply control");
+  await page.screenshot({ path: path.join(shots, "g09-390-inbox-sheet-open.png") });
   await page.locator("[data-of-mobile-panel=chat]").click();
   check(await page.locator("[data-of-composer]").isVisible(), "Mobile composer remains reachable");
+  check(await page.locator(".users-panel-chat [data-of-chat-brakes]").isVisible(), "Mobile chat shows the brakes beside Send");
+  await page.screenshot({ path: path.join(shots, "g09-390-inbox-sheet-closed.png") });
+  // G09 R2: an AI-on fan at 390px. Pause AI sits in the viewport above the mobile nav, and the thread keeps a message line.
+  await page.goto(origin + "/onlyfans/inbox/", { waitUntil: "load" });
+  await page.locator("[data-of-conversation-id]").first().click();
+  await page.locator("[data-of-composer]").waitFor();
+  const phone = await page.evaluate(() => {
+    const pause = document.querySelector(".users-panel-chat [data-of-action=pause_automation]")?.getBoundingClientRect();
+    const thread = document.querySelector(".users-panel-chat [data-of-thread]")?.parentElement?.getBoundingClientRect();
+    const line = Math.min(...[...document.querySelectorAll(".users-panel-chat [data-of-message-id]")].map(node => node.getBoundingClientRect().height));
+    return { pause: pause ? [Math.round(pause.top), Math.round(pause.bottom)] : null, thread: Math.round(thread?.height ?? 0), line: Math.round(line),
+      limit: Math.round(document.querySelector(".of-mobile-nav")?.getBoundingClientRect().top ?? innerHeight) };
+  });
+  check(!!phone.pause && phone.pause[0] >= 0 && phone.pause[1] <= phone.limit, `Pause AI is in the 390px viewport for an AI-on fan: ${JSON.stringify(phone)}`);
+  check(phone.thread >= phone.line, `Thread keeps a message line at 390px: ${JSON.stringify(phone)}`);
+  console.log(`G09 390x1000 AI-on fan: thread ${phone.thread}px, one message ${phone.line}px, Pause AI at ${phone.pause} (nav top ${phone.limit})`);
+  await page.screenshot({ path: path.join(shots, "g09-390-r2-ai-on-chat.png") });
   await page.setViewportSize({width:1440,height:1000});
   await page.goto(`${origin}/onlyfans/settings/`, { waitUntil: "load" });
   await page.locator("[data-of-edit-persona]").fill("Retained unsaved synthetic persona");
