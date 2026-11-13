@@ -2,24 +2,25 @@ import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { createCloneRow } from "@/app/clones/actions";
 import { getCloneDefaults } from "@/app/settings/actions";
 import { resolveClone } from "@/lib/api-read";
-import { OPERATIONAL_DEFAULT_NUMBERS } from "@/lib/clone-default-policy";
 
 export const dynamic = "force-dynamic";
 
-// Keys a caller may NOT send (G16, W4 F4). Money, the price brake and fan-facing
-// paywall text start at the fleet defaults and are changed in Configure, same
-// policy as ../write/route.ts. Refused outright rather than range-checked:
-// validateCloneDefaultsForWrite accepts price_guard_mode "off" and never reads
-// paywall text, and createCloneRow's rowFromForm (app/clones/actions.ts) does
-// not range-check money at all.
-const NOT_SETTABLE = new Set<string>([
-  "starting_credits", "credit_pack_size", "credit_pack_price_stars",
-  "tip_credits_per_100_stars", "tip_max_stars", "spoil_options", "category_pricing", "subscription_tiers",
-  "spend_tier_mid_stars", "spend_tier_high_stars", "spend_tier_whale_stars",
-  ...OPERATIONAL_DEFAULT_NUMBERS.filter((k) => k.startsWith("discount_")),
-  "price_guard_mode",
-  "welcome_instruction", "paywall_instruction", "paywall_default_message", "paywall_button_label",
-  "paywall_prime_instruction", "paywall_resume_instruction",
+// The only keys a caller may send (G16, W4 F4 + Codex final): an allowlist, so
+// a money, tip, paywall or brake column added to rowFromForm later is refused by
+// default instead of forwarded by default. Derived from what create needs (name,
+// bot_token, status) plus what its one caller sends (twin-bot clonify convert.ts:
+// voice_id, intake, and extract.ts FACT_KEYS, the typed persona facts). Every
+// other setting starts at the fleet defaults and is changed in Configure (the
+// switches also via ../write/route.ts). Anything else is a 400 naming the key.
+const CREATE_KEYS = new Set<string>([
+  "name", "bot_token", "status", "voice_id", "intake",
+  "stage_name", "real_name", "name_shared_with_fans", "date_of_birth", "gender", "height",
+  "ethnicity", "sexuality", "hometown", "current_city", "occupation", "creator_type", "known_for",
+  "career_start_year", "career_history", "cover_story", "admits_platforms", "platforms", "hair_color",
+  "hair_length", "eye_color", "body_type", "cup_size", "measurements", "tattoos", "tattoo_details",
+  "piercings", "piercing_details", "enhancements", "voice_accent", "voice_pace", "voice_texture",
+  "fan_nicknames", "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra", "meeting_policy",
+  "love_policy", "relationship_canon", "acknowledges_other_fans", "wake_time", "sleep_time",
 ]);
 
 // Create a new clone.
@@ -47,10 +48,10 @@ export const POST = withAdmin(async (req) => {
   const name = String(body.name ?? "").trim();
   const botToken = String(body.bot_token ?? "").trim();
   if (!name) return jsonError("name is required", 400);
-  const refused = Object.keys(body).filter((k) => NOT_SETTABLE.has(k));
+  const refused = Object.keys(body).filter((k) => !CREATE_KEYS.has(k));
   if (refused.length) {
     return jsonError(
-      `${refused.join(", ")} cannot be set through this API: money, the price brake and fan-facing paywall text start at the fleet defaults and are changed in Configure`,
+      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure`,
       400,
     );
   }
@@ -79,9 +80,9 @@ export const POST = withAdmin(async (req) => {
     if (v === null || v === undefined) continue;
     fd.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
   }
-  // Anything else the caller passes (NOT_SETTABLE was refused above) is forwarded verbatim to the same
-  // rowFromForm() the UI uses, so the API cannot drift from the form's own
-  // field handling. Unknown keys are simply ignored by it. Set AFTER the
+  // The allowlisted keys (anything else was refused above) are forwarded
+  // verbatim to the same rowFromForm() the UI uses, so the API cannot drift from
+  // the form's own field handling. Set AFTER the
   // defaults above so an explicit caller value always wins.
   for (const [k, v] of Object.entries(body)) {
     if (v === null || v === undefined) continue;

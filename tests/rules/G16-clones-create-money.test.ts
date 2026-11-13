@@ -44,6 +44,24 @@ const CASES: [string, unknown][] = [
   ["credit_pack_price_stars", 2.5],
   ["starting_credits", 200000],
   ["price_guard_mode", "off"],
+  // G16 Codex final P1: tip keys the first blocklist missed, then the sweep of rowFromForm + clone-default-policy.
+  ["tip_reask_after_paid", true],
+  ["tip_reask_cooldown_seconds", 1],
+  ["tip_push_level", "high"],
+  ["tips_enabled", true],
+  ["discounts_enabled", true],
+  ["bundles_enabled", false],
+  ["spoil_context_lookback_messages", 1],
+  ["charge_messages", true],
+  ["sell_via_mini_app", true],
+  ["media_allow_resend", true],
+  ["smart_paywall_enabled", true],
+  ["paywall_resume_free", true],
+  ["paywall_prime_before", 1],
+  ["push_level", "relentless"],
+  ["strict_minor_gate", false],
+  ["ai_disclosure", false],
+  ["greeting_ask_age", false],
   ["paywall_instruction", "Fake paywall line a fan would read"],
 ];
 for (const [field, value] of CASES) {
@@ -53,6 +71,32 @@ for (const [field, value] of CASES) {
       const { status, body } = await create({ [field]: value });
       const landed = inserted(w).some((r) => r[field] === value);
       assert.ok(status === 400 || (status === 200 && !landed), `${field}=${JSON.stringify(value)}: status ${status}, written ${landed} ${JSON.stringify(body).slice(0, 200)}`);
+      if (status === 400) {
+        assert.match(String((body as { error?: unknown }).error), new RegExp(field), "the 400 names the refused key");
+        assert.equal(inserted(w).length, 0, "nothing is inserted on a refusal");
+      }
     } finally { w.restore(); }
   });
 }
+
+test("allowlist: a key nobody has classified (future_money_col) is refused 400 by name, nothing inserted", async () => {
+  const w = wire();
+  try {
+    const { status, body } = await create({ future_money_col: 1 });
+    assert.equal(status, 400, JSON.stringify(body));
+    assert.match(String((body as { error?: unknown }).error), /future_money_col/);
+    assert.equal(inserted(w).length, 0);
+  } finally { w.restore(); }
+});
+
+test("allowlist control: a clonify-shaped payload (status, voice_id, facts, intake) is accepted and reaches the insert", async () => {
+  const w = wire();
+  try {
+    const { status, body } = await create({
+      status: "paused", voice_id: "v1", hometown: "Austin", hair_color: "brown", turn_ons: ["a"],
+      intake: { answers: "blob", fields: { quirks: "q" } },
+    });
+    assert.equal(status, 200, JSON.stringify(body));
+    assert.equal(inserted(w).length, 1);
+  } finally { w.restore(); }
+});

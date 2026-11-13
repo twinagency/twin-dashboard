@@ -83,3 +83,38 @@ test("F1: delete_channel_post with dryRun:true is refused or previewed, never ca
   assert.equal(adminWrites(r.w, "posting:delete_channel_post").length, 0, "dryRun:true was audited as a real delete");
   refusedOrPreview(r);
 });
+
+// G16 Codex final P1: a duplicated dryRun field (multipart false then true, or a JSON array) must not slip past
+// a first-value read. Refused 400, zero Telegram calls, no delete logged.
+async function postForm(fields: [string, string][]) {
+  const w = wire();
+  try {
+    const form = new FormData();
+    for (const [k, v] of fields) form.append(k, v);
+    const r = await callJson(POST, adminRequest("/api/admin/v1/posting/write", { form }));
+    await w.idle();
+    return { ...r, w };
+  } finally { w.restore(); }
+}
+const telegramCalls = (w: W) => w.telegram().length;
+for (const [action, extra, log] of [
+  ["delete_story", [["storyId", "5"]], "posting:delete_story"],
+  ["delete_channel_post", [["channel", "@fakechan"], ["messageIds", "7"]], "posting:delete_channel_post"],
+] as [string, [string, string][], string][]) {
+  test(`G16: ${action} with multipart dryRun=false then dryRun=true is refused before any Telegram call`, async () => {
+    const r = await postForm([["action", action], ["clone", CLONE_ID], ...extra, ["dryRun", "false"], ["dryRun", "true"]]);
+    assert.equal(r.status, 400, JSON.stringify(r.body));
+    assert.equal(telegramCalls(r.w), 0, "a duplicated dryRun reached Telegram");
+    assert.equal(adminWrites(r.w, log).length, 0);
+  });
+  test(`G16: ${action} with JSON dryRun [false, true] is refused before any Telegram call`, async () => {
+    const r = await post({ ...(action === "delete_story" ? DELETE_STORY : DELETE_POST), dryRun: [false, true] });
+    assert.equal(r.status, 400, JSON.stringify(r.body));
+    assert.equal(telegramCalls(r.w), 0, "a duplicated dryRun reached Telegram");
+  });
+}
+test("G16 control: delete_story with a single explicit dryRun=false still deletes", async () => {
+  const r = await postForm([["action", "delete_story"], ["clone", CLONE_ID], ["storyId", "5"], ["dryRun", "false"]]);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.w.telegram("deleteStory").length, 1);
+});

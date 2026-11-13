@@ -329,12 +329,17 @@ check("B10 meta lists every route and verb, and does not claim readOnly while wr
   }
 });
 
-check("B11 clones/create refuses money, the price brake and paywall text before building the form", () => {
+check("B11 clones/create takes an allowlist of keys and refuses the rest before building the form", () => {
   const src = adminSrc("clones/create/route.ts");
-  for (const k of ["credit_pack_price_stars", "starting_credits", "spoil_options", "category_pricing", "price_guard_mode", "paywall_instruction", "welcome_instruction"]) {
-    assert(src.includes(`"${k}"`), `${k} is no longer refused by clones/create`);
+  const m = src.match(/const CREATE_KEYS = new Set<string>\(\[([\s\S]*?)\]\)/);
+  assert(m, "clones/create no longer declares the CREATE_KEYS allowlist");
+  const keys = [...m[1].matchAll(/"([a-z0-9_]+)"/g)].map((k) => k[1]);
+  for (const k of ["name", "bot_token", "status", "intake"]) assert(keys.includes(k), `${k} dropped from the create allowlist`);
+  // A money-, tip-, paywall- or brake-shaped key in the allowlist is the bug this replaced.
+  for (const k of keys) {
+    assert(!/price|credit|tip|discount|spend|paywall|charge|guard|minor|disclosure|push|stars|free|spoil|bundle|tier|resend|welcome|ask_age/.test(k), `${k} is money- or brake-shaped and must not be in the create allowlist`);
   }
-  const refuse = src.indexOf("NOT_SETTABLE.has(");
+  const refuse = src.indexOf("filter((k) => !CREATE_KEYS.has(k))");
   assert(refuse !== -1 && refuse < src.indexOf("Object.entries(body)"), "the refusal must run before the body is copied into the form");
 });
 
@@ -347,9 +352,12 @@ check("B12 posting/write deletes refuse dryRun before reaching Telegram", () => 
   }
 });
 
-check("B13 media answers an all-failed upload with ok:false and a non-2xx status", () => {
+check("B13 media answers an all-failed or all-existing upload with ok:false and a non-2xx status", () => {
   const src = adminSrc("media/route.ts");
-  assert(/if \(uploaded\.length === 0\)[\s\S]*?ok: false[\s\S]*?status: 4\d\d/.test(src), "an upload that saved nothing must not be answered 200 ok:true");
+  assert(/if \(uploaded\.length === 0\)[\s\S]*?ok: false[\s\S]*?status: failed\.length \? 422 : 409/.test(src), "an upload that saved nothing must not be answered 200 ok:true");
+  assert(/\(result\.existing \? existing : uploaded\)\.push/.test(src), "a file already in the library (price not applied) must not count as uploaded");
+  const actions = readFileSync(new URL("../app/media/actions.ts", import.meta.url), "utf8");
+  assert((actions.match(/return \{ ok: true, existing: true \}/g) ?? []).length === 2, "uploadPhoto and uploadVideo must both flag the existing-row early return");
 });
 
 check("B14 agency act-as nets in agency mode (platform cut only), not a clone key's creator mode", () => {

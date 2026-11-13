@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic";
 // "act as" for the admin API: x-twin-act-as: clone:<uuid> | agency:<uuid>.
 // clone: the exact response that clone's own /api/v1 key would get (creator
 // net, both cuts). agency: no agency key scope exists, so this is the agency's
-// own view instead, platform cut only, summed over the clones it owns. Same
-// projection either way, our cost/margin never included. This is an
+// own view instead: a reduced agency summary (totals plus per-clone id, name,
+// revenue, sales; no series, features or top fans), platform cut only, summed
+// over the clones it owns. Not the public fleet projection. Our cost/margin is
+// never included in either view. This is an
 // admin-API-only feature: withAdmin() below is the SAME gate every other
 // route in app/api/admin/v1 uses (admin key + network), so acting-as never
 // widens who can call this, only what shape they get back. Never mount this
@@ -40,9 +42,9 @@ export const GET = withAdmin(async (req) => {
   if (!agency) return jsonError(`no agency matching "${actAs.id}"`, 404);
 
   // No fleet-scoped-to-a-subset-of-clones projection exists yet (the fleet key
-  // shape in lib/api-public.ts is whole-fleet only), so this builds the same
-  // PublicFleetModel[] shape by calling the per-clone projection once per
-  // assigned clone and summing. Agency mode, not publicRevenue's creator mode:
+  // shape in lib/api-public.ts is whole-fleet only), so this builds a reduced
+  // agency summary, not the public fleet shape, by calling the per-clone
+  // projection once per assigned clone and summing totals. Agency mode, not publicRevenue's creator mode:
   // the agency-creator cut is what the agency keeps, not a cost to it (G16).
   // Cost/margin are never computed (includeCost:false).
   const perClone = await Promise.all(
