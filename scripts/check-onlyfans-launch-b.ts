@@ -42,9 +42,13 @@ test("launch B: conversation rows cannot cross accounts or repeat identities", (
   assert.equal(parseConversations({ accountId: "acc-a", page: { items: [], nextCursor: "x" } }, "acc-a")?.more, true);
 });
 test("launch B: runtime projection preserves absent delivery policy and account scope", () => {
-  const base = { accountId: "acc-a", section: "settings", runtimeEnabled: false, historyRecoveryRequired: true, providerConnectionVerified: true, deliveryPolicy: null };
-  assert.equal(parseRuntime(base, "acc-a")?.deliveryEnabled, null);
-  assert.equal(parseRuntime(base, "acc-b"), null); assert.equal(parseRuntime({ ...base, runtimeEnabled: "yes" }, "acc-a"), null);
+  // The workspace route's envelope around an of-workspace.v2 settings read (route.ts answers {schemaVersion, workspace}).
+  const inner = { schemaVersion: "of-workspace.v2", section: "settings", accountId: "acc-a", asOf: "2026-11-12T10:00:00Z", lastCompleteSyncAt: null,
+    runtimeEnabled: false, historyRecoveryRequired: true, providerConnectionVerified: true, deliveryPolicy: null, configuration: null };
+  const base = (workspace: Record<string, unknown>) => ({ schemaVersion: "of-preview.v2", workspace });
+  assert.equal(parseRuntime(base(inner), "acc-a")?.deliveryEnabled, null);
+  assert.equal(parseRuntime(base(inner), "acc-b"), null); assert.equal(parseRuntime(base({ ...inner, runtimeEnabled: "yes" }), "acc-a"), null);
+  assert.equal(parseRuntime(inner, "acc-a"), null, "the bare inner payload is not what the route serves");
 });
 test("launch B: read-only, takeover and no-contact gate conversation controls", () => {
   const names = (c: Parameters<typeof actionRules>[0], manager: boolean) => actionRules(c, manager).filter(r => r.enabled).map(r => r.action);

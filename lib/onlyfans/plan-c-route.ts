@@ -9,7 +9,8 @@ import { PLAN_C_MAX_BODY_BYTES, PLAN_C_SCHEMA, isPlanCCommandKey, isPlanCConvers
 import type { PlanCBackend } from "./plan-c-backend";
 
 export type PlanCHttp = { status: number; body: Record<string, unknown> };
-const refuse = (status: number, error: string): PlanCHttp => ({ status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, outcome: "refused", error, reload: false } });
+/** A Plan C refusal: nothing was applied. Shared by the proxy rules here and the route gate in plan-c-guard.ts. */
+export const planCRefused = (status: number, error: string): PlanCHttp => ({ status, body: { schemaVersion: PLAN_C_SCHEMA, ok: false, outcome: "refused", error, reload: false } });
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const exactly = (body: Record<string, unknown>, keys: string[]) => Object.keys(body).every(key => keys.includes(key)) && keys.every(key => Object.hasOwn(body, key));
 const version = (value: unknown): value is number => typeof value === "number" && Number.isInteger(value) && value >= 1 && value < 2 ** 31 - 1;
@@ -40,39 +41,39 @@ const answer = (result: Awaited<ReturnType<PlanCBackend["draft"]>>): PlanCHttp =
 /** approve, reject or edit one draft version. The body carries the version the operator saw; the backend refuses a stale one with 409. */
 export async function planCDraftCommand(backend: PlanCBackend, input: { actor: string; accountId: string; requestId: string; generation: string; action: string; body: unknown }): Promise<PlanCHttp> {
   const { actor, accountId, requestId, generation, action, body } = input;
-  if (!isPlanCId(accountId) || !isPlanCRequestId(requestId) || !/^[0-9]{1,9}$/.test(generation) || !isPlanCDraftAction(action)) return refuse(400, "That draft reference is invalid.");
-  if (!record(body) || !isPlanCCommandKey(body.commandKey) || !version(body.expectedVersion)) return refuse(400, "That draft action is invalid.");
+  if (!isPlanCId(accountId) || !isPlanCRequestId(requestId) || !/^[0-9]{1,9}$/.test(generation) || !isPlanCDraftAction(action)) return planCRefused(400, "That draft reference is invalid.");
+  if (!record(body) || !isPlanCCommandKey(body.commandKey) || !version(body.expectedVersion)) return planCRefused(400, "That draft action is invalid.");
   const common = { requestId, generation: Number(generation), action: action as PlanCDraftAction, expectedVersion: body.expectedVersion, commandKey: body.commandKey, actor };
   if (action === "approve") {
-    if (!exactly(body, ["expectedVersion", "commandKey"])) return refuse(400, "That draft action is invalid.");
+    if (!exactly(body, ["expectedVersion", "commandKey"])) return planCRefused(400, "That draft action is invalid.");
     return answer(await backend.draft(accountId, common));
   }
   if (action === "reject") {
-    if (!exactly(body, ["expectedVersion", "commandKey", "reason"]) || typeof body.reason !== "string" || validateRejectReason(body.reason)) return refuse(400, "A rejection needs a reason.");
+    if (!exactly(body, ["expectedVersion", "commandKey", "reason"]) || typeof body.reason !== "string" || validateRejectReason(body.reason)) return planCRefused(400, "A rejection needs a reason.");
     return answer(await backend.draft(accountId, { ...common, reason: body.reason.trim() }));
   }
   if (!exactly(body, ["expectedVersion", "commandKey", "parts"]) || !Array.isArray(body.parts) || !body.parts.length || body.parts.length > 8 || body.parts.some(part => typeof part !== "string"))
-    return refuse(400, "That edit is invalid.");
+    return planCRefused(400, "That edit is invalid.");
   const parts = body.parts as string[];
   // The proxy has not seen the draft, so "unchanged" and part count are the backend's call; text rules are enforced here too.
-  if (validateEditTexts(parts)) return refuse(400, "That edit is invalid.");
+  if (validateEditTexts(parts)) return planCRefused(400, "That edit is invalid.");
   return answer(await backend.draft(accountId, { ...common, parts }));
 }
 
 /** stop, take over or hand back. A hand back restores planning eligibility only; the backend never replays a draft from it. */
 export async function planCConversationCommand(backend: PlanCBackend, input: { actor: string; accountId: string; conversationId: string; action: string; body: unknown }): Promise<PlanCHttp> {
   const { actor, accountId, conversationId, action, body } = input;
-  if (!isPlanCId(accountId) || !isPlanCId(conversationId) || !conversationId.startsWith(`${accountId}:`) || !isPlanCConversationAction(action)) return refuse(400, "That conversation reference is invalid.");
-  if (!record(body) || !exactly(body, ["expectedRevision", "commandKey"]) || !isPlanCCommandKey(body.commandKey) || !revision(body.expectedRevision)) return refuse(400, "That conversation action is invalid.");
+  if (!isPlanCId(accountId) || !isPlanCId(conversationId) || !conversationId.startsWith(`${accountId}:`) || !isPlanCConversationAction(action)) return planCRefused(400, "That conversation reference is invalid.");
+  if (!record(body) || !exactly(body, ["expectedRevision", "commandKey"]) || !isPlanCCommandKey(body.commandKey) || !revision(body.expectedRevision)) return planCRefused(400, "That conversation action is invalid.");
   return answer(await backend.conversation(accountId, { conversationId, action, expectedRevision: body.expectedRevision, commandKey: body.commandKey, actor }));
 }
 
 /** Reconcile one unresolved item. Refused without an evidence reference. */
 export async function planCReconcile(backend: PlanCBackend, input: { actor: string; accountId: string; id: string; body: unknown }): Promise<PlanCHttp> {
   const { actor, accountId, id, body } = input;
-  if (!isPlanCId(accountId) || !/^[A-Za-z0-9._:-]{1,100}$/.test(id)) return refuse(400, "That item reference is invalid.");
+  if (!isPlanCId(accountId) || !/^[A-Za-z0-9._:-]{1,100}$/.test(id)) return planCRefused(400, "That item reference is invalid.");
   if (!record(body) || !exactly(body, ["commandKey", "evidence"]) || !isPlanCCommandKey(body.commandKey) || typeof body.evidence !== "string" || validateEvidenceRef(body.evidence))
-    return refuse(400, "Reconciling needs the evidence you checked.");
+    return planCRefused(400, "Reconciling needs the evidence you checked.");
   return answer(await backend.reconcile(accountId, { id, commandKey: body.commandKey, actor, evidenceRef: planCEvidenceRef(body.evidence) }));
 }
 
