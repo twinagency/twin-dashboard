@@ -1,5 +1,6 @@
 import { canonicalManualMedia } from "../onlyfans/manual-media";
 import { controlActionFor, controlFields, controlFieldsProblem } from "../onlyfans/controls";
+import { campaignObject } from "../onlyfans/campaigns";
 // Which controls the dashboard may offer, and why.
 //
 // Three independent dimensions decide this, and none of them implies another:
@@ -241,8 +242,23 @@ export function payloadDigest(payload: CommandPayload): string {
  * same intent (after a lost reply, a remount or a reload) sends the same key.
  */
 export function intentRequestKey(idempotencyKey: string): string {
-  const hex = [0, 1, 2, 3].map(salt => fnv1a(`${salt}:${idempotencyKey}`)).join("");
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  return uuidRequestKey([0, 1, 2, 3].map(salt => fnv1a(`${salt}:${idempotencyKey}`)).join(""));
+}
+/** The first 32 hex digits of a key in the UUID shape the controls and campaign routes take as `requestKey`. */
+export const uuidRequestKey = (hex: string) => `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+
+/** A manual send's held-key intent (G04c2): the full canonical command, never payloadDigest, whose 32 bits collide. */
+export const sendIntent = (input: CommandRequestInput) =>
+  JSON.stringify([input.command, input.accountId, input.conversationId, input.expectedRevision, canonicalPayload(input.payload)]);
+/** A held manual send read back from storage, or null unless it is one the controls route's own field rule accepts unchanged. */
+export function heldSendInput(value: unknown): CommandRequestInput | null {
+  if (!campaignObject(value) || value.command !== "send_manual_message" || typeof value.accountId !== "string" || typeof value.conversationId !== "string"
+    || typeof value.expectedRevision !== "number" || !Number.isSafeInteger(value.expectedRevision) || !campaignObject(value.payload)) return null;
+  const { kind, body, ...rest } = value.payload;
+  if (kind !== "manual_message" || typeof body !== "string" || Object.keys(rest).some(key => key !== "catalogItemId" && key !== "media")
+    || controlFieldsProblem("manual_message", { body, ...rest })) return null;
+  return { command: value.command, accountId: value.accountId, conversationId: value.conversationId, expectedRevision: value.expectedRevision,
+    payload: { kind, body, ...rest } };
 }
 
 /**

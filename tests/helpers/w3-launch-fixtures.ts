@@ -10,6 +10,7 @@ import { LAUNCH_SCHEMA } from "../../lib/onlyfans/launch/a-types";
 import { parseAccounts, parseConversations, parseRuntime } from "../../lib/onlyfans/launch/automation/b-automation";
 import { parseEngagementAction, parseEngagementPage, parseEngagementSettings, parseNativePersonality, parseNativeReadiness,
   parsePersonalityHistory, validPolicy, type EngagementPolicy } from "../../lib/onlyfans/launch/native";
+import { MOXY_SCHEMA, parseMoxy, type MoxyMode } from "../../lib/onlyfans/moxy";
 import { parseMemoryEnvelope, parseMemoryPageEnvelope } from "../../lib/onlyfans/launch/memory/b-memory-client";
 
 const ok = <T,>(value: T, passes: boolean, what: string): T => { assert.ok(passes, `fixture: ${what} must pass its real parser`); return value; };
@@ -26,9 +27,9 @@ export function accounts(...ids: string[]) {
   return ok(body, parseAccounts(body)?.length === ids.length, "accounts");
 }
 /** GET /api/onlyfans/accounts/<id>/conversations: one paused conversation with no takeover (so Resume and Take over are live). */
-export function conversations(accountId = "of-a") {
+export function conversations(accountId = "of-a", extra: Record<string, unknown> = {}) {
   const body = { accountId, page: { nextCursor: null, items: [{ accountId, conversationId: "c-1", revision: 4, automationMode: "paused", takeoverState: "none",
-    fan: { displayName: "Fan One" }, lastActivityAt: STAMP, requiresAttention: false }] } };
+    fan: { displayName: "Fan One" }, lastActivityAt: STAMP, requiresAttention: false, ...extra }] } };
   return ok(body, parseConversations(body, accountId)?.items.length === 1, "conversations");
 }
 export function runtime(accountId = "of-a") {
@@ -51,6 +52,17 @@ export function readiness({ enabled = true, readyToEnable = true, backfill = fal
 /** GET .../automation/accounts/<id>/emergency-stop (AccountControls parser). */
 export const stopRead = (opts: Parameters<typeof readiness>[0] = {}, accountId = "of-a") =>
   ({ schemaVersion: B_CONTRACT_SCHEMA, ok: true, accountId, readiness: readiness(opts) });
+
+/** GET /api/onlyfans-configuration/accounts/<id>/moxy (lib/onlyfans/moxy.ts parseMoxy), copied from tests/helpers/w1-8-dom.ts. */
+export function moxyLegacy(accountId = "of-a") {
+  const body = { ok: true, schemaVersion: MOXY_SCHEMA, accountId, canManage: true, moxy: { engine: "legacy", moxySelected: false } };
+  return ok(body, parseMoxy(body, accountId)?.engine === "legacy", "legacy moxy view");
+}
+export function moxySelected(mode: MoxyMode, accountId = "of-a") {
+  const body = { ok: true, schemaVersion: MOXY_SCHEMA, accountId, canManage: true, moxy: { engine: "moxy", moxySelected: true, mode, revision: 3,
+    readiness: { ready: true, blockers: [] }, settings: { creator_key: "synthetic-creator", products: [], sequences: {}, catalogue_bindings: {}, operational: {} }, decisions: [] } };
+  return ok(body, parseMoxy(body, accountId)?.engine === "moxy", "moxy-selected view");
+}
 
 /** Engagement settings and follow-up actions (EngagementPanel parsers). */
 export const POLICY: EngagementPolicy = { enabled: false, offers: false, follow_ups: true, reengagement: false, offer_delay_hours: 24, follow_up_delay_hours: 24,

@@ -12,6 +12,7 @@ import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
 import { vibePresetFor } from "@/lib/vibes";
 import { CLONE_TOGGLE_FIELDS, type CloneToggleField, CLONE_DIAL_FIELDS, type CloneDialField } from "./toggle-fields";
 import { getCloneDefaults } from "@/app/settings/actions";
+import { checkDefaultNumber } from "@/lib/clone-default-policy";
 
 // Gather the structured intake_<key> fields into { fields, answers } where
 // `answers` is the labelled blob the AI compiler reads (prose + a structured-
@@ -151,6 +152,23 @@ function num(fd: FormData, key: string, fallback: number): number {
   if (v === null || String(v).trim() === "") return fallback;
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
+}
+// Credit economy: refused outside the canonical bounds, never clamped or
+// defaulted. The bot grants these straight through, so a -5 balance or a 2.5
+// pack would reach fans. Absent = not in the row (an update keeps the stored
+// value, a create takes CREATE_CREDIT_DEFAULTS); blank is refused, because a
+// fallback would turn a cleared 1-Star price into 199.
+const CREDIT_KEYS = ["starting_credits", "credit_pack_size", "credit_pack_price_stars", "tip_credits_per_100_stars"] as const;
+const CREATE_CREDIT_DEFAULTS = { starting_credits: 50, credit_pack_size: 50, credit_pack_price_stars: 199, tip_credits_per_100_stars: 0 };
+function credits(fd: FormData): Partial<Record<(typeof CREDIT_KEYS)[number], number>> {
+  const out: Partial<Record<(typeof CREDIT_KEYS)[number], number>> = {};
+  for (const key of CREDIT_KEYS) {
+    const v = fd.get(key);
+    if (v === null) continue;
+    if (String(v).trim() === "") throw new Error(`Enter a value for ${key}`);
+    out[key] = checkDefaultNumber(key, Number(v));
+  }
+  return out;
 }
 function numOrNull(fd: FormData, key: string): number | null {
   const v = fd.get(key);
@@ -344,7 +362,9 @@ function rowFromForm(fd: FormData) {
     read_receipts_enabled: fd.get("read_receipts_enabled") === "true",
     message_effects_enabled: fd.get("message_effects_enabled") === "true",
     ai_disclosure: fd.get("ai_disclosure") === "true",
-    strict_minor_gate: fd.get("strict_minor_gate") === "true",
+    // A brake, never read from the form: an API create posts no pin and its
+    // body may post "false". Migration 116; there is no off switch.
+    strict_minor_gate: true,
     // The auto_block_* columns are deliberately no longer written (2026-07-27).
     // The AI never blocks a fan, it only flags for operator review, so there is
     // no UI for these and nothing to save. The columns stay in the DB unread
@@ -397,7 +417,9 @@ function rowFromForm(fd: FormData) {
     discount_tier_share_mid_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_mid_pct", 75))),
     discount_tier_share_high_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_high_pct", 90))),
     discount_tier_share_whale_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_whale_pct", 100))),
-    spoil_options: parseSpoilOptions(fd),
+    // The only input is mounted only while tips are on; absent means untouched,
+    // not [] (a tips-off save used to wipe the stored menu).
+    ...(fd.has("spoil_options") ? { spoil_options: parseSpoilOptions(fd) } : {}),
     // category_pricing is NOT written here (2026-09-01): the editor moved to
     // the PPVs page (app/media/actions.ts:updateCategoryPricing), which has
     // its own save. This form no longer carries a category_pricing field, so
@@ -520,13 +542,10 @@ function rowFromForm(fd: FormData) {
     voice_speaker_boost: fd.get("voice_speaker_boost") === "true",
     voice_speed: num(fd, "voice_speed", 0.95),
 
-    starting_credits: num(fd, "starting_credits", 50),
-    credit_pack_size: num(fd, "credit_pack_size", 50),
-    credit_pack_price_stars: num(fd, "credit_pack_price_stars", 199),
-    // Migration 088. Default 0 = tips grant no credits, which is exactly the
-    // pre-088 live behaviour, so a save from an untouched form changes nothing.
-    // Clamped at 0 because a negative rate would mean a tip DEDUCTS credits.
-    tip_credits_per_100_stars: Math.max(0, num(fd, "tip_credits_per_100_stars", 0)),
+    ...credits(fd),
+    // Migration 088 tip_credits_per_100_stars is in credits() above: create
+    // default 0 = tips grant no credits; a negative rate (a tip DEDUCTS
+    // credits), fraction or over-max value is refused.
     // Migration 090. Anything unrecognised falls back to 'block', which is both
     // the column default and mapClone's fallback, so a save can never quietly
     // DISARM the guard: switching it off has to be a deliberate pick.
@@ -1000,10 +1019,27 @@ const OPTIONAL_COLUMNS = [
   ...ACCOUNT_PHONE_170_COLUMNS,
 ] as const;
 
-function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
-  const copy = { ...row };
-  for (const c of OPTIONAL_COLUMNS) delete copy[c];
-  return copy;
+// PostgREST names ONE missing column per error. Write the row, and on that
+// error strip exactly the named column and retry, but only if it is a listed
+// pre-migration column still in the row. Anything else is refused, so one
+// unapplied migration can never silently drop every other edit in the save.
+async function writeStrippingMissing<T extends { error: { message: string } | null }>(
+  row: Record<string, unknown>,
+  write: (row: Record<string, unknown>) => PromiseLike<T>,
+): Promise<T & { stripped: string[] }> {
+  const payload = { ...row };
+  const stripped: string[] = [];
+  let res = await write(payload);
+  while (res.error && isMissingColumnError(res.error.message)) {
+    const col = /could not find the '([^']+)' column/i.exec(res.error.message)?.[1];
+    if (!col || !(OPTIONAL_COLUMNS as readonly string[]).includes(col) || !(col in payload)) {
+      throw new Error(`Save refused: the database has no "${col ?? "unknown"}" column yet. Apply its migration first.`);
+    }
+    delete payload[col];
+    stripped.push(col);
+    res = await write(payload);
+  }
+  return { ...res, stripped };
 }
 
 // A genuine PostgREST "this column doesn't exist yet" error reads
@@ -1095,19 +1131,13 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   // hidden input used to carry through ConfigSections in "create" mode.
   const cloneDefaults = await getCloneDefaults();
   const row = {
+    ...CREATE_CREDIT_DEFAULTS,
     ...rowFromForm(fd),
     slug,
     drip_steps: DEFAULT_DRIP_STEPS,
     category_pricing: cloneDefaults.category_pricing ?? {},
   };
-  let { data, error } = await supabaseAdmin.from("clones").insert(row).select("id").single();
-  if (error && isMissingColumnError(error.message)) {
-    ({ data, error } = await supabaseAdmin
-      .from("clones")
-      .insert(withoutPersonaFactColumns(row))
-      .select("id")
-      .single());
-  }
+  const { data, error } = await writeStrippingMissing(row, (r) => supabaseAdmin.from("clones").insert(r).select("id").single());
   if (error) throw new Error(error.message);
   if (!data) throw new Error("insert returned no row");
   revalidatePath("/");
@@ -1116,7 +1146,9 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   return data.id;
 }
 
-export async function updateClone(id: string, fd: FormData) {
+// `notStored`: columns the save dropped because their migration has not run;
+// the form reports them and keeps them unsaved, never a plain "Saved".
+export async function updateClone(id: string, fd: FormData): Promise<{ notStored: string[] }> {
   await guardDashboardAction("app/clones/actions.ts#updateClone", [id, fd]);
   const image = fd.get("dashboard_profile_image");
   const previousImagePath = str(fd, "dashboard_profile_image_path");
@@ -1136,7 +1168,13 @@ export async function updateClone(id: string, fd: FormData) {
     fd.set("dashboard_profile_image_path", uploadedImagePath);
   }
 
-  const row = rowFromForm(fd);
+  let row: ReturnType<typeof rowFromForm>;
+  try {
+    row = rowFromForm(fd);
+  } catch (e) {
+    if (uploadedImagePath) await supabaseAdmin.storage.from("media").remove([uploadedImagePath]);
+    throw e;
+  }
   if (await getDashboardAccess()) {
     // The shared form also contains internal-only fields. Preserve those stored
     // values and submit exactly the same allowlist enforced by the agency fetch.
@@ -1146,16 +1184,12 @@ export async function updateClone(id: string, fd: FormData) {
   }
   if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
-  let { error } = await supabaseAdmin
-    .from("clones")
-    .update({ ...row, updated_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error && isMissingColumnError(error.message)) {
-    // Pre-migration-033: retry without the structured persona columns.
-    ({ error } = await supabaseAdmin
-      .from("clones")
-      .update({ ...withoutPersonaFactColumns(row), updated_at: new Date().toISOString() })
-      .eq("id", id));
+  let error: { message: string } | null;
+  let notStored: string[] = [];
+  try {
+    ({ error, stripped: notStored } = await writeStrippingMissing({ ...row, updated_at: new Date().toISOString() }, (r) => supabaseAdmin.from("clones").update(r).eq("id", id)));
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : String(e) };
   }
   if (error) {
     if (uploadedImagePath) await supabaseAdmin.storage.from("media").remove([uploadedImagePath]);
@@ -1177,6 +1211,7 @@ export async function updateClone(id: string, fd: FormData) {
   revalidatePath("/clones");
   revalidatePath(`/clones/${id}`);
   await invalidateCloneCaches();
+  return { notStored };
 }
 
 export async function deleteClone(id: string) {

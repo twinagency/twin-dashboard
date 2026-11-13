@@ -20,9 +20,10 @@ async function main(){
   if(table==="agency_creators")return json([{clone_id:assigned}]);
   return json([]);
  });
+ // Open the log before the fixture server listens: a missing ../evidence then throws with nothing holding the process open.
+ const fd=openSync("../evidence/commercial-next.log","w");
  await new Promise<void>(resolve=>identity.listen(0,"127.0.0.1",resolve));
  const port=(identity.address() as {port:number}).port;
- const fd=openSync("../evidence/commercial-next.log","w");
  const child=spawn(process.execPath,["node_modules/next/dist/bin/next","dev","--hostname","127.0.0.1","--port","3197"],{cwd:process.cwd(),env:{...process.env,NODE_OPTIONS:"--max-old-space-size=1536",NEXT_TELEMETRY_DISABLED:"1",DASHBOARD_PUBLIC_ORIGIN:base,SUPABASE_URL:"http://127.0.0.1:"+port,SUPABASE_SERVICE_KEY:"synthetic-service",ONLYFANS_API_BASE_URL:backend,ONLYFANS_API_TOKEN:"synthetic-read",ONLYFANS_CONTENT_TOKEN:"synthetic-content",ONLYFANS_CONFIGURATION_TOKEN:"synthetic-configuration"},stdio:["ignore",fd,fd]});
  try{
   for(let n=0;n<180;n++){try{const r=await fetch(base+"/api/onlyfans/accounts");if(r.status===401)break;}catch{}if(n===179)throw Error("Next did not start");await new Promise(r=>setTimeout(r,500));}

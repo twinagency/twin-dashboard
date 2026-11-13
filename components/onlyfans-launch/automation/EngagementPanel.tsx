@@ -35,13 +35,24 @@ const pageParser = (accountId: string) => (v: unknown) =>
   v.accountId === accountId
     ? parseEngagementPage(v)
     : null;
+const FLAGS = ["enabled", "offers", "follow_ups", "reengagement"] as const;
+/** A brake: every flag off, or against `saved` it turns at least one flag off and changes nothing else. An identical policy with a
+ *  flag on is a go. Anything that is not a brake is held while `goHold` is set. */
+function brakeOnly(next: EngagementPolicy, saved: EngagementPolicy | null) {
+  if (FLAGS.every((f) => !next[f])) return true;
+  if (saved === null) return false;
+  const changed = (Object.keys(next) as (keyof EngagementPolicy)[]).filter((k) => next[k] !== saved[k]);
+  return changed.length > 0 && changed.every((k) => (FLAGS as readonly string[]).includes(k) && next[k] === false);
+}
 function Settings({
   data,
   manage,
+  goHold,
   submit,
 }: {
   data: EngagementSettings;
   manage: boolean;
+  goHold: string | null;
   submit: (command: {
     expectedRevision: number;
     settings: EngagementPolicy;
@@ -55,8 +66,9 @@ function Settings({
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  const held = goHold !== null && !brakeOnly(p, data.settings);
   async function save() {
-    if (!manage || busy || !validPolicy(p)) return;
+    if (!manage || busy || !validPolicy(p) || held) return;
     setBusy(true);
     await submit({ expectedRevision: data.revision, settings: p });
     if (mounted.current) setBusy(false);
@@ -126,11 +138,12 @@ function Settings({
         ))}
         <button
           className={buttonClass}
-          disabled={!validPolicy(p)}
+          disabled={!validPolicy(p) || held}
           onClick={() => void save()}
         >
           Save engagement settings
         </button>
+        {held ? <span title={goHold ?? undefined} aria-label="Enabling engagement held" className="ml-2 cursor-help text-blue-700">ⓘ</span> : null}
       </fieldset>
       <p className="text-xs text-muted">
         Saved settings alone do not enable autonomous handling. Account
@@ -221,10 +234,12 @@ function Action({
 export default function EngagementPanel({
   accountId,
   manage,
+  goHold,
   editPolicy,
 }: {
   accountId: string;
   manage: boolean;
+  goHold: string | null;
   editPolicy: boolean;
 }) {
   const [cursor, setCursor] = useState<string | null>(null),
@@ -254,11 +269,14 @@ export default function EngagementPanel({
     useCallback(pageParser(accountId), [accountId]),
     false,
   );
+  // An identical retry is a brake only if every flag is off: it is not compared with the current read.
+  const retryHeld = (p: EngagementPolicy) => goHold !== null && !brakeOnly(p, null);
   async function saveSettings(command: {
     expectedRevision: number;
     settings: EngagementPolicy;
-  }) {
-    if (!manage || settingsBusy) return;
+  }, retry = false) {
+    const saved = settings.state.kind === "ok" ? settings.state.data.settings : null;
+    if (!manage || settingsBusy || (goHold !== null && !brakeOnly(command.settings, retry ? null : saved))) return;
     setSettingsBusy(true);
     const r = await bFetch(`${base}/settings`, {
       method: "POST",
@@ -333,6 +351,7 @@ export default function EngagementPanel({
             key={`${accountId}-${settings.state.data.revision}`}
             data={settings.state.data}
             manage={manage && pendingSettings === null && !settingsBusy}
+            goHold={goHold}
             submit={saveSettings}
           />
         ) : null}
@@ -343,8 +362,9 @@ export default function EngagementPanel({
           <div className="flex flex-wrap gap-2">
             <button
               className={buttonClass}
-              disabled={!manage || settingsBusy}
-              onClick={() => void saveSettings(pendingSettings)}
+              disabled={!manage || settingsBusy || retryHeld(pendingSettings.settings)}
+              title={goHold ?? undefined}
+              onClick={() => void saveSettings(pendingSettings, true)}
             >
               Retry identical engagement settings
             </button>
