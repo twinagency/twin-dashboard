@@ -23,6 +23,8 @@ export function denialResponse(denial: ReadDenial): NextResponse {
   return NextResponse.json(denialBody(denial), { status: denial.status, headers: PRIVATE_HEADERS });
 }
 
+type ReadOptions = { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean };
+
 /**
  * Establish who is asking, positively, before any backend work.
  *
@@ -32,7 +34,16 @@ export function denialResponse(denial: ReadDenial): NextResponse {
  *     const ctx = await requireOnlyFansRead();
  *     if (ctx instanceof NextResponse) return ctx;
  */
-export async function requireOnlyFansRead(options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean } = {}): Promise<ReadContext | NextResponse> {
+export async function requireOnlyFansRead(options: ReadOptions = {}): Promise<ReadContext | NextResponse> {
+  const ctx = await authorizeOnlyFansRead(options);
+  return "ok" in ctx ? denialResponse(ctx) : ctx;
+}
+
+/**
+ * The same gate, returning the denial itself instead of a response. For a write route that answers in its own schema: every
+ * denial here is raised before any upstream call, so nothing was applied and the route can say "refused".
+ */
+export async function authorizeOnlyFansRead(options: ReadOptions = {}): Promise<ReadContext | ReadDenial> {
   let agency: (AgencyIdentity & { kind?: string }) | null = null;
   let viewAs: unknown = null;
   try {
@@ -40,13 +51,13 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   } catch {
     // An expired agency session must not become "no identity, therefore the
     // internal operator". Refuse instead.
-    return denialResponse({
+    return {
       ok: false,
       status: 401,
       state: "denied",
       code: "session_unavailable",
       error: "Your dashboard session could not be verified. Sign in again.",
-    });
+    };
   }
 
   const grant = options.agency && agency && agency.kind !== "creator" && !viewAs && agency.name !== "Twin Technologies"
@@ -60,15 +71,15 @@ export async function requireOnlyFansRead(options: { agency?: boolean; write?: b
   };
 
   const denial = authorizeRead(auth);
-  if (denial) return denialResponse(denial);
+  if (denial) return denial;
 
   const canManage = grant ? grant.canManage : true;
   const canChat = canManage || grant?.canChat === true;
-  if (options.write && !(options.capability === "chat" ? canChat : canManage)) return denialResponse({ ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." });
+  if (options.write && !(options.capability === "chat" ? canChat : canManage)) return { ok: false, status: 403, state: "denied", code: "agency_read_only", error: "Your team access is read-only." };
   const purpose = configuredBackendPurpose("API");
   const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose) : fetch;
   // An unavailable read credential must never yield an unscoped write transport.
-  if (grant && !purpose) return denialResponse({ ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." });
+  if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." };
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
   const pilotActor = options.pilotIdentity && internalOperator(auth)
