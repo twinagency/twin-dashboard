@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Check, Plus, Trash2, CheckCircle2, Loader2, MessageSquare } from "lucide-react";
-import { OUTCOME_UNKNOWN, storedCardState, type ClaimState } from "@/app/api/ai-assistant/claim-state";
+import { approveOutcome, cardState, type ClaimState, type Proposal, type ProposalCard } from "@/lib/ai-claim-state";
+import { UnknownProposalCard } from "@/components/TwinPanel";
 
 type WriteEvent = { summary: string };
 // Writes stopped auto-executing on 2026-07-31 (see api/ai-assistant/proposals.ts).
@@ -12,14 +13,11 @@ type WriteEvent = { summary: string };
 // `lg:` only - so it needs the same approval cards the orb's panel has. Without
 // them a proposal arrives here, renders nothing, and the operator is told a
 // change is waiting for a tap that does not exist anywhere on their screen.
-type Proposal = { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean };
-// unknown: /approve claimed it and the outcome is not known (or it is in flight, or applied elsewhere). Not approvable.
-type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed" | "unknown"; error?: string };
 type ChatTurn = {
   role: "user" | "assistant";
   content: string;
   writes?: WriteEvent[];
-  proposals?: ProposalState[];
+  proposals?: ProposalCard[];
 };
 type ConversationRow = { id: string; title: string; created_at: string; updated_at: string };
 type Suggestion = { id: string; cloneName: string; message: string; prompt: string };
@@ -100,9 +98,8 @@ export default function AiChat() {
             role: m.role,
             content: m.content,
             writes: m.meta?.writes,
-            // A reloaded card takes its stored claim state: only a proposal /approve never claimed comes back
-            // approvable. An applied one is hidden (its Applied line shows), a claimed or unknown one is not approvable.
-            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: storedCardState(m.meta?.claims, p.id) })),
+            // A reloaded card takes its stored claim state through the same mapping as a live 409 (lib/ai-claim-state.ts).
+            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: cardState(m.meta?.claims?.[p.id]) })),
           }),
         ),
       );
@@ -193,7 +190,7 @@ export default function AiChat() {
             setTurns((cur) => {
               const next = [...cur];
               const last = next[next.length - 1];
-              const p: ProposalState = {
+              const p: ProposalCard = {
                 id: parsed.id,
                 tool: parsed.tool,
                 args: parsed.args,
@@ -235,7 +232,7 @@ export default function AiChat() {
     const target = turns[turnIndex]?.proposals?.find((p) => p.id === id);
     if (!target || target.state !== "pending") return;
 
-    const setProposalState = (state: ProposalState["state"], errText?: string) =>
+    const setProposalState = (state: ProposalCard["state"], errText?: string) =>
       setTurns((cur) =>
         cur.map((t, i) =>
           i !== turnIndex
@@ -251,15 +248,13 @@ export default function AiChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId, proposalId: target.id, tool: target.tool, args: target.args }),
       });
-      const j = await res.json();
-      // Applied elsewhere, in flight, or outcome unknown: never offer Approve again.
-      if (j?.state === "applied" || j?.state === "unknown") return setProposalState("unknown", j.error);
-      if (!res.ok || !j.ok) throw new Error(j?.error ?? "the change did not go through");
-      setProposalState("approved");
-      setTurns((cur) =>
-        cur.map((t, i) => (i !== turnIndex ? t : { ...t, writes: [...(t.writes ?? []), { summary: j.summary }] })),
-      );
-      router.refresh();
+      const out = approveOutcome(res.ok, await res.json(), target.summary);
+      setProposalState(out.state, out.error);
+      if (out.applied) {
+        const summary = out.applied;
+        setTurns((cur) => cur.map((t, i) => (i !== turnIndex ? t : { ...t, writes: [...(t.writes ?? []), { summary }] })));
+        router.refresh();
+      }
     } catch (e) {
       setProposalState("pending", e instanceof Error ? e.message : "failed");
     }
@@ -369,12 +364,7 @@ export default function AiChat() {
                     {t.proposals?.map((p) => {
                       if (p.state === "approved") return null;
                       if (p.state === "unknown") {
-                        return (
-                          <div key={p.id} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted">
-                            <p className="font-medium text-ink">{p.summary}</p>
-                            <p>{p.error ?? OUTCOME_UNKNOWN}</p>
-                          </div>
-                        );
+                        return <UnknownProposalCard key={p.id} p={p} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted" />;
                       }
                       if (p.state === "dismissed") {
                         return (

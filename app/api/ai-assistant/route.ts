@@ -177,6 +177,7 @@ export async function POST(req: NextRequest) {
       // This turn's assistant row: created at the first proposal, so every card the operator sees is stored
       // (and approvable) even while the turn is still streaming or if it later errors.
       let turnId: string | null = null;
+      let failed = false;
       const persistTurn = async () => {
         turnId = await saveTurn(finalConversationId, turnId, assistantText, { tools: [...toolsUsed], writes, proposals });
       };
@@ -257,12 +258,19 @@ export async function POST(req: NextRequest) {
           assistantText = cleaned;
           send({ type: "correction", text: cleaned });
         }
-
-        // Final text onto the row the first proposal created, or a new row for a text-only turn.
-        if (assistantText.trim() || turnId) await persistTurn();
       } catch (e) {
+        failed = true;
         send({ type: "error", message: e instanceof Error ? e.message : "failed" });
       } finally {
+        // Final text onto the row the first proposal created (even after an error, so it keeps this turn's text and
+        // cards), or a new row for a text-only turn that finished.
+        if (turnId || (!failed && assistantText.trim())) {
+          try {
+            await persistTurn();
+          } catch (e) {
+            send({ type: "error", message: e instanceof Error ? e.message : "failed" });
+          }
+        }
         send({ type: "done" });
         controller.close();
       }

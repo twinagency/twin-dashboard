@@ -66,31 +66,25 @@ async function fanLabel(userId: string): Promise<string> {
   return data?.stated_name || data?.name || (data?.telegram_id ? `Fan ${data.telegram_id}` : userId);
 }
 
-// Logs an applied write and returns the tool's result. supabase-js does not throw on an insert error, so a
-// failed audit row is reported as auditLogged:false instead of looking exactly like a logged write.
+// The one system_logs insert for assistant writes. supabase-js does not throw on an insert error, so it returns
+// whether the row saved; a transport failure still throws.
+async function insertWriteLog(level: "info" | "warn", cloneId: string | null, message: string, detail: Record<string, unknown>) {
+  const { error } = await supabaseAdmin.from("system_logs").insert({ level, source: "ai-assistant-write", clone_id: cloneId, message, detail });
+  if (error) console.error(`[ai-assistant-write] ${level} audit log insert failed`, error.message);
+  return !error;
+}
+
+// Logs an applied write and returns the tool's result: a failed audit row is reported as auditLogged:false instead
+// of looking exactly like a logged write.
 async function logWrite(opts: { tool: string; summary: string; cloneId?: string | null; args: Record<string, unknown> }) {
-  const { error } = await supabaseAdmin.from("system_logs").insert({
-    level: "info",
-    source: "ai-assistant-write",
-    clone_id: opts.cloneId ?? null,
-    message: opts.summary,
-    detail: { tool: opts.tool, args: opts.args },
-  });
-  if (error) console.error("[ai-assistant-write] audit log insert failed", error.message);
-  return error ? { ok: true, summary: opts.summary, auditLogged: false } : { ok: true, summary: opts.summary };
+  const logged = await insertWriteLog("info", opts.cloneId ?? null, opts.summary, { tool: opts.tool, args: opts.args });
+  return logged ? { ok: true, summary: opts.summary } : { ok: true, summary: opts.summary, auditLogged: false };
 }
 
 /** Best effort, never throws: a write that threw may or may not have landed, so the audit trail says so. */
 export async function logUnknownWrite(tool: string, args: Record<string, unknown>, summary: string): Promise<void> {
   try {
-    const { error } = await supabaseAdmin.from("system_logs").insert({
-      level: "warn",
-      source: "ai-assistant-write",
-      clone_id: null,
-      message: `Outcome unknown, the write threw: ${summary}`,
-      detail: { tool, args, outcome: "unknown" },
-    });
-    if (error) console.error("[ai-assistant-write] outcome-unknown log insert failed", error.message);
+    await insertWriteLog("warn", null, `Outcome unknown, the write threw: ${summary}`, { tool, args, outcome: "unknown" });
   } catch (e) {
     console.error("[ai-assistant-write] outcome-unknown log insert failed", e);
   }

@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { executeWriteTool, logUnknownWrite } from "../write-tools";
 import { describeProposal, isApprovableWrite } from "../proposals";
-import { appendMessage, claimProposal, settleClaim, type ProposalClaim } from "../db";
-import { OUTCOME_UNKNOWN } from "../claim-state";
+import { appendMessage, claimProposal, releaseClaim, settleClaim, type ProposalClaim } from "../db";
+import { OUTCOME_UNKNOWN } from "@/lib/ai-claim-state";
 import { trustedFormOrigin } from "@/lib/form-origin";
 
 export const dynamic = "force-dynamic";
@@ -44,17 +44,7 @@ export async function POST(req: NextRequest) {
     console.error("[ai-assistant/approve] claim failed", e);
     return Response.json({ ok: false, error: "could not check this proposal, nothing was changed" }, { status: 500 });
   }
-  if (claim.status === "missing") {
-    return Response.json({ ok: false, error: "this proposal was not found in this conversation, nothing was changed" }, { status: 404 });
-  }
-  if (claim.status === "ambiguous") {
-    return Response.json({ ok: false, error: "this older card matches more than one stored proposal, nothing was changed" }, { status: 409 });
-  }
-  if (claim.status === "taken") {
-    return claim.state === "applied"
-      ? Response.json({ ok: false, error: "this change was already applied", state: "applied" }, { status: 409 })
-      : Response.json({ ok: false, error: OUTCOME_UNKNOWN, state: "unknown" }, { status: 409 });
-  }
+  if (claim.status !== "ok") return claimRefusal(claim);
   const { messageId, proposal } = claim;
   const safeArgs = proposal.args;
 
@@ -62,9 +52,9 @@ export async function POST(req: NextRequest) {
   // client, so what gets recorded in the transcript is what actually ran.
   const { summary } = describeProposal(tool, safeArgs);
 
-  const settle = (state: "applied" | "unknown" | null) =>
-    settleClaim(messageId, proposal.id, state).catch((e) =>
-      console.error(`[ai-assistant/approve] could not record claim ${state ?? "released"} for ${proposal.id}`, e),
+  const settle = (state: "applied" | "unknown" | "released") =>
+    (state === "released" ? releaseClaim(messageId, proposal.id) : settleClaim(messageId, proposal.id, state)).catch((e) =>
+      console.error(`[ai-assistant/approve] could not record claim ${state} for ${proposal.id}`, e),
     );
   let result: unknown;
   try {
@@ -81,7 +71,7 @@ export async function POST(req: NextRequest) {
   const r = result as { ok?: boolean; summary?: string; error?: string; auditLogged?: boolean } | null;
   if (!r?.ok) {
     // ok:false is a refusal before anything was written (validation, missing fan), so the card stays retryable.
-    await settle(null);
+    await settle("released");
     return Response.json({ ok: false, error: r?.error ?? "the write did not report success" }, { status: 400 });
   }
   await settle("applied");
@@ -100,4 +90,19 @@ export async function POST(req: NextRequest) {
   }
 
   return Response.json(unaudited ? { ok: true, summary: applied, auditLogged: false } : { ok: true, summary: applied });
+}
+
+/** Every claim that does not let the write run. A taken claim answers its RAW state; the client maps it (lib/ai-claim-state.ts). */
+function claimRefusal(claim: Exclude<ProposalClaim, { status: "ok" }>): Response {
+  switch (claim.status) {
+    case "missing":
+      return Response.json({ ok: false, error: "this proposal was not found in this conversation, nothing was changed" }, { status: 404 });
+    case "ambiguous":
+      return Response.json({ ok: false, error: "this older card matches more than one stored proposal, nothing was changed" }, { status: 409 });
+    case "taken":
+      return Response.json(
+        { ok: false, error: claim.state === "applied" ? "this change was already applied" : OUTCOME_UNKNOWN, state: claim.state },
+        { status: 409 },
+      );
+  }
 }

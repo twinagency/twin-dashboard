@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
 import { supabaseAdmin } from "@/lib/supabase";
-import type { ClaimState } from "./claim-state";
+import type { ClaimState } from "@/lib/ai-claim-state";
 
 // Conversation persistence for the /ai assistant (migration 048). Plain CRUD
 // against ai_conversations / ai_messages — not part of the model's own tool
@@ -17,8 +17,9 @@ export type AiMessageMeta = {
    * vanishing, which would look like the change had gone through.
    */
   proposals?: { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean }[];
-  /** What /approve did with each proposal id (claim-state.ts), and the compare-and-swap counter guarding meta. */
+  /** What /approve did with each proposal id (lib/ai-claim-state.ts). */
   claims?: Record<string, ClaimState>;
+  /** Compare-and-swap counter bumped by EVERY meta write after the insert (casUpdateMessage), not only claims. */
   claimRev?: number;
 };
 
@@ -115,10 +116,10 @@ export type ProposalClaim =
   | { status: "taken"; state: ClaimState };
 
 /**
- * Read-modify-write of one message's meta, with a compare-and-swap on meta.claimRev so a concurrent claim or a
- * still-streaming turn adding a proposal cannot overwrite the other. `change` returns null to abort.
+ * Read-modify-write of one message's meta (and optionally its content), with a compare-and-swap on meta.claimRev so a
+ * concurrent claim or a still-streaming turn adding a proposal cannot overwrite the other. `change` returns null to abort.
  */
-async function updateMeta(
+async function casUpdateMessage(
   messageId: string,
   change: (meta: AiMessageMeta) => AiMessageMeta | null,
   columns: { content?: string } = {},
@@ -153,7 +154,7 @@ export async function saveTurn(
   meta: Pick<AiMessageMeta, "tools" | "writes" | "proposals">,
 ): Promise<string> {
   if (!messageId) return appendMessage(conversationId, "assistant", content, meta);
-  await updateMeta(messageId, (m) => ({ ...m, ...meta }), { content });
+  await casUpdateMessage(messageId, (m) => ({ ...m, ...meta }), { content });
   return messageId;
 }
 
@@ -177,19 +178,23 @@ export async function claimProposal(conversationId: string, proposalId: string, 
   if (!hits.length) return { status: "missing" };
   if (hits.length > 1) return { status: "ambiguous" };
   let taken: ClaimState | undefined;
-  const claimed = await updateMeta(hits[0].messageId, (meta) => {
+  const claimed = await casUpdateMessage(hits[0].messageId, (meta) => {
     taken = meta.claims?.[proposalId];
     return taken ? null : { ...meta, claims: { ...meta.claims, [proposalId]: "claimed" } };
   });
   return claimed ? { status: "ok", ...hits[0] } : { status: "taken", state: taken! };
 }
 
-/** Record how a claimed write ended. null = released (the tool refused before writing), so the card can be retried. */
-export async function settleClaim(messageId: string, proposalId: string, state: "applied" | "unknown" | null): Promise<void> {
-  await updateMeta(messageId, (meta) => {
+/** Record how a claimed write ended: applied, or unknown (it threw, it may have landed, never retried). */
+export async function settleClaim(messageId: string, proposalId: string, state: "applied" | "unknown"): Promise<void> {
+  await casUpdateMessage(messageId, (meta) => ({ ...meta, claims: { ...meta.claims, [proposalId]: state } }));
+}
+
+/** Drop a claim because the tool refused before writing (ok:false), so the card can be retried. */
+export async function releaseClaim(messageId: string, proposalId: string): Promise<void> {
+  await casUpdateMessage(messageId, (meta) => {
     const claims = { ...meta.claims };
-    if (state) claims[proposalId] = state;
-    else delete claims[proposalId];
+    delete claims[proposalId];
     return { ...meta, claims };
   });
 }

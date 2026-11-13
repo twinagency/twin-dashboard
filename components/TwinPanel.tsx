@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Loader2, Mic, MicOff, Send, X } from "lucide-react";
-import { OUTCOME_UNKNOWN } from "@/app/api/ai-assistant/claim-state";
+import { approveOutcome, OUTCOME_UNKNOWN, type Proposal, type ProposalCard } from "@/lib/ai-claim-state";
 
 // The slide-out the sidebar orb opens. This is the REAL assistant: it talks to
 // /api/ai-assistant, which is the same backend the /ai page used.
@@ -13,18 +13,25 @@ import { OUTCOME_UNKNOWN } from "@/app/api/ai-assistant/claim-state";
 // talking about what you are now looking at. A page cannot do that; navigating
 // to it is leaving whatever you were doing.
 
-type Proposal = { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean };
-// unknown: /approve claimed it and the outcome is not known (or it is in flight, or applied elsewhere). Not approvable.
-type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed" | "unknown"; error?: string };
 type Turn = {
   role: "user" | "assistant";
   content: string;
-  proposals?: ProposalState[];
+  proposals?: ProposalCard[];
   applied?: string[];
   opened?: string[];
 };
 
 const QUICK_ASKS = ["Who's earning most?", "Any errors today?", "Open the logs", "Which toggles look wrong?"];
+
+/** A card /approve claimed without a known outcome (in flight, or it threw): never approvable. Shared with app/ai/AiChat.tsx. */
+export function UnknownProposalCard({ p, className }: { p: ProposalCard; className: string }) {
+  return (
+    <div className={className}>
+      <p className="font-medium text-ink">{p.summary}</p>
+      <p>{p.error ?? OUTCOME_UNKNOWN}</p>
+    </div>
+  );
+}
 
 export default function TwinPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
   const router = useRouter();
@@ -146,7 +153,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
     const target = turns[turnIndex]?.proposals?.find((p) => p.id === id);
     if (!target || target.state !== "pending") return;
 
-    const setState = (state: ProposalState["state"], errText?: string) =>
+    const setState = (state: ProposalCard["state"], errText?: string) =>
       setTurns((cur) =>
         cur.map((t, i) =>
           i !== turnIndex
@@ -162,16 +169,14 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ conversationId, proposalId: target.id, tool: target.tool, args: target.args }),
       });
-      const j = await res.json();
-      // Applied elsewhere, in flight, or outcome unknown: never offer Approve again.
-      if (j?.state === "applied" || j?.state === "unknown") return setState("unknown", j.error);
-      if (!res.ok || !j.ok) throw new Error(j?.error ?? "the change did not go through");
-      setState("approved");
-      setTurns((cur) =>
-        cur.map((t, i) => (i !== turnIndex ? t : { ...t, applied: [...(t.applied ?? []), j.summary as string] })),
-      );
-      // The page you are on may be showing the value that just changed.
-      router.refresh();
+      const out = approveOutcome(res.ok, await res.json(), target.summary);
+      setState(out.state, out.error);
+      if (out.applied) {
+        const line = out.applied;
+        setTurns((cur) => cur.map((t, i) => (i !== turnIndex ? t : { ...t, applied: [...(t.applied ?? []), line] })));
+        // The page you are on may be showing the value that just changed.
+        router.refresh();
+      }
     } catch (e) {
       setState("pending", e instanceof Error ? e.message : "failed");
     }
@@ -322,12 +327,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
                     }
                     if (p.state === "approved") return null;
                     if (p.state === "unknown") {
-                      return (
-                        <div key={p.id} className="rounded-xl border border-white/60 bg-white/40 px-3 py-2 text-[11px] text-ink/60">
-                          <p className="font-medium text-ink">{p.summary}</p>
-                          <p>{p.error ?? OUTCOME_UNKNOWN}</p>
-                        </div>
-                      );
+                      return <UnknownProposalCard key={p.id} p={p} className="rounded-xl border border-white/60 bg-white/40 px-3 py-2 text-[11px] text-ink/60" />;
                     }
                     return (
                       <div

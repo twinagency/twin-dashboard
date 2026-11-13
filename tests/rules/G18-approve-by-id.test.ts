@@ -7,7 +7,7 @@
  * - a write that throws after the clones PATCH (revalidatePath outside a request) is "unknown": a retry is 409 and
  *   does not PATCH again, and a system_logs row records the unknown outcome (F2/F4)
  * - an ok:false tool result releases the claim, so the same card can be retried (F4)
- * - a reload returns meta.claims and storedCardState maps it: applied -> approved, unknown -> unknown (F5)
+ * - a reload returns meta.claims and cardState (lib/ai-claim-state.ts) maps it: applied -> approved, unknown -> unknown (F5)
  * Each was proven red on fceff02b (or by planting the hunk back), see the PR.
  * Run: env -i PATH="$PATH" HOME="$HOME" NODE_ENV=test nice -n 10 node --import tsx --test tests/rules/G18-approve-by-id.test.ts
  * DECLARED BYPASS: Next workAsyncStorage fake store (see harness header), deliberately left out for the one call
@@ -16,7 +16,7 @@
 import { CLONE, FAN_ID, inWorkStore, jsonRequest, startFakePostgrest, stubOpenRouter, type FakePostgrest } from "./G18-harness";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
-import { storedCardState } from "../../app/api/ai-assistant/claim-state";
+import { cardState } from "../../lib/ai-claim-state";
 
 const CONV = "a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1";
 const MSG_A = "b1b1b1b1-b1b1-4b1b-8b1b-b1b1b1b1b1b1", MSG_B = "b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2";
@@ -134,14 +134,14 @@ test("F4: an ok:false tool result releases the claim, so the same card can be re
   assert.equal(claims(MSG_A)[A], "applied");
 });
 
-test("F5: a reload returns each card's claim state, and storedCardState renders it", async () => {
+test("F5: a reload returns each card's claim state, and cardState renders it", async () => {
   assert.equal((await approve(B)).status, 200);
   pg.seed("ai_messages", [...pg.rows("ai_messages").map((m) => (m.id === MSG_A ? { ...m, meta: { ...m.meta, claims: { [A]: "unknown" } } } : m))]);
   const { GET } = await import("../../app/api/ai-assistant/conversations/[id]/route");
   const res = await GET(new Request(`http://127.0.0.1/api/ai-assistant/conversations/${CONV}`) as any, { params: Promise.resolve({ id: CONV }) });
   const { messages } = await res.json();
-  const states = messages.flatMap((m: any) => (m.meta?.proposals ?? []).map((p: any) => [p.id, storedCardState(m.meta?.claims, p.id)]));
+  const states = messages.flatMap((m: any) => (m.meta?.proposals ?? []).map((p: any) => [p.id, cardState(m.meta?.claims?.[p.id])]));
   assert.deepEqual(Object.fromEntries(states), { [A]: "unknown", [B]: "approved" });
-  assert.equal(storedCardState(undefined, A), "pending");
-  assert.equal(storedCardState({ [A]: "claimed" }, A), "unknown", "an in-flight claim must not render approvable");
+  assert.equal(cardState(undefined), "pending");
+  assert.equal(cardState("claimed"), "unknown", "an in-flight claim must not render approvable");
 });
