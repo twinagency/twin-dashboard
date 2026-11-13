@@ -64,8 +64,15 @@ async function main(){
   const prepPath=cfg+"/preparation";
   await ok(await post(prepPath,{action:"configure",expectedRevision:0,requestId:randomUUID(),reason:"Agency approved isolated preparation fixture",
    config:{contract_version:"preparation.v1",provider_account:setup.providerAccount,creator_id:setup.providerCreator,qualification:{mode:"fixture",reference:"Q14 actual Next/BFF and PG synthetic wire"},
-    limits:{provider_requests:4,provider_credit_budget:8,provider_credits_per_request:2}}}));
-  assert.equal((await fetch(backend+"/fixture/prepare",{method:"POST"})).status,200);
+    limits:{provider_requests:8,provider_credit_budget:16,provider_credits_per_request:2}}}));
+  const prepareTurn=async(expectedState:string)=>{
+   const response=await fetch(backend+"/fixture/prepare",{method:"POST"});
+   assert.equal(response.status,200);
+   const result=await response.json();
+   assert.equal(result.state,expectedState,JSON.stringify(result));
+  };
+  await prepareTurn("partial");
+  await prepareTurn("complete");
   const revisionAtSync=(await ok(await get(vault))).vault.connectionRevision;
   const sync={requestId:randomUUID(),expectedConnectionRevision:revisionAtSync};
   assert.equal((await post(vault+"/sync",sync,"synthetic-reader")).status,403);
@@ -75,17 +82,17 @@ async function main(){
   assert.equal(queued.status,"pending");
   assert.equal((await ok(await post(vault+"/sync",sync))).sync.jobId,queued.jobId);
   assert.equal((await post(vault+"/sync",{...sync,requestId:randomUUID()})).status,409);
-  assert.equal((await fetch(backend+"/fixture/prepare",{method:"POST"})).status,200);
+  await prepareTurn("partial");
   const partial=(await ok(await get(vault))).vault.sync;
   assert.equal(partial.jobId,queued.jobId);
   assert.equal(partial.status,"pending");
   assert.deepEqual(partial.kindOffsets,{photo:1,video:0});
-  assert.equal((await fetch(backend+"/fixture/prepare",{method:"POST"})).status,200);
+  await prepareTurn("complete");
   const complete=(await ok(await get(vault))).vault.sync;
   assert.equal(complete.status,"complete");
   assert.deepEqual(complete.selectedByKind,{photo:1,video:1});
   const providerReadsAfterRefresh=(await state()).providerReads;
-  assert.equal(providerReadsAfterRefresh,setup.providerReads+6,"one initial turn and two typed refresh turns");
+  assert.equal(providerReadsAfterRefresh,setup.providerReads+8,"two typed preparation turns and two typed refresh turns");
   // ---- history coverage: read-only, honest when no history import is configured
   const coveragePath=cfg+"/history-coverage";
   assert.notEqual((await fetch(base+coveragePath,{redirect:"manual"})).status,200,"coverage needs an agency session");
