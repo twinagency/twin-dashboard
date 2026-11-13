@@ -39,7 +39,11 @@ async function putObject(bucket: string, path: string, bytes: Buffer, contentTyp
 }
 async function removeObjects(bucket: string, paths: (string | null | undefined)[]) {
   const list = paths.filter((p): p is string => !!p);
-  if (list.length) await serviceClient().storage.from(bucket).remove(list);
+  if (!list.length) return;
+  // A failed remove must not be read as removed: callers go on to record "no copy" (public_path null) or delete the row.
+  // ai-public is created lazily on the first upload, so "not found" means nothing is stored there: already gone.
+  const { error } = await serviceClient().storage.from(bucket).remove(list);
+  if (error && !/(bucket|object) not found/i.test(error.message)) throw new Error(`Could not remove the stored file: ${error.message}`);
 }
 
 type ImgRow = { id: string; model_id: string; kind: "photo" | "video"; storage_path: string; public_path: string | null; status: string; access: string; price_stars: number | null };
@@ -48,14 +52,16 @@ async function loadImage(id: string): Promise<ImgRow> {
   if (error || !data) throw new Error("Image not found");
   return data as ImgRow;
 }
-/** Make the public bucket match the image's state: approved Free = the file, approved Locked = blurred preview, anything else = nothing. */
-async function syncPublic(img: ImgRow): Promise<string | null> {
+/** Make the public bucket match the image's state: approved Free = the file, approved Locked = blurred preview, anything else = nothing.
+ *  `patch` (the status/access change) is written in the same update as public_path, and only after storage matches. */
+async function syncPublic(img: ImgRow, patch: Partial<Pick<ImgRow, "status" | "access" | "price_stars">> = {}): Promise<string | null> {
   const sb = serviceClient();
   const want = img.status === "approved" ? img.access : null;
   const ext = img.kind === "video" ? (img.storage_path.endsWith(".webm") ? "webm" : "mp4") : "jpg";
   const freePath = `${img.model_id}/${img.id}.${ext}`, blurPath = `${img.model_id}/${img.id}.blur.jpg`;
   const keep = want === "free" ? freePath : want === "locked" ? blurPath : null;
   const stale = [freePath, blurPath].filter((p) => p !== keep);
+  await removeObjects(PUBLIC, stale); // takedown first: a failed remove throws before anything is recorded
   if (keep) {
     const dl = await sb.storage.from(PRIVATE).download(img.storage_path);
     if (dl.error || !dl.data) throw new Error("Original file is missing");
@@ -63,9 +69,12 @@ async function syncPublic(img: ImgRow): Promise<string | null> {
     if (want === "free") await putObject(PUBLIC, freePath, bytes, img.kind === "video" ? (ext === "webm" ? "video/webm" : "video/mp4") : "image/jpeg");
     else await putObject(PUBLIC, blurPath, await makeBlurredPreview(bytes, img.kind), "image/jpeg");
   }
-  await removeObjects(PUBLIC, stale);
-  const { error } = await sb.from("ai_model_images").update({ public_path: keep }).eq("id", img.id);
-  if (error) throw new Error(nice(error));
+  const { error } = await sb.from("ai_model_images").update({ ...patch, public_path: keep }).eq("id", img.id);
+  if (error) {
+    // The row keeps its old state, so a new public copy it does not allow (e.g. Locked to Free) must not stay readable.
+    if (keep && keep !== img.public_path) await removeObjects(PUBLIC, [keep]);
+    throw new Error(nice(error));
+  }
   return keep;
 }
 
@@ -177,9 +186,7 @@ export async function setImageStatus(imageId: string, status: "approved" | "reje
   if (!["approved", "rejected", "pending"].includes(status)) throw new Error("Invalid request");
   const img = await loadImage(imageId);
   if (status === "approved" && img.access === "locked" && validPrice(img.price_stars) == null) throw new Error("Set a price first");
-  const { error } = await serviceClient().from("ai_model_images").update({ status }).eq("id", imageId);
-  if (error) throw new Error(nice(error));
-  await syncPublic({ ...img, status });
+  await syncPublic({ ...img, status }, { status });
   if (status !== "approved") await serviceClient().from("ai_models").update({ profile_image_id: null }).eq("id", img.model_id).eq("profile_image_id", imageId);
   refresh(img.model_id);
 }
@@ -192,9 +199,7 @@ export async function setImageAccess(imageId: string, access: "free" | "locked",
   let stars: number | null = null;
   if (access === "locked") { stars = validPrice(price); if (stars == null) throw new Error("Locked pics need a price in Stars, 1 to 10000"); }
   const img = await loadImage(imageId);
-  const { error } = await serviceClient().from("ai_model_images").update({ access, price_stars: stars }).eq("id", imageId);
-  if (error) throw new Error(nice(error));
-  await syncPublic({ ...img, access, price_stars: stars });
+  await syncPublic({ ...img, access, price_stars: stars }, { access, price_stars: stars });
   if (access === "locked") await serviceClient().from("ai_models").update({ profile_image_id: null }).eq("id", img.model_id).eq("profile_image_id", imageId);
   refresh(img.model_id);
 }
@@ -215,11 +220,14 @@ export async function deleteAiImage(imageId: string) {
   await requireAdmin();
   uuid(imageId);
   const img = await loadImage(imageId);
-  const { count } = await serviceClient().from("ai_model_purchases").select("id", { count: "exact", head: true }).eq("image_id", imageId);
-  if ((count ?? 0) > 0) throw new Error("A fan bought this one, reject it instead of deleting");
-  await removeObjects(PRIVATE, [img.storage_path]);
+  // Deleting the row cascades to ai_model_purchases, so an unknown count (error or null) refuses, it never reads as 0.
+  const { count, error: cerr } = await serviceClient().from("ai_model_purchases").select("id", { count: "exact", head: true }).eq("image_id", imageId);
+  if (cerr || count == null) throw new Error("Could not check whether a fan bought this one, nothing was deleted");
+  if (count > 0) throw new Error("A fan bought this one, reject it instead of deleting");
+  // Public copy, then the row, then the private original: a failure at any step leaves a row that a retry can finish.
   await removeObjects(PUBLIC, [`${img.model_id}/${img.id}.jpg`, `${img.model_id}/${img.id}.mp4`, `${img.model_id}/${img.id}.webm`, `${img.model_id}/${img.id}.blur.jpg`]);
   const { error } = await serviceClient().from("ai_model_images").delete().eq("id", imageId);
   if (error) throw new Error(nice(error));
   refresh(img.model_id);
+  try { await removeObjects(PRIVATE, [img.storage_path]); } catch { throw new Error("Image deleted, but its original file could not be removed from private storage"); }
 }

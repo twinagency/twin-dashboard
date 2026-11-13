@@ -1,7 +1,7 @@
 "use client";
 import { ReadOnlyEditor } from "@/components/DashboardAccessProvider";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { inputCls } from "@/components/clone/fields";
@@ -83,7 +83,14 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
   }
   useEffect(load, [cloneId]);
 
+  // One lock for every action: the shared result banner and setBusy(null) serve all of them, and a story post is not
+  // idempotent, so nothing else may start (or unlock the story form) while any action is in flight. The ref is the lock
+  // (taken synchronously, so two submits in one batch cannot both pass); `locked` only disables the controls.
+  const lockRef = useRef(false);
+  const locked = busy !== null;
   async function act(action: string, build: (fd: FormData) => void) {
+    if (lockRef.current) return;
+    lockRef.current = true;
     setBusy(action);
     setResult(null);
     try {
@@ -102,6 +109,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
     } catch (e) {
       setResult({ action, ok: false, message: e instanceof Error ? e.message : String(e) });
     } finally {
+      lockRef.current = false;
       setBusy(null);
     }
   }
@@ -156,6 +164,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
             fullName={fullName}
             disabled={!rights.can_edit_profile_photo}
             busy={busy === "photo" || busy === "removePhoto"}
+            locked={locked}
             onSet={(fd) => act("photo", (f) => { f.set("file", fd.get("file") as Blob); f.set("isPublic", fd.get("isPublic") as string); })}
             onRemove={() => act("removePhoto", (f) => f.set("isPublic", "false"))}
           />
@@ -169,6 +178,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
           <NameField
             disabled={!rights.can_edit_name}
             busy={busy === "name"}
+            locked={locked}
             firstName={account.firstName ?? ""}
             lastName={account.lastName ?? ""}
             onSave={(firstName, lastName) => act("name", (f) => { f.set("firstName", firstName); f.set("lastName", lastName); })}
@@ -176,6 +186,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
           <UsernameField
             disabled={!rights.can_edit_username}
             busy={busy === "username"}
+            locked={locked}
             current={account.username ?? ""}
             onSave={(username) => act("username", (f) => f.set("username", username))}
           />
@@ -183,6 +194,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
             <BioField
               disabled={!rights.can_edit_bio}
               busy={busy === "bio"}
+              locked={locked}
               current={account.bio ?? ""}
               onSave={(bio) => act("bio", (f) => f.set("bio", bio))}
             />
@@ -190,7 +202,7 @@ export default function BusinessAccountManager({ cloneId }: { cloneId: string })
         </div>
       </Card>
 
-      <StoryCard busy={busy === "story"} disabled={!rights.can_manage_stories} onSubmit={(fd) => act("story", (f) => { for (const [k, v] of fd.entries()) f.set(k, v); })} />
+      <StoryCard busy={busy === "story"} locked={locked} disabled={!rights.can_manage_stories} onSubmit={(fd) => act("story", (f) => { for (const [k, v] of fd.entries()) f.set(k, v); })} />
     </div>
   );
 }
@@ -223,12 +235,14 @@ function FieldShell({
 function NameField({
   disabled,
   busy,
+  locked,
   firstName,
   lastName,
   onSave,
 }: {
   disabled: boolean;
   busy: boolean;
+  locked: boolean;
   firstName: string;
   lastName: string;
   onSave: (firstName: string, lastName: string) => void;
@@ -239,7 +253,7 @@ function NameField({
   const dirty = first !== firstName || last !== lastName;
   return (
     <FieldShell label="Name" hint="First and last name shown on her Telegram Business account. Requires the Change name permission." disabled={disabled}>
-      <fieldset disabled={disabled || busy} className="flex flex-col gap-2 disabled:opacity-50">
+      <fieldset disabled={disabled || locked} className="flex flex-col gap-2 disabled:opacity-50">
         <input className={inputCls} value={first} onChange={(e) => setFirst(e.target.value)} placeholder="First name" maxLength={64} />
         <input className={inputCls} value={last} onChange={(e) => setLast(e.target.value)} placeholder="Last name (optional)" maxLength={64} />
         <Button type="button" size="sm" disabled={!dirty || !first.trim()} onClick={() => onSave(first.trim(), last.trim())}>
@@ -253,11 +267,13 @@ function NameField({
 function UsernameField({
   disabled,
   busy,
+  locked,
   current,
   onSave,
 }: {
   disabled: boolean;
   busy: boolean;
+  locked: boolean;
   current: string;
   onSave: (username: string) => void;
 }) {
@@ -266,7 +282,7 @@ function UsernameField({
   const dirty = value !== current;
   return (
     <FieldShell label="Username" hint="Her @handle. Clear it and save to remove entirely. Requires the Change username permission." disabled={disabled}>
-      <fieldset disabled={disabled || busy} className="flex flex-col gap-2 disabled:opacity-50">
+      <fieldset disabled={disabled || locked} className="flex flex-col gap-2 disabled:opacity-50">
         <div className="flex items-center gap-1">
           <span className="text-sm text-muted">@</span>
           <input className={inputCls} value={value} onChange={(e) => setValue(e.target.value.replace(/^@/, ""))} placeholder="username" maxLength={32} />
@@ -282,11 +298,13 @@ function UsernameField({
 function BioField({
   disabled,
   busy,
+  locked,
   current,
   onSave,
 }: {
   disabled: boolean;
   busy: boolean;
+  locked: boolean;
   current: string;
   onSave: (bio: string) => void;
 }) {
@@ -295,7 +313,7 @@ function BioField({
   const dirty = value !== current;
   return (
     <FieldShell label="Bio" hint="Her Telegram bio, up to 140 characters. Clear it and save to remove entirely. Requires the Change bio permission." disabled={disabled}>
-      <fieldset disabled={disabled || busy} className="flex flex-col gap-2 disabled:opacity-50">
+      <fieldset disabled={disabled || locked} className="flex flex-col gap-2 disabled:opacity-50">
         <textarea className={inputCls} value={value} onChange={(e) => setValue(e.target.value)} placeholder="Bio" maxLength={140} rows={2} />
         <Button type="button" size="sm" disabled={!dirty} onClick={() => onSave(value.trim())} className="self-start">
           {busy ? "Saving…" : "Save bio"}
@@ -311,6 +329,7 @@ function PhotoEditor({
   fullName,
   disabled,
   busy,
+  locked,
   onSet,
   onRemove,
 }: {
@@ -319,6 +338,7 @@ function PhotoEditor({
   fullName: string;
   disabled: boolean;
   busy: boolean;
+  locked: boolean;
   onSet: (fd: FormData) => void;
   onRemove: () => void;
 }) {
@@ -327,7 +347,7 @@ function PhotoEditor({
     <div className="flex shrink-0 flex-col items-center gap-1.5">
       <label
         className={
-          "group relative block cursor-pointer rounded-full " + (disabled || busy ? "pointer-events-none opacity-60" : "")
+          "group relative block cursor-pointer rounded-full " + (disabled || locked ? "pointer-events-none opacity-60" : "")
         }
         title={disabled ? "She hasn't granted the Change profile photo permission" : "Click to upload a new profile photo"}
       >
@@ -341,7 +361,7 @@ function PhotoEditor({
           type="file"
           accept="image/*"
           className="hidden"
-          disabled={disabled || busy}
+          disabled={disabled || locked}
           onChange={(e) => {
             const file = e.target.files?.[0];
             e.target.value = "";
@@ -354,13 +374,13 @@ function PhotoEditor({
         />
       </label>
       <label className="flex items-center gap-1 text-[10px] text-muted">
-        <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} disabled={disabled || busy} />
+        <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} disabled={disabled || locked} />
         Public
       </label>
       <button
         type="button"
         className="text-[10px] text-muted underline decoration-dotted disabled:opacity-50"
-        disabled={disabled || busy || account.id == null}
+        disabled={disabled || locked || account.id == null}
         onClick={onRemove}
       >
         Remove
@@ -376,7 +396,7 @@ const STORY_PERIODS = [
   { value: 172800, label: "48 hours" },
 ];
 
-function StoryCard({ disabled, busy, onSubmit }: { disabled: boolean; busy: boolean; onSubmit: (fd: FormData) => void }) {
+function StoryCard({ disabled, busy, locked, onSubmit }: { disabled: boolean; busy: boolean; locked: boolean; onSubmit: (fd: FormData) => void }) {
   return (
     <Card className="p-4">
       <div className="mb-2 flex items-center gap-1.5">
@@ -394,7 +414,7 @@ function StoryCard({ disabled, busy, onSubmit }: { disabled: boolean; busy: bool
         Telegram app itself to see what's up right now.
       </div>
       <form onSubmit={(e) => { e.preventDefault(); onSubmit(new FormData(e.currentTarget)); }} className="flex flex-col gap-2">
-        <fieldset disabled={disabled || busy} className="flex flex-col gap-2 disabled:opacity-50">
+        <fieldset disabled={disabled || locked} className="flex flex-col gap-2 disabled:opacity-50">
           <select name="contentType" className={inputCls} defaultValue="photo">
             <option value="photo">Photo</option>
             <option value="video">Video</option>

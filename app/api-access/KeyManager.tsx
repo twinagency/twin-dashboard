@@ -76,7 +76,8 @@ export function KeyManager({
         detail="No key can see a chat message, a prompt, a bot token, or our AI costs and margin, at either scope. Every key is read only and can be revoked at any time, which takes effect on the very next request. Send it over something private, not in a group chat."
       />
 
-      {showKey && <KeyReveal apiKey={state.key!} fleet={state.scope === "fleet"} onDone={() => setDismissed(true)} />}
+      {/* key: each minted key gets a fresh reveal, so its Copied state never carries over from the previous key. */}
+      {showKey && <KeyReveal key={state.key} apiKey={state.key!} fleet={state.scope === "fleet"} onDone={() => setDismissed(true)} />}
 
       <form
         action={(fd) => {
