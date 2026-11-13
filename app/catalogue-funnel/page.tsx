@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { fmtNum } from "@/lib/money";
 import { supabaseAdmin } from "@/lib/supabase";
+import { selectAllRows } from "@/lib/select-all";
 import { TEST_TELEGRAM_IDS, type CatalogueEventName } from "@/lib/catalogue-events";
 
 export const dynamic = "force-dynamic";
@@ -58,19 +59,19 @@ export default async function CatalogueFunnelPage({ searchParams }: { searchPara
 
   const [clonesRes, eventsRes] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name").eq("status", "active").order("name", { ascending: true }),
-    supabaseAdmin
+    // Paged past the PostgREST 1000-row cap; a read that stops early is flagged, never shown as the week.
+    selectAllRows<EventRow>(supabaseAdmin
       .from("catalogue_events")
       .select("clone_id,telegram_id,event,rail,amount_stars,amount_nanoton,detail,created_at")
       .gte("created_at", weekStart)
       .order("created_at", { ascending: false })
-      .limit(20_000),
+      .order("id", { ascending: false }), { maxRows: 20_000, label: "catalogue-funnel" }),
   ]);
   if (clonesRes.error) throw new Error(clonesRes.error.message);
-  if (eventsRes.error) throw new Error(eventsRes.error.message);
 
   const clones = clonesRes.data ?? [];
   const cloneName = new Map(clones.map((c) => [c.id, c.name]));
-  const allEvents = (eventsRes.data ?? []) as EventRow[];
+  const allEvents = eventsRes.rows;
   const events = showTest ? allEvents : allEvents.filter((row) => !isTestRow(row));
 
   const today = new Map<string, Bucket>();
@@ -105,6 +106,11 @@ export default async function CatalogueFunnelPage({ searchParams }: { searchPara
         <h1 className="text-xl font-semibold text-ink">Catalogue funnel</h1>
         <p className="mt-1 text-sm text-muted">Mini App opens, item views, pay taps and confirmed sales by clone. Owner and test accounts are excluded below unless shown.</p>
       </div>
+      {eventsRes.truncated && (
+        <div role="alert" className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Totals incomplete. Not all events in the last 7 days could be read, so every count below is a lower bound.
+        </div>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
