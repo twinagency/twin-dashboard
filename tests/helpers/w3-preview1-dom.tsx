@@ -59,7 +59,8 @@ export function serve(handler: Handler) {
     calls.push(call);
     return new Promise<Response>((resolve, reject) => {
       signal?.addEventListener("abort", () => reject(aborted()), { once: true });
-      resolve(handler(call));
+      // Chain, never resolve(handler()): resolving with a pending promise locks this one in and the abort could no longer reject it.
+      Promise.resolve().then(() => handler(call)).then(resolve, reject);
     });
   }) as typeof fetch;
 }

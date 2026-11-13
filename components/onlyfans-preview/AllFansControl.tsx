@@ -14,14 +14,16 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
   const [notice, setNotice] = useState(""), [progress, setProgress] = useState<BulkProgress | null>(null);
   // A pause that was not confirmed holds the go until a pause is confirmed: a STOP whose outcome is unknown never re-arms enable.
   const [pauseUnconfirmed, setPauseUnconfirmed] = useState(false);
-  // One AbortController per operation. Pause, Stop and unmount abort the enable's; unmount aborts the pause's. An op whose
-  // controller is no longer current neither paints nor clears the lock, so a hung request never holds the next one.
+  // One AbortController per operation. Pause, Stop and unmount abort the enable's. The pause's is never aborted: a STOP outlives
+  // the component and only stops painting after unmount. An op whose controller is no longer current neither paints nor clears
+  // the lock, so a hung request never holds the next one.
+  const mounted = useRef(true);
   const op = useRef<Record<"enable" | "pause", AbortController | null>>({ enable: null, pause: null });
   const [current, setCurrent] = useState(op.current), busy = current.enable !== null, pausing = current.pause !== null;
-  const set = (kind: "enable" | "pause", value: AbortController | null) => { op.current = { ...op.current, [kind]: value }; setCurrent(op.current); };
+  const set = (kind: "enable" | "pause", value: AbortController | null) => { op.current = { ...op.current, [kind]: value }; if (mounted.current) setCurrent(op.current); };
   const end = (kind: "enable" | "pause", controller: AbortController) => { const mine = op.current[kind] === controller; if (mine) set(kind, null); return mine; };
   const stopEnable = () => { op.current.enable?.abort(); set("enable", null); };
-  useEffect(() => () => { op.current.enable?.abort(); op.current.pause?.abort(); op.current = { enable: null, pause: null }; }, []);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; op.current.enable?.abort(); op.current = { ...op.current, enable: null }; }; }, []);
   const accountId = account.accountId;
   const configurationUrl = `/api/onlyfans-configuration/accounts/${encodeURIComponent(accountId)}`;
   const controlUrl = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
@@ -52,10 +54,10 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
     stopEnable(); set("pause", controller); setPauseUnconfirmed(true); setNotice("Pausing account...");
     try {
       await changeAccount("pause", signal);
-      if (!signal.aborted) { setPauseUnconfirmed(false); setNotice("Account paused. Messages already being sent may still complete."); }
+      if (mounted.current) { setPauseUnconfirmed(false); setNotice("Account paused. Messages already being sent may still complete."); }
     } catch (error) {
-      if (!signal.aborted) setNotice(error instanceof Error ? error.message : "Pause unconfirmed. Pause again.");
-    } finally { if (end("pause", controller)) onChanged(); }
+      if (mounted.current) setNotice(error instanceof Error ? error.message : "Pause unconfirmed. Pause again.");
+    } finally { if (end("pause", controller) && mounted.current) onChanged(); }
   }
   async function run() {
     if (op.current.enable || !viewer.canManage) return;

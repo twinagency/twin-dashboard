@@ -1,7 +1,7 @@
 // RULE G09 (W3 ui-onlyfans-preview-1 F8, REVIEW inv 7): a Pause whose outcome is unconfirmed keeps "Enable AI replies" disabled;
 // only a confirmed Pause gives the go back. The Pause itself stays available, including while an enable runs (FB1).
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), window.confirm stubbed to true.
-import { dom, bodyOf, button, calls, click, close, http502, json, mount, never, posts, q, serve, settle, type Call } from "../helpers/w3-preview1-dom";
+import { dom, bodyOf, button, calls, click, close, http502, json, mount, never, posts, q, serve, settle, unmount, type Call } from "../helpers/w3-preview1-dom";
 import assert from "node:assert/strict";
 import test, { after } from "node:test";
 import React from "react";
@@ -103,3 +103,24 @@ for (const [label, brake] of [["a confirmed Pause", () => click(pause())], ["Sto
     assert.equal(configReads, 2, "the second Enable sent nothing: the hung enable still held its lock");
   });
 }
+
+// R3-1: a STOP is never harder to trigger than a go. The enable dies with the component; the pause does not.
+test("R3-1: unmounting between Pause's control read and its POST still sends the pause", async () => {
+  let release!: () => void;
+  const held = new Promise<Response>(resolve => { release = () => resolve(controlRead()); });
+  await control(call => call.method === "GET" ? held : pauseAck());
+  await click(pause());
+  assert.equal(pauses().length, 0, "the pause is waiting on its control read");
+  await unmount();
+  release(); await settle();
+  assert.equal(pauses().length, 1, "the pause was dropped when the component unmounted before its POST");
+  assert.equal(pauses()[0].signal?.aborted, false, "the pause POST was aborted");
+});
+
+test("R3-1: an unmount while the pause POST is in flight does not abort it", async () => {
+  await control(call => call.method === "GET" ? controlRead() : never());
+  await click(pause());
+  assert.equal(pauses().length, 1);
+  await unmount(); await settle();
+  assert.equal(pauses()[0].signal?.aborted, false, "unmount aborted the in-flight pause");
+});
