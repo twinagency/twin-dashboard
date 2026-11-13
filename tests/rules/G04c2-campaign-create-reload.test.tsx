@@ -5,7 +5,7 @@
 // (lib/onlyfans/plan-c-client.ts heldKeyStore), named by operator scope and account, so a reload restores the held write as the only
 // action: "Retry same request" with the exact payload, the create form locked (never the brakes, #12). Hold rule (G02a): after an
 // unconfirmed outcome only a recorded ack releases it; a refusal of a retry does not (the campaign routes forward no refusal code, #11),
-// so the form stays locked. A session loss forgets it (#14): the guarantee survives a reload, not a re-sign-in.
+// so the form stays locked. A session loss keeps it (#14, G04c3h B12); another operator scope opening the tab forgets it (G04c3h B5).
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), real CampaignManager. A reload is reloadPage(): unmount and drop every
 // product module (the in-memory draft goes with it, and is never seeded again after a reload here), keep sessionStorage.
 import { bodyOf, calls, click, close, dom, json, lostReply, mount, q, reloadPage, routeFailure, serve, submit, type Answer, type Call } from "../helpers/w3-preview1-dom";
@@ -134,11 +134,16 @@ test("G04c2 #2: without a reload, a remount for another operator scope does not 
   await load("op-a", "of-r-inpage", lostReply, "Hello there");
   await queue();
   const [sent] = posts().map(bodyOf);
-  await load("op-b", "of-r-inpage", () => ack("of-r-inpage"));
-  assert.ok(!locked() && !retryButton(), "the in-page held write is shared across operators on one account");
   await load("op-a", "of-r-inpage", () => ack("of-r-inpage"));
   await click(retryButton());
   assert.deepEqual(posts().map(bodyOf), [sent], "control: the remount for the same operator restores the exact write");
+  await load("op-a", "of-r-inpage", lostReply, "Hello there");
+  await queue();
+  await load("op-b", "of-r-inpage", () => ack("of-r-inpage"));
+  assert.ok(!locked() && !retryButton(), "the in-page held write is shared across operators on one account");
+  // G04c3h B5: another scope on this tab is another sign-in, so op-a's held write (and its campaign text) is forgotten, not kept.
+  await load("op-a", "of-r-inpage", () => ack("of-r-inpage"));
+  assert.ok(!locked() && !retryButton(), "the signed-out scope's held write outlived another scope's sign-in");
 });
 
 test("G04c2: another operator scope or another account sees no held create and never reuses the key", async () => {
@@ -184,11 +189,13 @@ test("G04c2 #13: a campaign change is never held in storage; its idempotency is 
   assert.ok(!locked() && !retryButton(), "a reload restored a held change");
 });
 
-test("G04c2 #14: a session loss (401) forgets this scope's held create, in storage too: the key could not dedupe under a new sign-in", async () => {
+// TEST-CHANGE (G04c3h B12): #14 reversed. A 401 proves the request was unauthorised, not that an earlier unknown attempt did not commit,
+// so the scope's held writes of every kind stay (was: forgotten, stored() 0) and the same operator gets the exact Retry after signing in.
+test("G04c2 #14 (G04c3h B12): a session loss (401) keeps this scope's held writes; after signing in again the exact create is offered", async () => {
   await load("op-a", "of-r-401", lostReply, "Hello there");
   await queue();
+  const [sent] = posts().map(bodyOf);
   assert.equal(stored(), 1, "control: the held create is in storage");
-  // codex final: a session loss forgets every held-write kind of the scope, so this operator's held manual send text goes too.
   const sendName = dom.window.sessionStorage.key(0)!.replace("of-campaign-keys", "of-send-keys");
   assert.notEqual(sendName, dom.window.sessionStorage.key(0), "control: the storage name carries the kind");
   dom.window.sessionStorage.setItem(sendName, "[]");
@@ -196,10 +203,12 @@ test("G04c2 #14: a session loss (401) forgets this scope's held create, in stora
   await load("op-a", "of-r-401", () => new Response(null, { status: 401 }));
   await click(retryButton());
   assert.equal(posts().length, 1, "control: the retry reached the route");
-  assert.equal(stored(), 0, "the session loss left a held write (and its message text) in storage");
+  assert.equal(stored(), 2, "the session loss forgot a held write of this scope, though it may have committed");
   await reloadPage();
   await load("op-a", "of-r-401", () => ack("of-r-401"));
-  assert.ok(!locked() && !retryButton(), "a held create from before the session loss was restored");
+  assert.ok(locked() && retryButton(), "the held create was not restored after signing in again");
+  await click(retryButton());
+  assert.deepEqual(posts().map(bodyOf), [sent], "the retry after signing in again was not the exact create");
 });
 
 test("G04c2 #19: a 403 (read-only, team permission, origin) is not a session loss: the held create stays in storage and is offered again", async () => {

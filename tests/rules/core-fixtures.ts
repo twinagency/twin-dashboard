@@ -28,6 +28,7 @@ export type CoreScenarios = {
   "memory-malformed": MemoryRun;
   pilot: Record<"agency session" | "agency identity with operator cookie, plan-c-guard options" | "agency identity with operator cookie, agency options"
     | "view-as" | "operator, lookup fails" | "operator, lookup resolves" | "operator, no pilotIdentity", PilotCase>;
+  "view-as-actor": Record<"admin" | "view-as" | "after view-as" | "agency user", string | null>;
 };
 
 /** One JSON line from the child, memoized per scenario. A child that crashes fails here (not on a domain assertion). */

@@ -14,7 +14,7 @@
  * Agency identity is set with the real `withDashboardAccess` scope that getDashboardAccess reads first (not a mock).
  * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a scripted queue of a UUID, a 503,
  * a 429 or a malformed 200) and the OnlyFans backend (agency preflight answers of-agency.v2; request and correction POSTs are recorded and acked).
- * Usage: core-route.child.ts <d6 | keys | memory-stable | memory-flap | memory-flap-back | memory-429 | memory-malformed | pilot>. Prints one JSON line. Synthetic values only.
+ * Usage: core-route.child.ts <d6 | keys | memory-stable | memory-flap | memory-flap-back | memory-429 | memory-malformed | pilot | view-as-actor>. Prints one JSON line. Synthetic values only.
  */
 import { mock } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
@@ -145,6 +145,17 @@ async function main(scenario: string): Promise<unknown> {
       "operator, lookup resolves": await run({ access: null, session: OWNER_SESSION, owner: ["uuid"] }, { agency: false, pilotIdentity: true }),
       "operator, no pilotIdentity": await run({ access: null, session: OWNER_SESSION, owner: ["uuid"] }, { agency: false }),
     } satisfies CoreScenarios["pilot"];
+  }
+  if (scenario === "view-as-actor") {
+    // G04c3h r1 (c): the held stores are named by planCKeyScope(ctx.actor), so view-as must not change ctx.actor (inbox options).
+    const { requireOnlyFansRead } = await import("../../lib/onlyfans/route");
+    const actor = async (access: AgencyIdentity | null, viewAs: boolean) => {
+      Object.assign(state, { session: OWNER_SESSION, viewAs, owner: [], lookups: 0 });
+      const ctx = await withDashboardAccess(access, () => requireOnlyFansRead({ agency: true }));
+      return ctx instanceof NextResponse ? `denied:${ctx.status}` : ctx.actor;
+    };
+    return { admin: await actor(null, false), "view-as": await actor(CHAT_AGENCY, true), "after view-as": await actor(null, false),
+      "agency user": await actor(CHAT_AGENCY, false) } satisfies CoreScenarios["view-as-actor"];
   }
   throw new Error(`unknown scenario ${scenario}`);
 }

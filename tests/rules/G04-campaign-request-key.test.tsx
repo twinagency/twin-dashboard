@@ -83,15 +83,18 @@ test("finding 7: navigating away and back keeps the held create and its requestK
   assert.equal(retry(), undefined, "the ack releases it");
 });
 
-// G04c2 #14: a session loss forgets the held create (lib/onlyfans/plan-c-client.ts forgetHeldKeys): the route folds the session actor
-// into the backend command key, so the held requestKey could not dedupe under a new sign-in anyway.
-test("a 401 on a held retry releases the held create, so a remount offers no stale Retry", async () => {
+// TEST-CHANGE (G04c3h B12): #14 reversed. A 401 proves the request was unauthorised, not that an earlier unknown attempt did not commit,
+// so the held create survives it (was: released, no Retry on remount) and a remount offers its exact Retry with the first requestKey.
+test("a 401 on a held retry keeps the held create, so a remount still offers its exact Retry", async () => {
   queue("of-c6");
   await manager("of-c6", n => n === 0 ? lostReply() : new Response(null, { status: 401 }));
   await submit(q("[data-of-campaign-manager] form"));
+  const [first] = keys();
   await click(retry());
   assert.match(notice(), /Sign in again/);
   await unmount();
   await manager("of-c6", () => ack("of-c6"));
-  assert.ok(retry() === undefined, "the held create survived the session loss");
+  assert.ok(retry(), "the held create was dropped by the session loss");
+  await click(retry());
+  assert.equal(keys().at(-1), first, "the retry after the session loss did not resend the first requestKey");
 });
