@@ -12,10 +12,12 @@ const answer = (body: unknown, status = 200) => NextResponse.json(body, { status
 const refuse = (status: number, error: string) => answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: false, outcome: "refused", error }, status);
 
 export async function POST(request: NextRequest, context: { params: Promise<{ accountId: string; conversationId: string; requestId: string }> }) {
-  const ctx = await authorizeOnlyFansRead({ agency: true, write: true, capability: "chat" });
+  // The backend binds a handover to the exact actor (accept, complete, decline): the named owner keeps it across sign-ins.
+  const ctx = await authorizeOnlyFansRead({ agency: true, write: true, capability: "chat", pilotIdentity: true });
   // Raised before any upstream call, so nothing was applied: tagged as this route's refusal, never left to the client to infer.
   if ("ok" in ctx) return refuse(ctx.status, ctx.error);
-  if (!ctx.canChat || !ctx.actor) return refuse(403, "Your team access is read-only.");
+  const actor = ctx.pilotActor ?? ctx.actor;
+  if (!ctx.canChat || !actor) return refuse(403, "Your team access is read-only.");
   if (!trustedFormOrigin(request) || ![null, "same-origin"].includes(request.headers.get("sec-fetch-site")) ||
       request.headers.get("content-type")?.split(";")[0].trim().toLowerCase() !== "application/json")
     return refuse(403, "This change must be requested from this dashboard.");
@@ -40,8 +42,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
   // A chat grant may handle requests; marking one reconciled stays with managers and the operator (RISKS D6), refused before upstream.
   if (action === "mark_reconciled" && !ctx.canManage) return refuse(403, "Only a manager can mark a request reconciled.");
   // `environment` is a label for the audit string only. The backend decides whether this binding is simulated or real and refuses a mismatch.
-  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
-  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: ctx.actor, commandKey, note, environment });
+  const commandKey = createHash("sha256").update(JSON.stringify([actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
+  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor, commandKey, note, environment });
   return result.ok ? answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: true, outcome: "recorded" }) :
     answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: false, outcome: result.outcome, error: result.error }, result.status ?? 502);
 }

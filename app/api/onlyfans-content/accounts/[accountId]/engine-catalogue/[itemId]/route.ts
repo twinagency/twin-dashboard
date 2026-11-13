@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredEngineCatalogueBackend } from "@/lib/onlyfans/engine-catalogue-backend";
 import { ENGINE_CATALOGUE_SCHEMA, validCatalogueDecision } from "@/lib/onlyfans/engine-catalogue";
-import { contentItemId } from "@/lib/onlyfans/content";
+import { canonicalContent, contentItemId } from "@/lib/onlyfans/content";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
   catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That catalogue decision is invalid."); }
   const backend = configuredEngineCatalogueBackend(ctx.fetch);
   if (!backend) return refuse(503, "Catalogue decisions are not configured.");
-  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, itemId, body])).digest("hex");
+  const commandKey = createHash("sha256").update(canonicalContent([ctx.actor, accountId, itemId, body])).digest("hex");
   const result = await backend(accountId, itemId, { ...body, actor: ctx.actor, commandKey });
   return result.ok ? answer({ schemaVersion: ENGINE_CATALOGUE_SCHEMA, ok: true, outcome: "recorded" })
     : answer({ schemaVersion: ENGINE_CATALOGUE_SCHEMA, ok: false, outcome: result.outcome, error: result.error }, result.status ?? 502);

@@ -9,7 +9,7 @@ import { createPlanCProxy } from "../contracts/plan-c-proxy";
 
 function setup() {
   const mock = createPlanCMock({ drafts: [seedDraft()] }), proxy = createPlanCProxy(mock);
-  return { mock, client: createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl: proxy.fetch }) };
+  return { mock, client: createPlanCClient({ accountId: MOCK_ACCOUNT, operatorScope: "test-operator", fetchImpl: proxy.fetch }) };
 }
 async function listed(client: ReturnType<typeof createPlanCClient>) {
   const list = await client.listDrafts();

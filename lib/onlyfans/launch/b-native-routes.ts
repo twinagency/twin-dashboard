@@ -1,8 +1,5 @@
 /** Native launch BFF: strict allowlists, same-origin manager commands, derived identities. */
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE } from "@/lib/session";
-import { planCOwnerActor } from "../plan-c-owner";
 import { NextRequest } from "next/server";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
@@ -96,7 +93,8 @@ export async function memoryFan(
   fan: string,
   write = false,
 ) {
-  const g = await bGate(request, account, write, "chat");
+  // A correction's key hashes the actor: the named owner keeps it across sign-ins (reads need no lookup).
+  const g = await bGate(request, account, write, "chat", write);
   if (!("ctx" in g)) return g;
   if (!decimalId(fan)) return invalid();
   const call = configuredNativeConfigurationBackend(g.ctx.fetch);
@@ -153,9 +151,8 @@ export async function memoryFan(
       : text(body.value, 600) && !!body.value.trim())
   )
     return invalid();
-  const named = internalOperator(g.ctx.auth)
-    ? await planCOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
-  const actor = named ?? g.ctx.actor!;
+  const actor = g.ctx.pilotActor ?? g.ctx.actor;
+  if (!actor) return bRefuse(403, "Your team access is read-only.", "agency_read_only");
   const r = await call(g.accountId, `${base}/corrections`, "POST", {
     ...body,
     actor,
