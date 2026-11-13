@@ -117,18 +117,25 @@ export async function setBlocked(fd: FormData) {
     if (error) throw new Error(error.message);
     if (data?.length) { revalidatePath("/users"); return; }
   }
+  if (!blocked) {
+    // Admin unblock clears blocked_at in the same write (the catalogue, browse and offer gates read it) and an
+    // operator stamp, never a safety reason. A "minor" reason keeps blocked_at: the minor gate is
+    // minor_flagged_at || reason "minor", and some media gates check only blocked_at and minor_flagged_at.
+    // Disjoint conditions, first match wins: operator, no reason, any reason but minor (neq skips null, as in SQL).
+    for (const [patch, op, value] of [
+      [{ blocked, blocked_reason: null, blocked_at: null }, "eq", "operator"],
+      [{ blocked, blocked_at: null }, "is", null],
+      [{ blocked, blocked_at: null }, "neq", "minor"],
+    ] as const) {
+      const { data, error } = await users().update(patch).eq("id", userId).filter("blocked_reason", op, value).select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length) { revalidatePath("/users"); return; }
+    }
+  }
   const { error } = await users()
     .update({ blocked })
     .eq("id", userId);
   if (error) throw new Error(error.message);
-  if (!blocked) {
-    // Admin unblock drops an operator stamp too, never a safety reason (minor, us_location).
-    const { error: stampError } = await users()
-      .update({ blocked_reason: null, blocked_at: null })
-      .eq("id", userId)
-      .eq("blocked_reason", "operator");
-    if (stampError) throw new Error(stampError.message);
-  }
   revalidatePath("/users");
 }
 
