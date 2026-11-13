@@ -1,4 +1,5 @@
-import { validManualMedia, canonicalManualMedia } from "../onlyfans/manual-media";
+import { canonicalManualMedia } from "../onlyfans/manual-media";
+import { controlFields, controlFieldsValid } from "../onlyfans/controls";
 // Which controls the dashboard may offer, and why.
 //
 // Three independent dimensions decide this, and none of them implies another:
@@ -48,12 +49,10 @@ const ALL_ACTIONS: AvailableAction[] = [
   "mark_no_contact",
 ];
 
-/** An unresolved send blocks every competing write for that conversation. */
-export const UNRESOLVED_OUTCOMES: DeliveryOutcome[] = ["dispatching", "accepted_pending", "unknown", "partial"];
-
-export function isDeliveryUnresolved(outcome: DeliveryOutcome): boolean {
-  return UNRESOLVED_OUTCOMES.includes(outcome);
-}
+/** A send is settled only once it ended. Any other outcome, one this build does not know included, is unresolved. */
+const SETTLED: readonly string[] = ["none", "sent", "retracted", "refused", "failed"] satisfies DeliveryOutcome[];
+/** An automated reply being prepared or queued: on the rollup it is the AI queue (ai-visibility.ts "AI reply queued"), not a held send. */
+const IN_FLIGHT: readonly string[] = ["generating", "queued"] satisfies DeliveryOutcome[];
 
 /**
  * While a send is unresolved, only the actions that reduce activity are
@@ -67,27 +66,16 @@ export function isDeliveryUnresolved(outcome: DeliveryOutcome): boolean {
  */
 export const UNRESOLVED_HOLDS: AvailableAction[] = ["send_manual_message", "resume_automation", "release_takeover"];
 
-export function isHeldByUnresolvedDelivery(action: AvailableAction): boolean {
-  return UNRESOLVED_HOLDS.includes(action);
-}
-
-/** Incident outcomes known to be settled. A recorded incident with any other outcome, one this build does not know included, holds. */
-const SETTLED_INCIDENT: readonly string[] = ["none", "generating", "queued", "sent", "retracted", "refused", "failed"] satisfies DeliveryOutcome[];
-
-export type DeliveryHold = { held: boolean; withheld: readonly AvailableAction[] };
-
 /**
- * The one held-gating rule, for availableActions and for every control outside it. A thread is held when its rollup OR its
- * recorded incident reports an unresolved outcome; either field alone is enough, because a "sent" rollup beside an
- * "unknown" incident is still an unknown send. Held withdraws only UNRESOLVED_HOLDS (every action that can start a send);
- * a stop (pause, take over, no contact) is never in it, so stopping is never harder than going.
+ * The one held rule, for availableActions and every control outside it: the rollup is neither settled nor in flight, or a
+ * recorded incident has not settled. An incident reporting queued or generating holds, because the backend counts both as
+ * unresolved (onlyfans_read/contract.py UNRESOLVED_OUTCOMES). A held thread loses UNRESOLVED_HOLDS and nothing else.
  */
-export function deliveryHold(
+export function isDeliveryHeld(
   delivery: DeliveryOutcome,
   deliveryIncident?: Pick<NonNullable<ConversationDetail["deliveryIncident"]>, "outcome"> | null,
-): DeliveryHold {
-  const held = isDeliveryUnresolved(delivery) || (deliveryIncident != null && !SETTLED_INCIDENT.includes(deliveryIncident.outcome));
-  return { held, withheld: held ? UNRESOLVED_HOLDS : [] };
+): boolean {
+  return (!SETTLED.includes(delivery) && !IN_FLIGHT.includes(delivery)) || (deliveryIncident != null && !SETTLED.includes(deliveryIncident.outcome));
 }
 
 /** Which account capability each action needs. */
@@ -114,7 +102,7 @@ export function availableActions(input: {
   deliveryIncident?: ConversationDetail["deliveryIncident"];
 }): ActionSet {
   const { account, summary, viewer, deliveryIncident = null } = input;
-  const hold = deliveryHold(summary.delivery, deliveryIncident);
+  const held = isDeliveryHeld(summary.delivery, deliveryIncident);
   const hasIncident = deliveryIncident !== null;
   const available: ActionAvailability[] = [];
   const blocked: ActionAvailability[] = [];
@@ -159,9 +147,9 @@ export function availableActions(input: {
     }
 
     // Then the unresolved hold, which withdraws only the actions that could
-    // start another send. Pausing, taking over and excluding contact stay
-    // available, because during an uncertain send they are the safe direction.
-    if (hold.withheld.includes(action)) {
+    // start another send. This hold never withdraws pausing, taking over or
+    // excluding contact (the safe direction); the other gates still may.
+    if (held && UNRESOLVED_HOLDS.includes(action)) {
       return action === "send_manual_message"
         ? "An earlier send is unresolved. Resolve its outcome before sending anything else."
         : "An earlier send is unresolved. Resolving it comes before resuming replies.";
@@ -259,44 +247,21 @@ export const MAX_MANUAL_MESSAGE_LENGTH = 4000;
 
 /**
  * Whether a payload is the right shape for a command, and says why not when it
- * is not. Both the UI and the fixture data source ask this, and it is kept at
- * least as strict as the live adapter (server-data-source submitControl), so
- * the simulated backend never accepts what the real one refuses.
+ * is not. The UI, the fixture data source and the live adapter all ask this,
+ * and it applies the controls route's own field rule (controlFieldsValid), so
+ * no preview path accepts what the route refuses.
  */
 export function commandPayloadProblem(
   command: PreviewCommand,
   payload: CommandPayload,
 ): string | null {
-  if (command === "send_manual_message") {
-    if (payload.kind !== "manual_message") {
-      return "A manual message needs a message payload.";
-    }
-    if (payload.body.trim().length === 0 && !payload.media) {
-      return "A manual message needs some text before it can be modelled.";
-    }
-    if (new TextEncoder().encode(payload.body).length > MAX_MANUAL_MESSAGE_LENGTH) {
-      return `That message is longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`;
-    }
-    if (payload.media !== undefined && (!validManualMedia(payload.media) || payload.catalogItemId !== undefined)) return "Choose valid vault files and a message price.";
-    if (payload.catalogItemId != null && (!Number.isInteger(payload.catalogItemId) || payload.catalogItemId <= 0 || payload.catalogItemId >= 2 ** 31)) {
-      return "Select a saved content item from this account.";
-    }
-    return null;
-  }
-  if (command === "resolve_delivery_evidence") {
-    if (payload.kind !== "delivery_resolution") {
-      return "Resolving a delivery needs the decision it resolves.";
-    }
-    if (payload.attemptId.trim().length === 0) {
-      return "A delivery resolution needs the attempt it resolves.";
-    }
-    // The live route reconciles only a confirmed delivery against an exact provider message id; match it here.
-    if (payload.decision !== "delivered" || !/^[1-9][0-9]{0,15}$/.test(payload.providerMessageId ?? "")) {
-      return "An exact provider message ID is required for reconciliation.";
-    }
-    return null;
-  }
-  return payload.kind === "none" ? null : `A ${command} command carries no payload.`;
+  const action = command === "send_manual_message" ? "manual_message" : command;
+  const kind = action === "manual_message" ? "manual_message" : action === "resolve_delivery_evidence" ? "delivery_resolution" : "none";
+  if (payload.kind !== kind) return kind === "none" ? `A ${command} command carries no payload.` : `A ${command} command needs a ${kind.replace("_", " ")} payload.`;
+  if (controlFieldsValid(action, controlFields(payload))) return null;
+  return kind === "manual_message"
+    ? `Write a message of at most ${MAX_MANUAL_MESSAGE_LENGTH} bytes or choose media. Check the attachment price and saved content.`
+    : "An exact provider message ID and a valid attempt are required for reconciliation.";
 }
 
 export type CommandRequestInput = {

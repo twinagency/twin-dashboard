@@ -258,5 +258,11 @@ export function buildScenarios(
     };
   }
 
+  if (controls.health) scenarios.account = account => withAccountOverrides(account, controls);
+  if (controls.automationMode || controls.takeoverState || controls.delivery) {
+    scenarios.summary = summary => withSummaryOverrides(summary, controls);
+    scenarios.detail = detail => withDetailOverrides(detail, controls);
+  }
+
   return Object.keys(scenarios).length === 0 ? undefined : scenarios;
 }

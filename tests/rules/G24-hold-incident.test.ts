@@ -1,8 +1,8 @@
-// RULE G24 (W4 lib-onlyfans-preview-1 F1): availableActions (lib/onlyfans-preview/actions.ts) holds on deliveryHold, which reads
+// RULE G24 (W4 lib-onlyfans-preview-1 F1): availableActions (lib/onlyfans-preview/actions.ts) holds on isDeliveryHeld, which reads
 // the rollup AND the incident. A "sent" summary beside an "unknown"/"partial" incident offers no send, hand back or resume.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deliveryHold } from "../../lib/onlyfans-preview/actions";
+import { isDeliveryHeld } from "../../lib/onlyfans-preview/actions";
 import type { DeliveryOutcome } from "../../lib/onlyfans-preview/types";
 import { AUTOMATED, incident, offered, PAUSED, TAKEN_OVER } from "./W4-lib-onlyfans-preview-1-helpers";
 
@@ -30,15 +30,15 @@ for (const outcome of ["unknown", "partial"] as const) {
   });
 }
 
-test("deliveryHold (the rule G09 consumes): held or unrecognised incident withholds every send path and never a stop", () => {
+test("isDeliveryHeld: a held or unrecognised incident holds and the delivery hold withdraws no stop", () => {
   const outcomes: DeliveryOutcome[] = ["unknown", "partial", "dispatching", "something_new" as DeliveryOutcome];
   for (const outcome of outcomes) {
-    const hold = deliveryHold("sent", { outcome });
-    assert.equal(hold.held, true, outcome);
-    assert.deepEqual([...hold.withheld].sort(), ["release_takeover", "resume_automation", "send_manual_message"], outcome);
+    assert.equal(isDeliveryHeld("sent", { outcome }), true, outcome);
+    assert.deepEqual(offered({ delivery: "sent", shape: TAKEN_OVER, incident: incident(outcome) })
+      .filter(a => ["send_manual_message", "release_takeover"].includes(a)), [], outcome);
   }
-  assert.deepEqual(deliveryHold("sent", null), { held: false, withheld: [] });
-  assert.equal(deliveryHold("sent", { outcome: "failed" }).held, false);
+  assert.equal(isDeliveryHeld("sent", null), false);
+  assert.equal(isDeliveryHeld("sent", { outcome: "failed" }), false);
   const stops = offered({ delivery: "sent", shape: AUTOMATED, incident: incident("unknown") });
   for (const stop of ["pause_automation", "request_takeover", "mark_no_contact"]) assert.ok(stops.includes(stop as never), `${stop} missing: ${stops}`);
 });

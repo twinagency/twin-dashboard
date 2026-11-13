@@ -2,7 +2,7 @@
 // the exact revision and availableActions, so the pretend backend refuses what the live route refuses.
 import assert from "node:assert/strict";
 import test from "node:test";
-import { availableActions, createCommandRequest } from "../../lib/onlyfans-preview/actions";
+import { createCommandRequest } from "../../lib/onlyfans-preview/actions";
 import { conversationDetails } from "../../lib/onlyfans-preview/fixtures";
 import { createFixtureOnlyFansDataSource, operatorViewer, readOnlyView } from "../../lib/onlyfans-preview/fixture-data-source";
 import type { CommandPayload, ConversationDetail, PreviewCommand, PreviewViewer } from "../../lib/onlyfans-preview/types";
@@ -51,10 +51,7 @@ test("F5: a send at a revision that is not the conversation's is refused; the sa
 test("F5: resuming automation while a delivery is unknown is refused with the hold's reason; pausing there is not", async () => {
   const bad = await submit(operatorViewer(), unknown, "resume_automation", NONE);
   assert.equal(bad.accepted, false, `accepted: ${bad.note}`);
-  const expected = availableActions({ account: AVA_ACCOUNT, summary: unknown.summary, viewer: operatorViewer(), deliveryIncident: unknown.deliveryIncident })
-    .blocked.find(b => b.action === "resume_automation")?.reason;
-  assert.ok(expected, "availableActions must block resume here");
-  assert.equal(bad.refusalReason, expected);
+  assert.equal(bad.refusalReason, "An earlier send is unresolved. Resolving it comes before resuming replies.");
   const good = await submit(operatorViewer(), unknown, "pause_automation", NONE);
   assert.equal(good.accepted, true, `pause refused: ${good.refusalReason}`);
 });

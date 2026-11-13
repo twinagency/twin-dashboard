@@ -1,5 +1,6 @@
 /** Shared control contract. Browser code contains no service credentials. */
-import type { CommandRequest } from "../onlyfans-preview/types";
+import type { CommandPayload, CommandRequest } from "../onlyfans-preview/types";
+import { validManualMedia } from "./manual-media";
 
 export const CONTROL_SCHEMA = "of-controls.v1";
 export const CONTROL_HEADER = "X-OnlyFans-Control-Version";
@@ -99,4 +100,23 @@ export function controlRefusalNote(status: number, value: unknown): string {
   if (status === 413) return "This request is too large. Shorten the reply and try again.";
   if (status === 503) return "Conversation controls are unavailable. The server connection or configuration needs attention.";
   return "The change was not accepted. Refresh the conversation before trying again.";
+}
+
+/** A payload's fields as the controls route receives them. A provider id that is not plain decimal is sent as null, never coerced. */
+export function controlFields(payload: CommandPayload): Record<string, unknown> {
+  if (payload.kind === "delivery_resolution") return { attemptId: payload.attemptId, decision: payload.decision,
+    providerMessageId: /^[1-9][0-9]*$/.test(payload.providerMessageId ?? "") ? Number(payload.providerMessageId) : null };
+  return payload.kind === "manual_message" ? { body: payload.body, ...(payload.catalogItemId !== undefined ? { catalogItemId: payload.catalogItemId } : {}),
+    ...(payload.media ? { media: payload.media } : {}) } : {};
+}
+
+/** The controls route's rule for those fields. The route and the preview (commandPayloadProblem) both call it, so neither drifts. */
+export function controlFieldsValid(action: ControlAction, f: Record<string, unknown>): boolean {
+  if (action === "resolve_delivery_evidence") return f.decision === "delivered" && typeof f.attemptId === "string" &&
+    /^[A-Za-z0-9-]{1,128}$/.test(f.attemptId) && Number.isSafeInteger(f.providerMessageId) && (f.providerMessageId as number) > 0;
+  if (action !== "manual_message") return true;
+  const media = Object.hasOwn(f, "media"), item = f.catalogItemId;
+  return typeof f.body === "string" && (!!f.body.trim() || media) && new TextEncoder().encode(f.body).length <= 4000 &&
+    (!media || (validManualMedia(f.media) && !Object.hasOwn(f, "catalogItemId"))) &&
+    (item === undefined || item === null || (Number.isInteger(item) && (item as number) > 0 && (item as number) < 2 ** 31));
 }

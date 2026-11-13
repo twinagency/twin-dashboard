@@ -8,7 +8,7 @@ import type { CommandPayload, PreviewCommand } from "../../lib/onlyfans-preview/
 
 const MEDIA = { mediaIds: ["101", "102"], previewIds: ["101"], priceCents: 500 };
 const CASES: Array<[string, PreviewCommand, CommandPayload]> = [
-  ["resolution decided not_delivered", "resolve_delivery_evidence", { kind: "delivery_resolution", attemptId: "a1", decision: "not_delivered" }],
+  ["resolution decided not_delivered", "resolve_delivery_evidence", { kind: "delivery_resolution", attemptId: "a1", decision: "not_delivered" as never }],
   ["delivered resolution without a provider message id", "resolve_delivery_evidence", { kind: "delivery_resolution", attemptId: "a1", decision: "delivered" }],
   ["media send with catalogItemId null", "send_manual_message", { kind: "manual_message", body: "hi", media: MEDIA, catalogItemId: null }],
 ];

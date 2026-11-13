@@ -44,7 +44,15 @@ export type FixtureScenarios = {
     accountId: string,
     conversationId: string,
   ) => RequestState<ConversationDetail> | undefined;
+  /** The control panel's overrides, applied to every read and to simulateCommand, so the controls and the simulator judge one thread. */
+  account?: (account: OfAccount) => OfAccount;
+  summary?: (summary: ConversationSummary) => ConversationSummary;
+  detail?: (detail: ConversationDetail) => ConversationDetail;
 };
+
+const same = <T>(value: T): T => value;
+const mapData = <T>(state: RequestState<T>, map: (value: T) => T): RequestState<T> =>
+  state.status === "ready" || state.status === "stale" ? { ...state, data: map(state.data) } : state;
 
 export type FixtureDataSourceOptions = {
   viewer: PreviewViewer;
@@ -120,6 +128,7 @@ export function createFixtureOnlyFansDataSource(
   options: FixtureDataSourceOptions,
 ): FixtureOnlyFansDataSource {
   const { viewer, scenarios = {}, label = "Sample data", latencyMs = 0 } = options;
+  const { account: overAccount = same, summary: overSummary = same, detail: overDetail = same } = scenarios;
 
   return {
     kind: "fixture",
@@ -135,7 +144,7 @@ export function createFixtureOnlyFansDataSource(
         inScope(viewer, account.accountId) && (!requested || account.binding.creatorId === requested));
       const override = scenarios.accounts;
       if (override && override.status !== "ready" && override.status !== "stale") return override;
-      const scoped = narrow(override ? override.data : fixtureAccounts);
+      const scoped = narrow(override ? override.data : fixtureAccounts).map(overAccount);
       if (scoped.length === 0) return { status: "empty" };
       return override ? { ...override, data: scoped } : { status: "ready", data: scoped };
     },
@@ -146,7 +155,7 @@ export function createFixtureOnlyFansDataSource(
       const account = fixtureAccounts.find((candidate) => candidate.accountId === accountId);
     if (!account) return scopeDenied();
     if (scope?.creatorId && account.binding.creatorId !== scope.creatorId) return scopeDenied();
-    return { status: "ready", data: account };
+    return { status: "ready", data: overAccount(account) };
     },
 
     async listConversations(accountId: string, cursor?: string | null, aiOnly?: boolean, search?: InboxSearch) {
@@ -154,8 +163,8 @@ export function createFixtureOnlyFansDataSource(
       if (!inScope(viewer, accountId)) return scopeDenied();
       const requestedPage = parseCursor(cursor);
       const override = scenarios.conversations?.(accountId, requestedPage);
-      if (override) return override;
-      const items = (fixtureConversations[accountId] ?? []).filter(item => (!aiOnly || isAiChatting(item)) && (!search?.query || `${item.fan.displayName} ${item.fan.fanId}`.toLowerCase().includes(search.query.trim().toLowerCase())) && (search?.filter !== "unread" || item.unreadCount > 0) && (search?.filter !== "attention" || item.requiresAttention));
+      if (override) return mapData(override, data => ({ ...data, items: data.items.map(overSummary) }));
+      const items = (fixtureConversations[accountId] ?? []).map(overSummary).filter(item => (!aiOnly || isAiChatting(item)) && (!search?.query || `${item.fan.displayName} ${item.fan.fanId}`.toLowerCase().includes(search.query.trim().toLowerCase())) && (search?.filter !== "unread" || item.unreadCount > 0) && (search?.filter !== "attention" || item.requiresAttention));
       if (items.length === 0) return { status: "empty" };
       return { status: "ready", data: page(items, requestedPage) };
     },
@@ -166,12 +175,12 @@ export function createFixtureOnlyFansDataSource(
       const detail = fixtureDetails[conversationId];
       // A conversation id belonging to another account must never resolve here, a scenario's included.
       if (!detail || detail.accountId !== accountId) return scopeDenied();
-      return scenarios.conversation?.(accountId, conversationId) ?? { status: "ready", data: detail };
+      return mapData(scenarios.conversation?.(accountId, conversationId) ?? { status: "ready", data: detail }, overDetail);
     },
 
     async submitCommand(request: CommandRequest): Promise<SimulatedCommandResult> {
       await wait(latencyMs);
-      return simulateCommand(request, viewer);
+      return simulateCommand(request, viewer, scenarios);
     },
   };
 }
@@ -185,7 +194,7 @@ export function createFixtureOnlyFansDataSource(
  * wrong account, or carrying a payload that does not belong to the command. A
  * simulation that accepts anything teaches the wrong contract.
  */
-export function simulateCommand(request: CommandRequest, viewer: PreviewViewer): SimulatedCommandResult {
+export function simulateCommand(request: CommandRequest, viewer: PreviewViewer, scenarios: FixtureScenarios = {}): SimulatedCommandResult {
   const refuse = (reason: string): SimulatedCommandResult => ({
     simulated: true,
     applied: false,
@@ -205,17 +214,18 @@ export function simulateCommand(request: CommandRequest, viewer: PreviewViewer):
   // Account scope is checked against the fixture binding, so a command that
   // names one account and a conversation that belongs to another is refused
   // rather than quietly modelled.
-  const binding = fixtureAccounts.find((account) => account.accountId === request.accountId);
-  if (!binding || !inScope(viewer, request.accountId)) {
+  const fixtureBinding = fixtureAccounts.find((account) => account.accountId === request.accountId);
+  if (!fixtureBinding || !inScope(viewer, request.accountId)) {
     return refuse("This account is not available in the current view.");
   }
-  const conversation = fixtureDetails[request.conversationId];
-  if (!conversation) {
+  const fixtureConversation = fixtureDetails[request.conversationId];
+  if (!fixtureConversation) {
     return refuse("That conversation is not part of this account.");
   }
-  if (conversation.accountId !== request.accountId) {
+  if (fixtureConversation.accountId !== request.accountId) {
     return refuse("That conversation belongs to a different account.");
   }
+  const binding = (scenarios.account ?? same)(fixtureBinding), conversation = (scenarios.detail ?? same)(fixtureConversation);
 
   if (request.expectedRevision !== conversation.summary.revision) {
     return refuse("This conversation changed since it was loaded. Refresh it before trying again.");

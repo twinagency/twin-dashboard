@@ -31,7 +31,7 @@ import {
   canSubmitCommand,
   commandPayloadProblem,
   createCommandRequest,
-  isDeliveryUnresolved,
+  isDeliveryHeld,
 } from "../lib/onlyfans-preview/actions";
 import {
   createFixtureOnlyFansDataSource,
@@ -387,10 +387,10 @@ async function main() {
       detail: "fixture",
     };
 
-    check("unknown delivery counts as unresolved", isDeliveryUnresolved("unknown"));
-    check("dispatching delivery counts as unresolved", isDeliveryUnresolved("dispatching"));
-    check("partial delivery retains its unresolved send hold", isDeliveryUnresolved("partial"));
-    check("failed delivery is settled, not unresolved", isDeliveryUnresolved("failed") === false);
+    check("unknown delivery counts as unresolved", isDeliveryHeld("unknown"));
+    check("dispatching delivery counts as unresolved", isDeliveryHeld("dispatching"));
+    check("partial delivery retains its unresolved send hold", isDeliveryHeld("partial"));
+    check("failed delivery is settled, not unresolved", isDeliveryHeld("failed") === false);
 
     const paused = { ...summary(AVA, "of-conv-ava-1002"), delivery: "unknown" as const, automationMode: "paused" as const };
     const pausedSet = availableActions({ account, summary: paused, viewer: operator, deliveryIncident: incident });
@@ -628,7 +628,7 @@ async function main() {
 
     const blank = await source.submitCommand(message("   "));
     check("an empty message is refused", blank.accepted === false);
-    check("and the refusal says why", /needs some text/i.test(blank.refusalReason ?? ""));
+    check("and the refusal says why", /write a message/i.test(blank.refusalReason ?? ""));
 
     const tooLong = await source.submitCommand(message("🙂".repeat(1001)));
     check("an over-long message is refused", tooLong.accepted === false);
@@ -691,10 +691,10 @@ async function main() {
       accountId: AVA,
       conversationId: "of-conv-ava-1002",
       expectedRevision: 17,
-      payload: { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "not_delivered" },
+      payload: { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "delivered", providerMessageId: "456" },
     });
     check(
-      "the opposite decision is a different command",
+      "a different provider message is a different command",
       decideAgain.commandId !== resolution.request.commandId,
     );
   }
