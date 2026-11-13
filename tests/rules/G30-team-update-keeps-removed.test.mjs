@@ -2,7 +2,7 @@
 // edit form on a Removed row reactivated a member Twin admin revoked. Green since G30 (20261113100200: update edits
 // active members only). F2/F4/F20a of the same review stay known-red outside this file. Applies the REAL chain
 // 204833 -> 20261028125157 -> 20261113100200 in a throwaway initdb cluster (tests/support/W5-db-migrations-pg.mjs);
-// skips without PG binaries.
+// skips locally without PG binaries, fails under CI.
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { skipReason as skip, freshDb, migration, jsonb } from "../support/W5-db-migrations-pg.mjs";

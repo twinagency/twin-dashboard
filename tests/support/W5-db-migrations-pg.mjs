@@ -22,18 +22,26 @@ function autoCluster() {
   if (!existsSync(`${PG_BIN}/initdb`) || !existsSync(`${PG_BIN}/pg_ctl`) || !existsSync(`${PG_BIN}/postgres`)) return null;
   const dir = mkdtempSync(`${realpathSync("/tmp")}/w5-dbmig-auto-`), data = `${dir}/data`;
   const env = { PATH: process.env.PATH, HOME: process.env.HOME, LC_ALL: "C" };
-  const stop = () => { spawnSync(`${PG_BIN}/pg_ctl`, ["-D", data, "-m", "immediate", "-w", "stop"], { env, stdio: "ignore" }); rmSync(dir, { recursive: true, force: true }); };
+  let stopped = false;
+  const stop = () => { if (stopped) return; stopped = true; spawnSync(`${PG_BIN}/pg_ctl`, ["-D", data, "-m", "immediate", "-w", "stop"], { env, stdio: "ignore" }); rmSync(dir, { recursive: true, force: true }); };
   const init = spawnSync(`${PG_BIN}/initdb`, ["-D", data, "-U", "postgres", "--auth=trust", "-E", "UTF8", "--no-instructions"], { env, encoding: "utf8" });
   if (init.status !== 0) { stop(); return null; }
   for (let attempt = 0; attempt < 5; attempt++) {
     const p = 56100 + Math.floor(Math.random() * 800);
     const start = spawnSync(`${PG_BIN}/pg_ctl`, ["-D", data, "-l", `${dir}/log`, "-w", "-t", "30", "-o", `-p ${p} -c listen_addresses=127.0.0.1 -c unix_socket_directories=${data}`, "start"], { env, encoding: "utf8" });
-    if (start.status === 0) { process.on("exit", stop); return String(p); }
+    if (start.status === 0) {
+      process.on("exit", stop);
+      // An interrupted run (Ctrl-C, test-runner cancel) must not leave the cluster running.
+      for (const [signal, code] of [["SIGINT", 130], ["SIGTERM", 143]]) process.once(signal, () => { stop(); process.exit(code); });
+      return String(p);
+    }
   }
   stop();
   return null;
 }
 if (!raw) raw = autoCluster() ?? undefined;
+// G30: under CI a missing cluster is a failure, never a skip (a skip there is a silent false green). Set W5_PG_BIN.
+if (!raw && process.env.CI) throw new Error(`CI: no throwaway PostgreSQL cluster (W5_MIGRATIONS_PGPORT unset, none started from ${PG_BIN}); set W5_PG_BIN to the server bin dir`);
 
 export const skipReason = raw
   ? false

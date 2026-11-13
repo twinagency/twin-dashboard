@@ -1,6 +1,6 @@
 // Was KNOWN RED (W5 db-migrations F3): applied from this repo alone, 20260927154552 left the revenue functions
 // executable by anon/authenticated. Green since G30 (20261113100000 revokes them). Applies the REAL migrations on stub
-// users/chat_history in a throwaway initdb cluster (tests/support/W5-db-migrations-pg.mjs); skips without PG binaries.
+// users/chat_history in a throwaway initdb cluster (tests/support/W5-db-migrations-pg.mjs); local skip without PG, CI fails.
 import assert from "node:assert/strict";
 import test, { before, after } from "node:test";
 import { skipReason as skip, freshDb, migration } from "../support/W5-db-migrations-pg.mjs";
