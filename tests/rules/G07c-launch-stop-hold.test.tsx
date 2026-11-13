@@ -1,7 +1,7 @@
 // RULE G07c launch-stop-hold (regression guard; REVIEW.md inv 7: a STOP is never harder than a go, unknown-delivery holds win).
 // Promoted from known-red W3-ui-onlyfans-launch-stop-gating (findings L3, L4; L1/L2 are G07a), widened by the #401 R1 review.
 //   L3 a 401/403 on one conversation control withdrew `manage`, and `manage` gates Emergency stop. Now it holds only the go controls of
-//      that account (conversation resume and hand back, account resume, Moxy On, engagement enabling) until a later control there succeeds.
+//      that account (conversation resume and hand back, account resume, Moxy On, engagement enabling) until a later go there succeeds (G07d B6).
 //   L4 an unconfirmed STOP (502) showed the generic "outcome is not confirmed. Refresh before trying again" and left every go live. Now a
 //      STOP holds every go of its account from the moment it is sent, until it is recorded, definitively refused, or a read STARTED after it
 //      shows the account stopped. The hold is a per-account sessionStorage marker, so a remount or reload keeps it. STOP, Pause, Take over,
@@ -97,7 +97,7 @@ for (const [status, body] of [[403, ORIGIN_REFUSAL], [401, { error: "Sign in aga
     await unmount();
   });
 
-test("L3 recovery: the refusal holds only its own account, and a later control there that succeeds lifts it", async () => {
+test("L3 recovery: the refusal holds only its own account, and a later brake there that succeeds does not lift it (G07d B6)", async () => {
   let n = 0;
   await open({ ids: ["of-a", "of-b"], control: () => (n++ === 0 ? json(ORIGIN_REFUSAL, 403) : ack("request_takeover")) });
   await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
@@ -107,7 +107,7 @@ test("L3 recovery: the refusal holds only its own account, and a later control t
   await choose("select#b-auto-acct", "of-a");
   assert.equal(conv("resume_automation"), false, "the refusal is still held on of-a");
   await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
-  assert.equal(conv("resume_automation"), true, "a successful control on of-a does not lift the refusal");
+  assert.equal(conv("resume_automation"), false, "a successful brake on of-a lifted the refusal: only a successful go may (G07d B6)");
   assert.match(hint, /sign in again/i, "the hint says how to recover");
   await unmount();
 });
