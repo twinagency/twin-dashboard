@@ -14,8 +14,9 @@
  * two distinct agency grants (different actor) sending the identical command produce DIFFERENT keys, so a fix that simply drops
  * the actor from the hash stays caught.
  * Turns green when the actor (and with it the key) comes from a stable principal (e.g. the named owner) instead of the session token.
- * Green since G04: a named owner's actor (namedOwnerActor) replaces the session actor; a lookup that may answer differently
- * on retry refuses 503 before upstream. A shared-password session (no named owner) still keys by session.
+ * Green since G04: the route opts in to the named owner (namedOwnerActorFor, lib/onlyfans/route.ts), so the key and the posted actor
+ * survive a re-sign-in; a lookup a retry could answer differently (here a 429) refuses 503 before upstream. ctx.actor itself stays
+ * the session actor (uploads, tests/rules/G04-upload-session-actor.test.ts). A shared-password session (no named owner) keys by session.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
@@ -45,4 +46,10 @@ test("F4: the same command under a second valid operator session reaches the bac
   assert.ok(r["session A"].actor, "precondition: the route posted an actor");
   assert.equal(r["session B"].commandKey, r["session A"].commandKey, "a new sign-in changed the idempotency key for the same intent");
   assert.equal(r["session B"].actor, r["session A"].actor, "a new sign-in changed the actor the backend binds the handover to");
+});
+
+test("F4: an owner lookup that answers 429 refuses 503 before upstream instead of falling back to the session actor", () => {
+  const r = run();
+  assert.equal(r["owner lookup 429"].status, 503);
+  assert.equal(r["owner lookup 429"].posts, 0, "the refused command reached the backend");
 });

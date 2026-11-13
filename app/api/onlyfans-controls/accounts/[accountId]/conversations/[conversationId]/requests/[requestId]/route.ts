@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { authorizeOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
+import { authorizeOnlyFansRead, namedOwnerActorFor, OWNER_UNAVAILABLE, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import type { EngineEnvironment } from "@/lib/onlyfans/engine-status";
@@ -39,9 +39,12 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
   const action = body.action, environment = body.environment as EngineEnvironment, expectedRevision = body.expectedRevision as number, note = typeof body.note === "string" ? body.note : undefined;
   // A chat grant may handle requests; marking one reconciled stays with managers and the operator (RISKS D6), refused before upstream.
   if (action === "mark_reconciled" && !ctx.canManage) return refuse(403, "Only a manager can mark a request reconciled.");
+  // The backend binds a handover to this exact actor (accept, complete, decline), so a named owner keeps it across sign-ins.
+  const actor = await namedOwnerActorFor(ctx);
+  if (actor === "unavailable") return refuse(OWNER_UNAVAILABLE.status, OWNER_UNAVAILABLE.error);
   // `environment` is a label for the audit string only. The backend decides whether this binding is simulated or real and refuses a mismatch.
-  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
-  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: ctx.actor, commandKey, note, environment });
+  const commandKey = createHash("sha256").update(JSON.stringify([actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
+  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: actor!, commandKey, note, environment });
   return result.ok ? answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: true, outcome: "recorded" }) :
     answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: false, outcome: result.outcome, error: result.error }, result.status ?? 502);
 }

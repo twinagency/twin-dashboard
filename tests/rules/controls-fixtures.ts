@@ -58,11 +58,13 @@ export type OpsGrantCase = { view: boolean; text: string; accountReads: string[]
 
 /** What each route-child scenario prints. */
 export type RouteScenarios = {
-  requests: Record<"valid" | "no environment" | "handover no environment" | "session A" | "session A again" | "session B" | "agency user 1" | "agency user 2"
+  requests: Record<"valid" | "no environment" | "handover no environment" | "session A" | "session A again" | "session B" | "owner lookup 429" | "agency user 1" | "agency user 2"
     | "foreign origin" | "cross-site" | "text/plain" | "oversize", RequestCase>;
   agency: Record<EngineRead | "requests", RouteCase>;
   "plan-c-no-owner": Record<"named owner" | "no owner", Record<PlanCRoute, RouteCase>>;
   upstream: Record<UpstreamStatus, Record<UpstreamRoute, UpstreamCase>>;
+  /** The actor the content-sync upload route posts for an internal operator whose named owner resolves. */
+  "upload-actor": { posts: number; actor: string | null };
   /** CH-F: "note 108 chars" is the accepted boundary control. */
   validation: Record<InvalidCommand | "note 108 chars", RequestCase>;
 };
@@ -75,7 +77,7 @@ export type PageScenarios = {
 };
 export type ControlsScenarios = RouteScenarios & PageScenarios;
 const CHILD_OF: Record<keyof ControlsScenarios, keyof typeof CHILDREN> = {
-  requests: "route", agency: "route", "plan-c-no-owner": "route", upstream: "route", validation: "route", "plan-c-page": "page", operations: "page", "operations-grant": "page", "plan-c-console": "page",
+  requests: "route", agency: "route", "plan-c-no-owner": "route", upstream: "route", "upload-actor": "route", validation: "route", "plan-c-page": "page", operations: "page", "operations-grant": "page", "plan-c-console": "page",
 };
 
 /** One JSON line from the child, memoized per scenario. A child that crashes fails here (an Error, not an assertion). */

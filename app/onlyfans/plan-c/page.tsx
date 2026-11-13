@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import PlanCConsole from "@/components/onlyfans-preview/PlanCConsole";
 import { CreatorPlatformEmpty, CreatorPlatformHeading } from "@/components/onlyfans-preview/CreatorPlatformPage";
@@ -28,6 +29,7 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>
-    <PlanCConsole accountId={accountId} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
+    {/* Scopes this operator's saved command keys in the tab; a hash, so the backend actor never reaches the browser. */}
+    <PlanCConsole accountId={accountId} operatorScope={createHash("sha256").update(`plan-c-keys:${operator.actor}`).digest("hex").slice(0, 16)} canAct={ctx.canManage} authorizationMode={scope.data.authorizationMode} />
   </div>;
 }

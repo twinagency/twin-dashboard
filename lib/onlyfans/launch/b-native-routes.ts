@@ -1,13 +1,11 @@
 /** Native launch BFF: strict allowlists, same-origin manager commands, derived identities. */
 import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
-import { SESSION_COOKIE } from "@/lib/session";
-import { namedOwnerActor } from "../plan-c-owner";
 import { NextRequest } from "next/server";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
 import { bGate, bAnswer, bRefuse } from "./b-route";
 import { internalOperator } from "../reads";
+import { namedOwnerActorFor } from "../route";
 import {
   configuredNativeConfigurationBackend,
   type NativeResult,
@@ -153,15 +151,13 @@ export async function memoryFan(
       : text(body.value, 600) && !!body.value.trim())
   )
     return invalid();
-  const named = internalOperator(g.ctx.auth)
-    ? await namedOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
-  // The key hashes the actor: a lookup that may answer differently on retry refuses before upstream, never re-keys.
-  if (named === "unavailable") return unavailable();
-  const actor = named ?? g.ctx.actor!;
+  // The key hashes the actor: the named owner keeps it across sign-ins; a lookup that may answer differently refuses before upstream.
+  const actor = await namedOwnerActorFor(g.ctx);
+  if (actor === "unavailable") return unavailable();
   const r = await call(g.accountId, `${base}/corrections`, "POST", {
     ...body,
     actor,
-    commandKey: identity(actor, g.accountId, `${base}/corrections`, body),
+    commandKey: identity(actor!, g.accountId, `${base}/corrections`, body),
   });
   if (!r.ok) return fail(r);
   const correction = parseCorrectionAck(r.data.correction);

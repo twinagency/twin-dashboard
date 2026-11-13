@@ -3,6 +3,7 @@ import React, { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createContentSyncBackend } from "../lib/onlyfans/content-sync-backend";
 import { dispatchSync, isChunkPath, type SyncCall } from "../lib/onlyfans/content-sync-route";
+import type { SessionActor } from "../lib/onlyfans/upload-permission";
 import { COVERAGE_LABELS, DRAFT_STATE_LABELS, MAX_SYNC_FILE_BYTES, SYNC_CHUNK_BYTES, SYNC_HEADER, SYNC_SCHEMA, UNPUBLISHED_UPLOAD_UNAVAILABLE,
   chunkIndex, parseChunkResponse, parseCommandResponse, parseConflict, parseConflictsResponse, parseDraft, parseDraftResponse, parseDraftsPage,
   parseFailureCode, parseOperation, parseOperationResponse, parseOperationsPage, parseResolveResponse, parseSettingsResponse, parseStatusResponse,
@@ -11,7 +12,7 @@ import ContentSyncDraft from "../components/onlyfans-preview/ContentSyncDraft";
 
 // tsx compiles the repo's preserved JSX to classic createElement calls; Next supplies the runtime in the app.
 (globalThis as { React?: unknown }).React = React;
-const ACCOUNT = "acc-a", ACTOR = "op-session:" + "b".repeat(64), REQ = "0f0e0d0c-0b0a-4908-8706-050403020100", FILE = "1f0e0d0c-0b0a-4908-8706-050403020100";
+const ACCOUNT = "acc-a", ACTOR = ("op-session:" + "b".repeat(64)) as SessionActor, REQ = "0f0e0d0c-0b0a-4908-8706-050403020100", FILE = "1f0e0d0c-0b0a-4908-8706-050403020100";
 const stamp = "2026-10-23T01:02:03Z";
 const coverage = (state: string, detail: string | null = null) => ({ state, checkedAt: stamp, detail });
 const syncState = { enabled: true, status: "active", revision: 3, blockedReason: null, lastIncrementalAt: stamp, nextIncrementalAt: stamp, lastReconcileAt: stamp,
@@ -186,7 +187,7 @@ async function main() {
   assert.equal(JSON.parse(sent.at(-1)!.body!).commandKey, parsedSettings.commandKey, "an exact retry is the same command");
   await manager("POST", ["settings"], { body: { requestId: FILE, enabled: true, expectedRevision: 3 } });
   assert.notEqual(JSON.parse(sent.at(-1)!.body!).commandKey, parsedSettings.commandKey, "a new request id is a new command");
-  await manager("POST", ["settings"], { actor: "op-session:" + "c".repeat(64), body: { requestId: REQ, enabled: true, expectedRevision: 3 } });
+  await manager("POST", ["settings"], { actor: ("op-session:" + "c".repeat(64)) as SessionActor, body: { requestId: REQ, enabled: true, expectedRevision: 3 } });
   assert.notEqual(JSON.parse(sent.at(-1)!.body!).commandKey, parsedSettings.commandKey, "commands are scoped to the actor");
   const n = sent.length;
   for (const body of [{ requestId: REQ, enabled: true, expectedRevision: 3, actor: "browser-actor" }, { requestId: REQ, enabled: true, expectedRevision: 3, commandKey: "a".repeat(64) }, { enabled: true }])

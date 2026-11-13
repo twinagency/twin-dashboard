@@ -107,7 +107,7 @@ const CAPABILITY_LINES = [
   'const purpose = configuredBackendPurpose("API");',
   "const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose) : fetch;",
   'if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." };',
-  'const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);',
+  'const actor = (grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null)) as SessionActor | null;',
   "return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };",
 ];
 let realBackend: ((fetchImpl?: typeof fetch) => unknown) | null = null;
@@ -128,6 +128,9 @@ const authorizeOnlyFansRead = async (options: { agency?: boolean; write?: boolea
 };
 const routeMock = {
   authorizeOnlyFansRead,
+  // Not mirrored: the named-owner lookup. This operator is a shared session with no named owner, so the opt-in actor is ctx.actor.
+  namedOwnerActorFor: async (ctx: { actor: string | null }) => ctx.actor,
+  OWNER_UNAVAILABLE: { ok: false, status: 503, state: "error", code: "owner_unavailable", error: "Your sign-in could not be verified just now. Try again." },
   PRIVATE_HEADERS,
   denialResponse,
   requireOnlyFansRead: async (options: { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean } = {}) => {

@@ -1,2 +1,2 @@
 import "server-only";
-export { namedOwnerActor, planCOwnerActor } from "./plan-c-owner-core";
+export { namedOwnerActor } from "./plan-c-owner-core";

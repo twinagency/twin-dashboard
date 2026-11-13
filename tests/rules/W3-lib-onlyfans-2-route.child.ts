@@ -19,7 +19,7 @@
  */
 import { mock } from "node:test";
 import { NextRequest } from "next/server";
-import { namedOwnerActor, planCOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 
@@ -52,7 +52,7 @@ async function main(scenario: Scenario): Promise<RouteRun> {
     headers: async () => new Headers(),
   } });
   mock.module(new URL("../../lib/view-as-banner.ts", import.meta.url).href, { namedExports: { getViewAsBannerInfo: async () => null } });
-  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor, planCOwnerActor: realOwnerActor } });
+  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor } });
 
   const calls: RouteRun["calls"] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {

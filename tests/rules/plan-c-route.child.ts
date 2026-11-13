@@ -4,7 +4,7 @@
  * `node --import tsx --test`.
  * Rules it holds to:
  *  - It drives the REAL route handlers under app/api/onlyfans-controls/accounts/[accountId]/plan-c/ -> planCGate ->
- *    authorizeOnlyFansRead -> isAuthed / planCOwnerActor -> plan-c-route -> plan-c-backend, with the real browser client in front.
+ *    authorizeOnlyFansRead -> isAuthed / namedOwnerActor -> plan-c-route -> plan-c-backend, with the real browser client in front.
  *  - Replaced, and only these: `next/headers` (no Next request scope offline; it hands back the operator session cookie, or none)
  *    and the `import "server-only"` line of lib/onlyfans/plan-c-owner.ts (Next's bundler makes it a no-op; the real core is
  *    re-exported). The wire is a fake `fetch`: the owner-session RPCs answer as Supabase would for a valid named owner, and the
@@ -20,7 +20,7 @@
  */
 import { mock } from "node:test";
 import { NextRequest } from "next/server";
-import { namedOwnerActor, planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
 import { CONVERSATION, KEY, MOCK_ACCOUNT, PLAN_C_SCHEMA, parsedDraft } from "./plan-c-fixtures";
@@ -31,7 +31,7 @@ async function main(scenario: string) {
   Object.assign(process.env, { SUPABASE_URL: "https://supabase.fixture.invalid", SUPABASE_SERVICE_KEY: "fixture-service-key",
     ONLYFANS_API_BASE_URL: "https://backend.fixture.invalid", ONLYFANS_CONTROL_TOKEN: "synthetic-control-token" });
   const session = scenario === "client-denied" ? undefined : OWNER_SESSION;
-  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor, planCOwnerActor } });
+  mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: { namedOwnerActor } });
   mock.module("next/headers", { namedExports: {
     cookies: async () => ({ get: (name: string) => name === SESSION_COOKIE && session ? { name, value: session } : undefined, getAll: () => [], has: () => false }),
     headers: async () => new Headers(),

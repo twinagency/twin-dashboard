@@ -23,6 +23,9 @@ export type CoreScenarios = {
   keys: Record<"base" | "base again" | "account of-b" | "conversation" | "request" | "action" | "revision" | "note", RequestCase>;
   "memory-stable": MemoryRun;
   "memory-flap": MemoryRun;
+  "memory-flap-back": MemoryRun;
+  "memory-429": MemoryRun;
+  "memory-malformed": MemoryRun;
   pilot: Record<"agency session" | "agency identity with operator cookie, plan-c-guard options" | "agency identity with operator cookie, agency options"
     | "view-as" | "operator, lookup fails" | "operator, lookup resolves" | "operator, no pilotIdentity", PilotCase>;
 };

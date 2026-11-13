@@ -6,20 +6,20 @@
  * Drives the REAL handlers: app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/requests/[requestId]/route.ts
  * POST, app/api/onlyfans-launch/memory/accounts/[accountId]/fans/[fanId]/route.ts PATCH (memoryFan), and requireOnlyFansRead
  * (lib/onlyfans/route.ts), through the real agency-scope transport, engine-operator / native-configuration backends,
- * isAuthed -> verifyOwnerSession, and the real planCOwnerActor core.
+ * isAuthed -> verifyOwnerSession, and the real namedOwnerActor core.
  * Replaced, and only these:
  *  - `next/headers`: no Next request scope offline. cookies() hands back the synthetic operator session cookie or none.
  *  - `lib/view-as-banner.ts` getViewAsBannerInfo: a real view-as needs a signed cookie plus a DB lookup; here a flag.
  *  - `lib/onlyfans/plan-c-owner.ts`: its `import "server-only"` line (Next's bundler makes it a no-op). Replaced by the real
  *    core (plan-c-owner-core.ts) wrapped in a call counter, so "never called" is measured.
  * Agency identity is set with the real `withDashboardAccess` scope that getDashboardAccess reads first (not a mock).
- * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a scripted queue of a UUID or
- * a 503) and the OnlyFans backend (agency preflight answers of-agency.v2; request and correction POSTs are recorded and acked).
- * Usage: core-route.child.ts <d6 | keys | memory-stable | memory-flap | pilot>. Prints one JSON line. Synthetic values only.
+ * The wire is a fake `fetch`: Supabase owner-session RPCs (verify -> true; named-owner identity -> a scripted queue of a UUID, a 503,
+ * a 429 or a malformed 200) and the OnlyFans backend (agency preflight answers of-agency.v2; request and correction POSTs are recorded and acked).
+ * Usage: core-route.child.ts <d6 | keys | memory-stable | memory-flap | memory-flap-back | memory-429 | memory-malformed | pilot>. Prints one JSON line. Synthetic values only.
  */
 import { mock } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
-import { planCOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 import { LYNQ_MANAGEMENT_AGENCY_ID } from "../../lib/agency-management-policy";
@@ -32,7 +32,7 @@ const CHAT_AGENCY: AgencyIdentity = { id: "11111111-1111-4111-8111-111111111111"
   name: "Synthetic Agency", cloneIds: ["33333333-3333-4333-8333-333333333333"], canManage: false, canChat: true };
 const MANAGER_AGENCY: AgencyIdentity = { ...CHAT_AGENCY, id: LYNQ_MANAGEMENT_AGENCY_ID, canManage: true, canChat: true };
 
-const state: { session?: string; viewAs: boolean; lookups: number; owner: Array<"uuid" | "fail"> } = { viewAs: false, lookups: 0, owner: [] };
+const state: { session?: string; viewAs: boolean; lookups: number; owner: Array<"uuid" | "fail" | "429" | "malformed"> } = { viewAs: false, lookups: 0, owner: [] };
 type Post = { path: string; body: Record<string, unknown> };
 const posts: Post[] = [];
 
@@ -46,14 +46,17 @@ async function main(scenario: string): Promise<unknown> {
   mock.module(new URL("../../lib/view-as-banner.ts", import.meta.url).href, { namedExports: {
     getViewAsBannerInfo: async () => state.viewAs ? { name: "Synthetic Agency", kind: "agency" } : null } });
   mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: {
-    planCOwnerActor: (token: string | undefined, fetcher?: typeof fetch) => { state.lookups++; return realOwnerActor(token, fetcher); } } });
+    namedOwnerActor: (token: string | undefined, fetcher?: typeof fetch) => { state.lookups++; return realOwnerActor(token, fetcher); } } });
 
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input)), method = init.method ?? "GET";
     if (url.origin === SUPABASE) {
       if (url.pathname.endsWith("/dashboard_owner_session_verify")) return Response.json(true);
-      if (url.pathname.endsWith("/dashboard_plan_c_owner_identity"))
-        return (state.owner.shift() ?? "fail") === "uuid" ? Response.json(NAMED_OWNER) : Response.json({ message: "unavailable" }, { status: 503 });
+      if (url.pathname.endsWith("/dashboard_plan_c_owner_identity")) {
+        const owner = state.owner.shift() ?? "fail";
+        return owner === "uuid" ? Response.json(NAMED_OWNER) : owner === "malformed" ? Response.json("unverified")
+          : Response.json({ message: "unavailable" }, { status: owner === "429" ? 429 : 503 });
+      }
       return Response.json(null, { status: 404 });
     }
     const v2 = { headers: { "X-OnlyFans-Access-Version": "of-agency.v2" } };
@@ -109,10 +112,12 @@ async function main(scenario: string): Promise<unknown> {
     } satisfies CoreScenarios["keys"];
   }
 
-  if (scenario === "memory-stable" || scenario === "memory-flap") {
+  const memory = { "memory-stable": ["uuid", "uuid"], "memory-flap": ["uuid", "fail"], "memory-flap-back": ["fail", "uuid"],
+    "memory-429": ["uuid", "429"], "memory-malformed": ["uuid", "malformed"] } as const;
+  if (scenario in memory) {
     const { PATCH } = await import("../../app/api/onlyfans-launch/memory/accounts/[accountId]/fans/[fanId]/route");
     state.session = OWNER_SESSION;
-    state.owner = scenario === "memory-stable" ? ["uuid", "uuid"] : ["uuid", "fail"];
+    state.owner = [...memory[scenario as keyof typeof memory]];
     const body = JSON.stringify({ field: "home_city", operation: "set", value: "Synthetic City", expectedVersion: "a".repeat(64), reason: "fan corrected it" });
     const statuses: number[] = [];
     for (let i = 0; i < 2; i++) {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "./route";
+import type { SessionActor } from "./upload-permission";
 import { readCommandJson } from "./command-json";
 import { canonicalContent } from "./content";
 import { configuredContentSyncBackend, type ContentSyncBackend, type SyncFailure } from "./content-sync-backend";
@@ -10,7 +11,7 @@ import { MAX_SYNC_JSON_BYTES, MAX_SYNC_PAGE, SYNC_CHUNK_BYTES, SYNC_SCHEMA, chun
 import { trustedFormOrigin } from "@/lib/form-origin";
 
 export type SyncCall = { method: "GET" | "POST" | "PUT"; accountId: string; path: string[]; search: URLSearchParams;
-  actor: string | null; canManage: boolean; body?: unknown; bytes?: Uint8Array };
+  actor: SessionActor | null; canManage: boolean; body?: unknown; bytes?: Uint8Array };
 export type SyncAnswer = { status: number; body: unknown };
 const digest = (value: string) => createHash("sha256").update(value).digest("hex");
 const refuse = (status: number, error: string, code = "invalid_syncrequest"): SyncAnswer => ({ status, body: { schemaVersion: SYNC_SCHEMA, ok: false, outcome: "refused", code, error } });

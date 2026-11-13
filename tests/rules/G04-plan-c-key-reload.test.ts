@@ -1,49 +1,92 @@
 /**
  * RULE G04, was KNOWN RED (W1 lane 1 finding 6; REVIEW.md invariant 7 "carries an idempotency key that a user retry reuses").
- * lib/onlyfans/plan-c-client.ts:18-24,33 keeps the unconfirmed intent's key in an in-memory Map, so a page reload (a new client)
- * mints a new key for the same intent while the text says "Retrying the same action is safe: it reuses the same key"
- * (plan-c.ts:212). Measured: two default clients, same draft approve after an unconfirmed reply -> two different commandKeys,
- * so the backend can commit twice.
- * `sessionStorage` and `localStorage` (also as `window.*`) are installed, both backed by ONE Map, so a storage-backed fix can go
- * green under node. A real reload also drops every module-level variable; node cannot show that here (measured: tsx ignores a
- * cache-busting `?reload=n` import query and returns the same module instance), so the red also asserts the pending key was
- * written to Web Storage.
- * Accepted fixes (turn it green): the DEFAULT key store (`createPlanCClient` without `keys`) persisting pending intent keys in
- * window.sessionStorage or window.localStorage, scoped to account + operator, until the outcome is definite.
- * Stay red: a module-level Map (survives a new client, not a reload), and a persistent store injected only from PlanCConsole.tsx
- * (this test exercises the default store; that fix needs its own test).
- * Green since G04: the default store mirrors pending keys to sessionStorage (`plan-c-keys:<account>`); a reloaded key is held.
+ * lib/onlyfans/plan-c-client.ts kept the unconfirmed intent's key in an in-memory Map only, so a page reload minted a new key for the
+ * same intent while PLAN_C_UNCONFIRMED_TEXT says "Retrying the same action is safe: it reuses the same key".
+ * A real reload drops every module-level variable, and the client caches one store per operator + account at module level, so two
+ * clients in one node process share a store and prove nothing about a reload (measured: tsx ignores a cache-busting `?reload=n`
+ * import query). These tests therefore build two separate createCommandKeyStore instances over one seeded Web Storage.
+ * Green since G04: a store with `persistAs` (the client names it plan-c-keys:<operator scope>:<account>) mirrors pending keys to
+ * sessionStorage under a hash of the intent, a reloaded key is held, and stale or excess entries are pruned.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createPlanCClient } from "../../lib/onlyfans/plan-c-client";
+import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
+import type { PlanCCommandResult, PlanCUnresolvedItem } from "../../lib/onlyfans/plan-c";
 import { MOCK_ACCOUNT, parsedDraft, recordingFetch } from "./plan-c-fixtures";
 
 const store = new Map<string, string>();
-const webStorage = () => ({ getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, String(v)),
-  removeItem: (k: string) => void store.delete(k), clear: () => store.clear(), key: (i: number) => [...store.keys()][i] ?? null, get length() { return store.size; } });
-for (const name of ["sessionStorage", "localStorage"]) Object.defineProperty(globalThis, name, { configurable: true, value: webStorage() });
-Object.defineProperty(globalThis, "window", { configurable: true, value: globalThis });
+Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
+  getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => void store.set(k, String(v)), removeItem: (k: string) => void store.delete(k) } });
 
-const lost = () => recordingFetch(() => { throw new TypeError("reply lost"); });
+const NAME = `plan-c-keys:operator-a:${MOCK_ACCOUNT}`;
+const INTENT = "draft:reject:req-1:1:v3:the fan asked for a refund";
+let n = 0;
+const mint = () => (++n).toString(16).padStart(64, "0");
+const unconfirmed: PlanCCommandResult = { ok: false, outcome: "unconfirmed", reload: true, error: "x" };
+const refused: PlanCCommandResult = { ok: false, outcome: "refused", reload: false, error: "x" };
 
-test("control: the same client retrying an unconfirmed approve reuses its key", async () => {
+test("finding 6: a fresh store over the same storage (a reload) reuses the pending key, and holds it through a refusal", () => {
   store.clear();
-  const draft = parsedDraft(), { sent, fetchImpl } = lost();
-  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl });
-  const first = await client.approveDraft(draft);
-  assert.equal(first.ok, false); if (!first.ok) assert.equal(first.outcome, "unconfirmed");
-  await client.approveDraft(draft);
-  assert.equal(sent.length, 2); assert.equal(sent[0], sent[1]);
+  const before = createCommandKeyStore(mint, NAME);
+  const key = before.keyFor(INTENT);
+  before.settle(INTENT, unconfirmed);
+  const after = createCommandKeyStore(mint, NAME);
+  assert.equal(after.keyFor(INTENT), key, "a reload minted a new key for an intent whose outcome is unconfirmed");
+  after.settle(INTENT, refused);
+  assert.equal(after.keyFor(INTENT), key, "a refusal after a reload released a key whose earlier attempt may have committed");
+  assert.equal(createCommandKeyStore(mint, NAME).keyFor(INTENT), key, "the refusal removed the held key from storage");
+  after.settle(INTENT, { ok: true, replayed: true, recordedVersion: null, recordedRevision: null });
+  assert.notEqual(createCommandKeyStore(mint, NAME).keyFor(INTENT), key, "a recorded ack releases the key");
 });
 
-test("finding 6: after a reload (a new client) the same unconfirmed intent reuses the same key, kept in Web Storage", async () => {
+test("storage holds the key under a hash of the intent, never the intent text", () => {
   store.clear();
-  const draft = parsedDraft(), { sent, fetchImpl } = lost();
-  await createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl }).approveDraft(draft);
-  const persisted = [...store.values()].some(value => value.includes(sent[0]));
-  await createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl }).approveDraft(draft);
+  createCommandKeyStore(mint, NAME).keyFor(INTENT);
+  const saved = store.get(NAME) ?? "";
+  assert.ok(saved.length > 0);
+  assert.ok(!saved.includes("refund") && !saved.includes("req-1"), saved);
+});
+
+test("malformed storage is an empty store, never a throw", () => {
+  for (const bad of ["{not json", "[]", "null", JSON.stringify({ abc: ["f".repeat(64), Date.now()] }), JSON.stringify({ ["0".repeat(16)]: "f".repeat(64) })]) {
+    store.set(NAME, bad);
+    const fresh = createCommandKeyStore(mint, NAME);
+    assert.equal(fresh.size(), 0, bad);
+  }
+});
+
+test("stale entries expire and the store keeps at most 50", () => {
+  store.clear();
+  let clock = 0;
+  const old = createCommandKeyStore(mint, NAME, () => clock);
+  const key = old.keyFor(INTENT);
+  clock = 24 * 3600_000 + 1;
+  assert.notEqual(createCommandKeyStore(mint, NAME, () => clock).keyFor(INTENT), key, "a day-old entry was reused");
+  store.clear();
+  const many = createCommandKeyStore(mint, NAME, () => clock++);
+  for (let i = 0; i < 60; i++) many.keyFor(`intent ${i}`);
+  assert.equal(Object.keys(JSON.parse(store.get(NAME)!)).length, 50);
+  const reloaded = createCommandKeyStore(mint, NAME, () => clock);
+  assert.equal(reloaded.size(), 50);
+});
+
+test("another operator's scope never reuses the key", async () => {
+  store.clear();
+  const draft = parsedDraft(), { sent, fetchImpl } = recordingFetch(() => { throw new TypeError("reply lost"); });
+  await createPlanCClient({ accountId: MOCK_ACCOUNT, operatorScope: "operator-a", fetchImpl }).approveDraft(draft);
+  await createPlanCClient({ accountId: MOCK_ACCOUNT, operatorScope: "operator-b", fetchImpl }).approveDraft(draft);
   assert.equal(sent.length, 2);
-  assert.equal(sent[1], sent[0], "a reload minted a new key for an intent whose outcome is unconfirmed");
-  assert.ok(persisted, "the unconfirmed intent's key is not in sessionStorage/localStorage, so a real reload loses it");
+  assert.notEqual(sent[1], sent[0]);
+  assert.ok([...store.keys()].some(k => k.includes("operator-a")) && [...store.keys()].some(k => k.includes("operator-b")));
+});
+
+test("reconcile: the item id and the evidence cannot run together into another intent", async () => {
+  store.clear();
+  const keys = createCommandKeyStore(mint), { sent, fetchImpl } = recordingFetch(() => { throw new TypeError("reply lost"); });
+  const client = createPlanCClient({ accountId: MOCK_ACCOUNT, fetchImpl, keys });
+  const item = (id: string) => ({ id }) as PlanCUnresolvedItem;
+  await client.reconcile(item("a"), "msg:123456");
+  await client.reconcile(item("a:msg"), "123456");
+  assert.equal(sent.length, 2);
+  assert.notEqual(sent[1], sent[0], "two different reconciliations shared one commandKey");
 });
