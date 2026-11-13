@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Info } from "@/components/clone/fields";
 import { createPlanCClient, type PlanCClient } from "@/lib/onlyfans/plan-c-client";
 import { canApprove, isExpired, minutesLeft, validateEditedParts, validateEvidenceRef, validateRejectReason,
-  type PlanCCommandResult, type PlanCConversation, type PlanCConversationAction, type PlanCDraft, type PlanCReceipt, type PlanCUnresolvedItem } from "@/lib/onlyfans/plan-c";
+  type PlanCCommandResult, type PlanCConversation, type PlanCConversationAction, type PlanCDraft, type PlanCReceipt, type PlanCStopTarget, type PlanCUnresolvedItem } from "@/lib/onlyfans/plan-c";
 
 const usd = (cents: number | null, currency: string | null) => cents === null ? "no price" : currency ? `${currency} ${(cents / 100).toFixed(2)}` : `${(cents / 100).toFixed(2)} (currency unknown)`;
 const place = (conversationId: string, accountId: string) => `Fan ${conversationId.startsWith(`${accountId}:`) ? conversationId.slice(accountId.length + 1) : conversationId}`;
@@ -47,13 +47,14 @@ function ConversationControls({ conversation, canAct, stop, onCommand }: { conve
     <div className="mt-2 flex flex-wrap gap-2">
       <button type="button" className="of-control-button of-primary" disabled={busy || !canAct} data-plan-c-conversation-action="stop" onClick={() => void run("stop")}>{CONVERSATION_COPY.stop.label}</button>
       {conversation.revision === null ? <span className="flex items-center gap-1 text-xs">Take over and hand back are unavailable<Info text="The backend did not report this conversation's revision, so it cannot be taken over or handed back from here." /></span> :
-        (["takeover", "handback"] as const).map(action => confirming === action ?
+        ([...(["takeover"] as const), ...(conversation.stopOnly ? [] : ["handback"] as const)]).map(action => confirming === action ?
           <span key={action} className="flex flex-wrap items-center gap-2" data-plan-c-confirm={action}>
             <span className="text-xs text-muted">{CONVERSATION_COPY[action].help}</span>
             <button type="button" className="of-control-button of-primary" disabled={busy || !canAct} data-plan-c-conversation-confirm={action} onClick={() => void run(action)}>{busy ? "Saving…" : CONVERSATION_COPY[action].confirm}</button>
             <button type="button" className="of-control-button of-secondary" disabled={busy} onClick={() => setConfirming(null)}>Cancel</button>
           </span> :
           <button key={action} type="button" className="of-control-button of-secondary" disabled={busy || !canAct || confirming !== null} data-plan-c-conversation-action={action} onClick={() => setConfirming(action)}>{CONVERSATION_COPY[action].label}</button>)}
+      {conversation.stopOnly && conversation.revision !== null ? <span className="flex items-center gap-1 text-xs" data-plan-c-stop-only>Hand back is unavailable<Info text="The draft list could not be read, so this conversation's drafts are not shown. Hand back is off until they can be read." /></span> : null}
     </div>
     {message ? <p role="status" className="mt-1 text-xs">{message}</p> : null}
   </li>;
@@ -101,7 +102,8 @@ function DraftCard({ draft, accountId, now, canAct, autonomous, hold, onApprove,
 
     <details className="mt-2" data-plan-c-context><summary className="cursor-pointer text-xs font-semibold">Recent conversation ({draft.messages.length})</summary>
       {draft.messages.length ? <ul className="mt-1 space-y-1">{draft.messages.map((entry, index) => <li key={index} className="text-xs" data-plan-c-message>
-        <span className="font-semibold">{entry.who}</span>{entry.at ? <span className="text-muted"> {new Date(entry.at).toLocaleString()}</span> : null}: <span className="whitespace-pre-wrap break-words">{entry.text}</span></li>)}</ul>
+        <span className="font-semibold">{entry.who}</span>{entry.at ? <span className="text-muted"> {new Date(entry.at).toLocaleString()}</span> : null}:
+        <span className="block max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded border border-line p-1">{entry.text}</span></li>)}</ul>
         : <p className="text-xs text-muted">The backend sent no recent messages.</p>}
     </details>
 
@@ -171,6 +173,7 @@ export default function PlanCConsole({ accountId, operatorScope, canAct, authori
   const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, operatorScope, fetchImpl }), [injected, accountId, operatorScope, fetchImpl]);
   const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
+  const [stopTargets, setStopTargets] = useState<PlanCStopTarget[]>([]);
   const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [session, setSession] = useState<Record<string, SessionRecord>>({}), [now, setNow] = useState(() => Date.now());
   const generation = useRef(0);
   /** True only when both lists were read and are now on screen. */
@@ -180,6 +183,7 @@ export default function PlanCConsole({ accountId, operatorScope, canAct, authori
     if (mine !== generation.current) return false;
     setNow(Date.now());
     setDrafts(d.ok ? { kind: "ready", value: d.data.drafts } : { kind: "error", error: d.error });
+    setStopTargets(d.ok ? [] : d.stopTargets ?? []);
     setReceipts(d.ok && d.data.receipts !== null ? { kind: "ready", value: d.data.receipts } :
       { kind: "error", error: d.ok ? "Receipt history is unavailable from this backend." : d.error });
     setUnresolved(u.ok ? { kind: "ready", value: u.data.items } : { kind: "error", error: u.error });
@@ -209,9 +213,14 @@ export default function PlanCConsole({ accountId, operatorScope, canAct, authori
       else if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; };
     if (drafts.kind === "ready") for (const draft of drafts.value) add(draft.conversationId, draft.conversationRevision);
     if (unresolved.kind === "ready") for (const item of unresolved.value) if (item.conversationId) add(item.conversationId, item.conversationRevision);
+    // With the draft list refused, a conversation known only from its Stop targets or this page's commands gets Stop and take over,
+    // never hand back: the engine would plan where no draft can be read.
+    const readable = new Set(byId.keys());
+    for (const target of stopTargets) add(target.conversationId, target.revision);
     for (const [conversationId, record] of Object.entries(session)) if (!record.floor || byId.has(conversationId)) add(conversationId, record.revision);
+    if (drafts.kind === "error") for (const conversation of byId.values()) if (!readable.has(conversation.conversationId)) conversation.stopOnly = true;
     return [...byId.values()];
-  }, [drafts, unresolved, session, accountId]);
+  }, [drafts, unresolved, stopTargets, session, accountId]);
 
   /** Why approve and edit are off for a fan: a stop this session sent, unresolved work for that fan, or unresolved work that could not be read. */
   const holdFor = (conversationId: string): string | null => {

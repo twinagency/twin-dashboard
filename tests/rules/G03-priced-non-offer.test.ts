@@ -11,22 +11,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePlanCDraft } from "../../lib/onlyfans/plan-c";
-import { MOCK_ACCOUNT, parsedDraft, scopedDraft, scopedOffer } from "./plan-c-fixtures";
+import { MOCK_ACCOUNT, parsedDraft, seedDraft, seedOffer } from "./plan-c-fixtures";
 import type { RawPart } from "../contracts/plan-c-mock-backend";
 
 test("control: a priced part whose action is offer is summarised and its price shown", () => {
-  const draft = parsedDraft(scopedOffer());
+  const draft = parsedDraft(seedOffer());
   assert.equal(draft.action, "offer");
   assert.equal(draft.offer?.priceCents, 300);
 });
 
 test("finding 8: a priced part whose action is not offer is refused", () => {
-  const raw = scopedDraft();
+  const raw = seedDraft();
   raw.parts[1] = { ...raw.parts[1], action: "paid_media" as RawPart["action"], price_cents: 300, currency: "USD" };
   assert.equal(parsePlanCDraft(raw, MOCK_ACCOUNT), null);
 });
 
-const reply = (extra: Partial<RawPart>) => { const raw = scopedDraft(); raw.parts[1] = { ...raw.parts[1], action: "reply", ...extra }; return raw; };
+const reply = (extra: Partial<RawPart>) => { const raw = seedDraft(); raw.parts[1] = { ...raw.parts[1], action: "reply", ...extra }; return raw; };
 
 test("finding 8: a reply part carrying a price is refused", () => {
   assert.equal(parsePlanCDraft(reply({ price_cents: 300, currency: "USD" }), MOCK_ACCOUNT), null);

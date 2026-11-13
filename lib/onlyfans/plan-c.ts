@@ -77,10 +77,14 @@ function strings(value: unknown, maxItems: number, maxLength = 64): string[] | n
  * Offer money terms, the backend's own: 300..20,000 cents (twin-onlyfans-backend fans_api_adapter/protocol.py:252,
  * db/onlyfans_offer_import_models.py:290) and USD only (conversation_engine/approval.py:53). Nothing outside is shown.
  */
-export const PLAN_C_PRICE_MIN_CENTS = 300;
-export const PLAN_C_PRICE_MAX_CENTS = 20_000;
-export const PLAN_C_CURRENCY = "USD";
+const PLAN_C_PRICE_MIN_CENTS = 300;
+const PLAN_C_PRICE_MAX_CENTS = 20_000;
+const PLAN_C_CURRENCY = "USD";
 const absent = (value: unknown) => value === undefined || value === null;
+/** Every alias that is set, so two that disagree (priceCents 300 beside price_cents 20000) are both checked, never "first one wins". */
+const every = (source: Record<string, unknown>, ...keys: string[]): unknown[] => keys.map(key => source[key]).filter(value => value !== undefined);
+const CONFLICT = Symbol("aliases disagree");
+const agreed = (source: Record<string, unknown>, ...keys: string[]): unknown => { const values = every(source, ...keys); return values.every(value => value === values[0]) ? values[0] : CONFLICT; };
 const productId = (value: unknown): string | null | undefined =>
   absent(value) ? null : typeof value === "string" && ID.test(value) ? value : intIn(value, 0, 2 ** 53 - 1) ? String(value) : undefined;
 
@@ -89,7 +93,7 @@ function parsePart(raw: unknown, position: number): PlanCPart | null {
   if (typeof raw === "string") return raw.length <= 4000 ? { index: position, action: "reply", text: raw, priceCents: null, currency: null, mediaIds: [], previewIds: [], productId: null } : null;
   if (!record(raw)) return null;
   const body = pick(raw, "text", "body"), index = pick(raw, "partIndex", "part_index", "index") ?? position, action = pick(raw, "action") ?? "reply";
-  const price = pick(raw, "priceCents", "price_cents"), currency = pick(raw, "currency");
+  const price = agreed(raw, "priceCents", "price_cents"), currency = pick(raw, "currency");
   const media = strings(pick(raw, "mediaIds", "media_ids"), 50), previews = strings(pick(raw, "previewIds", "preview_ids"), 50);
   const product = productId(pick(raw, "productId", "product_id", "catalogItemId", "catalog_item_id"));
   if (!text(body, 4000) || !intIn(index, 0, 1000) || !media || !previews || product === undefined) return null;
@@ -108,9 +112,11 @@ function parseMessages(value: unknown): PlanCMessage[] | null {
   for (const item of value.slice(-PLAN_C_MESSAGES_MAX)) {
     if (!record(item)) return null;
     const who = pick(item, "direction", "from", "role", "sender") ?? "message", body = pick(item, "text", "body"), at = pick(item, "at", "createdAt", "created_at", "sentAt");
-    // Fan text is context, not terms: the backend does not cap it (operator_v2.py:168), so a long one is shortened, not refused.
-    if (!text(who, 32) || !(body === undefined || body === null || typeof body === "string") || !(at === undefined || at === null || isoDate(at))) return null;
-    out.push({ who, text: typeof body !== "string" ? "[no text]" : body.length > 4000 ? `${body.slice(0, 4000)} [shortened]` : body, at: typeof at === "string" ? at : null });
+    // Fan text is shown whole, never shortened (its end can be what the decision turns on). The backend stores at most 20000 UTF-8 bytes
+    // per message (twin-onlyfans-backend service/onlyfans_runtime/store.py:82) and sends it as stored (operator_v2.py:168); longer is refused.
+    if (!text(who, 32) || !(body === undefined || body === null || (typeof body === "string" && new TextEncoder().encode(body).length <= 20_000)) ||
+        !(at === undefined || at === null || isoDate(at))) return null;
+    out.push({ who, text: typeof body !== "string" ? "[no text]" : body, at: typeof at === "string" ? at : null });
   }
   return out;
 }
@@ -160,10 +166,10 @@ function parseOfferTerms(raw: Record<string, unknown>, parts: PlanCPart[]): Plan
   const blocks = [raw.offer, raw.product];
   if (!blocks.every(block => absent(block) || record(block))) return undefined;
   const sources = [...blocks.filter(record), raw];
-  const declared = (...keys: string[]) => sources.map(source => pick(source, ...keys)).filter(value => value !== undefined);
+  const declared = (...keys: string[]) => sources.flatMap(source => every(source, ...keys));
   const price = declared("priceCents", "price_cents"), currency = declared("currency"), count = declared("mediaCount", "media_count");
-  const media = declared("mediaIds", "media_ids"), product = [...blocks.filter(record).map(block => pick(block, "productId", "product_id", "id")),
-    pick(raw, "productId", "product_id")].filter(value => value !== undefined);
+  const media = declared("mediaIds", "media_ids"), product = [...blocks.filter(record).flatMap(block => every(block, "productId", "product_id", "id")),
+    ...every(raw, "productId", "product_id")];
   const head = offerParts[0];
   if (!head) return [...blocks, ...price, ...currency, ...count, ...media, ...product].every(absent) ? null : undefined;
   const offer: PlanCOffer = { productId: head.productId, mediaCount: head.mediaIds.length, mediaIds: head.mediaIds, priceCents: head.priceCents, currency: head.currency };
@@ -197,6 +203,27 @@ export function parsePlanCDrafts(value: unknown, accountId: string): PlanCDraftL
     if (new Set(receipts.map(receipt => receipt.intentId)).size !== receipts.length) return null;
   }
   return { accountId, drafts, receipts };
+}
+
+/** A conversation the operator can still stop when the draft list was refused. It is never a draft, and hand back is not offered for it. */
+export type PlanCStopTarget = { conversationId: string; revision: number };
+/**
+ * The brake survives a refused list: approvals stay whole-list strict, so this lenient pass reads only Stop targets, from the backend's
+ * raw list (`drafts`) or the proxy's refusal (`stopTargets`). Each target has a readable draft's id pattern and account prefix, is never
+ * built from fanId and carries its own integer revision. A list without accountId is still scoped: the read went to this account's
+ * route, the id must carry its prefix, and the backend re-derives the id before any command (engine_approval_api.py:182). A list naming
+ * another account, or another contract, yields nothing.
+ */
+export function planCStopTargets(value: unknown, accountId: string): PlanCStopTarget[] {
+  if (!record(value) || value.schemaVersion !== PLAN_C_SCHEMA || !absent(value.accountId) && value.accountId !== accountId) return [];
+  const rows = Array.isArray(value.drafts) ? value.drafts.filter(record).map(raw => [pick(raw, "conversationId", "conversation_id"),
+    pick(record(raw.conversation) ? raw.conversation : {}, "revision") ?? pick(raw, "conversationRevision", "conversation_revision")])
+    : Array.isArray(value.stopTargets) ? value.stopTargets.filter(record).map(raw => [raw.conversationId, raw.revision]) : [];
+  const targets = new Map<string, PlanCStopTarget>();
+  for (const [conversationId, revision] of rows)
+    if (typeof conversationId === "string" && ID.test(conversationId) && conversationId.startsWith(`${accountId}:`) && intIn(revision, 0, 2 ** 31 - 2) &&
+        (targets.get(conversationId)?.revision ?? -1) < revision) targets.set(conversationId, { conversationId, revision });
+  return [...targets.values()];
 }
 
 // ── Unresolved work ───────────────────────────────────────────────────────────
@@ -287,5 +314,5 @@ export const isExpired = (draft: Pick<PlanCDraft, "expiresAt">, now: number) => 
 /** Approve is offered only for a draft that is awaiting approval and not past its expiry. */
 export const canApprove = (draft: Pick<PlanCDraft, "status" | "expiresAt">, now: number) => draft.status === "awaiting" && !isExpired(draft, now);
 
-/** A conversation the operator can stop, take over or hand back, with the revision the backend reported. */
-export type PlanCConversation = { conversationId: string; revision: number | null; label: string };
+/** A conversation the operator can stop, take over or hand back, with the revision the backend reported. `stopOnly`: the draft list was refused, so no hand back. */
+export type PlanCConversation = { conversationId: string; revision: number | null; label: string; stopOnly?: true };

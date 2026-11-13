@@ -9,11 +9,12 @@
  *    attempt only a recorded ack releases it.
  *  - A 409 (version or revision conflict) is returned as `conflict` with `reload: true`; it is never retried.
  */
-import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newCommandKey, parsePlanCDrafts, parsePlanCUnresolved,
+import { PLAN_C_CONFLICT_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, newCommandKey, parsePlanCDrafts, parsePlanCUnresolved, planCStopTargets,
   validateEditedParts, validateEvidenceRef, validateRejectReason,
-  type PlanCCommandResult, type PlanCConversationAction, type PlanCDraft, type PlanCDraftList, type PlanCUnresolvedItem, type PlanCUnresolvedList } from "./plan-c";
+  type PlanCCommandResult, type PlanCConversationAction, type PlanCDraft, type PlanCDraftList, type PlanCStopTarget, type PlanCUnresolvedItem, type PlanCUnresolvedList } from "./plan-c";
 
-export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: string };
+/** `stopTargets`: what a refused draft list can still be stopped on (plan-c.ts planCStopTargets), re-checked here. */
+export type PlanCReadOutcome<T> = { ok: true; data: T } | { ok: false; error: string; stopTargets?: PlanCStopTarget[] };
 
 /**
  * Stored entries are named by this hash instead of the intent, which can hold a rejection reason, edited text or evidence, so that
@@ -100,12 +101,14 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
   const keys = options.keys ?? accountKeyStore(accountId, options.operatorScope);
   const init = { credentials: "same-origin", cache: "no-store", redirect: "error" } as const;
 
-  async function read<T>(path: string, parse: (value: unknown) => T | null, what: string): Promise<PlanCReadOutcome<T>> {
+  async function read<T>(path: string, parse: (value: unknown) => T | null, what: string, salvage?: (value: unknown) => PlanCStopTarget[]): Promise<PlanCReadOutcome<T>> {
     try {
       const response = await fetchImpl(base(accountId) + path, { ...init, method: "GET", signal: AbortSignal.timeout(8000) });
-      const data = response.ok ? parse(await response.json()) : null;
+      // A refusal body is read only for its Stop targets; an unreadable one just has none.
+      const value: unknown = response.ok ? await response.json() : salvage ? await response.json().catch(() => undefined) : undefined;
+      const data = response.ok ? parse(value) : null;
       if (data) return { ok: true, data };
-      return { ok: false, error: response.ok ? `${what} could not be read.` : `${what} is unavailable.` };
+      return { ok: false, error: response.ok ? `${what} could not be read.` : `${what} is unavailable.`, ...(salvage ? { stopTargets: salvage(value) } : {}) };
     } catch { return { ok: false, error: `${what} is unavailable.` }; }
   }
 
@@ -136,7 +139,7 @@ export function createPlanCClient(options: { accountId: string; fetchImpl?: type
   const conversationPath = (conversationId: string, action: PlanCConversationAction) => `/conversations/${encodeURIComponent(conversationId)}/${action}`;
 
   return {
-    listDrafts: (): Promise<PlanCReadOutcome<PlanCDraftList>> => read("/drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval"),
+    listDrafts: (): Promise<PlanCReadOutcome<PlanCDraftList>> => read("/drafts", value => parsePlanCDrafts(value, accountId), "Drafts awaiting approval", value => planCStopTargets(value, accountId)),
     listUnresolved: (): Promise<PlanCReadOutcome<PlanCUnresolvedList>> => read("/unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work"),
     /** Approve this one draft version. Called only from an operator's click on one draft. */
     approveDraft: (draft: PlanCDraft) => send(draftPath(draft, "approve"), draftIntent(draft, "approve"),

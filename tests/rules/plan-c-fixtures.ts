@@ -2,7 +2,7 @@
  * Shared Plan C fixtures for tests/rules/G02-*, G03-* and G05-plan-c-gate-scope tests. Not a test file (the rules glob is *.test.*).
  *
  * Rules these fixtures hold to:
- *  - Every draft is FULLY scoped (`conversationId: "<account>:<fan>"`), so a test depends only on the rule it names.
+ *  - Every draft is FULLY scoped (seedDraft sends `conversationId: "<account>:<fan>"`), so a test depends only on the rule it names.
  *  - Backends are the real plan-c-backend over a one-answer fake fetch; nothing is cast into a PlanCBackend.
  *  - The route child (planCRouteChild) runs offline with a scrubbed environment: no Supabase, backend URL or key can leak in.
  */
@@ -12,18 +12,12 @@ import { fileURLToPath } from "node:url";
 import { createPlanCBackend } from "../../lib/onlyfans/plan-c-backend";
 import { createCommandKeyStore, createPlanCClient } from "../../lib/onlyfans/plan-c-client";
 import { PLAN_C_SCHEMA, parsePlanCDraft, type PlanCDraft } from "../../lib/onlyfans/plan-c";
-import { MOCK_ACCOUNT, MOCK_TOKEN, seedDraft, seedOffer, type RawDraft } from "../contracts/plan-c-mock-backend";
+import { MOCK_ACCOUNT, MOCK_TOKEN, seedDraft, seedOffer } from "../contracts/plan-c-mock-backend";
 import { OPERATOR_ACTOR } from "../contracts/plan-c-proxy";
 
-export { MOCK_ACCOUNT, PLAN_C_SCHEMA };
+export { MOCK_ACCOUNT, PLAN_C_SCHEMA, seedDraft, seedOffer };
 export const CONVERSATION = `${MOCK_ACCOUNT}:900000000001`;
 export const KEY = "a".repeat(64);
-
-type ScopedDraft = RawDraft & { conversationId: string };
-const scoped = (raw: RawDraft): ScopedDraft => ({ ...raw, conversationId: `${MOCK_ACCOUNT}:${raw.fanId}` });
-/** seedDraft / seedOffer with their conversationId pinned to the fan. Each call is a new draft (new requestId). */
-export const scopedDraft = (overrides: Partial<RawDraft> = {}): ScopedDraft => scoped(seedDraft(overrides));
-export const scopedOffer = (overrides: Partial<RawDraft> = {}): ScopedDraft => scoped(seedOffer(overrides));
 
 /** List payloads that carry their accountId (G03-unscoped-list is about omitting it). */
 export const draftList = (drafts: unknown[], extra: Record<string, unknown> = {}) => ({ schemaVersion: PLAN_C_SCHEMA, ok: true, accountId: MOCK_ACCOUNT, drafts, ...extra });
@@ -31,7 +25,7 @@ export const unresolvedList = (items: unknown[], extra: Record<string, unknown> 
 export const unresolvedItem = (conversationId: string = CONVERSATION) => ({ id: "unk-1", kind: "unknown_send", owner: "engine", nextStep: "reconcile_with_provider", conversationId });
 
 /** Parse a draft that must be valid; fails the test with a message instead of a later null crash. */
-export function parsedDraft(raw: unknown = scopedDraft()): PlanCDraft {
+export function parsedDraft(raw: unknown = seedDraft()): PlanCDraft {
   const draft = parsePlanCDraft(raw, MOCK_ACCOUNT);
   assert.ok(draft, "fixture draft did not parse");
   return draft;

@@ -307,3 +307,39 @@ test("autonomous mode shows policy authorization and no per-message approve butt
   assert.equal(mock.posts().length, 0);
   assert.equal(proxy.posts().length, 0);
 });
+
+// R1 D1: a refused draft list keeps the brake. Stop and take over stay for every conversation the raw list names validly;
+// hand back is not offered for them (the engine would plan where the operator cannot read the drafts).
+const brokenDraft = () => ({ ...seedDraft({ fanId: "900000000002" }), draftHash: "not-a-hash" });
+async function mountRefused(drafts: ReturnType<typeof seedDraft>[], dropAccount = false) {
+  const mock = createPlanCMock({ drafts });
+  const upstream = mock.fetch;
+  const fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const response = await upstream(input, init);
+    if (!dropAccount || !String(input).endsWith("/drafts")) return response;
+    const { accountId: _dropped, ...body } = await response.json(); return Response.json(body, { status: response.status });
+  }) as typeof globalThis.fetch;
+  const proxy = createPlanCProxy({ ...mock, fetch });
+  const { default: PlanCConsole } = await import("../../components/onlyfans-preview/PlanCConsole");
+  await render(<PlanCConsole accountId={MOCK_ACCOUNT} operatorScope="test-operator" canAct fetchImpl={proxy.fetch} />);
+  return mock;
+}
+const controlsFor = (fan: string) => q(`[data-plan-c-conversation="${MOCK_ACCOUNT}:${fan}"]`);
+const actionsOf = (el: HTMLElement | null) => [...(el?.querySelectorAll("[data-plan-c-conversation-action]") ?? [])].map(b => b.getAttribute("data-plan-c-conversation-action"));
+
+test("D1: a list refused for one bad draft shows no draft but keeps Stop and take over, not hand back, for every valid conversation", async () => {
+  const mock = await mountRefused([seedDraft(), brokenDraft()]);
+  assert.ok(q("[data-plan-c-drafts-error]")); assert.equal(all("[data-plan-c-draft]").length, 0, "nothing approvable");
+  for (const fan of ["900000000001", "900000000002"]) assert.deepEqual(actionsOf(controlsFor(fan)), ["stop", "takeover"], fan);
+  assert.equal(all('[data-plan-c-conversation-action="handback"]').length, 0);
+  await click(within(controlsFor("900000000002")!, '[data-plan-c-conversation-action="stop"]'));
+  assert.equal(mock.posts().length, 1); assert.match(mock.posts()[0].path, new RegExp(`${MOCK_ACCOUNT}:900000000002/stop$`));
+  assert.equal(mock.posts()[0].body?.expectedRevision, 7);
+  assert.equal(all('[data-plan-c-conversation-action="handback"]').length, 0, "a recorded stop does not bring hand back");
+});
+
+test("D1: a list refused for a missing accountId keeps Stop for its account-prefixed conversations", async () => {
+  await mountRefused([seedDraft()], true);
+  assert.ok(q("[data-plan-c-drafts-error]")); assert.equal(all("[data-plan-c-draft]").length, 0);
+  assert.deepEqual(actionsOf(controlsFor("900000000001")), ["stop", "takeover"]);
+});

@@ -4,9 +4,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePlanCDraft } from "../../lib/onlyfans/plan-c";
-import { MOCK_ACCOUNT, parsedDraft, scopedOffer } from "./plan-c-fixtures";
+import { MOCK_ACCOUNT, parsedDraft, seedOffer } from "./plan-c-fixtures";
 
-const withCurrency = (currency: unknown) => { const raw = scopedOffer(); (raw.parts[1] as Record<string, unknown>).currency = currency; return raw; };
+const withCurrency = (currency: unknown) => { const raw = seedOffer(); (raw.parts[1] as Record<string, unknown>).currency = currency; return raw; };
 
 test("control: an offer part priced in USD parses with currency USD", () => {
   assert.equal(parsedDraft(withCurrency("USD")).offer?.currency, "USD");

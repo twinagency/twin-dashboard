@@ -10,9 +10,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { parsePlanCDraft } from "../../lib/onlyfans/plan-c";
-import { MOCK_ACCOUNT, parsedDraft, scopedOffer } from "./plan-c-fixtures";
+import { MOCK_ACCOUNT, parsedDraft, seedOffer } from "./plan-c-fixtures";
 
-const priced = (cents: number) => { const raw = scopedOffer(); raw.parts[1].price_cents = cents; return raw; };
+const priced = (cents: number) => { const raw = seedOffer(); raw.parts[1].price_cents = cents; return raw; };
 
 for (const cents of [300, 20_000])
   test(`control: an offer priced ${cents} cents (a bound) parses and shows ${cents}`, () => {

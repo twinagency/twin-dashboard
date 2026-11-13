@@ -16,24 +16,43 @@ import { MOCK_ACCOUNT, MOCK_TOKEN, createPlanCMock, seedDraft } from "../contrac
 
 const LONG_FAN = "900000000001", OTHER_FAN = "900000000002";
 
-async function readWithFanMessage(length: number) {
+async function readWithFanMessage(body: string) {
   const long = seedDraft({ fanId: LONG_FAN });
-  long.conversation.messages = [{ direction: "fan", text: "x".repeat(length), at: new Date(Date.now() - 60_000).toISOString() }];
+  long.conversation.messages = [{ direction: "fan", text: body, at: new Date(Date.now() - 60_000).toISOString() }];
   const mock = createPlanCMock({ drafts: [long, seedDraft({ fanId: OTHER_FAN })] });
   const backend = createPlanCBackend({ baseUrl: "http://backend.invalid", token: MOCK_TOKEN, fetchImpl: mock.fetch });
   return planCReadDrafts(backend, MOCK_ACCOUNT);
 }
-const listedFans = (body: Record<string, unknown>) => (Array.isArray(body.drafts) ? body.drafts : []).map(draft => (draft as { fanId: string }).fanId).sort();
+type Listed = { fanId: string; messages: Array<{ text: string }> };
+const listed = (body: Record<string, unknown>) => (Array.isArray(body.drafts) ? body.drafts as Listed[] : []);
+const listedFans = (body: Record<string, unknown>) => listed(body).map(draft => draft.fanId).sort();
+const longText = (body: Record<string, unknown>) => listed(body).find(draft => draft.fanId === LONG_FAN)?.messages[0]?.text;
 
 test("control: a 4000-character fan message keeps the draft list readable", async () => {
-  const result = await readWithFanMessage(4000);
+  const result = await readWithFanMessage("x".repeat(4000));
   assert.equal(result.status, 200, JSON.stringify(result.body).slice(0, 200));
   assert.deepEqual(listedFans(result.body), [LONG_FAN, OTHER_FAN]);
 });
 
-test("finding 10: a 4001-character fan message does not make the draft list unreadable", async () => {
-  const result = await readWithFanMessage(4001);
-  assert.notEqual(result.status, 502, `the whole list was refused: ${JSON.stringify(result.body)}`);
+// R1 D2: the fan text is shown whole, never shortened: its end may be what the approval depends on.
+test("finding 10 / D2: a long fan message is passed through in full, up to the backend's 20000-byte cap", async () => {
+  const ending = "x".repeat(4001) + " DO NOT SEND";
+  let result = await readWithFanMessage(ending);
   assert.equal(result.status, 200);
-  assert.deepEqual(listedFans(result.body), [LONG_FAN, OTHER_FAN], "both drafts stay listed (the long text may be truncated or shown in full)");
+  assert.deepEqual(listedFans(result.body), [LONG_FAN, OTHER_FAN]);
+  assert.equal(longText(result.body), ending, "the whole text, its end included");
+  result = await readWithFanMessage("é".repeat(10_000)); // exactly 20000 UTF-8 bytes
+  assert.equal(result.status, 200);
+  assert.equal(longText(result.body), "é".repeat(10_000));
+});
+
+// The backend refuses a stored message over 20000 UTF-8 bytes (twin-onlyfans-backend service/onlyfans_runtime/store.py:82),
+// so a longer one is not what it holds: the list is refused (never shortened) and the Stop targets survive (D1).
+test("D2: a fan message over 20000 UTF-8 bytes refuses the list and keeps its Stop targets", async () => {
+  for (const body of ["x".repeat(20_001), "é".repeat(10_001)]) {
+    const result = await readWithFanMessage(body);
+    assert.equal(result.status, 502, `${body.length} chars`);
+    assert.equal(result.body.drafts, undefined, "no draft is shown");
+    assert.deepEqual(result.body.stopTargets, [{ conversationId: `${MOCK_ACCOUNT}:${LONG_FAN}`, revision: 7 }, { conversationId: `${MOCK_ACCOUNT}:${OTHER_FAN}`, revision: 7 }]);
+  }
 });
