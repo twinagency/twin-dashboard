@@ -126,7 +126,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     let outcome: "ack" | "refused" | null = null;
     try {
       const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
-      if ([401, 403].includes(response.status)) { outcome = "refused"; sessionLost(); return; }
+      if ([401, 403].includes(response.status)) { outcome = "refused"; heldWrites.delete(accountId); sessionLost(); return; } // released even if unmounted mid-flight
       // campaignRefuse (lib/onlyfans/campaign-route.ts) labels every definite refusal outcome "refused"; a bare or non-JSON status (a proxy 503) may follow a forwarded write.
       if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome === "refused") { outcome = "refused"; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
       else if (response.ok) {

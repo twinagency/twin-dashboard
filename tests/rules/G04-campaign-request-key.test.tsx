@@ -82,3 +82,13 @@ test("finding 7: navigating away and back keeps the held create and its requestK
   assert.deepEqual(keys(), [first], "the retry after a remount resends the first requestKey");
   assert.equal(retry(), undefined, "the ack releases it");
 });
+
+test("a 401 on a held retry releases the held create, so a remount offers no stale Retry", async () => {
+  queue("of-c6");
+  await manager("of-c6", n => n === 0 ? lostReply() : new Response(null, { status: 401 }));
+  await submit(q("[data-of-campaign-manager] form"));
+  await click(retry());
+  await unmount();
+  await manager("of-c6", () => ack("of-c6"));
+  assert.equal(retry(), undefined, "the held create survived the session loss");
+});
