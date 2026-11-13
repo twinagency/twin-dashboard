@@ -3,7 +3,8 @@
 import { useCallback, useState } from "react";
 import type { Clone } from "@/lib/types";
 import { isV2Engine } from "@/lib/v2-tips";
-import { DEFAULT_PAYWALL_BUTTON, DEFAULT_PAYWALL_MESSAGE, DEFAULT_SPOIL_OPTIONS } from "./fields";
+import { DEFAULT_PAYWALL_BUTTON, DEFAULT_PAYWALL_MESSAGE } from "./fields";
+import { DEFAULT_SPOIL_OPTIONS } from "@/lib/clone-default-policy";
 import { DEFAULT_CATEGORY_PRICING, type CategoryPricing } from "@/lib/pricing";
 
 type Level = "low" | "medium" | "high";

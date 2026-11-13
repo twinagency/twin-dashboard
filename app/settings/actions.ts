@@ -8,6 +8,8 @@ import { invalidateCloneCaches } from "@/lib/query-cache";
 import type { Clone } from "@/lib/types";
 import { MIN_PAID_MEDIA_PRICE_STARS, normalizeSafeCategoryGuide } from "@/lib/pricing";
 import {
+  CLONE_DEFAULT_GROUPS,
+  effectiveCloneDefaults,
   filterCloneDefaultCascade,
   OPERATIONAL_DEFAULT_JSON,
   OPERATIONAL_DEFAULT_MODELS,
@@ -120,24 +122,37 @@ export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollower
   // cross-field ordering; sanitizeCloneDefaults is intentionally read/fallback
   // behavior and must not be used as the save gate.
   const safeDefaults = validateCloneDefaultsForWrite(out) as Record<string, unknown>;
+  // W7: cascade only CHANGED fields, so an unrelated edit never reverts a creator's own price, tip rate or toggle. The follower
+  // UPDATE runs BEFORE the upsert: on any failure the template is the old one, a retry resends the delta. Concurrent saves can race.
+  const update = changedCascadeFields((await getCloneDefaults()) as Record<string, unknown>, safeDefaults);
+  let applied = 0;
+  if (Object.keys(update).length) {
+    const { data: followers, error: followersError } = await supabaseAdmin.from("clones").update(update).eq("uses_default_config", true).select("id");
+    if (followersError) throw new Error(`Defaults not saved, followers could not be updated: ${followersError.message}`);
+    applied = (followers ?? []).length;
+  }
   const { error: saveError } = await supabaseAdmin.from("app_settings").upsert({
     key: CLONE_DEFAULTS_KEY,
     value: JSON.stringify(safeDefaults),
     updated_at: new Date().toISOString(),
   });
-  if (saveError) throw new Error(`Could not save fleet defaults: ${saveError.message}`);
-  // Cascade: every clone still following the fleet default gets the new
-  // values immediately, not just future clones. A clone marked custom
-  // (uses_default_config = false) is left untouched.
-  const { data: followers, error: followersError } = await supabaseAdmin.from("clones").select("id").eq("uses_default_config", true);
-  if (followersError) throw new Error(`Defaults saved, but followers could not be loaded: ${followersError.message}`);
-  const ids = (followers ?? []).map((r) => (r as { id: string }).id);
-  if (ids.length) await applyConfigToClones(ids, safeDefaults);
+  if (saveError) throw new Error(`Followers updated, but fleet defaults could not be saved (save again): ${saveError.message}`);
   revalidatePath("/settings");
   revalidatePath("/clones/new");
   revalidatePath("/clones");
   await invalidateCloneCaches();
-  return { appliedFollowers: ids.length };
+  return { appliedFollowers: applied };
+}
+
+// A posted field cascades when its effective value differs (sorted keys), with its whole group; compared = written.
+const effective = (t: unknown) => effectiveCloneDefaults(t) as Record<string, unknown>;
+const canonical = (v: unknown): string => JSON.stringify(v ?? null, (_k, x) =>
+  x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([p], [q]) => p.localeCompare(q))) : x);
+function changedCascadeFields(previous: Record<string, unknown>, next: Record<string, unknown>): Record<string, unknown> {
+  const before = effective(previous), after = effective(next);
+  const changed = Object.keys(filterCloneDefaultCascade(next)).filter((k) => canonical(before[k]) !== canonical(after[k]));
+  const keys = new Set(changed.flatMap((k) => CLONE_DEFAULT_GROUPS.find((g) => g.includes(k)) ?? [k]));
+  return filterCloneDefaultCascade(Object.fromEntries([...keys].map((k) => [k, after[k]])));
 }
 
 // category_pricing is excluded from the fields pushed onto EXISTING clones
@@ -150,7 +165,7 @@ export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollower
 // getCloneDefaults().category_pricing directly).
 // Write a set of config fields (from the same operational allowlist
 // saveCloneDefaults produces) onto one or more EXISTING clone rows. Shared by
-// the save-time cascade above and the manual "push to selected clones" button
+// the manual "push to selected clones" button (Save writes only changed fields)
 // on the Settings page. Never touches identity/persona — `out`/`fields` only
 // is filtered again at the write boundary, even if stored JSON is stale.
 async function applyConfigToClones(cloneIds: string[], fields: Record<string, unknown>): Promise<void> {
@@ -175,14 +190,12 @@ export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
   }));
 }
 
-// Flip one clone between following the fleet default and running its own
-// custom config. Does NOT itself change any config value — a clone switched
-// TO default only actually receives the template's values on the next Save
-// or the next manual push below, so flipping this can never silently
-// overwrite a value the operator hasn't asked to apply yet.
+// Flip one clone between following the fleet default and her own config. Switching TO default writes the effective
+// template (operational fields and prices only) in the same UPDATE as the flag, so later diffs start from it.
 export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean): Promise<void> {
   await guardDashboardAction("app/settings/actions.ts#setCloneUsesDefault", [cloneId, usesDefault]);
-  const { error } = await supabaseAdmin.from("clones").update({ uses_default_config: usesDefault }).eq("id", cloneId);
+  const fields = usesDefault ? filterCloneDefaultCascade(effective(await getCloneDefaults())) : {};
+  const { error } = await supabaseAdmin.from("clones").update({ ...fields, uses_default_config: usesDefault }).eq("id", cloneId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
   revalidatePath("/clones");
@@ -198,7 +211,7 @@ export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
   await guardDashboardAction("app/settings/actions.ts#pushDefaultsToClones", [cloneIds]);
   if (!cloneIds.length) return;
   const defaults = await getCloneDefaults();
-  await applyConfigToClones(cloneIds, defaults as Record<string, unknown>);
+  await applyConfigToClones(cloneIds, effective(defaults));
   revalidatePath("/settings");
   revalidatePath("/clones");
   for (const id of cloneIds) revalidatePath(`/clones/${id}`);

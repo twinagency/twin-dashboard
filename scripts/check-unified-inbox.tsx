@@ -35,7 +35,7 @@ async function main(){
  const {JSDOM}=nativeRequire('jsdom');const dom=new JSDOM('<html><body><div id="root"></div></body></html>',{url:'https://dashboard.test/inbox'});Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,CSS:{escape:(s:string)=>s},IS_REACT_ACT_ENVIRONMENT:true});dom.window.HTMLElement.prototype.scrollIntoView=()=>{};
  let requests=0;const oldFetch=globalThis.fetch;globalThis.fetch=async()=>{requests++;throw Error('No live messaging or production writes');};
  const css=new Proxy({},{get:(_,k)=>String(k)});
- const fields=compile('components/clone/fields.tsx',{'@/lib/clone-field-styles':{inputCls:'',selectCls:''}});
+ const fields=compile('components/clone/fields.tsx',{'@/lib/clone-field-styles':{inputCls:'',selectCls:''},'@/lib/clone-default-policy':nativeRequire('../lib/clone-default-policy.ts')});
  const ChatThread=compile('components/users/ChatThread.tsx',{'@/lib/live-bus':{onLive:()=>{throw Error('Presentation must not subscribe to live fan events');},isTyping:()=>false}}).default;
  const dossier=compile('components/inbox/MemoryDossier.tsx',{'../fans/model':fanModel,'../clone/fields':fields,'./UnifiedInbox.module.css':{__esModule:true,default:css}});
  for(const fan of fans){const records=dossier.memoryGroups(fan.memories).flatMap((g:any)=>g.rows.flatMap((r:any)=>r.memories));assert.deepEqual(records.map((m:any)=>m.id).sort(),fan.memories.map(m=>m.id).sort(),'Every memory appears exactly once');}
