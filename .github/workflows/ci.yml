@@ -173,8 +173,15 @@ jobs:
       - name: Creator preparation and native media recovery
         run: node scripts/check-core-workspace-ui.mjs
 
+      # All four programs (product, scripts, preview, tests), 1,200 MB heap each per CLAUDE.md. next typegen first:
+      # it writes the git-ignored next-env.d.ts and .next/types they include, which a fresh checkout lacks.
       - name: Type check
-        run: npx tsc --noEmit
+        run: |
+          npx next typegen
+          npm run typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=1200
+          NEXT_TELEMETRY_DISABLED: "1"
 
       # Offline contracts and browser-check syntax only. The browser checks themselves run in the
       # isolated API/worker/dashboard integration harness (ONLYFANS_TEST_OFFER_IMPORT=1), not here.

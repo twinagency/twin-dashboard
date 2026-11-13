@@ -22,6 +22,8 @@ async function main() {
           nextStep: action === "request_handover" ? "await_handover_acceptance" : action === "accept_handover" ? "human_review" : "none" } : request) } : current);
       return { ok: true };
     };
+    // Accepting a handover needs human control (EngineStatus), so the simulated takeover hands the conversation over.
+    const onCommand = (action: string) => { if (action === "request_takeover") setValue(current => current.state === "current" ? { ...current, mode: "human" } : current); };
     const account = { ...accounts[0], accountId: detail.accountId };
     // Real-shaped backend pages, rescoped to the open conversation. A later page is served only for the first page's cursor.
     const scoped = (page: object) => ({ ...page, accountId: detail.accountId, conversationId: detail.conversationId });
@@ -30,7 +32,7 @@ async function main() {
       <button type="button" data-load-live onClick={() => setValue(scoped(live) as EngineStatusView)}>Load live fixture</button><InboxView accountsState={{ status: "ready", data: [account] }} activeAccount={account} activeAccountId={detail.accountId}
       onSelectAccount={() => {}} conversations={{ status: "ready", data: { items: [detail.summary], nextCursor: null } }}
       selectedConversationId={detail.conversationId} onSelectConversation={() => {}} detailState={{ status: "ready", data: { ...detail, engineStatus: value } }}
-      viewer={operatorViewer()} onCommand={() => {}} onEngineAction={onAction} onEngineLoadMore={onLoadMore} commandResult={null} nextCursor={null} loadingMore={false}
+      viewer={operatorViewer()} onCommand={onCommand} onEngineAction={onAction} onEngineLoadMore={onLoadMore} commandResult={null} nextCursor={null} loadingMore={false}
       onLoadMore={() => {}} showPreviewChrome={true} /></main>;
   }
   (window as unknown as { actions: unknown[]; cursors: string[] }).actions = []; (window as unknown as { cursors: string[] }).cursors = [];

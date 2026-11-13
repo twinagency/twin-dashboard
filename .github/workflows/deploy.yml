@@ -129,8 +129,15 @@ jobs:
           else
             command -v ffmpeg && command -v ffprobe || (sudo timeout --kill-after=10s 150s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 update && sudo timeout --kill-after=10s 210s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg)
           fi
+      # All four programs (product, scripts, preview, tests), 1,200 MB heap each per CLAUDE.md. next typegen first:
+      # it writes the git-ignored next-env.d.ts and .next/types they include, which a fresh checkout lacks.
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: |
+          npx next typegen
+          npm run typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=1200
+          NEXT_TELEMETRY_DISABLED: "1"
       - name: Build
         run: npm run build
         env:
