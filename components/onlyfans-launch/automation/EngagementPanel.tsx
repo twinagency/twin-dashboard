@@ -401,27 +401,31 @@ export default function EngagementPanel({
             ) : (
               <p className="text-sm">No engagement actions on this page.</p>
             )}
-            <div className="mt-3 flex gap-2">
-              <button
-                className={buttonClass}
-                disabled={cursor === null}
-                onClick={() => setCursor(null)}
-              >
-                Newest actions
-              </button>
-              <button
-                className={buttonClass}
-                disabled={actions.state.data.nextCursor === null}
-                onClick={() =>
-                  actions.state.kind === "ok" &&
-                  setCursor(actions.state.data.nextCursor)
-                }
-              >
-                Older actions
-              </button>
-            </div>
           </>
         ) : null}
+        {/* Outside the ok branch: a failed older-page read must never hide the way back to the newest page. */}
+        <div className="mt-3 flex gap-2">
+          <button
+            className={buttonClass}
+            disabled={cursor === null}
+            onClick={() => setCursor(null)}
+          >
+            Newest actions
+          </button>
+          <button
+            className={buttonClass}
+            disabled={
+              actions.state.kind !== "ok" ||
+              actions.state.data.nextCursor === null
+            }
+            onClick={() =>
+              actions.state.kind === "ok" &&
+              setCursor(actions.state.data.nextCursor)
+            }
+          >
+            Older actions
+          </button>
+        </div>
         <p role="status" className="mt-2 text-sm">
           {notice}
         </p>

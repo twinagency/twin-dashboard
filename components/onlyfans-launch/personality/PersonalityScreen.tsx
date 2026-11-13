@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ConfigurationEditor from "@/components/onlyfans-preview/ConfigurationEditor";
 import { FACT_KEYS, type FactKey } from "@/lib/onlyfans/configuration";
 import {
@@ -439,6 +439,22 @@ export default function PersonalityScreen({
   const [retry, setRetry] = useState<unknown | null>(null),
     [notice, setNotice] = useState(""),
     [sending, setSending] = useState(false);
+  // The editor stays mounted (disabled) through a loading, failed or pending re-read of THIS account, so an unchanged revision keeps
+  // the typed draft and a new one remounts it. useJsonResource never returns another url's state, so lastOk is always this account's
+  // read; a denied read hides it.
+  const lastOk = useRef<{ accountId: string; data: Personality } | null>(null);
+  useEffect(() => {
+    if (state.kind === "ok") lastOk.current = { accountId, data: state.data };
+    else if (lastOk.current?.accountId !== accountId) lastOk.current = null;
+  }, [state, accountId]);
+  const view =
+    state.kind === "ok"
+      ? state.data
+      : state.kind !== "denied" && lastOk.current?.accountId === accountId
+        ? lastOk.current.data
+        : null;
+  const editable =
+    state.kind === "ok" && manage === true && retry === null && !sending;
   async function submit(command: unknown): Promise<Post> {
     setSending(true);
     const r = await postCommand(accountId, command);
@@ -482,11 +498,11 @@ export default function PersonalityScreen({
             Your team access is read-only.
           </p>
         ) : null}
-        {state.kind === "ok" ? (
+        {view ? (
           <ReviewEditor
-            key={`${accountId}-${state.data.bindingId}-${state.data.revision}`}
-            p={state.data}
-            enabled={manage === true && retry === null && !sending}
+            key={`${accountId}-${view.bindingId}-${view.revision}`}
+            p={view}
+            enabled={editable}
             submit={submit}
           />
         ) : null}
