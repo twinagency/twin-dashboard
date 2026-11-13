@@ -72,21 +72,19 @@ export default function AccountControls({
     onChanged();
   }
   async function submit() {
-    if (
-      !manage ||
-      !action ||
-      busy ||
-      pending !== null ||
-      r.state.kind !== "ok" ||
-      !reason.trim()
-    )
+    if (!manage || !action || busy || pending !== null || !reason.trim())
       return;
+    // A STOP is a brake: it goes without a readable state and the route pins it to the current one.
+    if (!ready && action !== "emergency_stop") return;
     await send({
       action,
-      expectedFingerprint: r.state.data.accountControl.fingerprint,
+      ...(ready
+        ? { expectedFingerprint: ready.accountControl.fingerprint }
+        : {}),
       reason: reason.trim(),
     });
   }
+  const ready = r.state.kind === "ok" ? r.state.data : null;
 
   return (
     <div className="mt-3 space-y-3 border-t border-line pt-3">
@@ -100,91 +98,93 @@ export default function AccountControls({
           </button>
         </p>
       ) : null}
-      {r.state.kind === "ok" ? (
-        <>
-          <p className="text-sm" data-b-runtime>
-            {r.state.data.accountControl.enabled
-              ? "Account runtime enabled"
-              : "Account runtime stopped"}
-            . Unresolved outgoing operations:{" "}
-            {r.state.data.accountControl.unresolvedOutgoing}. Control revision{" "}
-            {r.state.data.accountControl.revision}.
+      {ready ? (
+        <p className="text-sm" data-b-runtime>
+          {ready.accountControl.enabled
+            ? "Account runtime enabled"
+            : "Account runtime stopped"}
+          . Unresolved outgoing operations:{" "}
+          {ready.accountControl.unresolvedOutgoing}. Control revision{" "}
+          {ready.accountControl.revision}.
+        </p>
+      ) : null}
+      <label className="block text-sm">
+        Reason
+        <input
+          className="min-h-11 w-full rounded border border-line px-2"
+          disabled={!manage || busy}
+          maxLength={512}
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+      </label>
+      <div className="flex flex-wrap gap-2">
+        {ready ? (
+          <button
+            className={buttonClass}
+            disabled={
+              !manage ||
+              busy ||
+              pending !== null ||
+              !reason.trim() ||
+              !ready.accountControl.enabled
+            }
+            onClick={() => setAction("pause")}
+          >
+            Pause account
+          </button>
+        ) : null}
+        <button
+          data-b-emergency
+          className={dangerClass}
+          disabled={!manage || busy || pending !== null || !reason.trim()}
+          onClick={() => setAction("emergency_stop")}
+        >
+          Emergency stop
+        </button>
+        {ready ? (
+          <button
+            className={buttonClass}
+            disabled={
+              !manage ||
+              busy ||
+              pending !== null ||
+              !reason.trim() ||
+              ready.accountControl.enabled ||
+              !ready.readyToEnable
+            }
+            onClick={() => setAction("resume")}
+          >
+            Resume with current prerequisites
+          </button>
+        ) : null}
+      </div>
+      {action ? (
+        <div
+          role="alertdialog"
+          aria-label="Confirm account control"
+          className="rounded border border-line p-3 text-sm"
+        >
+          <p>
+            {action === "resume"
+              ? "Resume this account for newly revalidated work? Cancelled work will not be replayed."
+              : "Stop this account and cancel queued work? Already dispatched or unknown operations cannot be assumed unsent."}
           </p>
-          <label className="block text-sm">
-            Reason
-            <input
-              className="min-h-11 w-full rounded border border-line px-2"
-              disabled={!manage || busy}
-              maxLength={512}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              className={buttonClass}
-              disabled={
-                !manage ||
-                busy ||
-                pending !== null ||
-                !reason.trim() ||
-                !r.state.data.accountControl.enabled
-              }
-              onClick={() => setAction("pause")}
-            >
-              Pause account
-            </button>
-            <button
-              data-b-emergency
-              className={dangerClass}
-              disabled={!manage || busy || pending !== null || !reason.trim()}
-              onClick={() => setAction("emergency_stop")}
-            >
-              Emergency stop
-            </button>
-            <button
-              className={buttonClass}
-              disabled={
-                !manage ||
-                busy ||
-                pending !== null ||
-                !reason.trim() ||
-                r.state.data.accountControl.enabled ||
-                !r.state.data.readyToEnable
-              }
-              onClick={() => setAction("resume")}
-            >
-              Resume with current prerequisites
-            </button>
-          </div>
-          {action ? (
-            <div
-              role="alertdialog"
-              aria-label="Confirm account control"
-              className="rounded border border-line p-3 text-sm"
-            >
-              <p>
-                {action === "resume"
-                  ? "Resume this account for newly revalidated work? Cancelled work will not be replayed."
-                  : "Stop this account and cancel queued work? Already dispatched or unknown operations cannot be assumed unsent."}
-              </p>
-              <button
-                className={action === "resume" ? buttonClass : dangerClass}
-                disabled={busy}
-                onClick={() => void submit()}
-              >
-                Confirm {action.replaceAll("_", " ")}
-              </button>
-              <button
-                className={buttonClass}
-                disabled={busy}
-                onClick={() => setAction(null)}
-              >
-                Cancel
-              </button>
-            </div>
-          ) : null}
-        </>
+          <button
+            className={action === "resume" ? buttonClass : dangerClass}
+            disabled={busy}
+            onClick={() => void submit()}
+          >
+            Confirm {action.replaceAll("_", " ")}
+          </button>
+          <button
+            className={buttonClass}
+            disabled={busy}
+            onClick={() => setAction(null)}
+          >
+            Cancel
+          </button>
+        </div>
       ) : null}
       <p role="status" data-b-stop-note className="text-sm">
         {notice}

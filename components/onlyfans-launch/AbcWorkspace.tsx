@@ -43,6 +43,7 @@ export default function AbcWorkspace({ initialAccountId = null, initialScreen = 
       {state.kind === "ok" && !state.data.length ? <p data-launch-state="empty" className="text-sm text-muted">No accounts are available to you.</p> : null}
       {state.kind === "ok" && state.data.length ? <div><label htmlFor="launch-account" className="block text-xs text-muted">Account</label>
         <select id="launch-account" className="min-h-11 w-full max-w-sm rounded-lg border border-line bg-white px-2 text-sm" value={accountId ?? ""} onChange={e => selectAccount(e.target.value)}>
+          {accountId ? null : <option value="" disabled>Select an account</option>}
           {state.data.map(a => <option key={a.accountId} value={a.accountId}>{a.label}</option>)}</select></div> : null}
     </header>
     {state.kind === "ok" && initialAccountId && !accountId ? <p role="status">That account is not available to this session. Select an authorised account.</p> : null}

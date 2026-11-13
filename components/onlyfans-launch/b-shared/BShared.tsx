@@ -27,6 +27,7 @@ export function BSourceList({ prefix }: { prefix: "automation" | "memory" }) {
 export function BAccountSwitcher({ accounts, value, onChange, id }: { accounts: BAccount[]; value: string; onChange: (id: string) => void; id: string }) {
   return <div className="min-w-0"><label htmlFor={id} className="block text-xs font-semibold uppercase tracking-wide text-muted">Account</label>
     <select id={id} value={value} onChange={e => onChange(e.target.value)} className="mt-1 min-h-11 w-full min-w-0 rounded-lg border border-line bg-transparent px-2 text-sm">
+      {accounts.some(a => a.accountId === value) ? null : <option value="" disabled>Select an account</option>}
       {accounts.map(a => <option key={a.accountId} value={a.accountId}>{a.handle}</option>)}</select></div>;
 }
 export function BLoading({ label }: { label: string }) {

@@ -24,7 +24,7 @@ import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 
 export type Scenario = "settings-read" | "settings-extra-field" | "refresh" | "cancel-confirmed" | "cancel-not-requested"
-  | "account-stop-401" | "account-stop-403" | "controls-non-manager";
+  | "account-stop-401" | "account-stop-403" | "controls-non-manager" | "account-stop-bare" | "account-stop-bare-unread" | "account-pause-bare";
 export type RouteRun = { status: number; body: Record<string, unknown>; calls: { method: string; path: string; body: unknown }[] };
 
 const DASH = "https://dash.fixture.invalid", BACKEND = "https://backend.fixture.invalid", SUPABASE = "https://supabase.fixture.invalid";
@@ -67,6 +67,12 @@ async function main(scenario: Scenario): Promise<RouteRun> {
         // Two unknown top-level fields with distinct names: a fix that strips one known name still leaks the other.
         // (An unknown key INSIDE `settings` is already refused: validPolicy, native.ts:527, wants exactly 16 keys -> 503.)
         ...(scenario === "settings-extra-field" ? { internalNote: "x", backendOnlyHint: "y" } : {}) });
+    // G07a: a STOP sent without a fingerprint is pinned by the route to the fingerprint it reads now.
+    if (method === "GET" && url.pathname === `/onlyfans/api/v1/accounts/${ACCOUNT}/readiness`)
+      return scenario === "account-stop-bare" ? Response.json({ schemaVersion: "of-preview.v2", ok: true, accountId: ACCOUNT,
+        readiness: { accountControl: { fingerprint: "e".repeat(64) } } }) : Response.json({ ok: false }, { status: 503 });
+    if (method === "POST" && url.pathname === CONTROL && scenario === "account-stop-bare")
+      return Response.json({ schemaVersion: "of-controls.v1", ok: true, accountId: ACCOUNT, command: { recorded: true, commandKey: (body as { commandKey: string }).commandKey } });
     if (method === "POST" && url.pathname === CONTROL && (scenario === "account-stop-401" || scenario === "account-stop-403"))
       return Response.json({ ok: false, error: "synthetic upstream answer" }, { status: scenario === "account-stop-401" ? 401 : 403 });
     const m = new RegExp(`^${CONFIG}/engagement/actions/([a-f0-9-]{36})/(cancel|refresh)$`).exec(url.pathname);
@@ -83,10 +89,11 @@ async function main(scenario: Scenario): Promise<RouteRun> {
   const { engagementSettings, engagementActions } = await import("../../lib/onlyfans/launch/b-native-routes");
   const headers = { origin: DASH, "sec-fetch-site": "same-origin", "content-type": "application/json" };
   let response: Response;
-  if (scenario === "account-stop-401" || scenario === "account-stop-403") {
+  if (scenario.startsWith("account-")) {
     const { accountControls } = await import("../../lib/onlyfans/launch/account-controls-route");
+    const bare = scenario.includes("-bare");
     const request = new NextRequest(`${DASH}/api/onlyfans-launch/automation/accounts/${ACCOUNT}/emergency-stop`, { method: "POST", headers,
-      body: JSON.stringify({ action: "emergency_stop", expectedFingerprint: "f".repeat(64), reason: "synthetic check" }) });
+      body: JSON.stringify({ action: scenario === "account-pause-bare" ? "pause" : "emergency_stop", ...(bare ? {} : { expectedFingerprint: "f".repeat(64) }), reason: "synthetic check" }) });
     response = await withDashboardAccess(null, () => accountControls(request, ACCOUNT, true));
   } else if (scenario === "controls-non-manager") {
     const { POST } = await import("../../app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/route");
