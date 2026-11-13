@@ -134,7 +134,7 @@ async function openEngagement(post: () => Response) {
     throw new TypeError(`unexpected fetch ${method} ${url}`);
   });
   const { default: EngagementPanel } = await import("../../components/onlyfans-launch/automation/EngagementPanel");
-  await mount(React.createElement(EngagementPanel, { accountId: "of-a", manage: true, goHold: null, editPolicy: true }));
+  await mount(React.createElement(EngagementPanel, { accountId: "of-a", manage: true, goHold: null, editPolicy: true, onDenied: () => {} }));
   return { stub, reread };
 }
 const followUpText = () => document.querySelector<HTMLTextAreaElement>('textarea[aria-label="follow up text"]');

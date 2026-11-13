@@ -1,10 +1,12 @@
+// TEST-CHANGE (G07d r1): hold fixtures (seed, clear, malformed value) moved from sessionStorage to localStorage, the store the
+//   hold now lives in for cross-tab reach (stop-hold.ts). Same key, same values, no assertion changed.
 // RULE G07c launch-stop-hold (regression guard; REVIEW.md inv 7: a STOP is never harder than a go, unknown-delivery holds win).
 // Promoted from known-red W3-ui-onlyfans-launch-stop-gating (findings L3, L4; L1/L2 are G07a), widened by the #401 R1 review.
 //   L3 a 401/403 on one conversation control withdrew `manage`, and `manage` gates Emergency stop. Now it holds only the go controls of
-//      that account (conversation resume and hand back, account resume, Moxy On, engagement enabling) until a later control there succeeds.
+//      that account (conversation resume and hand back, account resume, Moxy On, engagement enabling) until a later go there succeeds (G07d B6).
 //   L4 an unconfirmed STOP (502) showed the generic "outcome is not confirmed. Refresh before trying again" and left every go live. Now a
 //      STOP holds every go of its account from the moment it is sent, until it is recorded, definitively refused, or a read STARTED after it
-//      shows the account stopped. The hold is a per-account sessionStorage marker, so a remount or reload keeps it. STOP, Pause, Take over,
+//      shows the account stopped. The hold is a per-account localStorage marker (G07d r1), so a remount, reload or other tab keeps it. STOP, Pause, Take over,
 //      No contact, Moxy Off and engagement disabling stay live in every state.
 // Mounts the real BAutomationPanel (real AccountControls, MoxyControls, EngagementPanel) inside real Next router contexts. Offline: jsdom,
 // stub fetch, synthetic ids.
@@ -20,7 +22,7 @@ const stopUrl = (id: string) => `/api/onlyfans-launch/automation/accounts/${id}/
 type Answers = { stopGet?: (n: number) => Response | Promise<Response>; stopPost?: (raw: string) => Response | Promise<Response>; control?: () => Response;
   ids?: string[]; conv?: Record<string, unknown>; moxy?: () => Response };
 async function open(a: Answers = {}, keepStorage = false) {
-  if (!keepStorage) window.sessionStorage.clear();
+  if (!keepStorage) { window.sessionStorage.clear(); window.localStorage.clear(); }
   const ids = a.ids ?? ["of-a"];
   const stub = stubFetch((url, method, n, raw) => {
     if (url === "/api/onlyfans/accounts") return json(accounts(...ids));
@@ -97,7 +99,7 @@ for (const [status, body] of [[403, ORIGIN_REFUSAL], [401, { error: "Sign in aga
     await unmount();
   });
 
-test("L3 recovery: the refusal holds only its own account, and a later control there that succeeds lifts it", async () => {
+test("L3 recovery: the refusal holds only its own account, and a later brake there that succeeds does not lift it (G07d B6)", async () => {
   let n = 0;
   await open({ ids: ["of-a", "of-b"], control: () => (n++ === 0 ? json(ORIGIN_REFUSAL, 403) : ack("request_takeover")) });
   await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
@@ -107,7 +109,7 @@ test("L3 recovery: the refusal holds only its own account, and a later control t
   await choose("select#b-auto-acct", "of-a");
   assert.equal(conv("resume_automation"), false, "the refusal is still held on of-a");
   await click(document.querySelector('[data-b-conversation="c-1"] [data-b-action="request_takeover"]'));
-  assert.equal(conv("resume_automation"), true, "a successful control on of-a does not lift the refusal");
+  assert.equal(conv("resume_automation"), false, "a successful brake on of-a lifted the refusal: only a successful go may (G07d B6)");
   assert.match(hint, /sign in again/i, "the hint says how to recover");
   await unmount();
 });
@@ -245,8 +247,8 @@ test("L4: the hold survives a remount (reload of the panel)", async () => {
 });
 
 test("L4: a malformed stored hold never throws and holds (the safe direction)", async () => {
-  window.sessionStorage.clear();
-  window.sessionStorage.setItem("b-stop-held:of-a", "{not json");
+  window.sessionStorage.clear(); window.localStorage.clear();
+  window.localStorage.setItem("b-stop-held:of-a", "{not json");
   await open({}, true);
   assert.deepEqual({ stop: stop().present, resume: conv("resume_automation") }, { stop: true, resume: false });
   await unmount();

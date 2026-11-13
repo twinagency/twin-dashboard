@@ -17,7 +17,7 @@ async function sendViaControls(conversationId: string, patch: Partial<PreviewCon
   const account = dataOf(await source.getAccount(ACCOUNT_AVA));
   const detail = dataOf(await source.getConversation(ACCOUNT_AVA, conversationId));
   assert.ok(account && detail, "fixture reads failed");
-  const offered = availableActions({ account, summary: detail.summary, viewer, deliveryIncident: detail.deliveryIncident })
+  const offered = availableActions({ goHold: null, account, summary: detail.summary, viewer, deliveryIncident: detail.deliveryIncident })
     .available.some(entry => entry.action === "send_manual_message");
   const result = await source.submitCommand(createCommandRequest({ command: "send_manual_message", accountId: ACCOUNT_AVA,
     conversationId, expectedRevision: detail.summary.revision, payload: { kind: "manual_message", body: "hello" } }));

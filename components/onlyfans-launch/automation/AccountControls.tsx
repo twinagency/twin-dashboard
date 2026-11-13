@@ -33,6 +33,7 @@ export default function AccountControls({
   goHold,
   stopSince,
   onStop,
+  onDenied,
 }: {
   accountId: string;
   manage: boolean;
@@ -43,6 +44,8 @@ export default function AccountControls({
   stopSince: number | null;
   /** `attempt` is the `stamp()` taken when that STOP was sent (unused for "confirmed"). */
   onStop: (phase: StopPhase, attempt: number) => void;
+  /** A 401/403 here holds go on the account (on = true); a recorded resume lifts it (on = false). */
+  onDenied: (accountId: string, on?: boolean) => void;
 }) {
   const base = `/api/onlyfans-launch/automation/accounts/${encodeURIComponent(accountId)}/emergency-stop`;
   const r = useJsonResource(
@@ -61,19 +64,21 @@ export default function AccountControls({
   const issued = useRef(mountedAt);
   const reread = () => { issued.current = stamp(); r.reload(); };
   const ready = r.state.kind === "ok" ? r.state.data : null;
-  const unconfirmed = outcome.stop.pending !== null || outcome.control.pending !== null;
   const sending = (a: Action) => inFlight.includes(a);
-  /** The one gate for every control that sends. A STOP is blocked only by a STOP in flight; a pause or resume by no current read,
-   *  anything in flight or anything unconfirmed. `retry` resends a lane's unconfirmed command as it was: its own reason, no state
-   *  precondition. Closing a dialog or dropping an unconfirmed result sends nothing, so it waits only for its own command (`sending`). */
+  /** The one gate for every control that sends. A STOP is blocked only by a STOP in flight; a pause only by its own lane (no current read,
+   *  a pause or resume in flight or unconfirmed), never by a STOP (G07d B11); a resume by anything in flight or unconfirmed, and goHold.
+   *  `retry` resends a lane's unconfirmed command as it was: its own reason, no state precondition. Closing a dialog or dropping an
+   *  unconfirmed result sends nothing, so it waits only for its own command (`sending`). */
   function blocked(a: Action, retry = false) {
     if (!manage) return true;
     if (a === "emergency_stop") return sending(a) || (!retry && !reason.trim());
-    if (inFlight.length || (a === "resume" && goHold !== null)) return true;
+    const pause = a === "pause";
+    if (pause ? inFlight.some(f => laneOf(f) === "control") : inFlight.length || goHold !== null) return true;
     if (retry) return false;
-    return !reason.trim() || !ready || unconfirmed ||
-      (a === "pause" ? !ready.accountControl.enabled : ready.accountControl.enabled || !ready.readyToEnable);
+    return !reason.trim() || !ready || outcome.control.pending !== null || (!pause && outcome.stop.pending !== null) ||
+      (pause ? !ready.accountControl.enabled : ready.accountControl.enabled || !ready.readyToEnable);
   }
+  useEffect(() => { if (r.state.kind === "denied") onDenied(accountId); }, [r.state.kind, accountId, onDenied]);
   // A read issued after the STOP was sent that shows the account stopped confirms it: release the hold and the stop lane.
   useEffect(() => {
     if (stopSince === null || !ready || ready.accountControl.enabled || issued.current <= stopSince) return;
@@ -100,6 +105,8 @@ export default function AccountControls({
       object(q.data.command) &&
       q.data.command.recorded === true;
     const unconfirmed = q.kind === "unconfirmed" || (q.kind === "ok" && !recorded);
+    if (q.kind === "denied" || q.kind === "readonly") onDenied(accountId);
+    else if (recorded && command.action === "resume") onDenied(accountId, false);
     // Before the unmount check: a STOP answered after the operator switched account still settles that account's hold.
     if (isStop) onStop(recorded ? "recorded" : unconfirmed ? "unknown" : "refused", attempt);
     if (!mounted.current) return;

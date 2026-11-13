@@ -50,7 +50,9 @@ export async function bFetch(url: string, opts: Opts = {}): Promise<BReply<unkno
   if (response.status === 403) return value?.code === "agency_read_only" || /read-only/i.test(String(value?.error ?? "")) ? { kind: "readonly" } : { kind: "denied" };
   if (response.status === 501 && value?.code === "contract_pending") return { kind: "contract_pending", contract: text(value.contract, "unspecified") };
   if (response.ok && value) return { kind: "ok", data: value };
-  if (method !== "GET" && (response.status === 502 || value?.outcome === "unconfirmed" || !value || response.status >= 500 && response.status !== 503))
+  // A write's 503 is unknown unless it says it was refused before dispatch (bRefuse's code, or a forwarded outcome "refused").
+  const refusedMarker = value?.code === "refused" || value?.outcome === "refused";
+  if (method !== "GET" && (response.status === 502 || value?.outcome === "unconfirmed" || !value || response.status >= 500 && !(response.status === 503 && refusedMarker)))
     return { kind: "unconfirmed", error: B_UNCONFIRMED };
   if (method === "GET") return { kind: "unavailable", error: text(value?.error, "This read is unavailable right now.") };
   return { kind: "refused", status: response.status, error: text(value?.error, "The request was not accepted.") };

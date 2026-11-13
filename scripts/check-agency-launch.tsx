@@ -56,10 +56,10 @@ test("chatter permissions stay narrow in UI, middleware and backend transport; o
   const viewer = { kind: "operator" as const, label: "Chatter", canManage: false, canChat: true, scopedAccountIds: [], canActAsOwner: true };
   const account = { ...accounts[0], health: "connected" as const, capabilities: Object.fromEntries(Object.keys(accounts[0].capabilities).map(key => [key, "available"])) as typeof accounts[0]["capabilities"] };
   const summary = { ...Object.values(conversationDetails)[0].summary, automationMode: "human_controlled" as const, takeoverState: "effective" as const, delivery: "sent" as const };
-  const actions = availableActions({ account, summary, viewer });
+  const actions = availableActions({ goHold: null, account, summary, viewer });
   assert(canSubmitCommand(viewer, actions, "send_manual_message")); assert(canSubmitCommand(viewer, actions, "release_takeover"));
   for (const action of ["pause_automation", "resume_automation", "resolve_delivery_evidence", "mark_no_contact"] as const) assert(!canSubmitCommand(viewer, actions, action));
-  const foreign = availableActions({ account, summary, viewer: { ...viewer, canActAsOwner: false } }); assert(!canSubmitCommand(viewer, foreign, "send_manual_message"));
+  const foreign = availableActions({ goHold: null, account, summary, viewer: { ...viewer, canActAsOwner: false } }); assert(!canSubmitCommand(viewer, foreign, "send_manual_message"));
   let calls = 0;
   const fetcher: typeof fetch = async () => { calls++; return Response.json({}, { headers: { [AGENCY_ACCESS_HEADER]: AGENCY_CHAT_ACCESS_VERSION } }); };
   const scoped = agencyScopedFetch(grant, { baseUrl: "http://service.invalid", token: "synthetic" }, fetcher);

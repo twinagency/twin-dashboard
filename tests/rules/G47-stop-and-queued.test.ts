@@ -12,7 +12,7 @@ import { AUTOMATED, AVA_ACCOUNT, TAKEN_OVER, offered } from "../rules/W4-lib-onl
 const NOVA = accounts.find(a => a.accountId === ACCOUNT_NOVA)!;
 const onNova = () => {
   const summary = { ...conversationDetails["of-conv-ava-1003"].summary, ...AUTOMATED, delivery: "sent" as const };
-  return availableActions({ account: NOVA, summary, viewer: operatorViewer() }).available.map(a => a.action);
+  return availableActions({ goHold: null, account: NOVA, summary, viewer: operatorViewer() }).available.map(a => a.action);
 };
 
 test("control: healthy account offers pause and no-contact on an automated thread; send on a sent taken-over thread", () => {

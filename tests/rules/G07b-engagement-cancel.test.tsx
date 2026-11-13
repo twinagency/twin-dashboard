@@ -20,7 +20,7 @@ async function open(a: Answers) {
     throw new TypeError(`unexpected fetch ${method} ${url}`);
   });
   const { default: EngagementPanel } = await import("../../components/onlyfans-launch/automation/EngagementPanel");
-  await mount(React.createElement(EngagementPanel, { accountId: "of-a", manage: true, goHold: null, editPolicy: false }));
+  await mount(React.createElement(EngagementPanel, { accountId: "of-a", manage: true, goHold: null, editPolicy: false, onDenied: () => {} }));
   return stub;
 }
 /** Each helper asserts its container exists (boolean) before looking inside it, so a missing card or row cannot pass. */

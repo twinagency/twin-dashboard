@@ -6,7 +6,7 @@ import { HEALTH_TEXT, MODE_TEXT, TAKEOVER_TEXT, AFTER, actionRules, type BAccoun
 import { readAccounts, readConversations, readRuntime, sendControl } from "@/lib/onlyfans/launch/automation/b-automation-client";
 import EngagementPanel from "./EngagementPanel";
 import AccountControls, { type StopPhase } from "./AccountControls";
-import { readHold, stamp, writeHold } from "./stop-hold";
+import { STOP_HELD_TEXT, readHold, stamp, useStopHolds, writeHold } from "./stop-hold";
 import MoxyControls from "./MoxyControls";
 import { bTime, type BReply } from "@/lib/onlyfans/launch/b-common";
 import { BAccountSwitcher, BError, BLoading, BPending, bButton, bDanger } from "../b-shared/BShared";
@@ -27,11 +27,13 @@ function toLoad<T>(r: BReply<T>): Load<T> | null {
 /** Current account controls, conversation handling and native proactive engagement. */
 export default function BAutomationPanel({ canManage = false, initialAccountId }: { canManage?: boolean; initialAccountId?: string }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams();
+  useStopHolds();
   const chooseAccount = (id: string) => { setAccountId(id); router.replace(workspaceHref(pathname, { ...parseWorkspaceScope(params), accountId: id }), { scroll: false }); };
   const manage = canManage;
-  // Go (never STOP or a brake) is held per account: while a STOP there is unconfirmed (stop-hold.ts), and after a 401/403 on a
-  // control there until a later one succeeds.
+  // Go (never STOP or a brake) is held per account: while a STOP there is unconfirmed (stop-hold.ts), and after a 401/403 from any of
+  // its endpoints (conversation, account, Moxy, engagement) until a go there succeeds. A brake that succeeds lifts nothing.
   const [denied, setDenied] = useState<Record<string, boolean>>({});
+  const onDenied = useCallback((id: string, on = true) => setDenied(d => (Boolean(d[id]) === on ? d : { ...d, [id]: on })), []);
   const [, setHoldTick] = useState(0);
   function stopPhase(id: string, phase: StopPhase, attempt: number) {
     const hold = readHold(id);
@@ -93,9 +95,9 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
     const r = await sendControl(forAccount, c.conversationId, action, c.revision);
     if (current.current !== forAccount) return; // operator switched account: the reply belongs to another screen
     setBusy(null);
-    if (r.kind === "ok") { setNotice(`${c.fanName}: ${AFTER[action]}`); setDenied(d => ({ ...d, [forAccount]: false })); }
+    if (r.kind === "ok") { setNotice(`${c.fanName}: ${AFTER[action]}`); if (action === "resume_automation" || action === "release_takeover") onDenied(forAccount, false); }
     else if (r.kind === "readonly" || r.kind === "denied") {
-      setDenied(d => ({ ...d, [forAccount]: true }));
+      onDenied(forAccount);
       setNotice("Your access was refused for this change. Sign in again and reload the page. Resuming is held here; stops still work.");
     }
     else if (r.kind === "refused") setNotice(r.status === 409 ? `${c.fanName}: the conversation changed or is on hold. The list was refreshed; check it and try again.` : `${c.fanName}: ${r.error}`);
@@ -106,7 +108,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
 
   const account = accounts.state === "ok" ? accounts.data.find(a => a.accountId === accountId) : undefined;
   const stopSince = accountId ? readHold(accountId)?.since ?? null : null;
-  const goHold = stopSince !== null ? "Held until the emergency stop is confirmed." :
+  const goHold = stopSince !== null ? STOP_HELD_TEXT :
     denied[accountId] ? "Access was refused on this account. Sign in again and reload the page." : null;
   return <section className="grid min-w-0 gap-4 p-3" aria-labelledby="b-auto-h" data-b-automation>
     <h2 id="b-auto-h" className="text-lg font-semibold">Automation and follow-ups</h2>
@@ -133,7 +135,7 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {runtime.state === "loading" ? <BLoading label="Loading runtime…" /> : null}
         {runtime.state === "error" ? <BError message={runtime.message} onRetry={() => void loadAccountData(accountId)} /> : null}
         <AccountControls key={accountId} accountId={accountId} manage={manage} onChanged={() => void loadAccountData(accountId)}
-          goHold={goHold} stopSince={stopSince} onStop={(phase, attempt) => stopPhase(accountId, phase, attempt)} />
+          goHold={goHold} stopSince={stopSince} onStop={(phase, attempt) => stopPhase(accountId, phase, attempt)} onDenied={onDenied} />
       </div>
 
       <div className="min-w-0 rounded-xl border border-line p-3" data-b-card="conversations">
@@ -162,9 +164,9 @@ export default function BAutomationPanel({ canManage = false, initialAccountId }
         {convs.state === "ok" && convs.data.more ? <p className="mt-2 text-xs text-muted" data-b-more>Only the most recent conversations are shown. More exist.</p> : null}
       </div>
 
-      <MoxyControls key={accountId} accountId={accountId} manage={manage} goHold={goHold} onOwnership={setMoxySelected} />
+      <MoxyControls key={accountId} accountId={accountId} manage={manage} goHold={goHold} onOwnership={setMoxySelected} onDenied={onDenied} />
       {/* A brake: follow-ups and their cancel render whatever the Moxy read says; only the policy editor waits for a legacy view. */}
-      <EngagementPanel key={accountId} accountId={accountId} manage={manage} goHold={goHold} editPolicy={moxySelected === false} />
+      <EngagementPanel key={accountId} accountId={accountId} manage={manage} goHold={goHold} editPolicy={moxySelected === false} onDenied={onDenied} />
 
     </> : null}
   </section>;

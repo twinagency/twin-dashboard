@@ -63,6 +63,7 @@ import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onl
 import { fanContentHistory } from "@/lib/onlyfans/chat-content-history";
 import ChatContentPicker, { isSendableOffer, offerMediaSummary } from "./ChatContentPicker";
 import { Info } from "@/components/clone/fields";
+import { stopHoldReason, useStopHolds } from "@/components/onlyfans-launch/automation/stop-hold";
 
 const PRIORITY_LABEL: Record<ConversationSummary["priority"], { label: string; tone: "pink" | "gold" | "slate" }> = {
   priority: { label: "Priority", tone: "pink" },
@@ -838,6 +839,7 @@ export default function InboxView({
   inboxSearch?: InboxSearch;
   onInboxSearchChange?: (search: InboxSearch) => void;
 }) {
+  useStopHolds();
   const [mobilePanel, setMobilePanel] = useState<"conversations" | "chat" | "controls">("conversations");
   // The fan panel is a third column only where there is room for it (1280px+).
   // Narrower desktops start with it closed and can open it; closing it never
@@ -884,6 +886,7 @@ export default function InboxView({
           summary: detail.summary,
           viewer,
           deliveryIncident: detail.deliveryIncident,
+          goHold: stopHoldReason(activeAccount.accountId),
         })
       : null;
   const engineAware = detail ? parseEngineStatus(detail.engineStatus, detail.accountId, detail.conversationId)?.state === "current" : false;

@@ -393,7 +393,7 @@ async function main() {
     check("failed delivery is settled, not unresolved", isDeliveryHeld("failed") === false);
 
     const paused = { ...summary(AVA, "of-conv-ava-1002"), delivery: "unknown" as const, automationMode: "paused" as const };
-    const pausedSet = availableActions({ account, summary: paused, viewer: operator, deliveryIncident: incident });
+    const pausedSet = availableActions({ goHold: null, account, summary: paused, viewer: operator, deliveryIncident: incident });
     check(
       "resuming replies is withheld while a send is unresolved, because it could dispatch",
       !canSubmitCommand(operator, pausedSet, "resume_automation"),
@@ -411,7 +411,7 @@ async function main() {
     check("resolving the evidence is offered instead", canSubmitCommand(operator, pausedSet, "resolve_delivery_evidence"));
 
     const automated = { ...paused, automationMode: "automated" as const };
-    const automatedSet = availableActions({ account, summary: automated, viewer: operator, deliveryIncident: incident });
+    const automatedSet = availableActions({ goHold: null, account, summary: automated, viewer: operator, deliveryIncident: incident });
     check(
       "pausing is still offered, because it only reduces activity",
       canSubmitCommand(operator, automatedSet, "pause_automation"),
@@ -483,7 +483,7 @@ async function main() {
       partialOutbound.map((message) => message.delivery).join(","),
     );
     check("the partial override keeps an attempt to resolve", partial.deliveryIncident !== null);
-    const partialSet = availableActions({
+    const partialSet = availableActions({ goHold: null,
       account,
       summary: partial.summary,
       viewer: operator,
@@ -493,7 +493,7 @@ async function main() {
 
     const settled = withDetailOverrides(source, { ...DEFAULT_CONTROLS, delivery: "sent" });
     check("a settled outcome clears the attempt", settled.deliveryIncident === null);
-    const settledSet = availableActions({
+    const settledSet = availableActions({ goHold: null,
       account,
       summary: { ...settled.summary, automationMode: "human_controlled", takeoverState: "effective" },
       viewer: operator,
@@ -706,8 +706,8 @@ async function main() {
     const conversation = { ...summary(AVA_SECOND, "of-conv-ava2-1101"), automationMode: "human_controlled" as const, takeoverState: "effective" as const };
     const operator = operatorViewer();
     const viewAs = readOnlyView([AVA_SECOND]);
-    const operatorSet = availableActions({ account, summary: conversation, viewer: operator });
-    const viewAsSet = availableActions({ account, summary: conversation, viewer: viewAs });
+    const operatorSet = availableActions({ goHold: null, account, summary: conversation, viewer: operator });
+    const viewAsSet = availableActions({ goHold: null, account, summary: conversation, viewer: viewAs });
 
     check("the operator may send", canSubmitCommand(operator, operatorSet, "send_manual_message"));
     check(
