@@ -107,7 +107,7 @@ export const POST = withAdmin(async (req) => {
     return ok({
       created: created ?? { id },
       note:
-        "Created with status from your payload (default active). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.",
+        `Created with status "${String(fd.get("status") ?? "").trim() || "paused"}" (from your payload, default paused). A clone is a database row: index.ts picks up an active clone within ~30s, no deploy. It will have NO photos, NO onboarding steps and an uncompiled persona until you configure it.`,
       next: [
         "POST /api/admin/v1/clones/write {action:\"compile\"} once intake prose is set, or the persona stays empty and the prompt is thin",
         "GET  /api/admin/v1/config?clone=<slug> to read back everything that was stored",

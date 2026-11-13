@@ -26,6 +26,9 @@ export const GET = withAdmin(async (req) => {
     lastActiveFromDays: params.get("lastActiveFromDays") ? Number(params.get("lastActiveFromDays")) : undefined,
     lastActiveToDays: params.get("lastActiveToDays") ? Number(params.get("lastActiveToDays")) : undefined,
     language: params.get("language") ?? undefined,
+    // Same two narrowing/legacy knobs create_run keeps via sanitizeFilters.
+    includeLegacy: params.get("includeLegacy") === "true" || undefined,
+    excludeIds: params.getAll("excludeIds").flatMap((v) => v.split(",")).filter(Boolean),
   };
   const dailyCap = params.get("dailyCap") ? Number(params.get("dailyCap")) : DEFAULT_DAILY_CAP;
   const runCap = params.get("runCap") ? Number(params.get("runCap")) : null;

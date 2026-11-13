@@ -33,7 +33,7 @@ export const GET = withAdmin(async () => {
       "GET /api/admin/v1/clones",
       "GET /api/admin/v1/config?clone=<uuid|slug|name>",
       "GET /api/admin/v1/prompts",
-      "GET /api/admin/v1/chats?clone=&fan=&limit=&before=",
+      "GET /api/admin/v1/chats?clone=&fan=&limit=&before=&cursor=",
       "GET /api/admin/v1/fans?clone=&fan=&limit=",
       "GET /api/admin/v1/logs?clone=&level=&source=&since=&limit=",
       "GET /api/admin/v1/revenue?period=&clone=",
