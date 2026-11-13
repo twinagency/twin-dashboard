@@ -26,16 +26,20 @@ function intentHash(intent: string): string {
   for (let i = 0; i < intent.length; i++) { const c = intent.charCodeAt(i); a = Math.imul(a ^ c, 16777619); b = Math.imul(b ^ c, 0x5bd1e995); }
   return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
 }
-const KEEP_MS = 24 * 3600_000;
+/** A hold this old is shown as "held, needs review". It is never dropped for its age (G04c3h B2). */
+const REVIEW_MS = 24 * 3600_000;
 type Entry = { key: string; held: boolean; at: number; request: unknown; stale?: boolean };
-/** Pending keys a `persistAs` store saved in this tab's sessionStorage. Anything malformed or older than a day is dropped. */
-function storedKeys(name: string | undefined, now: number): [string, Entry][] {
+/**
+ * Pending keys a `persistAs` store saved in this tab's sessionStorage, as [key, at, request, stale]. Anything malformed is dropped;
+ * nothing is dropped for its age. The stale mark persists (G04c3h B4), so two revision refusals across a reload still release.
+ */
+function storedKeys(name: string | undefined): [string, Entry][] {
   try {
     const value: unknown = name ? JSON.parse(globalThis.sessionStorage?.getItem(name) ?? "{}") : {};
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    return Object.entries(value).flatMap(([id, item]): [string, Entry][] => Array.isArray(item) && [2, 3].includes(item.length) && typeof item[0] === "string"
-      && /^[a-f0-9]{64}$/.test(item[0]) && typeof item[1] === "number" && now - item[1] < KEEP_MS && /^[a-f0-9]{16}$/.test(id)
-      ? [[id, { key: item[0], held: true, at: item[1], request: item[2] ?? null }]] : []);
+    return Object.entries(value).flatMap(([id, item]): [string, Entry][] => Array.isArray(item) && [2, 3, 4].includes(item.length) && typeof item[0] === "string"
+      && /^[a-f0-9]{64}$/.test(item[0]) && typeof item[1] === "number" && /^[a-f0-9]{16}$/.test(id)
+      ? [[id, { key: item[0], held: true, at: item[1], request: item[2] ?? null, stale: item[3] === 1 }]] : []);
   } catch { return []; }
 }
 /**
@@ -48,24 +52,24 @@ export type Settled = "ack" | "unconfirmed" | "refused" | "stale";
  * Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent.
  * With `persistAs` (a name that carries the operator and account), every pending key is mirrored to this tab's sessionStorage
  * under the intent's hash, with the request it was taken for (null for Plan C), so a reload by the same operator keeps both.
- * Entries expire after a day, in memory and storage alike; that expiry is itself a silent release of a held key.
- * There is no count cap: every entry is either an attempt in flight or a held key (its attempt was unconfirmed), and dropping
- * either would let a retry act twice. Age alone bounds the store, checked before every read.
+ * Nothing expires and there is no count cap (G04c3h B2): every entry is an attempt in flight or a held key (an ack, or a refusal of an
+ * attempt never unconfirmed, deletes it at once), and dropping either would let a rebuilt send or create act twice. Over-holding is the
+ * safe direction. A day-old entry is listed by needsReview so the surface can say so; it is still held.
  */
 export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now) {
   // A key read back from an earlier page load had an unknown outcome there, so it is held.
-  const keys = new Map(storedKeys(persistAs, now()));
-  const live = () => { const t = now(); for (const [name, entry] of keys) if (t - entry.at >= KEEP_MS) keys.delete(name); return keys; };
+  const keys = new Map(storedKeys(persistAs));
   const save = () => {
     if (persistAs) try {
-      if (live().size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([name, entry]) => [name, [entry.key, entry.at, entry.request]]))));
+      if (keys.size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([name, entry]) => [name, [entry.key, entry.at, entry.request, entry.stale ? 1 : 0]]))));
       else globalThis.sessionStorage.removeItem(persistAs);
     } catch { /* No storage: the in-memory key still covers this page load. */ }
   };
+  const oldestFirst = () => [...keys.values()].sort((a, b) => a.at - b.at);
   return {
     /** `request` is kept with the key until the outcome releases both. */
     keyFor(intent: string, request: unknown = null): string {
-      let entry = live().get(intentHash(intent));
+      let entry = keys.get(intentHash(intent));
       if (!entry) { keys.set(intentHash(intent), entry = { key: random(), held: false, at: now(), request }); save(); }
       return entry.key;
     },
@@ -76,17 +80,19 @@ export function createCommandKeyStore(random: () => string = newCommandKey, pers
      * second. Returns whether the key is still held.
      */
     settle(intent: string, outcome: Settled): boolean {
-      const name = intentHash(intent), entry = live().get(name);
+      const name = intentHash(intent), entry = keys.get(name);
       if (outcome === "ack" || !entry?.held && outcome !== "unconfirmed" || entry?.stale && outcome === "stale") keys.delete(name);
       else if (entry) { entry.held = entry.held || outcome === "unconfirmed"; entry.stale = outcome === "stale"; }
       save();
       return keys.get(name)?.held === true;
     },
     /** The request of every entry not yet released, oldest first: held, or in flight (unknown to a remount or a reload). */
-    pending: () => [...live().values()].sort((a, b) => a.at - b.at).map(entry => entry.request),
+    pending: () => oldestFirst().map(entry => entry.request),
+    /** The requests of entries pending for a day or more: still held, shown as "held, needs review". */
+    needsReview: () => oldestFirst().filter(entry => now() - entry.at >= REVIEW_MS).map(entry => entry.request),
     /** Forgets every entry, in storage too. */
     clear: () => { keys.clear(); save(); },
-    size: () => live().size,
+    size: () => keys.size,
   };
 }
 
@@ -105,23 +111,36 @@ const accountKeyStore = (accountId: string, operatorScope: string) => sharedStor
 /**
  * The same store for a write whose double could reach a fan (G04c2: a manual send, a campaign create), one per kind, operator scope and
  * account, keeping each pending request with its key. Persisted only with an operator scope; without one it covers a remount, not a reload.
- * It survives a reload, not a re-sign-in: see forgetHeldKeys.
+ * It survives a reload, not a re-sign-in: see forgetHeldKeys. The first held store opened under a new operator scope forgets every other
+ * scope's held writes (G04c3h B5): another scope is another sign-in on this tab (planCKeyScope of the session actor), and the earlier
+ * one's message and campaign text must not outlive it. Its own holds stay. No scope (no actor) forgets nothing.
  */
-export const heldKeyStore = (kind: HeldKind, accountId: string, operatorScope?: string) => sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope);
+let currentScope: string | undefined;
+export function heldKeyStore(kind: HeldKind, accountId: string, operatorScope?: string) {
+  if (operatorScope && operatorScope !== currentScope) { currentScope = operatorScope; forget(scope => !!scope && scope !== operatorScope); }
+  return sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope);
+}
 const HELD_KINDS = ["of-send-keys", "of-campaign-keys"] as const;
 type HeldKind = typeof HELD_KINDS[number];
-/**
- * On a session loss (401; a 403 is not one, #19) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
- * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
- */
-export function forgetHeldKeys(operatorScope?: string) {
-  const prefixes = HELD_KINDS.map(kind => `${kind}:${operatorScope ?? ""}:`), held = (name: string | null) => !!name && prefixes.some(p => name.startsWith(p));
+/** The operator scope a held store's name carries, or null for any other name. */
+function heldScope(name: string | null): string | null {
+  const kind = HELD_KINDS.find(k => name?.startsWith(`${k}:`)), rest = kind ? name?.slice(kind.length + 1) ?? "" : "";
+  return kind && rest.includes(":") ? rest.slice(0, rest.indexOf(":")) : null;
+}
+/** Forgets the held writes of every scope `drop` names, in memory and in storage. */
+function forget(drop: (scope: string) => boolean) {
+  const held = (name: string | null) => { const scope = heldScope(name); return scope !== null && drop(scope); };
   for (const [name, store] of accountStores) if (held(name)) store.clear();
   try {
     const names = Array.from({ length: globalThis.sessionStorage.length }, (_, i) => globalThis.sessionStorage.key(i));
     for (const name of names) if (held(name)) globalThis.sessionStorage.removeItem(name!);
   } catch { /* No storage: nothing was persisted. */ }
 }
+/**
+ * On a session loss (401; a 403 is not one, #19) the scope's held writes of every kind are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
+ * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
+ */
+export const forgetHeldKeys = (operatorScope?: string) => forget(scope => scope === (operatorScope ?? ""));
 
 const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c`;
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });

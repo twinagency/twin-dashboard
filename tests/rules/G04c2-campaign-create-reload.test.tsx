@@ -134,11 +134,16 @@ test("G04c2 #2: without a reload, a remount for another operator scope does not 
   await load("op-a", "of-r-inpage", lostReply, "Hello there");
   await queue();
   const [sent] = posts().map(bodyOf);
-  await load("op-b", "of-r-inpage", () => ack("of-r-inpage"));
-  assert.ok(!locked() && !retryButton(), "the in-page held write is shared across operators on one account");
   await load("op-a", "of-r-inpage", () => ack("of-r-inpage"));
   await click(retryButton());
   assert.deepEqual(posts().map(bodyOf), [sent], "control: the remount for the same operator restores the exact write");
+  await load("op-a", "of-r-inpage", lostReply, "Hello there");
+  await queue();
+  await load("op-b", "of-r-inpage", () => ack("of-r-inpage"));
+  assert.ok(!locked() && !retryButton(), "the in-page held write is shared across operators on one account");
+  // G04c3h B5: another scope on this tab is another sign-in, so op-a's held write (and its campaign text) is forgotten, not kept.
+  await load("op-a", "of-r-inpage", () => ack("of-r-inpage"));
+  assert.ok(!locked() && !retryButton(), "the signed-out scope's held write outlived another scope's sign-in");
 });
 
 test("G04c2: another operator scope or another account sees no held create and never reuses the key", async () => {

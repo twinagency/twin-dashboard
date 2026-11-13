@@ -40,6 +40,9 @@ const REASONS: Record<string, string> = {
  */
 const heldWrite = (value: unknown): value is Write => campaignObject(value) && value.kind === "create" && validCampaignPayload(value.body);
 const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request before making another change.";
+/** A held create pending for a day or more (plan-c-client.ts needsReview, G04c3h B2): still held, never dropped for its age. */
+const REVIEW_TEXT = "Held, needs review. This campaign has not been confirmed for over a day.";
+const REVIEW_HINT = "It stays held so it cannot go out twice. Check Saved campaigns for it, then retry this same request: a create that already went out is replayed, not sent again.";
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
 
@@ -52,6 +55,7 @@ export default function CampaignManager({ accountId, sender = null, readOnly = f
 function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope }: { accountId: string; sender: Sender | null; readOnly: boolean; operatorScope?: string }) {
   // A write in flight or unconfirmed, on an earlier page load or mount too, is the only action offered until its outcome is known.
   const keys = heldKeyStore("of-campaign-keys", accountId, operatorScope), held = useRef(keys.pending().find(heldWrite) ?? null).current;
+  const heldNotice = (write: Write) => keys.needsReview().includes(write) ? REVIEW_TEXT : UNCONFIRMED_TEXT;
   const initialDraft = useRef(recallDraft(accountId)).current;
   const router = useRouter();
   const { audience, agencyName } = useDashboardAccess();
@@ -63,7 +67,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const [detail, setDetail] = useState<{ campaign: Campaign; recipients: CampaignRecipient[] } | null>(null);
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
   const [listReady, setListReady] = useState(false);
-  const [notice, setNotice] = useState(held ? UNCONFIRMED_TEXT : ""), [retry, setRetry] = useState<Write | null>(held);
+  const [notice, setNotice] = useState(held ? heldNotice(held) : ""), [retry, setRetry] = useState<Write | null>(held);
   const [name, setName] = useState(initialDraft.name), [body, setBody] = useState(initialDraft.body), [scheduled, setScheduled] = useState(initialDraft.scheduled);
   const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">(initialDraft.audienceKind);
   const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set(initialDraft.fanIds));
@@ -150,7 +154,8 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
     finally {
       const uncertain = create ? keys.settle(intent, outcome ?? "unconfirmed") : !outcome;
       // The oldest held create stays offered whatever this write was, so a brake used meanwhile never hides it.
-      if (active.current && !sessionDenied.current) { setRetry(keys.pending().find(heldWrite) ?? (uncertain ? request : null)); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
+      const next = keys.pending().find(heldWrite);
+      if (active.current && !sessionDenied.current) { setRetry(next ?? (uncertain ? request : null)); if (uncertain) setNotice(next ? heldNotice(next) : UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
       sending.current = false;
     }
   }
@@ -166,6 +171,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   }
   const locked = busy || !!retry || denied || readOnly;
   const campaign = detail?.campaign;
+  // A held create holds Resume, the one go change, until its outcome is known; Pause and Cancel remaining stay live (G04c3h B3).
   const actionAllowed = (action: CampaignAction) => !!campaign && (action === "pause" ? ["scheduled", "running"].includes(campaign.status) : action === "resume" ? campaign.status === "paused" : !["cancelled", "completed"].includes(campaign.status));
   return <div className="space-y-5" data-of-campaign-manager>
     <Card className={twinRefresh ? "twin-campaign-compose" : "p-4"}><h2 className="font-semibold">New campaign</h2>
@@ -193,12 +199,12 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
       </fieldset></form>
       {twinRefresh && <aside className="twin-campaign-preview" aria-label="Campaign preview"><h3>Message preview</h3><p className="twin-help">OnlyFans · {name || "Untitled campaign"}</p><div className="twin-preview-bubble">{body || "Your message will appear here as you type."}</div><dl><div><dt>Saved content</dt><dd>{catalogue.find(item => item.itemId === catalogItemId)?.label || "Text only"}</dd></div><div><dt>Audience</dt><dd>{audienceKind === "explicit" ? `${fanIds.size} selected conversations` : "All synchronized conversations, up to 1,000 (refused above that)"}</dd></div><div><dt>Send time</dt><dd>{scheduled ? "Scheduled for your selected time" : "Queues when you submit"}</dd></div></dl><p className="twin-help">This preview does not send a message. Review the audience and send time before submitting.</p></aside>}
     </Card>
-    {notice ? <div role="status" className="rounded-xl border border-line bg-elev p-4 text-sm" data-of-campaign-notice>{notice}{retry ? <button type="button" className={`${buttonClass} ml-3 bg-white`} disabled={busy} onClick={() => void write(retry)}>Retry same request</button> : null}</div> : null}
+    {notice ? <div role="status" className="rounded-xl border border-line bg-elev p-4 text-sm" data-of-campaign-notice>{notice}{notice === REVIEW_TEXT ? <Info text={REVIEW_HINT} /> : null}{retry ? <button type="button" className={`${buttonClass} ml-3 bg-white`} disabled={busy} onClick={() => void write(retry)}>Retry same request</button> : null}</div> : null}
     <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved campaigns</h2><button className={buttonClass} disabled={busy || denied || loading} onClick={() => { void read(); if (selected) void read(selected); }}>Refresh</button></div>
     {loading ? <p role="status" className="text-sm text-muted">Loading campaigns…</p> : !listReady ? <p className="text-sm text-muted">Campaign history is unavailable.</p> : !campaigns.length ? <p className="text-sm text-muted">No campaigns are recorded for this account.</p> : <div className="grid gap-3 md:grid-cols-2">{campaigns.map(item => <button type="button" key={item.campaignId} onClick={() => setSelected(item.campaignId)} className={`min-w-0 rounded-xl border p-4 text-left ${selected === item.campaignId ? "border-accent bg-accent/5" : "border-line bg-white"}`} data-of-campaign={item.campaignId}><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{item.name}</span><span className="rounded-full bg-elev px-2 py-1 text-xs capitalize text-muted">{item.status}</span></div><p className="mt-2 line-clamp-2 text-sm text-muted">{item.body}</p><p className="mt-3 text-xs text-muted">{item.recipientCount} recipients · {item.counts.accepted} accepted · {item.counts.unknown} uncertain</p><p className="mt-1 text-xs text-muted">Scheduled {when(item.scheduledAt)}</p></button>)}</div>}
     {truncated ? <p className="text-xs text-muted">Showing the latest 100 campaigns.</p> : null}
     {selected && !detail ? <p role="status" className="text-sm text-muted">Loading campaign detail…</p> : null}
-    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={busy || denied || readOnly} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
+    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={busy || denied || readOnly || (action === "resume" && retry?.kind === "create")} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
       <p className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-elev p-3 text-sm">{campaign.body}</p>
       {campaign.offer ? <div className="mt-3 rounded-lg border border-line p-3 text-sm"><div className="font-semibold">{campaign.offer.label} · {formatRecordedMoney(campaign.offer.priceCents, campaign.offer.currency)}</div><p className="mt-1 text-xs text-muted">{campaign.offer.mediaIds.length} saved media · {campaign.offer.previewIds.length} free previews · Frozen catalogue terms</p></div> : null}
       <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-5">{RECIPIENT_STATUSES.map(status => <div key={status} className="rounded-lg border border-line p-3"><div className="text-xs text-muted">{LABELS[status]}</div><div className="mt-1 text-lg font-semibold">{campaign.counts[status]}</div></div>)}</div>
