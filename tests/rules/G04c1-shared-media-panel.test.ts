@@ -59,3 +59,14 @@ test("a refresh answer for a different file is refused", async () => {
   await click(checks()[0]);
   assert.match(text(), /Upload status could not be verified\./);
 });
+
+// CF3: the answer is the file's live receipt, so it replaces the stale held row for the same kind and source id (its stale Check
+// goes with it). History rows for the file stay.
+test("a refresh answer for a newer receipt replaces the stale held row for the same file", async () => {
+  await mount([row("receipt-1", "failed", true), row("receipt-0", "expired", false)], row("receipt-2", "complete", false));
+  await click(checks()[0]);
+  assert.equal(checks().length, 0, "no stale Check left");
+  assert.equal(all("li").length, 2, "the live answer and the history row");
+  assert.doesNotMatch(text(), /Needs review/);
+  assert.match(text(), /Cancelled or expired/);
+});

@@ -257,4 +257,25 @@ if (ensureModuleMocks(import.meta.url, { controls: 2, rest: 10 }, () => {
     assert.deepEqual(store.rows, [before]);
     assert.equal(creates().length, 0);
   });
+
+  // CF2/FLF1: observe's save is conditional on the row it read. A stale held read (refresh, or the cleanup continuation) that
+  // saves after another request adopted the row must not downgrade it: zero rows match, the route re-reads and answers the
+  // stored row (held from the stored row), never a 503.
+  const ADOPTED = { status: "complete", media_id: "777", error_code: null };
+  for (const [name, held, stale, send] of [
+    ["refresh racing refresh", REVIEW, job("failed", { status: "failed", error: "upload_failed" }, { lastError: "upload_failed" }), check],
+    ["cleanup continuation racing refresh", { status: "failed", error_code: "provider_cleanup_required", job_id: JOB }, job("complete", { status: "done", mediaId: "777" }, { cleanupRequired: true }), share],
+  ] as const) {
+    test(`race: ${name}, a stale held read saves after an adopted save: the adopted row survives`, async () => {
+      store.rows = [receipt(held)];
+      // The other request adopts the row while this one waits on its (stale) uploads read.
+      withJobs([], () => { Object.assign(store.rows[0], ADOPTED); return uploadsList([stale]); });
+      const response = await send();
+      assert.equal(response.status, 200);
+      const body = (await transferOf(response)) as unknown as { status: string; mediaId: string | null; held: boolean };
+      assert.deepEqual([body.status, body.mediaId, body.held], ["complete", "777", false], "answers the stored adopted row");
+      assert.deepEqual([store.rows.length, store.rows[0].status, store.rows[0].media_id, store.rows[0].error_code], [1, "complete", "777", null], "not downgraded");
+      assert.equal(creates().length, 0);
+    });
+  }
 }

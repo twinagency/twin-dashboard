@@ -58,6 +58,7 @@ export function sharedFakeDb(store: Store) {
       const q: Record<string, unknown> = {
         select: () => q, order: () => q, limit: () => q,
         eq: (k: string, v: unknown) => { preds.push(r => r[k] === v); return q; },
+        is: (k: string, v: null) => { if (v !== null) throw Error("unsupported is"); preds.push(r => r[k] == null); return q; },
         or: (filter: string) => { preds.push(orTerm(`or(${filter})`)); return q; },
         insert: (value: Row) => { op = { kind: "insert", value }; return q; },
         update: (patch: Row) => { op = { kind: "update", patch }; return q; },

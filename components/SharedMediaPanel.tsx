@@ -61,10 +61,11 @@ export default function SharedMediaPanel({ creatorId, selected }: { creatorId: s
     running.current = true; controller.current = new AbortController(); setBusy(true); setNotice("Checking the upload status in OnlyFans…");
     try {
       const result = await request(endpoint(accountId), { kind: row.kind, sourceId: row.sourceId, action: "refresh" }), next = result.transfer as Transfer;
-      // The answer is the file's live receipt, which may be a newer one than the row clicked.
+      // The answer is the file's live receipt, which may be a newer one than the row clicked. It replaces any held row for the
+      // same file (a stale one would keep its Check); history rows stay.
       if (!result.ok || !next || next.sourceId !== row.sourceId || next.kind !== row.kind) throw Error("Upload status could not be verified.");
       if (!live.current) return;
-      setTransfers(current => [next, ...current.filter(previous => previous.id !== next.id)]);
+      setTransfers(current => [next, ...current.filter(previous => previous.id !== next.id && !(previous.held && previous.kind === next.kind && previous.sourceId === next.sourceId))]);
       setNotice(`Upload status checked: ${labels[next.status] ?? "Needs review"}.`);
     } catch (error) { if (live.current) setNotice(error instanceof Error ? error.message : "Upload status could not be checked."); }
     finally { running.current = false; if (live.current) setBusy(false); }

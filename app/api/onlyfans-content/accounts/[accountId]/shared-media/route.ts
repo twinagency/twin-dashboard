@@ -119,7 +119,15 @@ export async function POST(request: NextRequest, context: Context) {
       if (!job) return refuse("This upload is outside the recent history. Review it in OnlyFans before retrying.");
       const next = sharedUploadProgress(held, job);
       if (!(next.status === "complete" && next.media_id) && !sharedHeld(next)) return refuse("OnlyFans has not settled this upload. It stays held for review. Check again later.", 503);
-      await save(next); return answer({ ok: true, transfer: publicSharedTransfer(row!) });
+      // Saved only while the stored row is still the one read (CF2): a stale read never downgrades a newer save, such as a
+      // concurrent refresh or cleanup continuation that adopted it. Lost race: answer the stored row, `held` from it.
+      let cas = db.from("shared_media_transfers").update({ ...next, updated_at: new Date().toISOString() }).eq("id", held.id).eq("clone_id", cloneId).eq("status", held.status);
+      cas = held.error_code == null ? cas.is("error_code", null) : cas.eq("error_code", held.error_code);
+      cas = held.media_id == null ? cas.is("media_id", null) : cas.eq("media_id", held.media_id);
+      const saved = await cas.select("*").maybeSingle(); if (saved.error) throw Error("receipt_unconfirmed");
+      const stored = saved.data ? saved : await db.from("shared_media_transfers").select("*").eq("id", held.id).eq("clone_id", cloneId).maybeSingle();
+      if (stored.error || !stored.data) throw Error("receipt_unconfirmed");
+      return answer({ ok: true, transfer: publicSharedTransfer(stored.data as SharedTransfer) });
     };
     if (refresh || row.error_code === SHARED_CLEANUP_HOLD) return await observe(row);
     // Any other live terminal receipt (complete, or held for review because the file may already be in the vault) is answered
