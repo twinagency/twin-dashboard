@@ -15,7 +15,9 @@ export async function GET(request:NextRequest,context:{params:Promise<{accountId
     const r=await createBackendTransport(auth.fetch)(config.baseUrl.replace(/\/+$/,"")+path,{method:"GET",headers:{Authorization:`Bearer ${config.token}`,[CONTENT_HEADER]:CONTENT_SCHEMA}});
     if(r.status===202){await r.body?.cancel();return new NextResponse(null,{status:202,headers:{...PRIVATE_HEADERS,"Retry-After":"2"}});}
     const mime=r.headers.get("content-type")?.split(";")[0]||"";
-    if(!r.ok||!(p.variant==="preview"?["image/jpeg","image/png","image/webp","image/gif"]:["video/mp4","video/webm"]).includes(mime)){await r.body?.cancel();return new NextResponse(null,{status:r.status===404?404:503,headers:PRIVATE_HEADERS});}
+    // An upstream that names another account or media is refused, so its bytes are never served here. The backend does not echo these yet, so absent passes.
+    const foreign=(h:string,v:string)=>{const e=r.headers.get(h);return e!==null&&e!==v;};
+    if(!r.ok||foreign("X-OnlyFans-Account-Id",p.accountId)||foreign("X-OnlyFans-Media-Id",p.mediaId)||!(p.variant==="preview"?["image/jpeg","image/png","image/webp","image/gif"]:["video/mp4","video/webm"]).includes(mime)){await r.body?.cancel();return new NextResponse(null,{status:r.status===404?404:503,headers:PRIVATE_HEADERS});}
     return new NextResponse(r.body,{headers:{...PRIVATE_HEADERS,"Content-Type":mime,"X-Content-Type-Options":"nosniff","Content-Security-Policy":"default-src 'none'; sandbox"}});
   }catch{return new NextResponse(null,{status:503,headers:PRIVATE_HEADERS});}
 }

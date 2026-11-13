@@ -7,7 +7,8 @@
  * parent's, bad or unreadable: RED); it only sends anonymous page GETs (curl -q) and reads the DB read-only, within the budget.
  * Required (live mode): stack down, auth on or a refused target is INFRA. Optional (fast's stage, alone as mode `stage`, verdict
  * STAGE): the same three are a named skip. Fakes: a child-process dashboard (optionally retitled, or under a fake next dev), a fake psql.
- * Drives the real scripts offline; sentinels are synthetic. Control: `exec true` is EXEC.
+ * Drives the real scripts offline; sentinels are synthetic. Control: `exec true` is EXEC. check.sh is macOS only (sandbox-exec): off
+ * macOS it refuses (INFRA), and only that and the env refusal, which runs first, are tested there; the rest skip.
  * Run: nice -n 10 node --import tsx --test --test-concurrency=1 tests/rules/F0-check-harness.test.ts
  */
 import assert from "node:assert/strict";
@@ -113,6 +114,8 @@ function start(args: string[], env: Record<string, string> = {}, { outer, cwd = 
   });
   return { child, done };
 }
+/** For a test that needs macOS: off it, check.sh refuses (INFRA) before running anything. */
+const MAC = { skip: process.platform !== "darwin" && "check.sh is a macOS dev-box harness (sandbox-exec)" };
 const run = (args: string[], env: Record<string, string> = {}, o: Opts = {}) => start(args, env, o).done;
 /** fast's live stage alone (LIVE=opt): the stage mode. */
 const stage = (base: string, env: Record<string, string> = {}) => run(["stage"], { CHECK_BASE_URL: base, ...env });
@@ -149,7 +152,7 @@ function fastRepo(scripts: Record<string, string>, { planner = readFileSync("scr
   return d;
 }
 
-test("control: exec true is EXEC; plan records exactly check-plan.ts's plan rows (name, status = action, note), never GREEN", async () => {
+test("control: exec true is EXEC; plan records exactly check-plan.ts's plan rows (name, status = action, note), never GREEN", MAC, async () => {
   const r = await run(["exec", "true"]);
   const v = verdict(r.root);
   assert.equal(r.code, 0, r.out);
@@ -164,7 +167,7 @@ test("control: exec true is EXEC; plan records exactly check-plan.ts's plan rows
   assert.deepEqual(p.steps.map((s) => [s.name, s.status, s.note]), expected);
 });
 
-test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", async () => {
+test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown budget is RED 'budget'", MAC, async () => {
   const r = await run(["exec", "false"]);
   assert.equal(r.code, 1, r.out);
   assert.equal(verdict(r.root).verdict, "RED");
@@ -178,7 +181,7 @@ test("a failing step is RED, exit 1; a step cap is RED naming the step; a blown 
   }
 });
 
-test("a step that leaves a process behind fails and the process is killed", async () => {
+test("a step that leaves a process behind fails and the process is killed", MAC, async () => {
   const pidf = join(tmp("f0-pid-"), "pid");
   const r = await run(["exec", "sh", "-c", `sleep 300 & echo $! >${pidf}`]);
   assert.equal(r.code, 1, r.out);
@@ -186,7 +189,7 @@ test("a step that leaves a process behind fails and the process is killed", asyn
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "survivor still alive");
 });
 
-test("TERM to the harness kills the running step's process group", async () => {
+test("TERM to the harness kills the running step's process group", MAC, async () => {
   const pidf = join(tmp("f0-pid-"), "pid");
   const h = start(["exec", "sh", "-c", `echo $$ >${pidf}; exec sleep 300`]);
   assert.ok(await until(() => existsSync(pidf) && readFileSync(pidf, "utf8").trim() !== ""));
@@ -197,13 +200,13 @@ test("TERM to the harness kills the running step's process group", async () => {
   assert.ok(await until(() => !alive(Number(readFileSync(pidf, "utf8")))), "step outlived the harness");
 });
 
-test("fast refuses (INFRA) without the loopback-only network sandbox", async () => {
+test("fast refuses (INFRA) without the loopback-only network sandbox", MAC, async () => {
   const r = await run(["fast"], { CHECK_INHERITED_SANDBOX: "" }, { outer: LOOP });
   assert.equal(r.code, 2, r.out);
   assert.match(r.out, /sandbox/);
 });
 
-test("fast is GREEN only when premerge and every run row pass: a failing leaf or premerge, an unknown action, premerge not run: RED", async () => {
+test("fast is GREEN only when premerge and every run row pass: a failing leaf or premerge, an unknown action, premerge not run: RED", MAC, async () => {
   const ok = await run(["fast"], {}, { cwd: fastRepo({ "test:ok": "node ok.mjs --x" }) });
   assert.equal(ok.code, 0, ok.out);
   assert.match(ok.out, /^GREEN fast @/m);
@@ -222,7 +225,7 @@ test("fast is GREEN only when premerge and every run row pass: a failing leaf or
   }
 });
 
-test("the planner and the verdict writer get a scrubbed env: a NODE_OPTIONS preload never runs", async () => {
+test("the planner and the verdict writer get a scrubbed env: a NODE_OPTIONS preload never runs", MAC, async () => {
   const d = tmp("f0-preload-");
   writeFileSync(join(d, "pre.cjs"), `require("fs").appendFileSync(${JSON.stringify(join(d, "ran"))}, "x")`);
   const r = await run(["plan"], { NODE_OPTIONS: `--require=${join(d, "pre.cjs")}` });
@@ -230,7 +233,7 @@ test("the planner and the verdict writer get a scrubbed env: a NODE_OPTIONS prel
   assert.ok(!existsSync(join(d, "ran")), "preload ran");
 });
 
-test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never a PATH shadow, and refuses (INFRA) without one", async () => {
+test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never a PATH shadow, and refuses (INFRA) without one", MAC, async () => {
   const shadow = tmp("f0-shadow-"); // drops the profile and runs the step bare
   writeFileSync(join(shadow, "sandbox-exec"), '#!/bin/sh\nshift 2\nexec "$@"\n');
   chmodSync(join(shadow, "sandbox-exec"), 0o755);
@@ -252,7 +255,7 @@ test("exec runs its step in /usr/bin/sandbox-exec's loopback-only sandbox, never
   }
 });
 
-test("steps get a scrubbed env: no inherited vars, dotenv pointed at /dev/null, a private TMPDIR", async () => {
+test("steps get a scrubbed env: no inherited vars, dotenv pointed at /dev/null, a private TMPDIR", MAC, async () => {
   const log = evidence((await run(["exec", "env"], { F0_LEAK: "sentinel-leak" })).root);
   assert.match(log, /^DOTENV_CONFIG_PATH=\/dev\/null$/m);
   assert.match(log, /^TMPDIR=.*twin-check/m);
@@ -273,7 +276,7 @@ test("a prod Supabase project or a non-loopback Supabase URL in our env is refus
   }
 });
 
-test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, or a JWT, is redacted; NEXT_PUBLIC_/PUBLISHABLE are not", async () => {
+test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, or a JWT, is redacted; NEXT_PUBLIC_/PUBLISHABLE are not", MAC, async () => {
   const dotenv = 'OPENROUTER_API_KEY="sentinel-or-key-1a2b"\nexport TELEGRAM_BOT_TOKEN=sentinel-bot-tok-3c4d\nNEXT_PUBLIC_X_KEY=sentinel-pub-5e6f\n';
   const ours = { DASHBOARD_PASSWORD: PW, DASHBOARD_SESSION_SECRET: "sentinel-sess-7a8b", STRIPE_PUBLISHABLE_KEY: "sentinel-pub-9c0d" };
   const said = `${PW} sentinel-sess-7a8b sentinel-pub-9c0d jwt eyJhbGciOiJIUzI1NiJ9.eyJyb2xlIjoic2VydmljZSJ9.c2lnbmF0dXJl`;
@@ -284,7 +287,7 @@ test("a KEY/TOKEN/SECRET/PASSWORD value from our env or the repo's .env files, o
   for (const s of ["sentinel-pub-5e6f", "sentinel-pub-9c0d"]) assert.ok(log.includes(s), `${s}: ${log}`);
 });
 
-test("live refuses before any request unless the dashboard's .env files name only loopback Supabase: INFRA in live, a skip in fast", async () => {
+test("live refuses before any request unless the dashboard's .env files name only loopback Supabase: INFRA in live, a skip in fast", MAC, async () => {
   const bad: Record<string, string>[] = [
     { ".env": `SUPABASE_URL=https://aouaenqayfltoqrmpitg.supabase.co\nSUPABASE_SERVICE_KEY=${SECRET}\n` },
     { ".env": "SUPABASE_URL=http://127.0.0.1:54321\n", ".env.local": "NEXT_PUBLIC_SUPABASE_URL=https://cnnsllgzskqkvdovyiiv.supabase.co\n" },
@@ -321,7 +324,7 @@ test("live refuses before any request unless the dashboard's .env files name onl
   }
 });
 
-test("live is GREEN on a well-formed stack (fast's stage: STAGE, never GREEN), anonymous page GETs only, DB read-only, no leaks", async () => {
+test("live is GREEN on a well-formed stack (fast's stage: STAGE, never GREEN), anonymous page GETs only, DB read-only, no leaks", MAC, async () => {
   const d = await dashboard(GOOD);
   try {
     const home = tmp("f0-home-"); // curl -q: a ~/.curlrc cannot turn the GETs into anything else
@@ -347,7 +350,7 @@ test("live is GREEN on a well-formed stack (fast's stage: STAGE, never GREEN), a
   }
 });
 
-test("live: login demanded (INFRA; a skip in fast), DB unreadable or prod in a response INFRA, a failing page RED", async () => {
+test("live: login demanded (INFRA; a skip in fast), DB unreadable or prod in a response INFRA, a failing page RED", MAC, async () => {
   const cases = [
     ["live", "auth", false, 2, /auth on/],
     ["fast", "auth", false, 0, /skip  live .*auth on/],
@@ -370,7 +373,7 @@ test("live: login demanded (INFRA; a skip in fast), DB unreadable or prod in a r
   }
 });
 
-test("nothing listening: live is INFRA, fast's live stage is a 'stack down' skip", async () => {
+test("nothing listening: live is INFRA, fast's live stage is a 'stack down' skip", MAC, async () => {
   const req = await run(["live"], { CHECK_BASE_URL: "http://127.0.0.1:9" });
   assert.equal(req.code, 2, req.out);
   assert.match(req.out, /stack down/);
@@ -379,7 +382,7 @@ test("nothing listening: live is INFRA, fast's live stage is a 'stack down' skip
   assert.deepEqual(verdict(opt.root).steps.map((s) => [s.name, s.status, s.note]), [["live", "skip", "stack down: nothing listening on http://127.0.0.1:9"]]);
 });
 
-test("live reads the listening process's own env (next dev's server: its parent's): non-loopback, prod or unreadable is RED, nothing sent", async () => {
+test("live reads the listening process's own env (next dev's server: its parent's): non-loopback, prod or unreadable is RED, nothing sent", MAC, async () => {
   const bad = [
     [{ procEnv: { SUPABASE_URL: "https://example.com" } }, /live:target .*non-loopback/],
     [{ procEnv: { NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:1", X: "aouaenqayfltoqrmpitg" } }, /live:target .*prod/],
@@ -409,7 +412,7 @@ test("live reads the listening process's own env (next dev's server: its parent'
   }
 });
 
-test("live is held to its budget: a hung psql is killed and RED 'budget'; a stage that ends late is RED 'budget'", async () => {
+test("live is held to its budget: a hung psql is killed and RED 'budget'; a stage that ends late is RED 'budget'", MAC, async () => {
   const d = await dashboard(GOOD);
   writeFileSync(join(bin, "slow"), "");
   try {
@@ -427,4 +430,15 @@ test("live is held to its budget: a hung psql is killed and RED 'budget'; a stag
   const late = await stage("http://127.0.0.1:9", { CHECK_BUDGET_SECS: "1", PATH: `${slow}:${bin}:${process.env.PATH}` });
   assert.equal(late.code, 1, late.out);
   assert.match(late.out, /budget/);
+});
+
+test("off macOS check.sh refuses (INFRA) after its env check and before any step: no sandbox-exec, no false GREEN", async () => {
+  const shim = tmp("f0-uname-"); // a Linux uname on macOS; on Linux the real one
+  writeFileSync(join(shim, "uname"), "#!/bin/sh\necho Linux\n");
+  chmodSync(join(shim, "uname"), 0o755);
+  const r = await run(["exec", "true"], { PATH: `${shim}:${process.env.PATH}` });
+  assert.equal(r.code, 2, r.out);
+  assert.match(r.out, /infra preflight .*macOS only: steps need/);
+  assert.equal(verdict(r.root).verdict, "INFRA");
+  assert.ok(!r.out.includes("pass  exec"), r.out);
 });

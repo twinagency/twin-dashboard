@@ -8,6 +8,7 @@ export async function GET() {
     const suggestions = await computeSuggestions();
     return NextResponse.json({ suggestions });
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 500 });
+    console.error("[ai-assistant/suggestions]", e);
+    return NextResponse.json({ error: "suggestions unavailable" }, { status: 500 });
   }
 }

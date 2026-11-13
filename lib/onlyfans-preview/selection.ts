@@ -383,6 +383,9 @@ export function applyConversation(
   result: RequestState<ConversationDetail>,
 ): ApplyResult {
   if (generation !== state.scopeGeneration) return { state, applied: false };
+  // A payload naming another account or thread is never cached under this one; the thread shows an error instead of loading forever.
+  if ((result.status === "ready" || result.status === "stale") && (result.data.accountId !== accountId || result.data.conversationId !== conversationId))
+    result = { status: "error", message: "This conversation could not be loaded. Reopen it to retry." };
   const entry = entryOf(state, accountId);
   const issued = entry.detailSeq[conversationId] ?? 0;
   if (seq < issued) {

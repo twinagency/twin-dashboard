@@ -4,6 +4,7 @@
 #     only its listed env, then live (LIVE=opt).   live  read-only smoke of the local stack: anonymous page GETs + one read-only psql.
 #   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
 #   stage  fast's live stage alone (LIVE=opt), verdict STAGE, never GREEN (self-test hook).
+# macOS only: elsewhere INFRA after the env check, before anything runs.
 # Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
 #   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
@@ -337,6 +338,7 @@ live() {
 # ---- modes ----
 echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s (premerge ${PCAP}s)" | tee "$EV/run.log"
 envguard
+[ "$(uname -s)" = Darwin ] || infra preflight "macOS only: steps need /usr/bin/sandbox-exec"
 if [ $MODE = exec ]; then
   [ "$1" = -- ] && shift
   sandbox
