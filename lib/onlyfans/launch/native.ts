@@ -758,6 +758,12 @@ export type NativeReadiness = {
   };
   limits: string[];
 };
+/**
+ * Only the account-control fingerprint of a readiness body. Looser than parseNativeReadiness on purpose: a STOP is pinned to it
+ * (account-controls-route.ts), and a STOP must not fail because an unrelated readiness section drifted from the full parser.
+ */
+export const readinessFingerprint = (v: unknown): string | null =>
+  object(v) && object(v.accountControl) && hash(v.accountControl.fingerprint) ? v.accountControl.fingerprint : null;
 export function parseNativeReadiness(v: unknown): NativeReadiness | null {
   if (
     !object(v) ||

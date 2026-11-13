@@ -42,8 +42,9 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     const l = toLoad(await readAccounts(c.signal)); if (!l || c.signal.aborted) return;
     setAccounts(l);
     if (l.state === "ok") {
-      const wanted = selectedAccountId ?? initialAccountId;
-      if (wanted && !l.data.some(a => a.accountId === wanted)) { setAccounts({ state: "denied" }); setAccountId(""); return; }
+      // An empty ?account= is no ?account=; one this session cannot see selects nothing and keeps the switcher.
+      const wanted = selectedAccountId || initialAccountId || undefined;
+      if (wanted && !l.data.some(a => a.accountId === wanted)) { setAccountId(""); return; }
       setAccountId(old => wanted ?? (old && l.data.some(a => a.accountId === old) ? old : l.data[0]?.accountId ?? ""));
     }
   }, [selectedAccountId, initialAccountId]);
@@ -129,8 +130,10 @@ export default function BMemoryPanel({ canManage = false, canRecover = canManage
     {accounts.state === "error" ? <BError message={accounts.message} onRetry={() => void loadAccounts()} /> : null}
     {accounts.state === "denied" ? <p role="alert" className="text-sm">Your session cannot read accounts. Sign in again.</p> : null}
     {accounts.state === "ok" && accounts.data.length === 0 ? <p className="text-sm" data-b-state="empty">No OnlyFans accounts are connected yet.</p> : null}
+    {accounts.state === "ok" && accounts.data.length > 0 && !selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} unseen={Boolean(initialAccountId) && !accountId} onChange={chooseAccount} /> : null}
+    {accounts.state === "ok" && accounts.data.length > 0 && selectedAccountId && !accountId ? <p role="status" className="text-sm">That account is not available to this session.</p> : null}
     {accounts.state === "ok" && accountId ? <>
-      {!selectedAccountId ? <BAccountSwitcher id="b-mem-acct" accounts={accounts.data} value={accountId} onChange={chooseAccount} /> : part === "all" ? <p className="min-w-0 break-words text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p> : null}
+      {selectedAccountId && part === "all" ? <p className="min-w-0 break-words text-sm">{accounts.data.find(a => a.accountId === accountId)?.handle ?? accountId} · fan {selectedFanId}</p> : null}
       <div className="flex flex-wrap gap-2"><button type="button" className={bButton} onClick={() => { if (!selectedFanId) void loadCoverage(accountId); if (fanId) void loadFan(accountId, fanId); }}>Refresh current state</button>
         {!selectedFanId ? <button type="button" className={bButton} disabled={!manage || !canRecover || busy} onClick={() => void backfill()}>Resume account recovery</button> : null}</div>
       {!selectedFanId && coverage.state === "loading" ? <BLoading label="Loading history and fans…" /> : null}

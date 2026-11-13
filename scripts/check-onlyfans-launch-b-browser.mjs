@@ -977,13 +977,14 @@ async function runSynthetic() {
         settingsRevision,
         "no duplicate settings revision",
       );
+      // Pause keeps the identical retry: same body, same key, no extra revision.
       b.state.loseControlAck = true;
       await page
         .getByRole("textbox", { name: "Reason", exact: true })
-        .fill("Synthetic emergency-stop regression");
-      await page.locator("[data-b-emergency]").click();
+        .fill("Synthetic pause regression");
+      await page.getByRole("button", { name: "Pause account", exact: true }).click();
       await page
-        .getByRole("button", { name: "Confirm emergency stop", exact: true })
+        .getByRole("button", { name: "Confirm pause", exact: true })
         .click();
       await page.getByText(/Account runtime stopped/).waitFor();
       await page
@@ -1000,7 +1001,7 @@ async function runSynthetic() {
           exact: true,
         })
         .click();
-      await page.getByText(/Account command recorded/).waitFor();
+      await page.getByText(/Pause: Account command recorded/).waitFor();
       eq(
         JSON.stringify(b.state.posts.at(-1)),
         unknownControl,
@@ -1011,6 +1012,36 @@ async function runSynthetic() {
         controlRevision,
         "no duplicate account control revision",
       );
+      // A lost emergency STOP is not an identical retry: it offers "Send stop again" and carries no fingerprint.
+      b.state.loseControlAck = true;
+      await page
+        .getByRole("textbox", { name: "Reason", exact: true })
+        .fill("Synthetic emergency-stop regression");
+      await page.locator("[data-b-emergency]").click();
+      await page
+        .getByRole("button", { name: "Confirm emergency stop", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Send stop again", exact: true })
+        .waitFor();
+      eq(
+        await page
+          .getByRole("button", {
+            name: "Retry identical account command",
+            exact: true,
+          })
+          .count(),
+        0,
+        "STOP never offers an identical retry",
+      );
+      ok(
+        !("expectedFingerprint" in b.state.posts.at(-1)),
+        "STOP carries no fingerprint",
+      );
+      await page
+        .getByRole("button", { name: "Send stop again", exact: true })
+        .click();
+      await page.getByText(/Emergency stop: Account command recorded/).waitFor();
       eq(b.state.controls["acc-a"].enabled, false);
       ok(await fits(page), `${label} automation fits`);
       await shot(page, `synthetic-native-automation-${label}.png`);
