@@ -55,7 +55,7 @@ const css = `
 `;
 (async () => {
   const bundle = await build({ stdin: { contents: entry, resolveDir: root, loader: 'tsx' }, bundle: true, write: false, minify: true, platform: 'browser', format: 'iife', jsx: 'automatic', define: { 'process.env.NODE_ENV': '"production"' }, plugins: [{ name: 'trial-isolation', setup(b) {
-    b.onResolve({ filter: /.*/ }, args => Object.hasOwn(stubs, args.path) ? { path: args.path, namespace: 'fixture' } : args.path.startsWith('@/') ? { path: path.resolve(root, args.path.slice(2)) + (args.path.endsWith('AgencyTeamForm') || args.path.endsWith('AgencyJoin') ? '.tsx' : '.ts') } : undefined);
+    b.onResolve({ filter: /.*/ }, args => Object.hasOwn(stubs, args.path) ? { path: args.path, namespace: 'fixture' } : args.path.startsWith('@/') ? { path: ['.ts', '.tsx'].map(ext => path.resolve(root, args.path.slice(2)) + ext).find(file => fs.existsSync(file)) } : undefined);
     b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: stubs[args.path], loader: 'tsx', resolveDir: root }));
   } }] });
   const script = bundle.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
