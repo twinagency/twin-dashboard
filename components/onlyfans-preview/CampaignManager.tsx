@@ -122,7 +122,8 @@ function CampaignManagerForAccount({ accountId, sender, readOnly }: { accountId:
     try {
       const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
       if ([401, 403].includes(response.status)) { uncertain = false; sessionLost(); return; }
-      if ([400, 404, 409, 413, 503].includes(response.status)) { uncertain = false; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
+      // A refusal status is only a refusal when the body does not say "unconfirmed" (a 503 can be either).
+      if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome !== "unconfirmed") { uncertain = false; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
       else if (response.ok) {
         const ack = parseCampaignAck(await response.json(), { accountId, ...(request.kind === "change" ? { campaignId: request.campaignId, action: request.body.action, expectedRevision: request.body.expectedRevision } : {}) });
         if (ack && active.current) { uncertain = false; setSelected(ack.campaignId); selection.current = ack.campaignId;

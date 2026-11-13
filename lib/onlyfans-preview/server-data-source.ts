@@ -22,6 +22,7 @@ import { validManualMedia } from "../onlyfans/manual-media";
 // cannot reach its backend.
 
 import type { OnlyFansDataSource } from "./data-source";
+import { intentRequestKey } from "./actions";
 import { controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
@@ -161,7 +162,7 @@ export function createFetchOnlyFansTransport(
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ action, expectedRevision: command.expectedRevision,
-            ...(resolution && command.payload.kind === "delivery_resolution" ? { attemptId: command.payload.attemptId, decision: command.payload.decision, providerMessageId: Number(command.payload.providerMessageId), requestKey: command.idempotencyKey } : {}),
+            ...(resolution && command.payload.kind === "delivery_resolution" ? { attemptId: command.payload.attemptId, decision: command.payload.decision, providerMessageId: Number(command.payload.providerMessageId), requestKey: intentRequestKey(command.idempotencyKey) } : {}),
             ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
               ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}), ...(command.payload.media ? { media: command.payload.media } : {}) } : {}) }),
         });

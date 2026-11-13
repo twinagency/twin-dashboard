@@ -32,7 +32,7 @@ function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflic
 /** Side-by-side review of changed OnlyFans terms. Nothing changes until a decision is applied. */
 export default function ContentSyncConflict({ accountId, readOnly = false, onResolved }: { accountId: string; readOnly?: boolean; onResolved?: () => void }) {
   const [items, setItems] = useState<SyncConflict[] | null>(null), [error, setError] = useState(""), [choice, setChoice] = useState<Record<string, Resolution>>({});
-  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retry, setRetry] = useState<Pending | null>(null), [connection, setConnection] = useState(false);
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retries, setRetries] = useState<Record<string, Pending>>({}), [connection, setConnection] = useState(false);
   const controller = useRef<AbortController | null>(null), submitting = useRef(false), resolved = useRef(onResolved);
   resolved.current = onResolved;
 
@@ -48,6 +48,8 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
   async function apply(pending: Pending) {
     if (submitting.current) return;
     submitting.current = true; setBusy(true); setNotice(""); setConnection(false);
+    // An unconfirmed resolve holds only its own conflict, so review of every other conflict stays open.
+    const setRetry = (kept: Pending | null) => setRetries(({ [pending.conflictId]: _, ...rest }) => kept ? { ...rest, [pending.conflictId]: kept } : rest);
     try {
       const reply = await syncCall(accountId, `/conflicts/${encodeURIComponent(pending.conflictId)}/resolve`, { method: "POST", body: pending.body, signal: controller.current?.signal });
       if (reply.kind === "stale") return;
@@ -67,7 +69,7 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
     <h4 className="font-semibold">Changed OnlyFans terms</h4>
     {error ? <p className="mt-2 text-sm" role="status">{error} <button type="button" className="font-semibold text-accent underline" onClick={() => void read()}>Try again</button></p> : null}
     {items && !items.length && !error ? <p className="mt-2 text-sm" data-conflicts-empty>No item has changed terms to review.</p> : null}
-    {items?.map(conflict => { const selected = choice[conflict.conflictId];
+    {items?.map(conflict => { const selected = choice[conflict.conflictId], retry = retries[conflict.conflictId];
       const sourceUnavailable = conflict.sourceIssue != null;
       const submit = () => { if (selected && !(selected === "accept_source" && sourceUnavailable)) void apply({ conflictId: conflict.conflictId, resolution: selected, body: { requestId: crypto.randomUUID(), resolution: selected,
         expectedRevision: conflict.revision, expectedItemFingerprint: conflict.itemFingerprint } }); };
@@ -90,7 +92,7 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
         </fieldset>
         {readOnly ? <p className="mt-2 text-xs text-muted">Read-only team access</p> : <div className="mt-3 flex flex-wrap gap-2">
           <button type="submit" className={buttonClass} disabled={!selected || busy || !!retry || selected === "accept_source" && sourceUnavailable} data-conflict-apply>Apply decision</button>
-          {retry && retry.conflictId === conflict.conflictId ? <button type="button" className={buttonClass} disabled={busy} data-conflict-retry onClick={() => void apply(retry)}>Retry the same request</button> : null}
+          {retry ? <button type="button" className={buttonClass} disabled={busy} data-conflict-retry onClick={() => void apply(retry)}>Retry the same request</button> : null}
         </div>}
       </form>; })}
     {notice ? <p className="mt-2 text-sm" role="status" data-conflict-notice>{notice}{connection ? <> <Link className="font-semibold text-accent underline" href={connectionHref(accountId)}>Reconnect this account</Link></> : null}</p> : null}
