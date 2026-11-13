@@ -18,11 +18,13 @@ export default async function PlanCPage({ searchParams }: { searchParams: Promis
   const backend = configuredPlanCBackend();
   if (!backend) return unavailable("The pilot backend is not configured.");
   const requested = await searchParams;
-  const rawAccount = typeof requested.account === "string" ? requested.account : process.env.ONLYFANS_PLAN_C_ACCOUNT;
+  // Only an absent ?account= falls back to the configured pilot; a malformed (array) one is refused, never silently replaced.
+  const rawAccount = requested.account === undefined ? process.env.ONLYFANS_PLAN_C_ACCOUNT : typeof requested.account === "string" ? requested.account : null;
   const accountId = requestId(rawAccount);
   if (!accountId) return unavailable("Select the configured pilot account.");
-  const [access, scope] = await Promise.all([backend.drafts(accountId, operator.actor), backend.scope(accountId, operator.actor)]);
-  if (!access.ok || !scope.ok) return unavailable("This pilot account is not available to this session.");
+  // Gated on pilot scope alone: a failing draft read must not take STOP away. The console shows its own draft error.
+  const scope = await backend.scope(accountId, operator.actor);
+  if (!scope.ok) return unavailable(scope.status === 502 || scope.status === 503 ? "Pilot configuration is unavailable. Retry." : "This pilot account is not available to this session.");
   return <div className="dashboard-page">
     <CreatorPlatformHeading title={scope.data.authorizationMode === "autonomous" ? "Pilot monitoring" : "Plan C approvals"} description={description} />
     <p className="mb-3 text-sm text-muted" data-plan-c-account>Account {accountId}</p>

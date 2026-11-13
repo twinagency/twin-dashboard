@@ -1,12 +1,9 @@
 import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { authorizeOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
-import { internalOperator } from "@/lib/onlyfans/reads";
-import { namedOwnerActor } from "@/lib/onlyfans/plan-c-owner";
-import { SESSION_COOKIE } from "@/lib/session";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
+import type { EngineEnvironment } from "@/lib/onlyfans/engine-status";
 import { configuredEngineOperatorBackend, ENGINE_OPERATOR_SCHEMA, engineActionNeedsNote, isEngineEnvironment, isEngineOperatorAction } from "@/lib/onlyfans/engine-operator";
 
 export const dynamic = "force-dynamic";
@@ -33,21 +30,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
     const resolution = engineActionNeedsNote(body.action);
     const allowed = new Set(["action", "expectedRevision", "environment", ...(resolution ? ["note"] : [])]);
     if (Object.keys(body).some(key => !allowed.has(key)) || (resolution && !Object.hasOwn(body, "note")) ||
-        (body.environment !== undefined && !isEngineEnvironment(body.environment)) ||
+        // Every action names its environment; the dashboard never picks one for it.
+        !isEngineEnvironment(body.environment) ||
         (resolution && (typeof body.note !== "string" || !body.note.trim() || body.note !== body.note.trim() || body.note.length > 108 || /[\u0000-\u001f]/.test(body.note)))) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That request action is invalid."); }
   const backend = configuredEngineOperatorBackend(ctx.fetch);
   if (!backend || !isEngineOperatorAction(body.action)) return refuse(503, "Request actions are not configured.");
-  const action = body.action, expectedRevision = body.expectedRevision as number, note = typeof body.note === "string" ? body.note : undefined;
-  // A label for the audit string only. The backend decides whether this binding is simulated or real and refuses a mismatch.
-  const environment = isEngineEnvironment(body.environment) ? body.environment : "simulation";
-  // The backend binds a handover to this actor, and the key hashes it: a named owner keeps both across sign-ins.
-  // A lookup that may answer differently on retry refuses before any upstream call, so one intent never gets two keys.
-  const named = internalOperator(ctx.auth) ? await namedOwnerActor((await cookies()).get(SESSION_COOKIE)?.value) : null;
-  if (named === "unavailable") return refuse(503, "Your sign-in could not be verified. Try again.");
-  const actor = named ?? ctx.actor;
-  const commandKey = createHash("sha256").update(JSON.stringify([actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
-  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor, commandKey, note, environment });
+  const action = body.action, environment = body.environment as EngineEnvironment, expectedRevision = body.expectedRevision as number, note = typeof body.note === "string" ? body.note : undefined;
+  // A chat grant may handle requests; marking one reconciled stays with managers and the operator (RISKS D6), refused before upstream.
+  if (action === "mark_reconciled" && !ctx.canManage) return refuse(403, "Only a manager can mark a request reconciled.");
+  // `environment` is a label for the audit string only. The backend decides whether this binding is simulated or real and refuses a mismatch.
+  const commandKey = createHash("sha256").update(JSON.stringify([ctx.actor, accountId, conversationId, params.requestId, action, expectedRevision, note ?? null, ...(environment === "simulation" ? [] : [environment])])).digest("hex");
+  const result = await backend({ accountId, conversationId, requestId: params.requestId, action, expectedRevision, actor: ctx.actor, commandKey, note, environment });
   return result.ok ? answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: true, outcome: "recorded" }) :
     answer({ schemaVersion: ENGINE_OPERATOR_SCHEMA, ok: false, outcome: result.outcome, error: result.error }, result.status ?? 502);
 }

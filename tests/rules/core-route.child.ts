@@ -1,6 +1,6 @@
 /**
  * Child process for the W1 lane 4 (lib-onlyfans-core) route tests: tests/known-red/core-d6-chat-mark-reconciled.test.ts (F1),
- * tests/rules/G04-core-memory-correction-key.test.ts (F2), tests/rules/core-request-command-key.test.ts (CH3) and
+ * tests/known-red/core-memory-correction-key.test.ts (F2), tests/rules/core-request-command-key.test.ts (CH3) and
  * tests/rules/core-pilot-actor-gate.test.ts (CH2). Spawned by tests/rules/core-fixtures.ts under --experimental-test-module-mocks;
  * the rules glob `*.test.*` does not run it.
  * Drives the REAL handlers: app/api/onlyfans-controls/accounts/[accountId]/conversations/[conversationId]/requests/[requestId]/route.ts
@@ -19,7 +19,7 @@
  */
 import { mock } from "node:test";
 import { NextRequest, NextResponse } from "next/server";
-import { namedOwnerActor as realNamedOwner, planCOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { planCOwnerActor as realOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 import { SESSION_COOKIE } from "../../lib/session";
 import { withDashboardAccess } from "../../lib/dashboard-access";
 import { LYNQ_MANAGEMENT_AGENCY_ID } from "../../lib/agency-management-policy";
@@ -46,8 +46,7 @@ async function main(scenario: string): Promise<unknown> {
   mock.module(new URL("../../lib/view-as-banner.ts", import.meta.url).href, { namedExports: {
     getViewAsBannerInfo: async () => state.viewAs ? { name: "Synthetic Agency", kind: "agency" } : null } });
   mock.module(new URL("../../lib/onlyfans/plan-c-owner.ts", import.meta.url).href, { namedExports: {
-    planCOwnerActor: (token: string | undefined, fetcher?: typeof fetch) => { state.lookups++; return realOwnerActor(token, fetcher); },
-    namedOwnerActor: (token: string | undefined, fetcher?: typeof fetch) => { state.lookups++; return realNamedOwner(token, fetcher); } } });
+    planCOwnerActor: (token: string | undefined, fetcher?: typeof fetch) => { state.lookups++; return realOwnerActor(token, fetcher); } } });
 
   globalThis.fetch = (async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = new URL(String(input)), method = init.method ?? "GET";
@@ -89,7 +88,8 @@ async function main(scenario: string): Promise<unknown> {
       return { status: response.status, outcome: ((await response.json()) as Record<string, unknown>).outcome, posts: sent.length,
         commandKey: typeof sent[0]?.body.commandKey === "string" ? sent[0].body.commandKey : null };
     };
-    const base = { action: "complete", expectedRevision: 3, note: "checked the vault" };
+    // Names its environment as the real client does (engine-operator-client.ts sends it for simulation too since G05).
+    const base = { action: "complete", expectedRevision: 3, note: "checked the vault", environment: "simulation" };
     if (scenario === "d6") return {
       "chat complete simulation": await send(CHAT_AGENCY, base),
       "chat mark_reconciled": await send(CHAT_AGENCY, { ...base, action: "mark_reconciled" }),
