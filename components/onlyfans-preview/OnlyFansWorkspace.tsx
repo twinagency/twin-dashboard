@@ -95,7 +95,8 @@ import HandoverPanel from "./HandoverPanel";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { EngineActionHandler, EnginePageLoader } from "./EngineStatus";
 import { submitEngineOperatorCommand } from "@/lib/onlyfans/engine-operator-client";
-import { heldKeyStore } from "@/lib/onlyfans/plan-c-client";
+import { forgetHeldKeys, heldKeyStore } from "@/lib/onlyfans/plan-c-client";
+import { STALE_REFUSAL_CODES } from "@/lib/onlyfans/controls";
 import type { CursorPage, ConversationSummary } from "@/lib/onlyfans-preview/types";
 import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
@@ -221,7 +222,7 @@ export default function OnlyFansWorkspace({
   canChat?: boolean;
   draftPrincipal?: string;
   agencyViewer?: boolean;
-  /** Names this operator's held sends in the tab's sessionStorage (planCKeyScope); without it a reload drops them. */
+  /** Names this operator's held sends in the tab's sessionStorage (planCKeyScope); without it a reload drops them, and a session loss always does. */
   operatorScope?: string;
 }) {
   const submittedDrafts = useRef(new Map<string, InboxDraft>());
@@ -629,8 +630,9 @@ export default function OnlyFansWorkspace({
   const executeCommand = useCallback(async (command: CommandRequest) => {
     if (commandBusy.current) return;
     // A manual send reaches the fan, so the exact request and its requestKey are held per tab, operator and account, across a reload
-    // too, named by the full intent (conversation, revision, canonical payload). The same send at the same revision reuses the key;
-    // any change, a new revision included, is a new intent. Only a recorded ack releases it.
+    // too (not across a re-sign-in), named by a hash of the full intent (conversation, revision, canonical payload). The same send at the
+    // same revision reuses the key; any change, a new revision included, is a new intent. Only a recorded ack, or two allowlisted
+    // post-lookup refusals in a row (STALE_REFUSAL_CODES), release it.
     const { command: kind, accountId, conversationId, expectedRevision, payload } = command, intent = sendIntent(command);
     const sendKeys = payload.kind === "manual_message" ? heldKeyStore("of-send-keys", accountId, operatorScope) : null;
     const request = sendKeys ? { ...command, idempotencyKey: uuidRequestKey(sendKeys.keyFor(intent, { command: kind, accountId, conversationId, expectedRevision, payload })) } : command;
@@ -648,10 +650,14 @@ export default function OnlyFansWorkspace({
       let result: CommandResult;
       try { result = await source.submitCommand(request); }
       catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request, note: UNCONFIRMED_NOTE }; }
-      sendKeys?.settle(intent, result.simulated || result.outcome === "refused" ? "refused" : result.outcome === "recorded" ? "ack" : "unconfirmed");
-      // A refusal does not prove an earlier unconfirmed attempt failed: the send stays held and its exact retry stays offered.
-      if (!result.simulated && result.outcome === "refused" && sendKeys?.isHeld(intent))
-        result = { ...result, outcome: "unconfirmed", note: `${result.note} An earlier attempt is not confirmed, so retry this same request.` };
+      const refusal = result.simulated ? undefined : result.refusal;
+      if (sendKeys && refusal && [401, 403].includes(refusal.status)) forgetHeldKeys("of-send-keys", operatorScope);
+      const held = sendKeys?.settle(intent, result.simulated ? "refused" : result.outcome === "recorded" ? "ack" : result.outcome === "unconfirmed" ? "unconfirmed"
+        : STALE_REFUSAL_CODES.includes(refusal?.code ?? "") ? "stale" : "refused");
+      // A refusal does not prove an earlier unconfirmed attempt failed: the send stays held and its exact retry stays offered. Once this
+      // one is settled, the oldest other held send of the conversation is offered next.
+      if (sendKeys && !result.simulated && result.outcome !== "unconfirmed") result = held
+        ? { ...result, outcome: "unconfirmed", note: `${result.note} An earlier attempt is not confirmed, so retry this same request.` } : heldSend(accountId, conversationId) ?? result;
       const submitted = submittedDrafts.current.get(request.idempotencyKey);
       if (!result.simulated && result.outcome === "recorded" && result.intentId && submitted) {
         clearSubmittedDraft(draftId, submitted);
@@ -691,7 +697,7 @@ export default function OnlyFansWorkspace({
       commit(applyAccounts(ref.current, generation, { status: "unavailable",
         message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
     } finally { commandBusy.current = false; setCommandPending(false); setPendingAction(null); }
-  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal, operatorScope]);
+  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId, draftPrincipal, operatorScope, heldSend]);
 
   const submitAction = useCallback(
     async (action: AvailableAction, payload: CommandPayload) => {

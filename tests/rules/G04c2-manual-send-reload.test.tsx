@@ -2,9 +2,10 @@
 // click and the unconfirmed result lived in component state, so after an unconfirmed send a full reload and a resend of the same text
 // minted a new key and the fan could get the message twice. The pending send (the exact request: body, media, price, catalogue item)
 // and its key now live in one entry of the G04a sessionStorage store (lib/onlyfans/plan-c-client.ts heldKeyStore), named by operator
-// scope and account and keyed by the full canonical intent (conversation, revision, payload), so after a reload the conversation offers
+// scope and account and keyed by a hash of the full canonical intent (conversation, revision, payload), so after a reload the conversation offers
 // the exact held retry again. The guarantee is per tab and operator scope, at one conversation revision: a changed revision is a new
-// intent and a new key. Hold rule (G02a): after an unconfirmed outcome only a recorded ack releases the key; a refusal does not.
+// intent and a new key. Hold rule (G02a): after an unconfirmed outcome only a recorded ack releases the key; a refusal does not (#11 below
+// is the one allowlisted exception). A session loss forgets the scope's held sends (#14): the guarantee survives a reload, not a re-sign-in.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), the real workspace over the real server data source. A reload is
 // reloadPage(): unmount and drop every product module (the in-memory composer draft goes with it), keep sessionStorage.
 import { bodyOf, calls, click, close, dom, json, lostReply, mount, q, reloadPage, routeFailure, serve, type, type Call, type Answer } from "../helpers/w3-preview1-dom";
@@ -146,7 +147,7 @@ test("G04c2: the same send at the same revision keeps its key across a reload; a
   const { createCommandKeyStore } = require("../../lib/onlyfans/plan-c-client");
   const { sendIntent } = require("../../lib/onlyfans-preview/actions");
   let n = 0;
-  const store = () => createCommandKeyStore(() => (++n).toString(16).padStart(64, "0"), "of-send-keys:op-id:" + AVA, Date.now, true);
+  const store = () => createCommandKeyStore(() => (++n).toString(16).padStart(64, "0"), "of-send-keys:op-id:" + AVA);
   const media = (ids: string[]) => ({ mediaIds: ids, previewIds: [], priceCents: 700 });
   const held = store().keyFor(sendIntent(intentOf("hello fan", 4, media(["501", "502"]))));
   const reloaded = store();
@@ -165,9 +166,8 @@ test("G04c2 #3: two messages whose 32-bit payload digests collide keep separate 
   const heldA = keysFor.keyFor(sendIntent(A), A);
   keysFor.settle(sendIntent(A), "unconfirmed");
   assert.notEqual(keysFor.keyFor(sendIntent(B), B), heldA, "a different message shared the held key of a colliding digest");
-  keysFor.settle(sendIntent(B), "ack");
-  assert.ok(keysFor.isHeld(sendIntent(A)), "an ack for another message released this message's held send");
-  assert.deepEqual(keysFor.pending(), [A], "the held request is not the exact one");
+  assert.equal(keysFor.settle(sendIntent(B), "ack"), false);
+  assert.deepEqual(keysFor.pending(), [A], "an ack for another message released this message's held send, or the held request is not the exact one");
 });
 
 test("G04c2: the held retry comes from storage: with the entry deleted, the reload offers none and the same text gets a new key", async () => {
@@ -220,7 +220,7 @@ test("G04c2 #11: a held send stays held through a key conflict, an account hold 
     assert.ok(retryButton(), `${code}: one refusal released the held send`);
   }
   await retry();
-  assert.equal(retryButton(), null, "a second revision refusal in a row did not release the held send");
+  assert.ok(retryButton() === null, "a second revision refusal in a row did not release the held send");
   assert.equal(dom.window.sessionStorage.length, 0, "the released send stayed in storage");
 });
 

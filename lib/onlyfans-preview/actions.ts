@@ -1,5 +1,6 @@
 import { canonicalManualMedia } from "../onlyfans/manual-media";
 import { controlActionFor, controlFields, controlFieldsProblem } from "../onlyfans/controls";
+import { campaignObject } from "../onlyfans/campaigns";
 // Which controls the dashboard may offer, and why.
 //
 // Three independent dimensions decide this, and none of them implies another:
@@ -249,11 +250,10 @@ export const uuidRequestKey = (hex: string) => `${hex.slice(0, 8)}-${hex.slice(8
 /** A manual send's held-key intent (G04c2): the full canonical command, never payloadDigest, whose 32 bits collide. */
 export const sendIntent = (input: CommandRequestInput) =>
   JSON.stringify([input.command, input.accountId, input.conversationId, input.expectedRevision, canonicalPayload(input.payload)]);
-const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 /** A held manual send read back from storage, or null unless it is one the controls route's own field rule accepts unchanged. */
 export function heldSendInput(value: unknown): CommandRequestInput | null {
-  if (!record(value) || value.command !== "send_manual_message" || typeof value.accountId !== "string" || typeof value.conversationId !== "string"
-    || typeof value.expectedRevision !== "number" || !Number.isSafeInteger(value.expectedRevision) || !record(value.payload)) return null;
+  if (!campaignObject(value) || value.command !== "send_manual_message" || typeof value.accountId !== "string" || typeof value.conversationId !== "string"
+    || typeof value.expectedRevision !== "number" || !Number.isSafeInteger(value.expectedRevision) || !campaignObject(value.payload)) return null;
   const { kind, body, ...rest } = value.payload;
   if (kind !== "manual_message" || typeof body !== "string" || Object.keys(rest).some(key => key !== "catalogItemId" && key !== "media")
     || controlFieldsProblem("manual_message", { body, ...rest })) return null;

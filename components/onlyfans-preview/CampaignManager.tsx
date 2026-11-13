@@ -6,14 +6,13 @@ import { useDashboardAccess } from "@/components/DashboardAccessProvider";
 import { usesTwinAgencyRefresh } from "@/lib/twin-agency-refresh";
 import { Card } from "@/components/ui/card";
 import { Info, inputCls } from "@/components/clone/fields";
-import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, campaignId as validCampaignId, campaignObject, parseCampaignAck, parseCampaignDetail, parseCampaignList,
-  validCampaignChange, validCampaignPayload, type Campaign, type CampaignAction, type CampaignChange, type CampaignPayload, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
+import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, campaignObject, parseCampaignAck, parseCampaignDetail, parseCampaignList, validCampaignPayload, type Campaign, type CampaignAction, type CampaignChange, type CampaignPayload, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
 import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
 import OnlyFansAvatar from "./OnlyFansAvatar";
 import { inboxSearchParams } from "@/lib/onlyfans/inbox-search";
 import { ALL_MODE_HINT, ALL_MODE_LABEL, AUDIENCE_LIMIT, NO_SENDER_TEXT, POPULATION_HINT, POPULATION_TEXT, ageText, canQueue, clearSelection, forgetDraft, lastSyncAt, mergePage, recallDraft, rememberDraft, selectPage, senderLine, type Sender } from "@/lib/onlyfans/campaign-audience";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
-import { heldKeyStore } from "@/lib/onlyfans/plan-c-client";
+import { forgetHeldKeys, heldKeyStore } from "@/lib/onlyfans/plan-c-client";
 import { uuidRequestKey } from "@/lib/onlyfans-preview/actions";
 
 type Write = { kind: "create"; body: CampaignPayload } | { kind: "change"; campaignId: string; body: CampaignChange };
@@ -35,9 +34,11 @@ const REASONS: Record<string, string> = {
   policy_changed: "Delivery permissions changed before sending.",
   expired: "The delivery request expired before sending.",
 };
-/** A stored write this build can resend unchanged. The held writes live in the key store (G04c2), per operator scope and account. */
-const heldWrite = (value: unknown): value is Write => campaignObject(value) && (value.kind === "create" ? validCampaignPayload(value.body)
-  : value.kind === "change" && validCampaignId(value.campaignId) && validCampaignChange(value.body));
+/**
+ * A stored create this build can resend unchanged. Held creates live in the key store (G04c2), per operator scope and account, across a
+ * reload but not a re-sign-in. A change is never stored: the route keys it by its expectedRevision, so it needs no requestKey.
+ */
+const heldWrite = (value: unknown): value is Write => campaignObject(value) && value.kind === "create" && validCampaignPayload(value.body);
 const UNCONFIRMED_TEXT = "The outcome is not confirmed. Retry this same request before making another change.";
 const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
 const when = (value: string) => new Date(value).toLocaleString();
@@ -78,9 +79,9 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   const sessionLost = useCallback(() => {
     if (!active.current) return;
     sessionDenied.current = true;
-    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId);
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null); forgetDraft(accountId); forgetHeldKeys("of-campaign-keys", operatorScope);
     setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
-  }, [router, accountId]);
+  }, [router, accountId, operatorScope]);
   const read = useCallback(async (id?: string | null) => {
     try {
       const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
@@ -126,11 +127,12 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
   useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
   async function write(request: Write) {
     if (sending.current || denied || readOnly) return; sending.current = true; setBusy(true); setNotice("");
-    // The exact write is held with its requestKey; once any attempt went unconfirmed only a recorded ack releases it (keys.settle).
-    const intent = JSON.stringify(request), requestKey = uuidRequestKey(keys.keyFor(intent, request));
+    // The exact create is held with its requestKey; once any attempt went unconfirmed only a recorded ack releases it (keys.settle). The
+    // backend refusal code is not forwarded by the campaign routes (campaigns-backend.ts), so no refusal can prove a create did not commit.
+    const create = request.kind === "create", intent = JSON.stringify(request), requestKey = create ? uuidRequestKey(keys.keyFor(intent, request)) : null;
     let outcome: "ack" | "refused" | null = null;
     try {
-      const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.kind === "create" ? { requestKey, ...request.body } : request.body) });
+      const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(create ? { requestKey, ...request.body } : request.body) });
       if ([401, 403].includes(response.status)) { outcome = "refused"; sessionLost(); return; } // settled below even if unmounted mid-flight
       // campaignRefuse (lib/onlyfans/campaign-route.ts) labels every definite refusal outcome "refused"; a bare or non-JSON status (a proxy 503) may follow a forwarded write.
       if ([400, 404, 409, 413, 503].includes(response.status) && (await response.json().catch(() => null))?.outcome === "refused") { outcome = "refused"; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
@@ -143,9 +145,9 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
       }
     } catch { /* Keep exact original write identity for an explicit retry. */ }
     finally {
-      keys.settle(intent, outcome ?? "unconfirmed");
-      const uncertain = keys.isHeld(intent);
-      if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
+      const uncertain = create ? keys.settle(intent, outcome ?? "unconfirmed") : !outcome;
+      // The oldest held create stays offered whatever this write was, so a brake used meanwhile never hides it.
+      if (active.current && !sessionDenied.current) { setRetry(keys.pending().find(heldWrite) ?? (uncertain ? request : null)); if (uncertain) setNotice(UNCONFIRMED_TEXT); await read(); if (selection.current) await read(selection.current); setBusy(false); }
       sending.current = false;
     }
   }
@@ -193,7 +195,7 @@ function CampaignManagerForAccount({ accountId, sender, readOnly, operatorScope 
     {loading ? <p role="status" className="text-sm text-muted">Loading campaigns…</p> : !listReady ? <p className="text-sm text-muted">Campaign history is unavailable.</p> : !campaigns.length ? <p className="text-sm text-muted">No campaigns are recorded for this account.</p> : <div className="grid gap-3 md:grid-cols-2">{campaigns.map(item => <button type="button" key={item.campaignId} onClick={() => setSelected(item.campaignId)} className={`min-w-0 rounded-xl border p-4 text-left ${selected === item.campaignId ? "border-accent bg-accent/5" : "border-line bg-white"}`} data-of-campaign={item.campaignId}><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{item.name}</span><span className="rounded-full bg-elev px-2 py-1 text-xs capitalize text-muted">{item.status}</span></div><p className="mt-2 line-clamp-2 text-sm text-muted">{item.body}</p><p className="mt-3 text-xs text-muted">{item.recipientCount} recipients · {item.counts.accepted} accepted · {item.counts.unknown} uncertain</p><p className="mt-1 text-xs text-muted">Scheduled {when(item.scheduledAt)}</p></button>)}</div>}
     {truncated ? <p className="text-xs text-muted">Showing the latest 100 campaigns.</p> : null}
     {selected && !detail ? <p role="status" className="text-sm text-muted">Loading campaign detail…</p> : null}
-    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={locked} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
+    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={busy || denied || readOnly} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
       <p className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-elev p-3 text-sm">{campaign.body}</p>
       {campaign.offer ? <div className="mt-3 rounded-lg border border-line p-3 text-sm"><div className="font-semibold">{campaign.offer.label} · {formatRecordedMoney(campaign.offer.priceCents, campaign.offer.currency)}</div><p className="mt-1 text-xs text-muted">{campaign.offer.mediaIds.length} saved media · {campaign.offer.previewIds.length} free previews · Frozen catalogue terms</p></div> : null}
       <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-5">{RECIPIENT_STATUSES.map(status => <div key={status} className="rounded-lg border border-line p-3"><div className="text-xs text-muted">{LABELS[status]}</div><div className="mt-1 text-lg font-semibold">{campaign.counts[status]}</div></div>)}</div>

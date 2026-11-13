@@ -27,62 +27,65 @@ function intentHash(intent: string): string {
   return (a >>> 0).toString(16).padStart(8, "0") + (b >>> 0).toString(16).padStart(8, "0");
 }
 const KEEP_MS = 24 * 3600_000;
-type Entry = { key: string; held: boolean; at: number; request?: unknown };
+type Entry = { key: string; held: boolean; at: number; request: unknown; stale?: boolean };
 /** Pending keys a `persistAs` store saved in this tab's sessionStorage. Anything malformed or older than a day is dropped. */
-function storedKeys(name: string | undefined, now: number, keepRequests: boolean): [string, Entry][] {
+function storedKeys(name: string | undefined, now: number): [string, Entry][] {
   try {
     const value: unknown = name ? JSON.parse(globalThis.sessionStorage?.getItem(name) ?? "{}") : {};
     if (!value || typeof value !== "object" || Array.isArray(value)) return [];
-    return Object.entries(value).flatMap(([id, item]): [string, Entry][] => Array.isArray(item) && typeof item[0] === "string" && /^[a-f0-9]{64}$/.test(item[0])
-      && typeof item[1] === "number" && now - item[1] < KEEP_MS && (keepRequests ? item.length === 3 : /^[a-f0-9]{16}$/.test(id))
-      ? [[id, { key: item[0], held: true, at: item[1], ...(keepRequests ? { request: item[2] } : {}) }]] : []);
+    return Object.entries(value).flatMap(([id, item]): [string, Entry][] => Array.isArray(item) && [2, 3].includes(item.length) && typeof item[0] === "string"
+      && /^[a-f0-9]{64}$/.test(item[0]) && typeof item[1] === "number" && now - item[1] < KEEP_MS && /^[a-f0-9]{16}$/.test(id)
+      ? [[id, { key: item[0], held: true, at: item[1], request: item[2] ?? null }]] : []);
   } catch { return []; }
 }
-export type Settled = "ack" | "unconfirmed" | "refused";
+/**
+ * How an attempt ended. "stale" (G04c2 #11) is a refusal the backend raised after it looked the command key up and found no earlier
+ * commit; the caller maps it from an exact allowlisted code only. Everything else that is not an ack or unconfirmed is "refused".
+ */
+export type Settled = "ack" | "unconfirmed" | "refused" | "stale";
 
 /**
  * Keys by intent. An intent is the exact action on the exact version, so a different edit text or reason is a different intent.
  * With `persistAs` (a name that carries the operator and account), every pending key is mirrored to this tab's sessionStorage
- * under the intent's hash, so a reload by the same operator keeps it. Entries expire after a day, in memory and storage alike.
+ * under the intent's hash, with the request it was taken for (null for Plan C), so a reload by the same operator keeps both.
+ * Entries expire after a day, in memory and storage alike; that expiry is itself a silent release of a held key.
  * There is no count cap: every entry is either an attempt in flight or a held key (its attempt was unconfirmed), and dropping
  * either would let a retry act twice. Age alone bounds the store, checked before every read.
- * With `keepRequests` (G04c2, fan-visible writes) an entry is named by the full intent, not its hash, and also keeps the exact
- * request, so after a reload `pending()` gives back what to retry. Both are written to storage verbatim.
  */
-export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now, keepRequests = false) {
+export function createCommandKeyStore(random: () => string = newCommandKey, persistAs?: string, now: () => number = Date.now) {
   // A key read back from an earlier page load had an unknown outcome there, so it is held.
-  const keys = new Map(storedKeys(persistAs, now(), keepRequests));
-  const id = (intent: string) => keepRequests ? intent : intentHash(intent);
+  const keys = new Map(storedKeys(persistAs, now()));
   const live = () => { const t = now(); for (const [name, entry] of keys) if (t - entry.at >= KEEP_MS) keys.delete(name); return keys; };
   const save = () => {
     if (persistAs) try {
-      if (live().size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([name, entry]) =>
-        [name, keepRequests ? [entry.key, entry.at, entry.request ?? null] : [entry.key, entry.at]]))));
+      if (live().size) globalThis.sessionStorage.setItem(persistAs, JSON.stringify(Object.fromEntries([...keys].map(([name, entry]) => [name, [entry.key, entry.at, entry.request]]))));
       else globalThis.sessionStorage.removeItem(persistAs);
     } catch { /* No storage: the in-memory key still covers this page load. */ }
   };
   return {
-    /** `request` is kept with the key (a `keepRequests` store persists it) until the outcome releases both. */
-    keyFor(intent: string, request?: unknown): string {
-      let entry = live().get(id(intent));
-      if (!entry) { keys.set(id(intent), entry = { key: random(), held: false, at: now(), request }); save(); }
+    /** `request` is kept with the key until the outcome releases both. */
+    keyFor(intent: string, request: unknown = null): string {
+      let entry = live().get(intentHash(intent));
+      if (!entry) { keys.set(intentHash(intent), entry = { key: random(), held: false, at: now(), request }); save(); }
       return entry.key;
     },
     /**
      * A recorded ack releases the key. Unconfirmed keeps it so a retry is idempotent. A refusal or conflict releases it only if no
-     * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice.
+     * earlier attempt was unconfirmed: that attempt may have committed, and a fresh key on the next retry could act twice. A held key
+     * is released by a second "stale" in a row, never one: a committed original still in flight at the first replays as an ack by the
+     * second. Returns whether the key is still held.
      */
-    settle(intent: string, outcome: Settled) {
-      const name = id(intent), entry = live().get(name);
-      if (outcome === "ack") keys.delete(name);
-      else if (outcome === "unconfirmed") { if (entry) entry.held = true; }
-      else if (!entry?.held) keys.delete(name);
+    settle(intent: string, outcome: Settled): boolean {
+      const name = intentHash(intent), entry = live().get(name);
+      if (outcome === "ack" || !entry?.held && outcome !== "unconfirmed" || entry?.stale && outcome === "stale") keys.delete(name);
+      else if (entry) { entry.held = entry.held || outcome === "unconfirmed"; entry.stale = outcome === "stale"; }
       save();
+      return keys.get(name)?.held === true;
     },
-    /** Whether an earlier attempt of this intent was unconfirmed, so only a recorded ack releases it. */
-    isHeld: (intent: string) => live().get(id(intent))?.held === true,
-    /** The request of every entry not yet released: held, or in flight (unknown to a remount or a reload). */
-    pending: () => [...live().values()].map(entry => entry.request),
+    /** The request of every entry not yet released, oldest first: held, or in flight (unknown to a remount or a reload). */
+    pending: () => [...live().values()].sort((a, b) => a.at - b.at).map(entry => entry.request),
+    /** Forgets every entry, in storage too. */
+    clear: () => { keys.clear(); save(); },
     size: () => live().size,
   };
 }
@@ -93,18 +96,31 @@ export function createCommandKeyStore(random: () => string = newCommandKey, pers
  * reload in the same tab by the same operator does too; another operator signing in on that tab never sees it.
  */
 const accountStores = new Map<string, ReturnType<typeof createCommandKeyStore>>();
-function sharedStore(name: string, persist: boolean, keepRequests: boolean) {
+function sharedStore(name: string, persist: boolean) {
   let store = accountStores.get(name);
-  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, persist ? name : undefined, Date.now, keepRequests));
+  if (!store) accountStores.set(name, store = createCommandKeyStore(newCommandKey, persist ? name : undefined));
   return store;
 }
-const accountKeyStore = (accountId: string, operatorScope: string) => sharedStore(`plan-c-keys:${operatorScope}:${accountId}`, true, false);
+const accountKeyStore = (accountId: string, operatorScope: string) => sharedStore(`plan-c-keys:${operatorScope}:${accountId}`, true);
 /**
- * The same store for a write whose double could reach a fan (G04c2: a manual send, a campaign write), one per kind, operator scope and
+ * The same store for a write whose double could reach a fan (G04c2: a manual send, a campaign create), one per kind, operator scope and
  * account, keeping each pending request with its key. Persisted only with an operator scope; without one it covers a remount, not a reload.
+ * It survives a reload, not a re-sign-in: see forgetHeldKeys.
  */
-export const heldKeyStore = (kind: "of-send-keys" | "of-campaign-keys", accountId: string, operatorScope?: string) =>
-  sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope, true);
+export const heldKeyStore = (kind: HeldKind, accountId: string, operatorScope?: string) => sharedStore(`${kind}:${operatorScope ?? ""}:${accountId}`, !!operatorScope);
+type HeldKind = "of-send-keys" | "of-campaign-keys";
+/**
+ * On a session loss (401/403) the scope's held writes are forgotten, in storage too (G04c2 #14). The routes fold the session actor into
+ * the backend command key, so a held key cannot dedupe under a new sign-in, and its message text must not outlive the session.
+ */
+export function forgetHeldKeys(kind: HeldKind, operatorScope?: string) {
+  const prefix = `${kind}:${operatorScope ?? ""}:`;
+  for (const [name, store] of accountStores) if (name.startsWith(prefix)) store.clear();
+  try {
+    const names = Array.from({ length: globalThis.sessionStorage.length }, (_, i) => globalThis.sessionStorage.key(i));
+    for (const name of names) if (name?.startsWith(prefix)) globalThis.sessionStorage.removeItem(name);
+  } catch { /* No storage: nothing was persisted. */ }
+}
 
 const base = (accountId: string) => `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c`;
 const unconfirmed = (): PlanCCommandResult => ({ ok: false, outcome: "unconfirmed", reload: true, error: PLAN_C_UNCONFIRMED_TEXT });

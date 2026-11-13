@@ -1,10 +1,11 @@
 // RULE G04c2 (G04b finding F2): components/onlyfans-preview/CampaignManager.tsx create, a fan-visible send to every recipient. The held
 // create lived in a module Map (G04 finding 7) and its requestKey was crypto.randomUUID(), so after an unconfirmed create a full reload
 // left the form open and the operator had to rebuild the campaign by hand: any difference was a new requestKey and every fan could get
-// it twice. The pending write (the exact create or change) and its key now live in one entry of the G04a sessionStorage store
+// it twice. The pending create and its key now live in one entry of the G04a sessionStorage store
 // (lib/onlyfans/plan-c-client.ts heldKeyStore), named by operator scope and account, so a reload restores the held write as the only
-// action: "Retry same request" with the exact payload, the form locked. Hold rule (G02a): after an unconfirmed outcome only a recorded
-// ack releases it; a refusal of a retry does not, so the form stays locked.
+// action: "Retry same request" with the exact payload, the create form locked (never the brakes, #12). Hold rule (G02a): after an
+// unconfirmed outcome only a recorded ack releases it; a refusal of a retry does not (the campaign routes forward no refusal code, #11),
+// so the form stays locked. A session loss forgets it (#14): the guarantee survives a reload, not a re-sign-in.
 // Offline: jsdom, global fetch stubbed (https://fixture.invalid), real CampaignManager. A reload is reloadPage(): unmount and drop every
 // product module (the in-memory draft goes with it, and is never seeded again after a reload here), keep sessionStorage.
 import { bodyOf, calls, click, close, dom, json, lostReply, mount, q, reloadPage, routeFailure, serve, submit, type Answer, type Call } from "../helpers/w3-preview1-dom";
