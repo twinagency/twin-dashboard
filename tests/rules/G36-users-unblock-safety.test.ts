@@ -140,3 +140,11 @@ test("a safety block landing between the last read and the write is not lifted (
   assert.equal(row.blocked, true, "fan is no longer blocked");
   assert.match(outcome, /^rejected/, "0 rows updated must reject");
 });
+
+test("/users shows the unblock control as admin-only for every block the server refuses to agency managers", () => {
+  const page = readFileSync("app/users/page.tsx", "utf8");
+  const m = page.match(/<MutationForm adminOnly=\{([^}]*)\}\s+action=\{setBlocked\}>/);
+  assert.ok(m, "unblock form found");
+  assert.doesNotMatch(m[1], /blocked_reason != null/, "a block with no recorded reason is admin-only on the server, so the UI must not offer it to agency managers");
+  assert.match(m[1], /selected\.blocked_reason !== "operator"/);
+});

@@ -1721,7 +1721,7 @@ export default async function FansPage({
                   </MutationForm>
 
                   {/* A safety verdict (minor, US location) is lifted by an admin only; setBlocked refuses anyone else. */}
-                  <MutationForm adminOnly={selected.blocked && (!!selected.minor_flagged_at || (selected.blocked_reason != null && selected.blocked_reason !== "operator"))} action={setBlocked}>
+                  <MutationForm adminOnly={selected.blocked && (!!selected.minor_flagged_at || selected.blocked_reason !== "operator")} action={setBlocked}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="blocked" value={selected.blocked ? "false" : "true"} />
                     <ConfirmSubmit
