@@ -60,10 +60,12 @@ function exposureGaps(stmts: string[]) {
     return [{ fn, revoked: pending.size === 0, between }];
   });
 }
-/** begin ... commit around the whole file; `set ...` statements (e.g. lock_timeout) may precede the begin. */
+/** begin ... commit around the whole file, with no transaction control in between; `set ...` statements (e.g. lock_timeout) may precede the begin. */
 function inOneTransaction(stmts: string[]) {
   const body = stmts.slice(stmts.findIndex(s => !/^set\s/i.test(s)));
-  return /^(begin|start transaction)\b/i.test(body[0] ?? "") && /^(commit|end)\b/i.test(body[body.length - 1] ?? "");
+  const control = /^(begin|start transaction|commit|end|rollback|abort)\b/i;
+  return /^(begin|start transaction)\b/i.test(body[0] ?? "") && /^(commit|end)\b/i.test(body[body.length - 1] ?? "")
+    && !body.slice(1, -1).some(s => control.test(s));
 }
 
 test("control: creator-combined-content.sql revokes claim_creator_upload right after creating it", () => {
@@ -89,8 +91,11 @@ test("control: the checker accepts every valid fix shape and rejects a late revo
   assert.ok(inOneTransaction(statements(`set lock_timeout = '5s'; set statement_timeout = 0; begin; ${fn("f")} ${other} commit;`)), "set before begin");
   const late = statements(`${fn("f")} ${other} revoke all on function public.f(uuid) from public, anon, authenticated;`);
   assert.equal(inOneTransaction(late), false);
+  assert.equal(inOneTransaction(statements(`begin; ${fn("f")} commit; ${other} begin; commit;`)), false, "an early commit splits the transaction");
   assert.deepEqual(exposureGaps(late).map(g => g.between.length), [1], "an unrelated statement before the revoke is a gap");
 });
+
+test("control: creator-file-removals.sql is one transaction", () => assert.ok(inOneTransaction(statements(sql("creator-file-removals.sql")))));
 
 test("D1: creator-file-removals.sql never leaves a SECURITY DEFINER RPC callable by anon between statements", () => {
   const stmts = statements(sql("creator-file-removals.sql"));
