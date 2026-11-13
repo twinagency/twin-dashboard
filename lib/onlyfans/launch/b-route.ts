@@ -10,10 +10,13 @@ export const bRefuse = (status: number, error: string, code = "refused") => bAns
 export const bPending = (contract: string) => bAnswer({ ok: false, code: "contract_pending", contract,
   error: "The backend contract for this feature is not delivered yet. Nothing was changed." }, 501);
 
-/** Authenticate, scope the account id, and for writes require a manager plus same-origin JSON. */
-export async function bGate(request: NextRequest, rawAccountId: string, write: boolean, capability: "chat" | "manage" = "manage"):
+/**
+ * Authenticate, scope the account id, and for writes require a manager plus same-origin JSON. `namedOwner` opts in to the internal
+ * operator's named owner as `ctx.pilotActor` (lib/onlyfans/route.ts); only memory correction uses it.
+ */
+export async function bGate(request: NextRequest, rawAccountId: string, write: boolean, capability: "chat" | "manage" = "manage", namedOwner = false):
   Promise<{ ctx: ReadContext; accountId: string } | NextResponse> {
-  const ctx = await requireOnlyFansRead({ agency: true, write, capability });
+  const ctx = await requireOnlyFansRead({ agency: true, write, capability, pilotIdentity: namedOwner });
   if (ctx instanceof NextResponse) return ctx;
   const accountId = requestId(rawAccountId);
   if (!accountId) return bRefuse(400, "That account reference is invalid.", "invalid_request");

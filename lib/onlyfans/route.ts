@@ -8,7 +8,8 @@ import { agencyGrant, agencyScopedFetch } from "./agency-scope";
 import { configuredBackendPurpose } from "./backend-transport";
 import type { AgencyIdentity } from "@/lib/agency-identity";
 import { isAuthed } from "@/lib/auth";
-import { planCOwnerActor } from "./plan-c-owner";
+import { namedOwnerActor } from "./plan-c-owner";
+import type { NamedOwnerActor, SessionActor } from "./actor";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import { configuredOnlyFansBackend, type OnlyFansBackend } from "./backend";
@@ -17,12 +18,17 @@ import { authorizeRead, denialBody, internalOperator, type ReadAuth, type ReadDe
 /** Private, never cached: conversation data is per-operator and per-account. */
 export const PRIVATE_HEADERS = { "Cache-Control": "private, no-store", "X-Data-Mode": "live" } as const;
 
-export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: string | null; pilotActor?: string | null; canManage: boolean; canChat: boolean };
+export type ReadContext = { auth: ReadAuth; backend: OnlyFansBackend | null; fetch: typeof fetch; actor: SessionActor | null; pilotActor?: NamedOwnerActor | null; canManage: boolean; canChat: boolean };
 
 export function denialResponse(denial: ReadDenial): NextResponse {
   return NextResponse.json(denialBody(denial), { status: denial.status, headers: PRIVATE_HEADERS });
 }
 
+/**
+ * `pilotIdentity` opts a route in to the internal operator's named owner as `ctx.pilotActor`: a stable actor across sign-ins, for
+ * Plan C and for routes whose backend binds state to the actor (handover requests, memory correction). `ctx.actor` stays the session
+ * actor, the only kind an upload may carry. A lookup a retry could answer differently refuses 503 before any upstream call.
+ */
 type ReadOptions = { agency?: boolean; write?: boolean; capability?: "chat" | "manage"; pilotIdentity?: boolean };
 
 /**
@@ -81,9 +87,11 @@ export async function authorizeOnlyFansRead(options: ReadOptions = {}): Promise<
   // An unavailable read credential must never yield an unscoped write transport.
   if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." };
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);
-  const pilotActor = options.pilotIdentity && internalOperator(auth)
-    ? await planCOwnerActor(token) : null;
+  // ctx.actor is always the session's own actor: revocable per session, so the only kind upload permission admits.
+  const actor = (grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null)) as SessionActor | null;
+  // A named owner only, never a shared password-admin session (no owner identity: null).
+  const pilotActor = options.pilotIdentity && internalOperator(auth) ? await namedOwnerActor(token) : null;
+  if (pilotActor === "unavailable") return { ok: false, status: 503, state: "unavailable", code: "owner_unavailable", error: "Your sign-in could not be verified just now. Try again." };
   return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };
 }
 

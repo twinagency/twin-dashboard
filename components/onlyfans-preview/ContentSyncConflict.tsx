@@ -15,6 +15,8 @@ const CHOICES: Record<Resolution, { label: string; help: string }> = {
 const DONE: Record<Resolution, string> = { accept_source: "Now using the new source terms.", keep_crm: "Keeping the CRM terms.", disable: "This item is switched off." };
 const ISSUES: Record<string,string> = {post_deleted:"The source post was deleted.",post_no_longer_paid:"The source post is no longer paid.",source_retracted:"The source message was retracted.",source_terms_unusable:"The current source terms are unusable."};
 type Pending = { conflictId: string; resolution: Resolution; body: { requestId: string; resolution: Resolution; expectedRevision: number; expectedItemFingerprint: string } };
+/** Decisions whose outcome is unconfirmed, per account and conflict. Module level so a remount keeps the exact retry; a reload does not (G04c). */
+const heldDecisions = new Map<string, Record<string, Pending>>();
 
 function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflict["current"]; lockedText?: boolean | null }) {
   return <div className="min-w-0 rounded-lg border border-line p-3" data-conflict-terms={title}>
@@ -32,7 +34,7 @@ function Terms({ title, terms, lockedText }: { title: string; terms: SyncConflic
 /** Side-by-side review of changed OnlyFans terms. Nothing changes until a decision is applied. */
 export default function ContentSyncConflict({ accountId, readOnly = false, onResolved }: { accountId: string; readOnly?: boolean; onResolved?: () => void }) {
   const [items, setItems] = useState<SyncConflict[] | null>(null), [error, setError] = useState(""), [choice, setChoice] = useState<Record<string, Resolution>>({});
-  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retry, setRetry] = useState<Pending | null>(null), [connection, setConnection] = useState(false);
+  const [busy, setBusy] = useState(false), [notice, setNotice] = useState(""), [retries, setRetries] = useState<Record<string, Pending>>(() => heldDecisions.get(accountId) ?? {}), [connection, setConnection] = useState(false);
   const controller = useRef<AbortController | null>(null), submitting = useRef(false), resolved = useRef(onResolved);
   resolved.current = onResolved;
 
@@ -48,12 +50,20 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
   async function apply(pending: Pending) {
     if (submitting.current) return;
     submitting.current = true; setBusy(true); setNotice(""); setConnection(false);
+    // An unconfirmed resolve holds only its own conflict, so review of every other conflict stays open. Once held, only a recorded
+    // resolve releases it: a later refusal does not prove the earlier attempt failed. Held from the send on, so leaving mid-flight keeps it.
+    const hold = (kept: Pending | null) => {
+      const { [pending.conflictId]: _, ...rest } = heldDecisions.get(accountId) ?? {}, next = kept ? { ...rest, [pending.conflictId]: kept } : rest;
+      heldDecisions.set(accountId, next); return next;
+    };
+    const wasHeld = heldDecisions.get(accountId)?.[pending.conflictId] === pending; hold(pending);
+    const setRetry = (kept: Pending | null) => setRetries(hold(kept));
     try {
       const reply = await syncCall(accountId, `/conflicts/${encodeURIComponent(pending.conflictId)}/resolve`, { method: "POST", body: pending.body, signal: controller.current?.signal });
       if (reply.kind === "stale") return;
       if (reply.kind === "denied") { setItems(null); setRetry(null); setError("Your session cannot save this decision. Sign in again."); return; }
       if (reply.kind === "unconfirmed") { setRetry(pending); setNotice(reply.error); return; }
-      setRetry(null);
+      setRetry(reply.kind === "refused" && wasHeld ? pending : null);
       if (reply.kind === "refused") {
         setConnection(reply.code === "connection_unavailable");
         setNotice(reply.error); await read(); return;
@@ -67,7 +77,7 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
     <h4 className="font-semibold">Changed OnlyFans terms</h4>
     {error ? <p className="mt-2 text-sm" role="status">{error} <button type="button" className="font-semibold text-accent underline" onClick={() => void read()}>Try again</button></p> : null}
     {items && !items.length && !error ? <p className="mt-2 text-sm" data-conflicts-empty>No item has changed terms to review.</p> : null}
-    {items?.map(conflict => { const selected = choice[conflict.conflictId];
+    {items?.map(conflict => { const selected = choice[conflict.conflictId], retry = retries[conflict.conflictId];
       const sourceUnavailable = conflict.sourceIssue != null;
       const submit = () => { if (selected && !(selected === "accept_source" && sourceUnavailable)) void apply({ conflictId: conflict.conflictId, resolution: selected, body: { requestId: crypto.randomUUID(), resolution: selected,
         expectedRevision: conflict.revision, expectedItemFingerprint: conflict.itemFingerprint } }); };
@@ -90,7 +100,7 @@ export default function ContentSyncConflict({ accountId, readOnly = false, onRes
         </fieldset>
         {readOnly ? <p className="mt-2 text-xs text-muted">Read-only team access</p> : <div className="mt-3 flex flex-wrap gap-2">
           <button type="submit" className={buttonClass} disabled={!selected || busy || !!retry || selected === "accept_source" && sourceUnavailable} data-conflict-apply>Apply decision</button>
-          {retry && retry.conflictId === conflict.conflictId ? <button type="button" className={buttonClass} disabled={busy} data-conflict-retry onClick={() => void apply(retry)}>Retry the same request</button> : null}
+          {retry ? <button type="button" className={buttonClass} disabled={busy} data-conflict-retry onClick={() => void apply(retry)}>Retry the same request</button> : null}
         </div>}
       </form>; })}
     {notice ? <p className="mt-2 text-sm" role="status" data-conflict-notice>{notice}{connection ? <> <Link className="font-semibold text-accent underline" href={connectionHref(accountId)}>Reconnect this account</Link></> : null}</p> : null}

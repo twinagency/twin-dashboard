@@ -1,27 +1,47 @@
 #!/usr/bin/env bash
-# Test harness runner. Exit 0 EXEC, 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
-#   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+# Test harness. Exit 0 GREEN (PLAN/EXEC in those modes), 1 RED, 2 INFRA (harness/env broke or target refused). RED beats INFRA.
+#   fast  merge gate: premerge.sh, every promoted test:* leaf, then live (LIVE=opt).   full  fast plus the NEEDS leaves, each with
+#     only its listed env, then live (LIVE=opt).   live  read-only smoke of the local stack: anonymous page GETs + one read-only psql.
+#   plan  list what fast would run and skip, run nothing.   exec <cmd...>  one step, scrubbed and sandboxed like a leaf (self-test hook).
+#   stage  fast's live stage alone (LIVE=opt), verdict STAGE, never GREEN (self-test hook).
 # macOS only: elsewhere INFRA after the env check, before anything runs.
-# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED).
+# Budgets, caps, verdict labels: the mode table below (a cap or blown budget is RED). What runs or is skipped, and why: the rows
+#   `scripts/check-plan.ts <mode>` prints; this script runs the `run` rows and records the rest.
 # Steps: scrubbed env (DOTENV_CONFIG_PATH=/dev/null, own TMPDIR), macOS loopback-only network sandbox (refused without), own
 #   process group; leaving processes behind fails. Detached (setsid) descendants are unsupported: the sandbox limits the network
 #   only, and the harness trusts test code not to rewrite $EV.
 #   INFRA if a *SUPABASE*URL* var is not loopback or any var names prod. CHECK_INHERITED_SANDBOX=1: see sandbox() below.
 # Redacted from evidence: JWTs, bearer tokens, and the value of every *KEY*|*TOKEN*|*SECRET*|*PASSWORD* var (not NEXT_PUBLIC_*,
 #   *PUBLISHABLE*) in our env or the repo's .env* files.
-# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
+# live refuses before its first request unless the process listening on CHECK_BASE_URL's port provably targets a loopback Supabase:
+#   every *SUPABASE*URL* in its env (as ps -E; next dev's retitled next-server hides it, so its `next dev` parent's, which it inherits)
+#   is loopback and none names prod, else RED (env unreadable: RED too); then every (NEXT_PUBLIC_)SUPABASE_URL line in its .env files
+#   is loopback and some line or env var names one, else refused. target() checks the exec-time env (unreadable unless it has a
+#   PATH= entry), not later process.env changes. It never POSTs or calls an API route: public/admin 401s write
+#   system_logs, a login writes a session. curl -q (no ~/.curlrc). CHECK_BASE_URL: http://localhost|127.0.0.1 only.
+# LIVE  req (live mode): anything live cannot check is INFRA. opt (fast/full): the stack down, auth on (seen from one GET /overview)
+#   or a refused target is a skip with a named note, and nothing more is sent. Both: a non-local CHECK_BASE_URL, a prod name in a
+#   response or psql failing is INFRA. psql gets what is left of the budget (30s at most); a run that ends past its budget is RED.
+# Evidence: .check-evidence/<ts>-<sha>/{run.log,timings.tsv,verdict.json,rows.txt,logs/} (root: CHECK_EVIDENCE_DIR). Can only lower: CHECK_BUDGET_SECS, CHECK_STEP_SECS.
 [ -n "$CHECK_NICED" ] || exec env CHECK_NICED=1 nice -n 10 bash "$0" "$@"
 set -o pipefail
 cd "$(dirname "$0")/.." || exit 2
 MODE=$1
 shift
-case $MODE in # BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed
-  exec) BUDGET=0   CAP=600 OK=EXEC;;
-  *) echo "usage: scripts/check.sh exec [-- cmd...]"; exit 2;;
+# BUDGET: whole run (0 none)  CAP: per step  OK: verdict when nothing failed  PRE: preflight (sandbox, deps, clean tree)  LIVE: see header
+case $MODE in
+  fast) BUDGET=900 CAP=300 OK=GREEN PRE=1 LIVE=opt;;
+  full) BUDGET=0   CAP=600 OK=GREEN PRE=1 LIVE=opt;;
+  live) BUDGET=180 CAP=0   OK=GREEN PRE=0 LIVE=req;;
+  stage) BUDGET=180 CAP=0  OK=STAGE PRE=0 LIVE=opt;;
+  plan) BUDGET=0   CAP=0   OK=PLAN  PRE=0 LIVE=list;;
+  exec) BUDGET=0   CAP=600 OK=EXEC  PRE=0 LIVE=no;;
+  *) echo "usage: scripts/check.sh fast|full|live|stage|plan|exec [-- cmd...]"; exit 2;;
 esac
 lower() { [[ $1 =~ ^[0-9]+$ ]] && (( $1 > 0 && ($2 == 0 || $1 < $2) )) && echo "$1" || echo "$2"; }
 BUDGET=$(lower "$CHECK_BUDGET_SECS" $BUDGET)
 CAP=$(lower "$CHECK_STEP_SECS" $CAP)
+PCAP=$(lower "$CHECK_STEP_SECS" "$([ $MODE = fast ] && echo 600 || echo $CAP)") # the premerge step's cap: it runs every premerge suite
 T0=$(date +%s)
 SHA=$(git rev-parse --short=8 HEAD 2>/dev/null || echo nogit)
 EV=${CHECK_EVIDENCE_DIR:-.check-evidence}/$(date -u +%Y%m%dT%H%M%SZ)-$SHA
@@ -31,6 +51,8 @@ TMPD=$(umask 077; mktemp -d "${TMPDIR:-/tmp}/twin-check.XXXXXX") || exit 2
 trap 'rm -rf "$TMPD"' EXIT
 trap stop INT TERM HUP
 PROD='aouaenqayfltoqrmpitg|cnnsllgzskqkvdovyiiv'
+BASE=${CHECK_BASE_URL:-http://localhost:3001}
+BASE=${BASE%/}
 SANDBOX=(/usr/bin/sandbox-exec -p '(version 1)(allow default)(deny network-outbound (remote ip))(allow network-outbound (remote ip "localhost:*"))')
 CLEAN=(env -i "PATH=$PWD/node_modules/.bin:$PATH" "HOME=$HOME" "TMPDIR=$TMPD/" DOTENV_CONFIG_PATH=/dev/null NODE_ENV=test)
 # confined: does the kernel refuse (EPERM, the sandbox's answer; no route is ENETUNREACH) UDP to TEST-NET-1 and -2 and the IPv6
@@ -70,6 +92,7 @@ redact() {
     s/eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]+/[REDACTED-JWT]/g;
     s/(bearer\s+)\S+/$1\[REDACTED]/gi'
 }
+note() { echo "note  $*" | redact | tee -a "$EV/run.log"; }
 # rec <name> <status> <secs> <note>: one evidence row
 rec() {
   printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" | redact >>"$EV/timings.tsv"
@@ -86,6 +109,7 @@ finish() {
   i=$(cnt infra)
   if (( i )); then v=INFRA; code=2; fi
   if (( f )); then v=RED; code=1; fi
+  if [ $v = GREEN ] && (( p == 0 )); then v=RED; code=1; fi # nothing passed is not GREEN
   env -i PATH="$PATH" node -e 'const [mode, sha, verdict, w, b] = process.argv.slice(1);
     const steps = require("fs").readFileSync(0, "utf8").split("\n").filter(Boolean).map((l) => {
       const [name, status, secs, note] = l.split("\t");
@@ -104,6 +128,8 @@ budget() {
   rec "$1" fail "${2:-0}" "budget: ${BUDGET}s run budget exceeded${3:+, $3}"
   finish
 }
+# late: a run that ends past its budget is RED, whatever its last command did (a slow lsof, ps...)
+late() { (( BUDGET && $(left) < 0 )) && budget run 0 "finished late"; }
 stop() {
   [ -n "$TP" ] && kill -TERM "$TP" 2>/dev/null && wait "$TP"
   infra "${CUR:-run}" "interrupted; step process group killed"
@@ -129,6 +155,7 @@ tmo() {
 # step <name> cmd...: run cmd under the step cap (or what is left of the budget, if less) and record pass/fail
 step() {
   local n=$1 t s=$CAP src=cap l why rc
+  [ "$n" = premerge ] && s=$PCAP
   shift
   CUR=$n
   t=$(date +%s)
@@ -161,8 +188,155 @@ envguard() {
   done
   return 0
 }
+# okbase: okurl, plus http only (curl gets --proto =http) and no path (live appends its own)
+okbase() { okurl "$1" && [[ $1 =~ ^http://[^/]+/?$ ]]; }
+# procargs <pid>: its argv (one line) then its exec-time env (a line per var), from sysctl(KERN_PROCARGS2) as ps -E reads them; ps
+#   itself is setuid, which no sandbox may exec. A retitled process (next-server, sleep...) shows no env, as with ps -E.
+procargs() {
+  perl -e 'my $b = "\0" x 1048576; my $l = pack("Q", length $b);
+    syscall(202, pack("i3", 1, 49, $ARGV[0]), 3, $b, $l, 0, 0) == 0 or exit 1; # __sysctl, CTL_KERN, KERN_PROCARGS2
+    my ($n, $c) = (unpack("Q", $l), unpack("i", $b));
+    my $p = index($b, "\0", 4);
+    $p++ while $p < $n && substr($b, $p, 1) eq "\0";
+    my @a;
+    for (1 .. $c) { my $e = index($b, "\0", $p); exit 1 if $e < 0 || $e >= $n; push @a, substr($b, $p, $e - $p); $p = $e + 1 }
+    print "@a\n";
+    while ($p < $n) { my $e = index($b, "\0", $p); last if $e <= $p || $e > $n; print substr($b, $p, $e - $p), "\n"; $p = $e + 1 }' "$1"
+}
+# target: does the process listening on BASE's port provably use a loopback Supabase? If not: WHY, nothing sent yet, and return 2
+#   (RED: its env names a bad target or cannot be read) or 1 (refused). Reads its env's *SUPABASE*URL* and prod names, its .env
+#   files' (NEXT_PUBLIC_)SUPABASE_URL lines, and logs host:port only.
+target() {
+  local port=${BASE##*:} pids pid pp dir f u hp= a e NEXTDEV='^([^ ]*/)?node [^ ]*/next dev( |$)'
+  [[ $port =~ ^[0-9]+$ ]] || port=80
+  pids=$(lsof -nP -iTCP:"$port" -sTCP:LISTEN -t 2>/dev/null)
+  if [ -z "$pids" ]; then
+    WHY="stack down: nothing listening on $BASE"
+    return 1
+  fi
+  for pid in $pids; do
+    e=$(procargs "$pid" | sed 1d)
+    if ! grep -q '^PATH=' <<<"$e"; then # next dev forks next-server with its own initial env (next/dist/cli/next-dev.js), then retitles it
+      pp=$(lsof -a -p "$pid" -d cwd -R -FR 2>/dev/null | sed -n 's/^R//p')
+      a=$(procargs "$pp")
+      [[ ${a%%$'\n'*} =~ $NEXTDEV ]] && e=$(sed 1d <<<"$a")
+    fi
+    if ! grep -q '^PATH=' <<<"$e"; then # none, or partly read: no PATH= entry
+      WHY="cannot read the environment of pid $pid listening on :$port, so its Supabase target cannot be proven"
+      return 2
+    fi
+    if [[ $e =~ $PROD ]]; then
+      WHY="pid $pid's environment names a prod Supabase project"
+      return 2
+    fi
+    while IFS= read -r u; do
+      [[ $u =~ ^[A-Za-z0-9_]*SUPABASE[A-Za-z0-9_]*URL[A-Za-z0-9_]*= ]] || continue
+      if ! okurl "${u#*=}"; then
+        WHY="pid $pid's environment has a non-loopback ${u%%=*}"
+        return 2
+      fi
+      u=${u#*://}
+      hp="$hp ${u%%/*}"
+    done <<<"$e"
+    dir=$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')
+    if [ ! -d "$dir" ]; then
+      WHY="refuse: cannot read the cwd of pid $pid listening on :$port"
+      return 1
+    fi
+    for f in .env .env.local .env.development .env.development.local .env.production .env.production.local; do
+      [ -f "$dir/$f" ] || continue
+      while IFS= read -r u; do
+        u=${u#*=}
+        u=${u%$'\r'}
+        u=${u#[\"\']}
+        u=${u%[\"\']}
+        if ! okurl "$u"; then
+          WHY="refuse: pid $pid's $f names a non-loopback Supabase URL"
+          return 1
+        fi
+        u=${u#*://}
+        hp="$hp ${u%%/*}"
+      done < <(grep -E '^(export )?(NEXT_PUBLIC_)?SUPABASE_URL=' "$dir/$f")
+    done
+  done
+  if [ -z "$hp" ]; then
+    WHY="refuse: neither the env nor the .env files of pid $pids name a SUPABASE_URL, so its target cannot be proven"
+    return 1
+  fi
+  note "dashboard pid $pids targets Supabase$(tr ' ' '\n' <<<"$hp" | sort -u | tr '\n' ' ')"
+}
+# unavailable <why>: live cannot check the stack. LIVE=req: INFRA. LIVE=opt: a named skip.
+unavailable() {
+  [ $LIVE = req ] && infra live "$1"
+  rec live skip 0 "$1"
+}
+# get <url>: sets CODE; body in $TMPD/b, headers in $TMPD/h, never written to evidence
+get() {
+  local l m=60
+  l=$(left)
+  (( BUDGET && l <= 0 )) && budget live
+  (( BUDGET && l < m )) && m=$l
+  CODE=$(curl -q -s -m "$m" --noproxy '*' --proto =http -o "$TMPD/b" -D "$TMPD/h" -w '%{http_code}' "$1")
+  if grep -qE "$PROD" "$TMPD/b" "$TMPD/h"; then infra refuse "a response names a prod Supabase project"; fi
+}
+# ck <name> cmd...: one live:<name> row, pass if cmd succeeds
+ck() {
+  local n="live:$1" t
+  shift
+  t=$(date +%s)
+  if "$@"; then rec "$n" pass $(( $(date +%s) - t )); else rec "$n" fail $(( $(date +%s) - t )) "$CODE"; fi
+}
+# page <path> <title>: 200, that title, the themed shell, no Next error page
+page() {
+  get "$BASE$1"
+  CODE="http $CODE"
+  [ "$CODE" = "http 200" ] && grep -q "<title>$2" "$TMPD/b" && grep -q 'data-brand-theme=' "$TMPD/b" && ! grep -q '__next_error__' "$TMPD/b"
+}
+# db: local default creds on loopback, read-only session, SELECT only; never a credential from .env
+#   under what is left of the budget (30s at most)
+db() {
+  local q="select current_setting('transaction_read_only'), (select count(*) from public.clones), (select count(*) from (select 1 from public.system_logs limit 1) s)"
+  local s=30 l rc src=cap
+  l=$(left)
+  (( BUDGET && l <= 0 )) && budget live:db 0 "not started"
+  if (( BUDGET && l < s )); then s=$l; src=budget; fi
+  rm -f "$TMPD/mark"
+  tmo "$s" "$TMPD/mark" env -i PATH="$PATH" PGPASSWORD=postgres PGCONNECT_TIMEOUT=5 PGOPTIONS='-c default_transaction_read_only=on' \
+    psql -h 127.0.0.1 -p 54322 -U postgres -d postgres -XAtq -v ON_ERROR_STOP=1 -c "$q" >"$TMPD/o" 2>"$TMPD/e" </dev/null &
+  TP=$!
+  wait $TP
+  rc=$?
+  TP=
+  [ "$(cat "$TMPD/mark" 2>/dev/null)" = deadline ] && [ $src = budget ] && budget live:db 0 "psql killed"
+  [ -s "$TMPD/mark" ] && infra live:db "psql 127.0.0.1:54322 killed: $(cat "$TMPD/mark")"
+  (( rc )) && infra live:db "psql 127.0.0.1:54322 failed: $(head -c 200 "$TMPD/e")"
+  CODE=$(cat "$TMPD/o")
+  [[ $CODE =~ ^on\|[1-9][0-9]*\|[01]$ ]]
+}
+live() {
+  case $LIVE in
+    no) return;;
+    list) rec live plan 0 "runs if listening"; return;;
+  esac
+  okbase "$BASE" || infra refuse "CHECK_BASE_URL is not http://localhost or 127.0.0.1 without a path"
+  target
+  case $? in
+    1) unavailable "$WHY"; return;;
+    2) rec live:target fail 0 "$WHY"; return;;
+  esac
+  get "$BASE/overview" # the auth probe
+  if [[ $CODE == 3* || $CODE == 401 ]] || grep -q '<title>Admin sign in' "$TMPD/b"; then
+    unavailable "auth on: pages demand a login, live only checks anonymous pages"
+    return
+  fi
+  for p in /overview /clones /revenue /logs; do
+    ck "page:$p" page $p "Twin Console"
+  done
+  ck page:/api-access page /api-access "API access"
+  ck db db
+}
 # ---- modes ----
-echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s" | tee "$EV/run.log"
+echo "check $MODE @ $SHA, budget ${BUDGET}s, step cap ${CAP}s (premerge ${PCAP}s)" | tee "$EV/run.log"
 envguard
 [ "$(uname -s)" = Darwin ] || infra preflight "macOS only: steps need /usr/bin/sandbox-exec"
 if [ $MODE = exec ]; then
@@ -171,3 +345,32 @@ if [ $MODE = exec ]; then
   step exec "${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} "$@"
   finish
 fi
+if [ $MODE = live ] || [ $MODE = stage ]; then
+  live
+  late
+  finish
+fi
+sandbox
+if (( PRE )); then
+  [ -x node_modules/.bin/tsx ] || infra preflight "node_modules missing (deps not installed or symlink broken)"
+  [ -f next-env.d.ts ] || infra preflight "next-env.d.ts missing (run next dev/build once)"
+  [ -z "$(git status --porcelain)" ] || infra preflight "dirty tree: commit first"
+fi
+# the planner runs node: scrubbed (no NODE_OPTIONS preload, BASH_ENV...) and sandboxed like a step
+"${CLEAN[@]}" ${BOX[@]+"${BOX[@]}"} node --import tsx scripts/check-plan.ts "$MODE" >"$EV/rows.txt" 2>"$EV/logs/plan.log" ||
+  infra preflight "scripts/check-plan.ts failed: $(head -c 300 "$EV/logs/plan.log")"
+while IFS=$'\x1f' read -r n a why envs c; do
+  pe=() # the row's own env, from ours, only if set
+  for e in $envs; do
+    [ -n "${!e+x}" ] && pe+=("$e=${!e}")
+  done
+  case $MODE:$a in
+    fast:run | full:run) step "$n" "${CLEAN[@]}" ${pe[@]+"${pe[@]}"} ${BOX[@]+"${BOX[@]}"} sh -c "$c";;
+    *:skip | plan:plan) rec "$n" "$a" 0 "$why";;
+    *) rec "$n" fail 0 "unknown plan action '$a' in $MODE";;
+  esac
+done <"$EV/rows.txt"
+[ $OK != GREEN ] || grep -q $'^premerge\tpass\t' "$EV/timings.tsv" || rec premerge fail 0 "premerge did not pass: no GREEN without it"
+live
+late
+finish

@@ -110,7 +110,7 @@ const CAPABILITY_LINES = [
   "const scopedFetch = grant && purpose ? agencyScopedFetch(grant, purpose) : fetch;",
   'if (grant && !purpose) return { ok: false, status: 503, state: "unavailable", code: "agency_unavailable", error: "Scoped agency access is not configured." };',
   'return "ok" in ctx ? denialResponse(ctx) : ctx;',
-  'const actor = grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null);',
+  'const actor = (grant?.actor ?? (token ? `op-session:${createHash("sha256").update(token).digest("hex")}` : null)) as SessionActor | null;',
   "return { auth, backend: configuredOnlyFansBackend(scopedFetch), fetch: scopedFetch, actor, pilotActor, canManage, canChat };",
 ];
 let realBackend: ((fetchImpl?: typeof fetch) => unknown) | null = null;

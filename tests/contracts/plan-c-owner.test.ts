@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { planCOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
+import { namedOwnerActor } from "../../lib/onlyfans/plan-c-owner-core";
 
 const token1 = `owner_${"1".repeat(64)}`;
 const token2 = `owner_${"2".repeat(64)}`;
@@ -17,17 +17,23 @@ test("named owner identity survives login rotation, but not another owner or inv
     seen.push(parsed.p_session_hash);
     return Response.json(response);
   };
-  const a = await planCOwnerActor(token1, fake);
-  const b = await planCOwnerActor(token2, fake);
-  assert.match(a ?? "", /^op-session:[a-f0-9]{64}$/);
+  const a = await namedOwnerActor(token1, fake);
+  const b = await namedOwnerActor(token2, fake);
+  assert.match(String(a), /^op-session:[a-f0-9]{64}$/);
   assert.equal(a, b);
   assert.notEqual(seen[0], seen[1]);
   response = other;
-  assert.notEqual(await planCOwnerActor(token1, fake), a);
-  for (const invalid of [null, "", "unverified", 123]) {
-    response = invalid;
-    assert.equal(await planCOwnerActor(token1, fake), null);
-  }
-  assert.equal(await planCOwnerActor("invalid", fake), null);
-  assert.equal(await planCOwnerActor(token1, async () => { throw new Error("offline"); }), null);
+  assert.notEqual(await namedOwnerActor(token1, fake), a);
+  response = null;
+  assert.equal(await namedOwnerActor(token1, fake), null, "a 200 that says null is a definite miss");
+  assert.equal(await namedOwnerActor("invalid", fake), null);
+});
+
+test("G04: only a definite miss is null; anything a retry could answer differently is unavailable", async () => {
+  const status = (code: number): typeof fetch => async () => Response.json({ message: "x" }, { status: code });
+  assert.equal(await namedOwnerActor(token1, status(404)), null);
+  for (const code of [408, 425, 429, 500, 502, 503]) assert.equal(await namedOwnerActor(token1, status(code)), "unavailable", `HTTP ${code}`);
+  for (const body of ["", "unverified", 123, {}]) assert.equal(await namedOwnerActor(token1, async () => Response.json(body)), "unavailable", `200 ${JSON.stringify(body)}`);
+  assert.equal(await namedOwnerActor(token1, async () => new Response("not json")), "unavailable");
+  assert.equal(await namedOwnerActor(token1, async () => { throw new Error("offline"); }), "unavailable");
 });
