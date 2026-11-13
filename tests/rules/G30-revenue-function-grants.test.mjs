@@ -53,7 +53,9 @@ test("F3: anon and authenticated must not have EXECUTE on the revenue functions"
     has_function_privilege('anon','${STATS}','execute') as anon_stats,
     has_function_privilege('authenticated','${STATS}','execute') as authenticated_stats,
     has_function_privilege('anon','${MESSAGED}','execute') as anon_messaged,
-    has_function_privilege('authenticated','${MESSAGED}','execute') as authenticated_messaged`);
-  assert.deepEqual(grants, { anon_stats: false, authenticated_stats: false, anon_messaged: false, authenticated_messaged: false },
+    has_function_privilege('authenticated','${MESSAGED}','execute') as authenticated_messaged,
+    has_function_privilege('service_role','${STATS}','execute') as service_stats,
+    has_function_privilege('service_role','${MESSAGED}','execute') as service_messaged`);
+  assert.deepEqual(grants, { anon_stats: false, authenticated_stats: false, anon_messaged: false, authenticated_messaged: false, service_stats: true, service_messaged: true },
     "applied from this repo alone, the functions are executable by anon/authenticated");
 });

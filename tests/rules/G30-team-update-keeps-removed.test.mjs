@@ -73,7 +73,9 @@ test("F1: owner 'update' must not reactivate a member Twin admin revoked", { ski
   db.run(`update agency_memberships set active=false,creator_access_revision=gen_random_uuid() where user_id='${staff}';`);
   const revoked = member(staff);
   assert.equal(revoked.active, false, "fixture: revoke applied");
-  // /agency/team still renders the edit form for the Removed row with this current revision.
+  // A direct RPC call with the current revision (the UI no longer offers one) must be refused, not applied.
   const err = raised(() => command(OWNER, AGENCY, { operation: "update", user_id: staff, revision: revoked.revision, can_manage: false, can_chat: true, creator_scope: "all", creator_ids: [] }));
   assert.equal(member(staff).active, false, `revoked member was reactivated by an agency-owner update (rpc ${err ? `raised: ${err}` : "returned OK"})`);
+  assert.match(err ?? "", /Record changed/, "refused by the active guard, not by an unrelated failure");
+  assert.deepEqual(member(staff), revoked, "scope and revision unchanged");
 });
