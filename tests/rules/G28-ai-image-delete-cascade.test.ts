@@ -15,8 +15,8 @@
 import { startFakeSupabase, asAdmin, outcome, blockedFetches } from "./G28-harness";
 import assert from "node:assert/strict";
 import test from "node:test";
-// G28 round 2 (Flash): delete order is public copy, then the row, then the private original, so a failed public remove
-// leaves the row and the original in place (retry safe); a missing ai-public bucket (lazy) counts as already gone.
+// G28 round 2 (Flash): a failed public remove leaves the row and the original in place (retry safe); a missing ai-public
+// bucket (lazy) counts as already gone. G28c: order is now public, then private, then the row (see G28c-ai-image-storage-order).
 import { deleteAiImage } from "../../app/ai-models/actions";
 
 const MODEL = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -74,10 +74,10 @@ test("F-B3: a failed public remove keeps the row and the private original (retry
   assert.deepEqual(blockedFetches, []);
 });
 
-test("F-B3b: with the ai-public bucket missing the delete goes through: public, then row, then private", async () => {
+test("F-B3b: with the ai-public bucket missing the delete goes through: public, then private, then row", async () => {
   seed("none", "no-bucket");
   const result = await outcome(asAdmin(() => deleteAiImage(IMAGE)));
   assert.equal(result, "resolved", "a missing public bucket means nothing public is left, so the delete must not be blocked");
-  assert.deepEqual(deletes(), ["/storage/v1/object/ai-public", "/rest/v1/ai_model_images", "/storage/v1/object/ai-private"]);
+  assert.deepEqual(deletes(), ["/storage/v1/object/ai-public", "/storage/v1/object/ai-private", "/rest/v1/ai_model_images"]);
   assert.deepEqual(blockedFetches, []);
 });
