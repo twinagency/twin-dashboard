@@ -527,3 +527,10 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
   - STAGE MINUTES #401 (measured): fix r1 23 · codex final 3 · fix P1s 10 · fast 5.3 · CI pending.
 - BOTTLENECK (3 PRs, measured): fixer rounds (10-23 min) and CI (9-22 min, plus flake reruns) dominate. Codex final 3 min, Flash 3-6 min, fast 5-6 min. CI flake :91 now costs a rerun per hit; moving it out of POST-FIXMODE is worth considering if it repeats.
 - Slots: G45 (blk, CI wiring; fix-g45) and G27 (sec-money, clone save money/columns/spoil/minor gate; fix-g27). G16 waits on #402 (clones/create overlap), now unblocked.
+- 12:1xZ #400 G04c2 merged → 08e3247a (47); rerun green (flake :91 confirmed). #401 G07c merged → d504d672 (48); no file overlap with #400 (measured). Batch rwl: 3/4 merges.
+- LIVE @d504d672: build 0; first dev boot hung (stale root .next, TypeError 'length' on /_not-found), .next moved to /tmp, restart OK; check.sh live GREEN 6/6; automation page settled view (evidence live-d504d672.md). Next restart ~51-53.
+- #403 G45: Flash 2 weak guards fixed 35bf8929 (planted red, measured), fast GREEN 39. CI pending.
+- #404 G27 (head 966cd94f): Codex final P1 blank credit → 199 fallback; P2 partial-save silent (also Flash major, two lenses → in scope); P2 Moxy widening REJECTED (removing hardcoded roster is the finding; access unchanged). Flash: tip_credits unvalidated (maj), 2 weak tests (min); route 400 item dropped (G16 owns route). Fix round running.
+- #405 G16 (head 8bc9a75a): Codex final P1 duplicate multipart dryRun reaches Telegram; P1 create blocklist misses tip_reask_*; P2 agency summary comment. Fix round running; Flash pending.
+- G25 (preview view-as exit, selection cache, stop revision) started, worktree fix-g25 @9f31af71.
+- Follow-ups → POST-FIXMODE candidates: CLAUDE.md "admin API has no write routes" stale (docs); G16 create is a blocklist (new money column passes until listed).
