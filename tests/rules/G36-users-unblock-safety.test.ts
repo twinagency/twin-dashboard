@@ -1,8 +1,9 @@
 // G36 regression guard (was KNOWN RED W7 app-users F1, security/safety; promoted from fix-sweep
 // tests/known-red/W7-app-users-unblock-safety.test.ts). setBlocked used to write `blocked` whatever the reason, and
 // the guard lets agency managers call it, so an agency manager could lift a minor or us_location safety block. Now
-// setBlocked(false) from a non-admin re-reads the row and refuses (writes nothing) unless the block is unflagged or
-// "operator". Added in G36: a missing or garbage `blocked` value is refused, never read as "unblock".
+// setBlocked(false) from a non-admin is ONE conditional update (blocked_reason "operator", minor_flagged_at null) and
+// rejects on 0 rows: a null reason is admin-only, and a verdict landing after the last read is never lifted (r1).
+// Added in G36: a missing or garbage `blocked` value is refused, never read as "unblock".
 // Controls: admin unblock of a minor-flagged fan and agency unblock of a plain block both write {blocked:false}.
 // Harness: actions.ts transpiled with a fake `@/lib/supabase`; the REAL guard runs under withDashboardAccess, and its
 // ownedResource read (serviceClient, lib/supabase-service.ts) is answered by a stubbed globalThis.fetch at the wire.
@@ -12,6 +13,7 @@ import test from "node:test";
 import ts from "typescript";
 import { guardDashboardAction } from "../../lib/agency-management";
 import * as dashboardAccess from "../../lib/dashboard-access";
+import * as fanCredits from "../../lib/fan-credits";
 import { TOP_ONLYFANS_AGENCY } from "../../lib/partner-portals";
 const { withDashboardAccess } = dashboardAccess;
 
@@ -24,7 +26,8 @@ const manager = { ...TOP_ONLYFANS_AGENCY, cloneIds: [assigned], canManage: true 
 const FAN = "11111111-1111-4111-8111-111111111111";
 type Row = { id: string; clone_id: string; telegram_id: number; paused: boolean; blocked: boolean; blocked_reason: string | null; minor_flagged_at: string | null };
 let row: Row;
-const plainBlock = (): Row => ({ id: FAN, clone_id: assigned, telegram_id: 4242, paused: false, blocked: true, blocked_reason: null, minor_flagged_at: null });
+const noReasonBlock = (): Row => ({ id: FAN, clone_id: assigned, telegram_id: 4242, paused: false, blocked: true, blocked_reason: null, minor_flagged_at: null });
+const plainBlock = (): Row => ({ ...noReasonBlock(), blocked_reason: "operator" });
 const minorBlock = (): Row => ({ ...plainBlock(), blocked_reason: "minor", minor_flagged_at: "2026-11-01T00:00:00Z" });
 const usBlock = (): Row => ({ ...plainBlock(), blocked_reason: "us_location" });
 
@@ -42,23 +45,26 @@ globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
 }) as typeof fetch;
 test.after(() => { globalThis.fetch = realFetch; });
 
-// Fake supabaseAdmin: recording builder; a users select by id serves the full row (so a fixed action can re-read it).
+// Fake supabaseAdmin over the one `row`: eq/is filters apply to select AND update, like PostgREST, so a conditional
+// update that no longer matches changes nothing. `writes` records only patches that matched (and were applied);
+// update().select() returns the matched rows.
 const writes: { table: string; patch: Record<string, unknown> }[] = [];
+let raceBeforeWrite: Partial<Row> | null = null;
 function builder(table: string) {
   const b: any = {
+    filters: [] as ((r: Record<string, unknown>) => boolean)[],
     select(cols: string) { b.cols = cols; return b; },
     update(patch: Record<string, unknown>) { b.patch = patch; return b; },
-    eq(key: string, value: unknown) { (b.eqs ??= {})[key] = value; return b; },
-    maybeSingle() { b.single = true; return b; },
-    single() { b.single = true; return b; },
+    eq(key: string, value: unknown) { b.filters.push((r: Record<string, unknown>) => r[key] !== null && String(r[key]) === String(value)); return b; },
+    is(key: string, value: null) { b.filters.push((r: Record<string, unknown>) => r[key] === value); return b; },
+    maybeSingle() { b.one = true; return b; },
+    single() { b.one = true; return b; },
     then(resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) {
-      let out: unknown = { data: null, error: null };
-      if (b.patch) writes.push({ table, patch: { ...b.patch } });
-      else if (table === "users" && b.cols !== undefined) {
-        const hit = b.eqs?.id === row.id ? [{ ...row }] : [];
-        out = { data: b.single ? hit[0] ?? null : hit, error: null };
-      }
-      return Promise.resolve(out).then(resolve, reject);
+      if (b.patch && raceBeforeWrite) { Object.assign(row, raceBeforeWrite); raceBeforeWrite = null; } // lands after every read
+      const hit = table === "users" && b.filters.every((f: (r: Record<string, unknown>) => boolean) => f(row)) ? [row] : [];
+      if (b.patch) for (const r of hit) { Object.assign(r, b.patch); writes.push({ table, patch: { ...b.patch } }); }
+      const data = b.cols === undefined ? null : b.one ? (hit[0] ? { ...hit[0] } : null) : hit.map(r => ({ ...r }));
+      return Promise.resolve({ data, error: null }).then(resolve, reject);
     },
   };
   return b;
@@ -72,6 +78,7 @@ const actions: Record<string, (fd: FormData) => Promise<void>> = {};
 new Function("require", "exports", output)((name: string) => {
   if (name === "@/lib/agency-management") return { guardDashboardAction };
   if (name === "@/lib/dashboard-access") return dashboardAccess;
+  if (name === "@/lib/fan-credits") return fanCredits;
   if (name === "@/lib/supabase") return { supabaseAdmin: db };
   if (name === "next/cache") return { revalidatePath() {} };
   throw new Error("Unexpected action import: " + name);
@@ -85,6 +92,7 @@ test("control: admin unblock of a minor-flagged fan writes blocked:false (docume
   assert.deepEqual(writes, [{ table: "users", patch: { blocked: false } }]);
 });
 
+// TEST-CHANGE: the plain block is now blocked_reason "operator" (was null). Null is admin-only (Fable, G36 r1), see below.
 test("control: agency manager unblock of a plain operator block writes blocked:false", async () => {
   row = plainBlock(); writes.length = 0;
   await withDashboardAccess(manager, () => actions.setBlocked(unblock()));
@@ -114,3 +122,21 @@ for (const value of [null, "", "no", "False"]) {
     assert.match(outcome, /^rejected/);
   });
 }
+
+test("agency manager cannot lift a block with no recorded reason (admin-only)", async () => {
+  row = noReasonBlock(); writes.length = 0;
+  const outcome = await withDashboardAccess(manager, () => actions.setBlocked(unblock())).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
+  assert.deepEqual(writes, [], `agency manager lifted a reason-less block: wrote ${JSON.stringify(writes)} (outcome ${outcome})`);
+  assert.match(outcome, /^rejected/);
+  assert.equal(row.blocked, true);
+});
+
+test("a safety block landing between the last read and the write is not lifted (conditional update)", async () => {
+  row = plainBlock(); writes.length = 0;
+  raceBeforeWrite = { blocked_reason: "minor", minor_flagged_at: "2026-11-01T00:00:00Z" };
+  const outcome = await withDashboardAccess(manager, () => actions.setBlocked(unblock())).then(() => "resolved", (e: Error) => `rejected: ${e.message}`);
+  raceBeforeWrite = null;
+  assert.deepEqual(writes, [], `the unblock landed on a fan flagged after the check: wrote ${JSON.stringify(writes)} (outcome ${outcome})`);
+  assert.equal(row.blocked, true, "fan is no longer blocked");
+  assert.match(outcome, /^rejected/, "0 rows updated must reject");
+});

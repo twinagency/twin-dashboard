@@ -2,6 +2,7 @@
 
 import { guardDashboardAction } from "@/lib/agency-management";
 import { getDashboardAccess } from "@/lib/dashboard-access";
+import { isFanCredits, MAX_FAN_CREDITS } from "@/lib/fan-credits";
 
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -11,15 +12,13 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 // Refuse, never coerce: a blank box, "2.5", "-3", "Infinity" or "1e9" used to
 // floor/clamp into a written balance (blank = 0 wiped the fan's credits).
-// Ceiling: 10x the largest credit pack / starting grant (clone-default-policy).
-const MAX_CREDITS = 1_000_000;
 export async function setCredits(fd: FormData) {
   await guardDashboardAction("app/users/actions.ts#setCredits", [fd]);
   const userId = String(fd.get("userId"));
   const raw = String(fd.get("credits") ?? "").trim();
   const credits = /^\d{1,7}$/.test(raw) ? Number(raw) : NaN;
-  if (!Number.isSafeInteger(credits) || credits > MAX_CREDITS) {
-    throw new Error(`credits must be a whole number from 0 to ${MAX_CREDITS}`);
+  if (!isFanCredits(credits)) {
+    throw new Error(`credits must be a whole number from 0 to ${MAX_FAN_CREDITS}`);
   }
   const { error } = await supabaseAdmin
     .from("users")
@@ -80,7 +79,9 @@ export async function toggleActive(fd: FormData) {
 //
 // Lifting is the dangerous direction, so it is never a default: `blocked` must
 // be exactly "true" or "false". Only an internal admin may lift a safety
-// verdict; an agency manager may lift an unflagged or operator block only.
+// verdict or a block with no recorded reason; anyone else lifts an "operator"
+// block only, checked in the UPDATE itself so a verdict landing after the
+// guard's read is never lifted (0 rows matched = refused).
 export async function setBlocked(fd: FormData) {
   await guardDashboardAction("app/users/actions.ts#setBlocked", [fd]);
   const userId = String(fd.get("userId"));
@@ -90,13 +91,15 @@ export async function setBlocked(fd: FormData) {
   if (!blocked && (await getDashboardAccess())) {
     const { data, error } = await supabaseAdmin
       .from("users")
-      .select("minor_flagged_at,blocked_reason")
+      .update({ blocked })
       .eq("id", userId)
-      .maybeSingle();
-    if (error || !data) throw new Error(error?.message ?? "fan not found");
-    if (data.minor_flagged_at || (data.blocked_reason !== null && data.blocked_reason !== "operator")) {
-      throw new Error("Only an administrator can lift a safety block");
-    }
+      .eq("blocked_reason", "operator")
+      .is("minor_flagged_at", null)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!data?.length) throw new Error("Only an administrator can lift this block");
+    revalidatePath("/users");
+    return;
   }
   const { error } = await supabaseAdmin
     .from("users")
@@ -253,7 +256,8 @@ export async function manualSendPhoto(fd: FormData) {
 // The key comes from the row being deleted, never the form (a stale form used
 // to erase another fan's transcript). History goes first and its error stops
 // the wipe, so a failure never leaves a deleted fan's transcript behind. Not a
-// transaction: a users delete that fails after it leaves the fan with no history.
+// transaction: a users delete that fails after it leaves the fan with no
+// history, and the error says so and asks for a retry.
 export async function deleteUser(fd: FormData) {
   await guardDashboardAction("app/users/actions.ts#deleteUser", [fd]);
   const userId = String(fd.get("userId"));
@@ -272,7 +276,9 @@ export async function deleteUser(fd: FormData) {
   if (historyErr) throw new Error(historyErr.message);
 
   const { error } = await supabaseAdmin.from("users").delete().eq("id", userId);
-  if (error) throw new Error(error.message);
+  if (error) {
+    throw new Error(`Chat history is already deleted, but the fan row was not (${error.message}). Retry Delete user.`);
+  }
 
   revalidatePath("/users");
 }

@@ -10,6 +10,7 @@ import test from "node:test";
 import ts from "typescript";
 import { guardDashboardAction } from "../../lib/agency-management";
 import * as dashboardAccess from "../../lib/dashboard-access";
+import * as fanCredits from "../../lib/fan-credits";
 const { withDashboardAccess } = dashboardAccess;
 
 const FAN = "11111111-1111-4111-8111-111111111111";
@@ -35,6 +36,7 @@ const actions: Record<string, (fd: FormData) => Promise<void>> = {};
 new Function("require", "exports", output)((name: string) => {
   if (name === "@/lib/agency-management") return { guardDashboardAction };
   if (name === "@/lib/dashboard-access") return dashboardAccess;
+  if (name === "@/lib/fan-credits") return fanCredits;
   if (name === "@/lib/supabase") return { supabaseAdmin: db };
   if (name === "next/cache") return { revalidatePath() {} };
   throw new Error("Unexpected action import: " + name);

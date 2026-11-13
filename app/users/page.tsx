@@ -226,6 +226,11 @@ const FAN_PAGE = 100;
 // used to do.
 const FAN_MAX = 1000;
 
+// Refill reads after the first slice. When the DB filter and fanMatches
+// disagree (the "_" wildcard did once), each read can add no visible fan; this
+// stops the loop walking the table. Leftovers stay behind "Load more".
+const MAX_REFILL_READS = FAN_MAX / FAN_PAGE;
+
 // The 24h Telegram messaging window, the only "active" that matters here.
 const REACHABLE_MS = 24 * 3600 * 1000;
 
@@ -355,7 +360,7 @@ export default async function FansPage({
   // slice rather than hiding the remaining matching legacy conversations.
   let legacyHasMore = fetchedFans.length > showCount;
   let offset = fetchedFans.length;
-  while (matchingFans.length <= showCount && legacyHasMore) {
+  for (let refills = 0; matchingFans.length <= showCount && legacyHasMore && refills < MAX_REFILL_READS; refills++) {
     const next = await applyFilters(supabaseAdmin.from("users").select("*")).order(sortKey, { ascending: asc, nullsFirst: asc }).order("id", { ascending: true }).range(offset, offset + FAN_PAGE - 1);
     if (next.error) throw new Error("Could not load Telegram fans. Please retry.");
     const rows = next.data ?? [];

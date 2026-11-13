@@ -3,7 +3,8 @@
 // delete the user row anyway, and keyed the history delete by hidden form fields, so a stale form erased another
 // fan's transcript. Now it reads clone_id,telegram_id by userId, deletes history first, and a history error rejects
 // with the user row kept. KNOWN LIMIT (todo, not a pass): a users delete that fails AFTER history is gone still loses
-// the history; only a transactional RPC (bot migration) fixes that, out of G36 scope.
+// the history; only a transactional RPC (bot migration) fixes that, out of G36 scope. Until then its error says the
+// history is already deleted and asks for a retry (r1).
 // Harness: actions.ts transpiled with a fake `@/lib/supabase` (in-memory tables); admin caller via the real guard.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -11,6 +12,7 @@ import test from "node:test";
 import ts from "typescript";
 import { guardDashboardAction } from "../../lib/agency-management";
 import * as dashboardAccess from "../../lib/dashboard-access";
+import * as fanCredits from "../../lib/fan-credits";
 const { withDashboardAccess } = dashboardAccess;
 
 const FAN = "11111111-1111-4111-8111-111111111111";
@@ -68,6 +70,7 @@ const actions: Record<string, (fd: FormData) => Promise<void>> = {};
 new Function("require", "exports", output)((name: string) => {
   if (name === "@/lib/agency-management") return { guardDashboardAction };
   if (name === "@/lib/dashboard-access") return dashboardAccess;
+  if (name === "@/lib/fan-credits") return fanCredits;
   if (name === "@/lib/supabase") return { supabaseAdmin: db };
   if (name === "next/cache") return { revalidatePath() {} };
   throw new Error("Unexpected action import: " + name);
@@ -110,4 +113,12 @@ test("chat_history delete is keyed by the deleted row, not the form", async () =
   await run(form(OTHER_CLONE, "9999"));
   assert.equal(historyOf(OTHER_CLONE, 9999), 1, "stale form erased ANOTHER fan's transcript (keyed by form fields, not the users row)");
   assert.equal(historyOf(CLONE, 4242), 0, "the deleted fan's own chat_history survived");
+});
+
+test("a users delete failing after the history delete says the history is gone and to retry", async () => {
+  reset(); failDelete.users = { message: "boom" };
+  const outcome = await run(form(CLONE, "4242"));
+  assert.match(outcome, /^rejected/);
+  assert.match(outcome, /chat history (is |was )?already deleted/i, `error does not tell the operator the history is gone: ${outcome}`);
+  assert.match(outcome, /retry/i, `error does not tell the operator to retry the delete: ${outcome}`);
 });
