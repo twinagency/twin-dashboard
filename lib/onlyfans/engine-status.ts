@@ -120,12 +120,12 @@ const PURCHASE_TEXT: Record<PurchaseEvidenceState, [string, string, string]> = {
   unlocked: ["Unlocked", "Purchase recorded and access confirmed.", "Purchase and access confirmed"],
   refunded: ["Refunded", "A refund or chargeback is recorded for this purchase.", "Refund or chargeback recorded; review required"],
   held_for_review: ["Held for review", "Access or payment evidence conflicts. A person must review it before anything else is sent.", "Purchase held for review"] };
-/** What the request proves about money and access. Explicit backend evidence wins, except that a send proven not (yet) out
- * contradicts any offer, purchase or access claim and reads held for review; otherwise it is read from the request's own state. */
+/** What the request proves about money and access. Explicit backend evidence is authoritative (NEEDS-BACKEND.md §6), even on an
+ * unsent action: a recorded payment stays visible and the label carries the send's state. Otherwise it is derived, never from an unsent send. */
 export function engineRequestPurchase(request: EngineRequestView): PurchaseEvidence | null {
   const make = (state: PurchaseEvidenceState, extra: Partial<EnginePurchaseView> = {}): PurchaseEvidence =>
     ({ ...extra, state, label: PURCHASE_TEXT[state][0], detail: PURCHASE_TEXT[state][1] });
-  if (request.purchase) return make(unsent(request) && request.actionOutcome !== "unknown" && !["refunded", "held_for_review"].includes(request.purchase.state) ? "held_for_review" : request.purchase.state, request.purchase);
+  if (request.purchase) return make(request.purchase.state, request.purchase);
   if (request.nextStep === "review_refund_or_chargeback") return make("refunded");
   if (request.nextStep === "review_access_revocation") return make("held_for_review");
   if (request.actionType !== "offer" || unsent(request)) return null;
