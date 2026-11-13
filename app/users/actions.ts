@@ -88,10 +88,12 @@ export async function setBlocked(fd: FormData) {
   const flag = fd.get("blocked");
   if (flag !== "true" && flag !== "false") throw new Error("blocked must be true or false");
   const blocked = flag === "true";
-  if (!blocked && (await getDashboardAccess())) {
-    const { data, error } = await supabaseAdmin
-      .from("users")
-      .update({ blocked })
+  const agency = await getDashboardAccess();
+  const users = () => supabaseAdmin.from("users");
+  if (!blocked && agency) {
+    // Lift and clear the stamp in one statement: a later reason-less block never reads as this operator block.
+    const { data, error } = await users()
+      .update({ blocked, blocked_reason: null, blocked_at: null })
       .eq("id", userId)
       .eq("blocked_reason", "operator")
       .is("minor_flagged_at", null)
@@ -101,8 +103,36 @@ export async function setBlocked(fd: FormData) {
     revalidatePath("/users");
     return;
   }
-  const { error } = await supabaseAdmin
-    .from("users")
+  if (blocked && agency) {
+    // An agency block is stamped "operator" so the same agency can lift it, in ONE statement and only on a fan it
+    // flips, never over a safety reason or minor flag. 0 rows falls through to the plain block below, which always
+    // lands. Admin and AI-assistant blocks stay reason-less, so only an admin can lift them.
+    const { data, error } = await users()
+      .update({ blocked, blocked_reason: "operator", blocked_at: new Date().toISOString() })
+      .eq("id", userId)
+      .eq("blocked", false)
+      .or("blocked_reason.is.null,blocked_reason.eq.operator")
+      .is("minor_flagged_at", null)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (data?.length) { revalidatePath("/users"); return; }
+  }
+  if (!blocked) {
+    // Admin unblock clears blocked_at in the same write (the catalogue, browse and offer gates read it) and an
+    // operator stamp, never a safety reason. A "minor" reason keeps blocked_at: the minor gate is
+    // minor_flagged_at || reason "minor", and some media gates check only blocked_at and minor_flagged_at.
+    // Disjoint conditions, first match wins: operator, no reason, any reason but minor (neq skips null, as in SQL).
+    for (const [patch, op, value] of [
+      [{ blocked, blocked_reason: null, blocked_at: null }, "eq", "operator"],
+      [{ blocked, blocked_at: null }, "is", null],
+      [{ blocked, blocked_at: null }, "neq", "minor"],
+    ] as const) {
+      const { data, error } = await users().update(patch).eq("id", userId).filter("blocked_reason", op, value).select("id");
+      if (error) throw new Error(error.message);
+      if (data?.length) { revalidatePath("/users"); return; }
+    }
+  }
+  const { error } = await users()
     .update({ blocked })
     .eq("id", userId);
   if (error) throw new Error(error.message);
