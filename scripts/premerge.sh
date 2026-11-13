@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 BASE=${PREMERGE_BASE:-origin/claude/commercial-dashboard-r2-20261111}
+SUITES=(test:offline test:api test:public test:rules) # npm suites run on every PR; --list feeds scripts/check-plan.ts
+[ "${1:-}" = --list ] && { echo "${SUITES[*]}"; exit 0; }
 BIN=node_modules/.bin
 LOG=$(mktemp -d /tmp/twin-premerge.XXXXXX)
 fail=0
@@ -37,15 +39,9 @@ for f in $tests; do
   run "test:${f//\//_}" node "${flags[@]}" "$f"
 done
 [ -z "$tests" ] && echo "n/a   changed tests (none under tests/)"
-# always: area gating by path silently skipped suites that shared code reaches
-run test:offline npm run test:offline
-run test:api npm run test:api
-run test:public npm run test:public
-
-# promoted rules
+# always: area gating by path silently skipped suites that shared code reaches; test:rules = promoted rules
+for s in "${SUITES[@]}"; do run "$s" npm run -s "$s"; done
 shopt -s nullglob
-rules=(tests/rules/*.test.*)
-if [ ${#rules[@]} -gt 0 ]; then run rules npm run -s test:rules; else echo "n/a   rules (no tests/rules on this branch)"; fi
 
 # known-reds: control passes, the rest still fails on an assertion
 krs=(tests/known-red/*.test.*)
