@@ -5,9 +5,15 @@ import {
   configuredNativeReadBackend,
   configuredNativeControlBackend,
 } from "./native-backend";
-import { hash, object, parseNativeReadiness, text } from "./native";
+import { hash, object, parseNativeReadiness, readinessFingerprint, text } from "./native";
 import { readCommandJson } from "../command-json";
 import { canonicalConfiguration } from "../configuration";
+/** The one exact key set each action accepts (after a STOP's client fingerprint is discarded). */
+const KEYS: Record<string, string> = {
+  emergency_stop: "action,reason",
+  pause: "action,expectedFingerprint,reason",
+  resume: "action,expectedFingerprint,reason",
+};
 export async function accountControls(
   request: NextRequest,
   accountId: string,
@@ -41,18 +47,15 @@ export async function accountControls(
   } catch {
     return bRefuse(400, "Invalid account control request.");
   }
-  // A STOP is a brake: it may come without a fingerprint when the panel could not read state.
-  const bare =
-    object(b) &&
-    b.action === "emergency_stop" &&
-    Object.keys(b).sort().join(",") === "action,reason";
+  // A STOP is a brake. A fingerprint the client holds may be stale, and the backend refuses a stale one exactly when STOP is needed,
+  // so any client fingerprint on a STOP is discarded and the route pins the one it reads now (below).
+  if (object(b) && b.action === "emergency_stop") delete b.expectedFingerprint;
+  const keys = object(b) && Object.hasOwn(KEYS, String(b.action)) ? KEYS[String(b.action)] : undefined;
   if (
     !object(b) ||
-    (!bare &&
-      (Object.keys(b).sort().join(",") !==
-        "action,expectedFingerprint,reason" ||
-        !hash(b.expectedFingerprint))) ||
-    !["pause", "emergency_stop", "resume"].includes(String(b.action)) ||
+    !keys ||
+    Object.keys(b).sort().join(",") !== keys ||
+    (b.action !== "emergency_stop" && !hash(b.expectedFingerprint)) ||
     !text(b.reason, 512) ||
     !b.reason.trim()
   )
@@ -60,16 +63,10 @@ export async function accountControls(
   const call = configuredNativeControlBackend(g.ctx.fetch);
   if (!call)
     return bRefuse(503, "The account control authority is unavailable.");
-  if (bare) {
-    // The backend checks a fingerprint on every control, so pin this STOP to the state as it is now.
-    // Only the fingerprint is needed: a readiness body that fails the full parser still yields one.
+  if (b.action === "emergency_stop") {
     const read = configuredNativeReadBackend(g.ctx.fetch),
       now = read ? await read(g.accountId, "readiness") : null,
-      r =
-        now?.ok && object(now.data.readiness)
-          ? now.data.readiness.accountControl
-          : null,
-      fingerprint = object(r) && hash(r.fingerprint) ? r.fingerprint : null;
+      fingerprint = now?.ok ? readinessFingerprint(now.data.readiness) : null;
     if (!fingerprint)
       return bRefuse(
         503,
@@ -77,6 +74,9 @@ export async function accountControls(
       );
     b.expectedFingerprint = fingerprint;
   }
+  // The key covers the pinned fingerprint. Every recorded control bumps the backend's control revision, which is part of that
+  // fingerprint, so a STOP sent again after a recorded one is a new command (stops again), and one sent again after an unrecorded
+  // one replays the same key.
   const actor = g.ctx.actor!,
     commandKey = createHash("sha256")
       .update(canonicalConfiguration([actor, g.accountId, "control", b]))

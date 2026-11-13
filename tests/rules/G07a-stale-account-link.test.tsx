@@ -85,3 +85,14 @@ test("L5 workspace: with no account selected the select does not show the first 
   assert.equal(w.placeholder || w.shownValue !== "of-a", true, `select shows ${w.shownValue} as chosen with no placeholder (AbcWorkspace.tsx:45)`);
   await unmount();
 });
+
+test("L5 embedded memory (inbox, switcher hidden): an unseen account says so and does not ask to select one", async () => {
+  const stub = serve("of-a");
+  const { default: BMemoryPanel } = await import("../../components/onlyfans-launch/memory/BMemoryPanel");
+  await mount(inNextApp(React.createElement(BMemoryPanel, { canManage: true, part: "facts", selectedAccountId: "of-gone", selectedFanId: "101" }), "/onlyfans"));
+  const text = pageText();
+  assert.deepEqual({ switcher: Boolean(document.querySelector("select")), notAvailable: /not available/i.test(text), select: /select an/i.test(text),
+    signInAgain: /sign in again/i.test(text), ofAFetched: stub.calls.some(c => /\/accounts\/of-a(\/|$)/.test(c.url.split("?")[0])) },
+    { switcher: false, notAvailable: true, select: false, signInAgain: false, ofAFetched: false }, "asks to select with nothing to select (BMemoryPanel.tsx:134)");
+  await unmount();
+});
