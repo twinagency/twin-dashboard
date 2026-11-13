@@ -44,20 +44,20 @@ export const GET = withAdmin(async (req) => {
   if (!users.rowCount) return jsonError(`no fan with telegram_id ${fan}${clone ? ` on ${clone.slug}` : ""}`, 404);
 
   // A fan is (clone_id, telegram_id), so the same Telegram id can be a separate
-  // row on every clone. Without ?clone= this legitimately returns several.
-  const profiles = await runQuery({
-    table: "fan_profiles",
-    filters: (users.rows as { id: string }[]).length === 1
-      ? [{ column: "user_id", op: "eq", value: (users.rows as { id: string }[])[0].id }]
-      : [],
-    limit: 50,
-  });
+  // row on every clone. Without ?clone= this legitimately returns several, and
+  // the profile read is skipped: with no user_id filter it would return
+  // unrelated fans' profiles.
+  const one = users.rows.length === 1 ? (users.rows as { id: string }[])[0] : null;
+  const profiles = one
+    ? await runQuery({ table: "fan_profiles", filters: [{ column: "user_id", op: "eq", value: one.id }], limit: 50 })
+    : null;
+  if (profiles && isQueryError(profiles)) return fromQueryError(profiles);
 
   return ok({
     telegramId: Number(fan),
     clone: clone ? { id: clone.id, slug: clone.slug, name: clone.name } : null,
     users: users.rows,
-    profiles: isQueryError(profiles) ? [] : profiles.rows,
+    profiles: profiles ? profiles.rows : [],
     note:
       (users.rows as unknown[]).length > 1
         ? "This Telegram id exists on more than one clone. Pass ?clone= to narrow it; the profile lookup is skipped while ambiguous."

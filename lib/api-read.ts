@@ -72,6 +72,8 @@ export type QuerySpec = {
   select?: string[];
   filters?: { column: string; op: FilterOp; value: string }[];
   orderBy?: string;
+  /** Second sort key, same direction: makes rows sharing `orderBy` come back in a stable order for keyset paging. */
+  tieBreak?: string;
   ascending?: boolean;
   limit?: number;
 };
@@ -181,6 +183,8 @@ export async function runQuery(spec: QuerySpec): Promise<QueryResult | QueryErro
     return { error: `column(s) not allowed for "${spec.table}"`, status: 400 };
   }
 
+  if (spec.tieBreak && !allowed.includes(spec.tieBreak)) return { error: `order column not allowed: ${spec.tieBreak}`, status: 400 };
+
   const limit = clampLimit(spec.limit);
   let q = supabaseAdmin.from(spec.table).select(columns.join(","));
   for (const f of spec.filters ?? []) {
@@ -188,6 +192,7 @@ export async function runQuery(spec: QuerySpec): Promise<QueryResult | QueryErro
     q = (q as unknown as Record<string, (c: string, v: string) => typeof q>)[f.op](f.column, f.value);
   }
   if (spec.orderBy) q = q.order(spec.orderBy, { ascending: spec.ascending === true });
+  if (spec.tieBreak) q = q.order(spec.tieBreak, { ascending: spec.ascending === true });
   q = q.limit(limit);
 
   const { data, error } = await q;

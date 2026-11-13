@@ -31,6 +31,7 @@ import {
   clampLimit,
   isQueryError,
   parseRevenueWindow,
+  runQuery,
   FORBIDDEN_COLUMNS,
   MAX_LIMIT,
 } from "../lib/api-read";
@@ -551,10 +552,16 @@ check("D13 shared creator facts use the existing scoped admin reader", () => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-const total = passed + failures.length;
-if (failures.length) {
-  console.error(`\n  ${failures.length} of ${total} CHECKS FAILED\n`);
-  for (const f of failures) console.error(`  ✗ ${f}\n`);
-  process.exit(1);
-}
-console.log(`\n  ALL ${total} CHECKS PASSED\n`);
+// runQuery is async; its tie-break check runs before any client is built, so no Supabase and no network here.
+void runQuery({ table: "clones", orderBy: "slug", tieBreak: "bot_token", limit: 1 }).catch((e: unknown) => e).then((d8b) => {
+  check("D8b a TIE-BREAK order on a forbidden column is rejected (chats keyset paging)", () => {
+    assert(isQueryError(d8b) && d8b.status === 400, `tieBreak bot_token must 400, got ${String(d8b)}`);
+  });
+  const total = passed + failures.length;
+  if (failures.length) {
+    console.error(`\n  ${failures.length} of ${total} CHECKS FAILED\n`);
+    for (const f of failures) console.error(`  ✗ ${f}\n`);
+    process.exit(1);
+  }
+  console.log(`\n  ALL ${total} CHECKS PASSED\n`);
+});

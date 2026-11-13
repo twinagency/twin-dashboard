@@ -124,7 +124,9 @@ export const POST = withAdmin(async (req) => {
       case "set_connection_pause": {
         const cloneId = String(body.cloneId ?? "");
         if (!cloneId) return jsonError("cloneId is required", 400);
-        const paused = body.paused === true;
+        // Only a real boolean: a missing or "true"/1 value used to read as resume.
+        if (typeof body.paused !== "boolean") return jsonError("paused must be true or false", 400);
+        const paused = body.paused;
         // Resuming a spike AUTO-HALT needs body.confirmText = "RESUME <clone name or short id>" (checked in setConnectionPaused).
         await setConnectionPaused(cloneId, paused, typeof body.reason === "string" ? body.reason : null, ACTOR, typeof body.confirmText === "string" ? body.confirmText : null);
         logAdminWrite("mtproto:set_connection_pause", cloneId, { paused });
