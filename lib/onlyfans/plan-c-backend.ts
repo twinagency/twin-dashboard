@@ -9,7 +9,8 @@ import { createBackendTransport, configuredBackendPurpose } from "./backend-tran
 import { PLAN_C_CONFLICT_TEXT, PLAN_C_GONE_TEXT, PLAN_C_HEADER, PLAN_C_REFUSED_TEXT, PLAN_C_SCHEMA, PLAN_C_UNCONFIRMED_TEXT, parsePlanCDrafts, parsePlanCUnresolved,
   type PlanCCommandResult, type PlanCConversationAction, type PlanCDraftAction, type PlanCDraftList, type PlanCUnresolvedList } from "./plan-c";
 
-export type PlanCReadResult<T> = { ok: true; data: T } | { ok: false; status: 404 | 502 | 503; error: string };
+/** 403: the backend refused this actor (upstream 401/403). 502/503: it could not be read at all, so nothing was established. */
+export type PlanCReadResult<T> = { ok: true; data: T } | { ok: false; status: 403 | 404 | 502 | 503; error: string };
 
 export type PlanCDraftCommand = { requestId: string; generation: number; action: PlanCDraftAction; expectedVersion: number; commandKey: string; actor: string;
   reason?: string; parts?: string[] };
@@ -37,6 +38,7 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
     try {
       const response = await call(url, { method: "GET", headers: { ...headers, ...(actor ? { "X-Plan-C-Actor": actor } : {}) } });
       if (response.status === 404) { await response.body?.cancel(); return { ok: false, status: 404, error: `${what} is not available.` }; }
+      if (response.status === 401 || response.status === 403) { await response.body?.cancel(); return { ok: false, status: 403, error: `${what} is not available to this session.` }; }
       if (response.ok) { const data = parse(await response.json()); return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` }; }
       await response.body?.cancel();
     } catch { /* fall through */ }

@@ -10,12 +10,14 @@ export function engineOperatorEvidenceRef(environment: EngineEnvironment, note: 
 }
 export { isEngineEnvironment };
 type Submission = { accountId: string; conversationId: string; requestId: string; action: EngineOperatorAction;
-  expectedRevision: number; commandKey: string; actor: string; note?: string; environment?: EngineEnvironment };
+  expectedRevision: number; commandKey: string; actor: string; note?: string; environment: EngineEnvironment };
 
 /** A missing or malformed acknowledgement is uncertain, never a failed write. */
 export function createEngineOperatorBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
   return async (command: Submission): Promise<EngineOperatorResult & { status?: number }> => {
+    // Never defaulted: a command that names no environment would otherwise store simulation evidence against real work.
+    if (!isEngineEnvironment(command.environment)) return { ok: false, status: 400, outcome: "refused", error: "The request action was not accepted." };
     try {
       const response = await call(options.baseUrl.replace(/\/+$/, "") +
         `/onlyfans/control/v1/accounts/${encodeURIComponent(command.accountId)}/conversations/${encodeURIComponent(command.conversationId)}/requests/${encodeURIComponent(command.requestId)}`, {
@@ -24,7 +26,7 @@ export function createEngineOperatorBackend(options: { baseUrl: string; token: s
         body: JSON.stringify({ action: command.action, expectedRevision: command.expectedRevision,
           commandKey: command.commandKey, actor: command.actor,
           ...(command.action === "request_handover" ? { target: command.actor } : {}),
-          ...(engineActionNeedsNote(command.action) ? { evidenceRef: engineOperatorEvidenceRef(command.environment ?? "simulation", command.note ?? "") } : {}) }),
+          ...(engineActionNeedsNote(command.action) ? { evidenceRef: engineOperatorEvidenceRef(command.environment, command.note ?? "") } : {}) }),
       });
       if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) return { ok: false, status: response.status,
         outcome: "refused", error: response.status === 409 ? "The request changed or is held. Refresh and review it before trying again." : "The request action was not accepted." };

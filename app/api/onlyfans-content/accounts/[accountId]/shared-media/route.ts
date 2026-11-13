@@ -8,6 +8,7 @@ import { trustedFormOrigin } from "@/lib/form-origin";
 import { readCommandJson } from "@/lib/onlyfans/command-json";
 import { creatorUuid } from "@/lib/staff-creator-scope";
 import { serviceClient } from "@/lib/supabase-service";
+import { isOperatorActor } from "@/lib/onlyfans/upload-permission";
 import { SHARED_MEDIA_LIMIT, boundedMediaBytes, sharedChunkDigests, sharedDigest, sharedFileName, sharedSourceKind, sharedStoragePath, sharedUploadProgress, publicSharedTransfer, type SharedTransfer } from "@/lib/shared-media";
 
 export const dynamic = "force-dynamic";
@@ -20,13 +21,17 @@ const active = new Set(["prepared", "receiving", "pending", "running"]);
 
 async function access(request: NextRequest, context: Context, write = false) {
   const auth = await requireOnlyFansRead({ agency: true, write }); if (auth instanceof NextResponse) return auth;
-  const accountId = requestId((await context.params).accountId), cloneId = request.nextUrl.searchParams.get("creator");
-  if (!accountId || !creatorUuid(cloneId) || request.nextUrl.searchParams.size !== 1) return refuse("Choose a creator and connected account.", 400);
+  const accountId = requestId((await context.params).accountId), raw = request.nextUrl.searchParams.get("creator");
+  if (!accountId || !creatorUuid(raw) || request.nextUrl.searchParams.size !== 1) return refuse("Choose a creator and connected account.", 400);
+  // Grants, DB rows and storage paths hold lower-case ids; normalize once so letter case never decides access.
+  const cloneId = raw.toLowerCase();
+  // A creator outside the agency grant is refused before the backend is consulted at all.
+  if (auth.auth.agencyGrant && !auth.auth.agencyGrant.creatorIds.includes(cloneId)) return refuse("Creator access denied.", 403);
   // Bind both channels before consulting private source rows or receipts.
   const accounts = await auth.backend?.listAccounts({ creatorId: cloneId });
   if (!accounts?.ok) return refuse("Connected accounts could not be verified.", 503);
-  const account = accounts.data.find(a => a.accountId === accountId && a.binding.creatorId === cloneId);
-  if (!account || auth.auth.agencyGrant && !auth.auth.agencyGrant.creatorIds.includes(cloneId)) return refuse("Creator access denied.", 403);
+  const account = accounts.data.find(a => a.accountId === accountId && a.binding.creatorId.toLowerCase() === cloneId);
+  if (!account) return refuse("Creator access denied.", 403);
   const backend = configuredVaultMediaBackend(auth.fetch), vault = configuredVaultBackend(auth.fetch);
   if (!backend || !vault || !auth.actor) return refuse("Media sharing is unavailable.", 503);
   return { auth, account, accountId, cloneId, backend, vault, db: serviceClient() };
@@ -88,9 +93,9 @@ export async function POST(request: NextRequest, context: Context) {
       if (!row) return refuse("Refresh the saved upload before retrying.", 503);
     }
     if (row.clone_id !== cloneId || row.storage_path !== source.data.storage_path) return refuse("The source file changed. Review it before sharing.");
-    // Agency actors must match the backend's freshly verified grant. Owner
-    // sessions may resume their server-recorded receipt after signing in again.
-    if (ctx.auth.auth.agencyGrant && row.actor !== ctx.auth.actor) return refuse("This upload was started by another team member. Ask them to finish it.");
+    // Agency actors must match the backend's freshly verified grant. Owner sessions may resume an owner receipt after signing in
+    // again, never an agency member's: the backend binds the job to its actor, so relaying it would attribute the write to them.
+    if (ctx.auth.auth.agencyGrant ? row.actor !== ctx.auth.actor : !isOperatorActor(row.actor)) return refuse("This upload was started by another team member. Ask them to finish it.");
     if (!active.has(row.status) && row.error_code !== "provider_cleanup_required") return answer({ ok: true, transfer: publicSharedTransfer(row) });
     const identity = (action: string) => ({ actor: row!.actor, commandKey: sharedDigest(`shared-media.v1:${row!.id}:${action}`) });
     const save = async (patch: Partial<SharedTransfer>) => {
