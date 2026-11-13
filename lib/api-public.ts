@@ -19,7 +19,7 @@ import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import type { Period, DateRange } from "./dashboard-data";
 import { supabaseAdmin } from "./supabase";
 import { STAR_USD, AUD_PER_USD } from "./money";
-import { net, resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
+import { net, resolveCloneCuts, scaleAnalyticsData, type ViewerMode } from "./revenue-projection";
 import { getCutPctForClone, getAgencyCreatorCutPct, applyStackedCut } from "./platform-cut";
 import { FAN_SORT_COLUMN, type FanQuery } from "./api-public-query";
 
@@ -166,11 +166,21 @@ export async function publicRevenue(
   period: Period,
   range?: DateRange,
 ): Promise<PublicRevenue> {
-  const analytics = await getAnalytics(period, cloneId, range, { includeCost: false });
   // Clone-scope key = creator-facing: both cuts, stacked.
+  return cloneRevenue(cloneId, period, range, "creator");
+}
+
+// One clone as its AGENCY sees it: platform cut only, the same netting a fleet
+// key gets. Only the admin API's agency act-as calls it (G16, W4 F6); no public
+// key reaches it, so a key's scope still never picks the mode.
+export async function agencyCloneRevenue(cloneId: string, period: Period, range?: DateRange): Promise<PublicRevenue> {
+  return cloneRevenue(cloneId, period, range, "agency");
+}
+
+async function cloneRevenue(cloneId: string, period: Period, range: DateRange | undefined, mode: ViewerMode): Promise<PublicRevenue> {
+  const analytics = await getAnalytics(period, cloneId, range, { includeCost: false });
   const cuts = await resolveCloneCuts([cloneId]);
-  const netAnalytics = scaleAnalyticsData(analytics, cuts, "creator");
-  return projectRevenue(netAnalytics, range ?? null);
+  return projectRevenue(scaleAnalyticsData(analytics, cuts, mode), range ?? null);
 }
 
 // ── the fleet projection (migration 127 keys) ────────────────────────────────

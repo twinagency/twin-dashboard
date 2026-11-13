@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { uploadPhoto, uploadVideo } from "@/app/media/actions";
 import { resolveClone } from "@/lib/api-read";
@@ -58,6 +59,8 @@ export const POST = withAdmin(async (req) => {
   // photos silently missing" — the worst possible failure for a media library,
   // because the count looks plausible and nobody notices which ones are gone.
   const uploaded: string[] = [];
+  // Already in the library: kept as it was, the requested price/free flag NOT applied (G16 Flash).
+  const existing: string[] = [];
   const failed: { file: string; error: string }[] = [];
   for (const file of files) {
     const fd = new FormData();
@@ -68,7 +71,7 @@ export const POST = withAdmin(async (req) => {
     try {
       const result = type === "photo" ? await uploadPhoto(clone.id, fd) : await uploadVideo(clone.id, fd);
       if (!result.ok) throw new Error(result.error);
-      uploaded.push(file.name);
+      (result.existing ? existing : uploaded).push(file.name);
     } catch (e) {
       // One bad file must not lose the whole set — and it must be NAMED, so the
       // caller knows exactly which item to retry rather than re-uploading all.
@@ -76,16 +79,29 @@ export const POST = withAdmin(async (req) => {
     }
   }
 
-  logAdminWrite(`media upload (${uploaded.length} ${type}s)`, clone.id, { uploaded: uploaded.length, failed: failed.length });
+  logAdminWrite(`media upload (${uploaded.length} ${type}s)`, clone.id, { uploaded: uploaded.length, existing: existing.length, failed: failed.length });
+
+  // Nothing saved is a failure, not a 200 (G16, W4 F5): 422 if anything failed,
+  // 409 if every file was already in the library. A partial set stays 200 so the
+  // saved items are not retried, but says partial:true beside failed/existing.
+  if (uploaded.length === 0) {
+    const error = failed.length
+      ? `none of the ${files.length} file(s) was saved; see failed`
+      : `all ${existing.length} file(s) are already in the library; nothing saved and the requested price was not applied`;
+    return NextResponse.json({ ok: false, error, clone, type, uploaded, existing, failed }, { status: failed.length ? 422 : 409 });
+  }
 
   return ok({
     clone,
     type,
     uploaded,
+    existing,
     failed,
+    partial: failed.length > 0 || existing.length > 0,
     note:
-      failed.length > 0
+      (failed.length > 0
         ? `${uploaded.length} uploaded. Could not confirm saving ${failed.length} file(s); review the failed items before retrying.`
-        : `${uploaded.length} ${type}(s) saved. Check their analysis status in the media library before use.`,
+        : `${uploaded.length} ${type}(s) saved. Check their analysis status in the media library before use.`) +
+      (existing.length > 0 ? ` ${existing.length} already in the library, kept as they were (price not changed).` : ""),
   });
 });

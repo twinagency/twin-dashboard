@@ -39,8 +39,11 @@ import { DEFAULT_BLUR, validBlur } from "@/lib/catalogue-core";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
+// existing: the bytes were already in this clone's library, so nothing was
+// written and the request's star_value/is_free were NOT applied. Additive: the
+// dashboard callers only read ok.
 export type MediaUploadResult =
-  | { ok: true }
+  | { ok: true; existing?: true }
   | { ok: false; error: string };
 
 function uploadFailure(error: unknown): MediaUploadResult {
@@ -283,7 +286,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
     if (existingError) throw new Error(existingError.message);
     if (existingPhoto) {
       revalidatePath("/media");
-      return { ok: true };
+      return { ok: true, existing: true };
     }
   }
 
@@ -354,7 +357,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
     if (existingError) throw new Error(existingError.message);
     if (existingVideo) {
       revalidatePath("/media");
-      return { ok: true };
+      return { ok: true, existing: true };
     }
   }
 

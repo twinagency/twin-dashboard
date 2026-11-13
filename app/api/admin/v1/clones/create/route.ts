@@ -5,6 +5,24 @@ import { resolveClone } from "@/lib/api-read";
 
 export const dynamic = "force-dynamic";
 
+// The only keys a caller may send (G16, W4 F4 + Codex final): an allowlist, so
+// a money, tip, paywall or brake column added to rowFromForm later is refused by
+// default instead of forwarded by default. Derived from what create needs (name,
+// bot_token, status) plus what its one caller sends (twin-bot clonify convert.ts:
+// voice_id, intake, and extract.ts FACT_KEYS, the typed persona facts). Every
+// other setting starts at the fleet defaults and is changed in Configure (the
+// switches also via ../write/route.ts). Anything else is a 400 naming the key.
+const CREATE_KEYS = new Set<string>([
+  "name", "bot_token", "status", "voice_id", "intake",
+  "stage_name", "real_name", "name_shared_with_fans", "date_of_birth", "gender", "height",
+  "ethnicity", "sexuality", "hometown", "current_city", "occupation", "creator_type", "known_for",
+  "career_start_year", "career_history", "cover_story", "admits_platforms", "platforms", "hair_color",
+  "hair_length", "eye_color", "body_type", "cup_size", "measurements", "tattoos", "tattoo_details",
+  "piercings", "piercing_details", "enhancements", "voice_accent", "voice_pace", "voice_texture",
+  "fan_nicknames", "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra", "meeting_policy",
+  "love_policy", "relationship_canon", "acknowledges_other_fans", "wake_time", "sleep_time",
+]);
+
 // Create a new clone.
 //
 // Goes through createCloneRow(), the SAME server action the "New clone" form
@@ -30,6 +48,13 @@ export const POST = withAdmin(async (req) => {
   const name = String(body.name ?? "").trim();
   const botToken = String(body.bot_token ?? "").trim();
   if (!name) return jsonError("name is required", 400);
+  const refused = Object.keys(body).filter((k) => !CREATE_KEYS.has(k));
+  if (refused.length) {
+    return jsonError(
+      `${refused.join(", ")} cannot be set through this API: create takes name, bot_token, status, voice_id, intake and the typed persona facts only. Every other setting starts at the fleet defaults and is changed in Configure`,
+      400,
+    );
+  }
   if (!botToken) {
     return jsonError(
       "bot_token is required: a clone with no Telegram token cannot be launched, and the slug/token uniqueness checks run against it",
@@ -55,9 +80,9 @@ export const POST = withAdmin(async (req) => {
     if (v === null || v === undefined) continue;
     fd.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
   }
-  // Anything else the caller passes is forwarded verbatim to the same
-  // rowFromForm() the UI uses, so the API cannot drift from the form's own
-  // field handling. Unknown keys are simply ignored by it. Set AFTER the
+  // The allowlisted keys (anything else was refused above) are forwarded
+  // verbatim to the same rowFromForm() the UI uses, so the API cannot drift from
+  // the form's own field handling. Set AFTER the
   // defaults above so an explicit caller value always wins.
   for (const [k, v] of Object.entries(body)) {
     if (v === null || v === undefined) continue;
