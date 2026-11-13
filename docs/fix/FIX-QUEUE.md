@@ -437,3 +437,4 @@ Skipped: rwl-W1-lib-onlyfans-plan-c (dirty=2); 5 /tmp rwl mut dirs (standalone c
 - G47: implementer running (incl. 7a-engine-note-and-accept, 7a-engine-page-race).
 - Flash psql tests used own initdb cluster on random loopback port (measured from code); stack/prod untouched.
 - Incident: F0 fixer pkill'd other sessions' premerge runs (pid 30666 /tmp/fix-f4, 41350, 56250, 57577). Owners rerun.
+- #375 G01 merged 720751aa (rwl full R1+R2 Sonnet APPROVE; codex final P2 hand-back stale revision fixed red-first; premerge PASS c304bbb3; CI billing-locked). 21 merged. Fable consult sent.
