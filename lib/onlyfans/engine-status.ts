@@ -42,8 +42,11 @@ const requestStatuses = new Set(["open", "waiting_fan", "waiting_provider", "han
 const actionOutcomes = new Set(["ready", "queued", "dispatching", "unknown", "accepted", "not_accepted", "cancelled", "refused", "completed", "held"]);
 const FINISHED = new Set(["completed", "declined", "cancelled"]);
 
-/** A request that still needs someone or something. Matches the backend's unresolved-first ordering. */
-export const isUnresolvedRequest = (request: Pick<EngineRequestView, "status">) => !FINISHED.has(request.status);
+/** Outcomes that prove nothing went out, or not yet: a request carrying one never reads as sent, offered or purchased. */
+const NOT_SENT = new Set(["ready", "queued", "dispatching", "unknown", "held", "not_accepted", "cancelled", "refused"]);
+/** A request that still needs someone or something. An unknown or held send needs a person whatever its status. */
+export const isUnresolvedRequest = (request: Pick<EngineRequestView, "status"> & { actionOutcome?: string | null }) =>
+  !FINISHED.has(request.status) || request.actionOutcome === "unknown" || request.actionOutcome === "held";
 export const isCursor = (value: unknown): value is string => typeof value === "string" && /^[A-Za-z0-9_=-]{1,512}$/.test(value);
 
 function parsePurchase(value: unknown): EnginePurchaseView | null | undefined {
@@ -122,30 +125,37 @@ export function engineRequestPurchase(request: EngineRequestView): PurchaseEvide
   if (request.purchase) return make(request.purchase.state, request.purchase);
   if (request.nextStep === "review_refund_or_chargeback") return make("refunded");
   if (request.nextStep === "review_access_revocation") return make("held_for_review");
-  if (request.actionType !== "offer") return null;
+  if (request.actionType !== "offer" || NOT_SENT.has(request.actionOutcome ?? "")) return null;
   if (request.status === "completed") return make("unlocked");
   if (request.status === "waiting_provider" && request.nextStep === "verify_access") return make("purchased");
   if (request.status === "waiting_fan" && request.nextStep === "await_purchase_or_question") return make("offered");
   return null;
 }
 
+/** Explicit evidence short of access on a finished request. Each names its own state so a refund or hold is never hidden. */
+const EVIDENCE_LABEL: Record<Exclude<PurchaseEvidenceState, "unlocked">, string> = {
+  offered: "Offered; no purchase is recorded", purchased: "Purchase recorded; access is not yet confirmed",
+  refunded: "Refund or chargeback recorded; review required", held_for_review: "Purchase held for review" };
+
 export function engineRequestLabel(request: EngineRequestView): string {
   if (request.nextStep === "no_contact") return "Contact stopped at the fan’s request";
   if (request.actionOutcome === "unknown") return "Delivery outcome needs review";
+  if (request.actionOutcome === "held") return "Send held; review required";
   if (request.nextStep === "review_delivery_dependency") return "Reply held while an earlier delivery needs review";
   if (request.nextStep === "review_changed_conversation") return "Reply needs review after the conversation changed";
   if (request.nextStep === "review_access_revocation") return "Access revoked; review required";
   if (request.nextStep === "review_refund_or_chargeback") return "Refund or chargeback needs review";
   if (request.status === "waiting_provider" && request.nextStep === "verify_access") return "Purchase recorded; access is not yet confirmed";
   if (request.status === "waiting_provider") return "Waiting for provider evidence";
-  if (request.status === "waiting_fan" && request.nextStep === "await_purchase_or_question") return "Offer sent; purchase is not confirmed";
+  if (request.status === "waiting_fan" && request.nextStep === "await_purchase_or_question" && !NOT_SENT.has(request.actionOutcome ?? "")) return "Offer sent; purchase is not confirmed";
   if (request.actionOutcome === "not_accepted") return "Send was not accepted; review the existing request";
   if (request.status === "handover_pending") return "Waiting for a team member to accept";
   if (request.status === "handover_accepted") return "Team member accepted responsibility";
   if (request.actionOutcome === "cancelled" || request.actionOutcome === "refused") return "Reply needs review";
   if (request.status === "open" && request.partsTotal && request.partsTotal > 1 && request.partsCompleted)
     return `${request.partsCompleted} of ${request.partsTotal} reply parts sent; remaining parts pending`;
-  if (request.status === "completed" && request.actionType === "offer") return "Purchase and access confirmed";
+  if (request.status === "completed" && request.purchase && request.purchase.state !== "unlocked") return EVIDENCE_LABEL[request.purchase.state];
+  if (request.status === "completed" && request.actionType === "offer" && !NOT_SENT.has(request.actionOutcome ?? "")) return "Purchase and access confirmed";
   if (request.status === "completed" && request.actionType === "reply") return "Reply completed";
   if (request.status === "completed") return "Request completed";
   if (request.status === "waiting_fan") return "Waiting for the fan";

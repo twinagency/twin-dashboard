@@ -124,7 +124,9 @@ export function availableActions(input: {
     }
 
     const capability = account.capabilities[REQUIRED_CAPABILITY[action]];
-    if (capability !== "available") {
+    // A stop is our own state, not a provider write, so a degraded session never blocks it. Not configured still does.
+    const stop = action === "pause_automation" || action === "mark_no_contact";
+    if (capability !== "available" && !(stop && capability === "unavailable")) {
       return capability === "not_configured"
         ? "Not configured for this account."
         : "Not available for this account right now.";
@@ -151,6 +153,7 @@ export function availableActions(input: {
 
     switch (action) {
       case "send_manual_message":
+        if (summary.delivery === "queued" || summary.delivery === "generating") return "An automated reply is still being prepared. Wait for it before sending.";
         return summary.automationMode === "human_controlled" && summary.takeoverState === "effective"
           ? null : "Take over this conversation before sending a manual reply.";
       case "request_takeover":
