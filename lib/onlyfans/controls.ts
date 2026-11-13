@@ -1,5 +1,5 @@
 /** Shared control contract. Browser code contains no service credentials. */
-import type { CommandPayload, CommandRequest } from "../onlyfans-preview/types";
+import type { CommandPayload, CommandRequest, PreviewCommand } from "../onlyfans-preview/types";
 import { validManualMedia } from "./manual-media";
 
 export const CONTROL_SCHEMA = "of-controls.v1";
@@ -110,13 +110,24 @@ export function controlFields(payload: CommandPayload): Record<string, unknown> 
     ...(payload.media ? { media: payload.media } : {}) } : {};
 }
 
-/** The controls route's rule for those fields. The route and the preview (commandPayloadProblem) both call it, so neither drifts. */
-export function controlFieldsValid(action: ControlAction, f: Record<string, unknown>): boolean {
-  if (action === "resolve_delivery_evidence") return f.decision === "delivered" && typeof f.attemptId === "string" &&
-    /^[A-Za-z0-9-]{1,128}$/.test(f.attemptId) && Number.isSafeInteger(f.providerMessageId) && (f.providerMessageId as number) > 0;
-  if (action !== "manual_message") return true;
+/** The controls route's action for a preview command; the one rename lives here. */
+export const controlActionFor = (command: PreviewCommand): ControlAction => command === "send_manual_message" ? "manual_message" : command;
+
+/** The longest manual message body in UTF-8 bytes, the route's own limit. */
+export const MAX_MANUAL_MESSAGE_BYTES = 4000;
+
+/** Why the controls route refuses those fields, or null when it accepts them. The route and commandPayloadProblem both call it. */
+export function controlFieldsProblem(action: ControlAction, f: Record<string, unknown>): string | null {
+  if (action === "resolve_delivery_evidence") {
+    if (f.decision !== "delivered") return "Only a delivery the provider evidence confirms can be reconciled.";
+    if (typeof f.attemptId !== "string" || !/^[A-Za-z0-9-]{1,128}$/.test(f.attemptId)) return "A delivery resolution needs the attempt it resolves.";
+    return Number.isSafeInteger(f.providerMessageId) && (f.providerMessageId as number) > 0 ? null : "An exact provider message ID is required for reconciliation.";
+  }
+  if (action !== "manual_message") return null;
   const media = Object.hasOwn(f, "media"), item = f.catalogItemId;
-  return typeof f.body === "string" && (!!f.body.trim() || media) && new TextEncoder().encode(f.body).length <= 4000 &&
-    (!media || (validManualMedia(f.media) && !Object.hasOwn(f, "catalogItemId"))) &&
-    (item === undefined || item === null || (Number.isInteger(item) && (item as number) > 0 && (item as number) < 2 ** 31));
+  if (typeof f.body !== "string" || (!f.body.trim() && !media)) return "A manual message needs some text or media.";
+  if (new TextEncoder().encode(f.body).length > MAX_MANUAL_MESSAGE_BYTES) return `That message is longer than the ${MAX_MANUAL_MESSAGE_BYTES} byte limit.`;
+  if (media && (!validManualMedia(f.media) || Object.hasOwn(f, "catalogItemId"))) return "Choose valid vault files and a message price.";
+  return item === undefined || item === null || (Number.isInteger(item) && (item as number) > 0 && (item as number) < 2 ** 31)
+    ? null : "Select a saved content item from this account.";
 }

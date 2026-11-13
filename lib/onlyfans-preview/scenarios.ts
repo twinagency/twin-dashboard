@@ -20,6 +20,7 @@ import {
   conversationsByAccount as fixtureConversations,
 } from "./fixtures";
 import type { FixtureScenarios } from "./fixture-data-source";
+import { IN_FLIGHT, RECEIPTED } from "./actions";
 import type {
   AutomationMode,
   ConnectionHealth,
@@ -202,13 +203,13 @@ export function withDetailOverrides(
   // never reached has no receipt at all.
   const messages = detail.messages.map((message) => {
     if (message.direction !== "outbound") return message;
-    const reachedProvider = !["none", "generating", "queued"].includes(outcome);
+    const reachedProvider = outcome !== "none" && !IN_FLIGHT.includes(outcome);
     return {
       ...message,
       delivery: outcome,
       // Only a sent or retracted bubble has a receipt; any other outcome points at its recorded attempt, or nothing.
       evidenceRef: reachedProvider
-        ? ["sent", "retracted"].includes(outcome)
+        ? RECEIPTED.includes(outcome)
           ? message.evidenceRef !== null && message.evidenceRef !== droppedAttempt
             ? message.evidenceRef : `of-receipt-preview-${message.messageId}`
           : (incident?.attemptId ?? null)
@@ -227,7 +228,7 @@ export function withDetailOverrides(
 export function buildScenarios(
   controls: PreviewControls,
   viewer: PreviewViewer,
-): FixtureScenarios | undefined {
+): FixtureScenarios {
   const visibleAccounts = fixtureAccounts.filter((account) =>
     viewer.scopedAccountIds.includes(account.accountId),
   );
@@ -255,11 +256,9 @@ export function buildScenarios(
     };
   }
 
-  if (controls.health) scenarios.account = account => withAccountOverrides(account, controls);
-  if (controls.automationMode || controls.takeoverState || controls.delivery) {
-    scenarios.summary = summary => withSummaryOverrides(summary, controls);
-    scenarios.detail = detail => withDetailOverrides(detail, controls);
-  }
-
-  return Object.keys(scenarios).length === 0 ? undefined : scenarios;
+  // Always installed: each with* leaves a value alone when its control is unset, so no guard here can miss a new field.
+  scenarios.account = account => withAccountOverrides(account, controls);
+  scenarios.summary = summary => withSummaryOverrides(summary, controls);
+  scenarios.detail = detail => withDetailOverrides(detail, controls);
+  return scenarios;
 }

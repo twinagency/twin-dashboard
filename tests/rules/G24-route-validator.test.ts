@@ -14,18 +14,28 @@ const MEDIA = { mediaIds: ["101", "102"], previewIds: ["101"], priceCents: 500 }
 const KEY = "12345678-1234-4234-8234-123456789abc";
 const resolve = (attemptId: string, providerMessageId?: string): CommandPayload =>
   ({ kind: "delivery_resolution", attemptId, decision: "delivered", ...(providerMessageId === undefined ? {} : { providerMessageId }) });
-/** [name, the route's verdict written down, command, payload]. */
-const CASES: Array<[string, boolean, PreviewCommand, CommandPayload]> = [
-  ["valid resolution", true, "resolve_delivery_evidence", resolve("of-attempt-ava-6001", "123")],
-  ["resolution attempt id with a space", false, "resolve_delivery_evidence", resolve("bad id", "123")],
-  ["resolution attempt id of 129 characters", false, "resolve_delivery_evidence", resolve("a".repeat(129), "123")],
-  ["resolution provider id past the safe integer range", false, "resolve_delivery_evidence", resolve("of-attempt-ava-6001", "9999999999999999")],
-  ["resolution without a provider id", false, "resolve_delivery_evidence", resolve("of-attempt-ava-6001")],
-  ["text send", true, "send_manual_message", { kind: "manual_message", body: "hi" }],
-  ["media send", true, "send_manual_message", { kind: "manual_message", body: "", media: MEDIA }],
-  ["media send with catalogItemId null", false, "send_manual_message", { kind: "manual_message", body: "hi", media: MEDIA, catalogItemId: null }],
-  ["blank send", false, "send_manual_message", { kind: "manual_message", body: "  " }],
-  ["catalog item 0", false, "send_manual_message", { kind: "manual_message", body: "hi", catalogItemId: 0 }],
+const ATTEMPT = "A delivery resolution needs the attempt it resolves.", PROVIDER_ID = "An exact provider message ID is required for reconciliation.";
+const MEDIA_RULE = "Choose valid vault files and a message price.", ITEM = "Select a saved content item from this account.";
+/** [name, the reason written down (null: the route accepts it), command, payload]. R2 #13: one case per refusal branch. */
+const CASES: Array<[string, string | null, PreviewCommand, CommandPayload]> = [
+  ["valid resolution", null, "resolve_delivery_evidence", resolve("of-attempt-ava-6001", "123")],
+  ["resolution attempt id with a space", ATTEMPT, "resolve_delivery_evidence", resolve("bad id", "123")],
+  ["resolution attempt id of 129 characters", ATTEMPT, "resolve_delivery_evidence", resolve("a".repeat(129), "123")],
+  ["resolution provider id past the safe integer range", PROVIDER_ID, "resolve_delivery_evidence", resolve("of-attempt-ava-6001", "9999999999999999")],
+  ["resolution without a provider id", PROVIDER_ID, "resolve_delivery_evidence", resolve("of-attempt-ava-6001")],
+  ["resolution deciding not delivered", "Only a delivery the provider evidence confirms can be reconciled.", "resolve_delivery_evidence",
+    { kind: "delivery_resolution", attemptId: "of-attempt-ava-6001", decision: "not_delivered" as never, providerMessageId: "123" }],
+  ["text send", null, "send_manual_message", { kind: "manual_message", body: "hi" }],
+  ["text send of exactly 4000 bytes", null, "send_manual_message", { kind: "manual_message", body: "a".repeat(4000) }],
+  ["text send of 4001 bytes", "That message is longer than the 4000 byte limit.", "send_manual_message", { kind: "manual_message", body: "a".repeat(4001) }],
+  ["media send", null, "send_manual_message", { kind: "manual_message", body: "", media: MEDIA }],
+  ["media send priced below the minimum", MEDIA_RULE, "send_manual_message", { kind: "manual_message", body: "hi", media: { ...MEDIA, priceCents: 100 } }],
+  ["media send with catalogItemId null", MEDIA_RULE, "send_manual_message", { kind: "manual_message", body: "hi", media: MEDIA, catalogItemId: null }],
+  ["blank send", "A manual message needs some text or media.", "send_manual_message", { kind: "manual_message", body: "  " }],
+  ["catalog item 5", null, "send_manual_message", { kind: "manual_message", body: "hi", catalogItemId: 5 }],
+  ["catalog item null", null, "send_manual_message", { kind: "manual_message", body: "hi", catalogItemId: null }],
+  ["catalog item 0", ITEM, "send_manual_message", { kind: "manual_message", body: "hi", catalogItemId: 0 }],
+  ["catalog item 2^31", ITEM, "send_manual_message", { kind: "manual_message", body: "hi", catalogItemId: 2 ** 31 }],
 ];
 
 /** The body the route receives for a payload, written out here rather than taken from the code under test. */
@@ -54,14 +64,13 @@ async function adapter(command: PreviewCommand, payload: CommandPayload): Promis
 
 test("control: the route child ran, and the route accepts every valid shape past validation", () => {
   assert.ok(statuses && statuses.length === CASES.length, `child did not report: ${child.stderr.slice(0, 800)}`);
-  CASES.forEach(([name, valid], index) => assert.equal(statuses[index] === 400, !valid, `route on ${name}: ${statuses[index]}`));
+  CASES.forEach(([name, reason], index) => assert.equal(statuses[index] === 400, reason !== null, `route on ${name}: ${statuses[index]}`));
 });
 
-for (const [index, [name, valid, command, payload]] of CASES.entries()) {
-  test(`#7/#3: preview validator, live adapter and route agree on ${name}`, async () => {
-    const problem = commandPayloadProblem(command, payload);
-    assert.equal(problem === null, valid, `preview validator: ${problem}`);
-    assert.equal(statuses?.[index] === 400, !valid, `route status ${statuses?.[index]}`);
-    assert.equal(await adapter(command, payload), valid ? "sent" : problem, "live adapter verdict or reason");
+for (const [index, [name, reason, command, payload]] of CASES.entries()) {
+  test(`#7/#3/#13: preview validator, live adapter and route agree on ${name}`, async () => {
+    assert.equal(commandPayloadProblem(command, payload), reason, "preview validator reason");
+    assert.equal(statuses?.[index] === 400, reason !== null, `route status ${statuses?.[index]}`);
+    assert.equal(await adapter(command, payload), reason ?? "sent", "live adapter verdict or reason");
   });
 }

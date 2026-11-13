@@ -628,7 +628,7 @@ async function main() {
 
     const blank = await source.submitCommand(message("   "));
     check("an empty message is refused", blank.accepted === false);
-    check("and the refusal says why", /write a message/i.test(blank.refusalReason ?? ""));
+    check("and the refusal says why", /needs some text/i.test(blank.refusalReason ?? ""));
 
     const tooLong = await source.submitCommand(message("🙂".repeat(1001)));
     check("an over-long message is refused", tooLong.accepted === false);

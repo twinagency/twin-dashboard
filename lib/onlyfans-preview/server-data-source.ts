@@ -22,7 +22,7 @@ import { inboxSearchParams, type InboxSearch } from "../onlyfans/inbox-search";
 
 import type { OnlyFansDataSource } from "./data-source";
 import { commandPayloadProblem, intentRequestKey } from "./actions";
-import { controlFields, controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
+import { controlActionFor, controlFields, controlRefusalNote, isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
@@ -144,7 +144,7 @@ export function createFetchOnlyFansTransport(
         applied: outcome === "recorded", accepted: outcome === "recorded", outcome,
         request: command, note, recordedRevision, intentId });
       const manual = command.command === "send_manual_message", resolution = command.command === "resolve_delivery_evidence";
-      const action = manual ? "manual_message" : command.command;
+      const action = controlActionFor(command.command);
       if (!isControlAction(action)) return result("refused", "That action is not configured for this account.");
       const problem = commandPayloadProblem(command.command, command.payload);
       if (problem) return result("refused", problem);

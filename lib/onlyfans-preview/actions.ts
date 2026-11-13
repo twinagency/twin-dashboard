@@ -1,5 +1,5 @@
 import { canonicalManualMedia } from "../onlyfans/manual-media";
-import { controlFields, controlFieldsValid } from "../onlyfans/controls";
+import { controlActionFor, controlFields, controlFieldsProblem } from "../onlyfans/controls";
 // Which controls the dashboard may offer, and why.
 //
 // Three independent dimensions decide this, and none of them implies another:
@@ -51,8 +51,10 @@ const ALL_ACTIONS: AvailableAction[] = [
 
 /** A send is settled only once it ended. Any other outcome, one this build does not know included, is unresolved. */
 const SETTLED: readonly string[] = ["none", "sent", "retracted", "refused", "failed"] satisfies DeliveryOutcome[];
+/** The settled sends the provider took, so the only ones with a receipt. */
+export const RECEIPTED: readonly string[] = ["sent", "retracted"] satisfies DeliveryOutcome[];
 /** An automated reply being prepared or queued: on the rollup it is the AI queue (ai-visibility.ts "AI reply queued"), not a held send. */
-const IN_FLIGHT: readonly string[] = ["generating", "queued"] satisfies DeliveryOutcome[];
+export const IN_FLIGHT: readonly string[] = ["generating", "queued"] satisfies DeliveryOutcome[];
 
 /**
  * While a send is unresolved, only the actions that reduce activity are
@@ -242,26 +244,19 @@ export function intentRequestKey(idempotencyKey: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-/** The longest modelled manual message. A contract limit, not a provider rule. */
-export const MAX_MANUAL_MESSAGE_LENGTH = 4000;
-
 /**
  * Whether a payload is the right shape for a command, and says why not when it
  * is not. The UI, the fixture data source and the live adapter all ask this,
- * and it applies the controls route's own field rule (controlFieldsValid), so
- * no preview path accepts what the route refuses.
+ * and it gives the controls route's own field rule and reason (controlFieldsProblem),
+ * so no preview path accepts what the route refuses.
  */
 export function commandPayloadProblem(
   command: PreviewCommand,
   payload: CommandPayload,
 ): string | null {
-  const action = command === "send_manual_message" ? "manual_message" : command;
+  const action = controlActionFor(command);
   const kind = action === "manual_message" ? "manual_message" : action === "resolve_delivery_evidence" ? "delivery_resolution" : "none";
-  if (payload.kind !== kind) return kind === "none" ? `A ${command} command carries no payload.` : `A ${command} command needs a ${kind.replace("_", " ")} payload.`;
-  if (controlFieldsValid(action, controlFields(payload))) return null;
-  return kind === "manual_message"
-    ? `Write a message of at most ${MAX_MANUAL_MESSAGE_LENGTH} bytes or choose media. Check the attachment price and saved content.`
-    : "An exact provider message ID and a valid attempt are required for reconciliation.";
+  return payload.kind === kind ? controlFieldsProblem(action, controlFields(payload)) : "That payload does not belong to this command.";
 }
 
 export type CommandRequestInput = {

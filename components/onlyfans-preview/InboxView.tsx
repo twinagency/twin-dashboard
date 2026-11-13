@@ -27,7 +27,8 @@ import MessageAttachments from "./MessageAttachments";
 import { useInboxIdentity } from "./InboxIdentity";
 import { Card } from "@/components/ui/card";
 import OnlyFansAvatar from "./OnlyFansAvatar";
-import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
+import { availableActions, canSubmitCommand, commandPayloadProblem } from "@/lib/onlyfans-preview/actions";
+import { MAX_MANUAL_MESSAGE_BYTES } from "@/lib/onlyfans/controls";
 import { conversationTimeline, isAiChatting, effectiveAiStatus, replyOwnership } from "@/lib/onlyfans/ai-visibility";
 import type { Handover } from "@/lib/onlyfans/handover";
 import type { ActionSet } from "@/lib/onlyfans-preview/actions";
@@ -413,8 +414,8 @@ function Composer({
   const bodyProblem =
     text.trim().length === 0
       ? null
-      : new TextEncoder().encode(text).length > MAX_MANUAL_MESSAGE_LENGTH
-        ? `Longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`
+      : new TextEncoder().encode(text).length > MAX_MANUAL_MESSAGE_BYTES
+        ? `Longer than the ${MAX_MANUAL_MESSAGE_BYTES} byte limit.`
         : null;
   const canEdit = !pending && (viewer.canManage || viewer.canChat === true);
   const media: ManualMedia | undefined = draft.selectedMedia.length ? {
@@ -510,6 +511,7 @@ function Composer({
   );
 }
 
+// One option on purpose: the operator attests what the provider evidence shows before a ledger reconcile, not a dead chooser.
 const RESOLUTION_OPTIONS: { value: DeliveryResolutionDecision; label: string }[] = [
   { value: "delivered", label: "The evidence shows it was delivered" },
 
@@ -617,7 +619,8 @@ function ActionColumn({
       <div className="of-reply-actions" data-of-actions>
         {orderControls(actionSet.available.filter(entry => !["send_manual_message", "mark_no_contact"].includes(entry.action))).map(entry => {
           const resolution = entry.action === "resolve_delivery_evidence";
-          const needsDecision = resolution && (decision === null || !/^[1-9][0-9]{0,15}$/.test(providerMessageId));
+          const needsDecision = resolution && (!incident || decision === null || commandPayloadProblem("resolve_delivery_evidence",
+            { kind: "delivery_resolution", attemptId: incident.attemptId, decision, providerMessageId }) !== null);
           const primary = resolution || ["request_takeover", "release_takeover", "resume_automation"].includes(entry.action);
           const label = isEngineControlAction(entry.action) ? engineControlLabel(entry.action, engineAware) : entry.label;
           const Icon = entry.action === "request_takeover" ? UserRound : entry.action === "pause_automation" ? Pause : Sparkles;

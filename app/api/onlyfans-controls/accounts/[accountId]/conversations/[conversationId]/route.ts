@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredControlBackend } from "@/lib/onlyfans/controls-backend";
-import { CONTROL_SCHEMA, controlFieldsValid, isControlAction } from "@/lib/onlyfans/controls";
+import { CONTROL_SCHEMA, controlFieldsProblem, isControlAction } from "@/lib/onlyfans/controls";
 import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 import { trustedFormOrigin } from "@/lib/form-origin";
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest, context: {
     const resolution = body.action === "resolve_delivery_evidence";
     const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : []), ...(Object.hasOwn(body, "media") ? ["media"] : [])].sort().join(",");
     if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : resolution ? "action,attemptId,decision,expectedRevision,providerMessageId,requestKey" : "action,expectedRevision")) throw new Error();
-    if (!controlFieldsValid(body.action, body) || (resolution && (typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) ||
+    if (controlFieldsProblem(body.action, body) !== null || (resolution && (typeof body.requestKey !== "string" || !/^[a-f0-9-]{36}$/.test(body.requestKey))) ||
         (manual && (typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey)))) throw new Error();
   } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That conversation control request is invalid."); }
   const backend = configuredControlBackend(ctx.fetch);
