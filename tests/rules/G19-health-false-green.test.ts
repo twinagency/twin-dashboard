@@ -46,14 +46,13 @@ test("F14: clones read OK but a clone's Telegram getMe answering ok:false does n
     `a refused bot answered HTTP ${r.status} (telegram.ok:${r.body.clones?.[0]?.telegram.ok}): a status-code monitor reads it as healthy`);
 });
 
-test("G19 R1 #1: paused clones and clones with no bot token are reported as skipped, not pinged, and do not turn the status red", async () => {
+test("G19 R1 #1: paused clones (incl. OnlyFans-only, no token) are reported as skipped, not pinged, and do not turn the status red", async () => {
   if (!route?.GET) return; // the route is gone: nothing can read it as healthy
   // Statuses are "active" | "paused" (lib/types.ts:40); OnlyFans-only creators are created paused with bot_token ""
   // (lib/onlyfans/connection-creators.ts:89). A retired bot's token answers getMe 401.
   const PAUSED_DEAD = { id: "0f000001-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "paused-dead", name: "Paused Dead", bot_token: "1:DEAD_FIXTURE", status: "paused" };
   const OF_ONLY = { id: "0f000002-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "of-only", name: "OF Only", bot_token: "", status: "paused" };
-  const ACTIVE_NO_TOKEN = { id: "0f000003-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "no-token", name: "No Token", bot_token: "", status: "active" };
-  const fleet: Responder = c => (isRest(c, "clones") ? table([CLONE, PAUSED_DEAD, OF_ONLY, ACTIVE_NO_TOKEN], c) : undefined);
+  const fleet: Responder = c => (isRest(c, "clones") ? table([CLONE, PAUSED_DEAD, OF_ONLY], c) : undefined);
   const telegram: Responder = c => (isTelegram(c, "getMe") ? (c.url.pathname.includes(BOT_TOKEN) ? getMe(c) : getMeRefused(c)) : undefined);
   const r = await withWire(anyOf(fleet, telegram), async stub => {
     const res = await as(null, () => route.GET!());
@@ -62,5 +61,21 @@ test("G19 R1 #1: paused clones and clones with no bot token are reported as skip
   });
   assert.equal(r.status, 200, `a mixed fleet with every active bot healthy answered ${r.status}`);
   assert.deepEqual(r.body.clones?.map(c => (c as unknown as { slug: string }).slug), ["clone-a"]);
-  assert.deepEqual(r.body.skipped?.map(s => s.slug).sort(), ["no-token", "of-only", "paused-dead"]);
+  assert.deepEqual(r.body.skipped?.map(s => s.slug).sort(), ["of-only", "paused-dead"]);
+});
+
+test("G19 R2 A: an active clone with no bot token is a broken bot and turns the status red without a ping", async () => {
+  if (!route?.GET) return;
+  const ACTIVE_NO_TOKEN = { id: "0f000003-aaaa-4aaa-8aaa-aaaaaaaaaaaa", slug: "no-token", name: "No Token", bot_token: "", status: "active" };
+  for (const rows of [[CLONE, ACTIVE_NO_TOKEN], [ACTIVE_NO_TOKEN]]) {
+    const fleet: Responder = c => (isRest(c, "clones") ? table(rows, c) : undefined);
+    const telegram: Responder = c => (isTelegram(c, "getMe") ? (c.url.pathname.includes(BOT_TOKEN) ? getMe(c) : getMeRefused(c)) : undefined);
+    const r = await withWire(anyOf(fleet, telegram), async stub => {
+      const res = await as(null, () => route.GET!());
+      assert.equal(stub.to("api.telegram.org").length, rows.length - 1, "a tokenless clone is never pinged");
+      return { status: res.status, body: await res.json() as Body };
+    });
+    assert.equal(r.status, 503, `an active clone with no bot token answered ${r.status}: a status-code monitor reads it as healthy`);
+    assert.ok(r.body.clones?.some(c => (c as unknown as { slug: string; telegram: { ok: boolean } }).slug === "no-token" && !(c as unknown as { telegram: { ok: boolean } }).telegram.ok));
+  }
 });
