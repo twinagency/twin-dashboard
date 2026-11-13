@@ -66,7 +66,6 @@ export async function guardDashboardAction(action: string, args: unknown[]): Pro
     return;
   }
   const [file,name] = action.split("#");
-  if (file === "app/agency/creator-split/actions.ts" && name === "saveAgencyCreatorCut") { assignedClone(access,args[0]); return; }
   if (file === "app/clones/actions.ts" && ["updateClone","toggleClonePause","compileCloneAction","setStatus","setCloneToggle","setCloneDial"].includes(name)) {
     const cloneId=assignedClone(access,args[0]);
     if (name === "updateClone") {

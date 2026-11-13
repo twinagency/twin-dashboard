@@ -1,7 +1,7 @@
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboardAccess } from "@/lib/dashboard-access";
-import { hashInviteCode, randomInviteCode } from "@/lib/creator-invite-codes";
+import { hashInviteCode, INVITE_FLASH_COOKIE, inviteFlashCookie, randomInviteCode } from "@/lib/creator-invite-codes";
 // serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
 // agency sessions and force-scoped by clone_id, which these agency_id-scoped
 // tables do not have. Every query here scopes to the signed-in agency explicitly.
@@ -68,5 +68,7 @@ export async function POST(req: NextRequest) {
   }).select("id");
   if (inserted.error || !inserted.data?.length) return fail();
 
-  return back(`created=${encodeURIComponent(code)}`);
+  const res = back("result=created");
+  res.cookies.set(INVITE_FLASH_COOKIE, code, inviteFlashCookie("/agency/creator-invites"));
+  return res;
 }

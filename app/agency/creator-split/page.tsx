@@ -3,7 +3,6 @@ import { agencyCanManage } from "@/lib/agency-management-policy";
 import { notFound } from "next/navigation";
 import { listAgencyCreatorCuts } from "@/lib/platform-cut";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import AgencyCreatorCutRowForm from "./AgencyCreatorCutRowForm";
 
 export const dynamic = "force-dynamic";
 
@@ -48,19 +47,23 @@ export default async function AgencyCreatorSplitPage() {
               <TableRow>
                 <TableHead>Creator</TableHead>
                 <TableHead>Current cut</TableHead>
-                <TableHead>New cut</TableHead>
-                <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {cuts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-muted">
+                  <TableCell colSpan={2} className="text-center text-sm text-muted">
                     No creators found
                   </TableCell>
                 </TableRow>
               ) : (
-                cuts.map((row) => <AgencyCreatorCutRowForm key={row.cloneId} row={row} />)
+                // Read only: /agency/* refuses every server action (lib/agency-policy.ts), so no Save here.
+                cuts.map((row) => (
+                  <TableRow key={row.cloneId}>
+                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell>{row.cutPct !== null ? `${row.cutPct}%` : "Not set (0%)"}</TableCell>
+                  </TableRow>
+                ))
               )}
             </TableBody>
           </Table>

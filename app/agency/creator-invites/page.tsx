@@ -2,9 +2,9 @@ import { redirect } from "next/navigation";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { dashboardOrigin, LYNQ_DASHBOARD_ORIGIN } from "@/lib/form-origin";
 import { isMoxy } from "@/lib/agency-brand";
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import CopyField from "./CopyField";
-import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
+import { INVITE_CODE_PATTERN, INVITE_FLASH_COOKIE, inviteUrl } from "@/lib/creator-invite-codes";
 // serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
 // agency sessions and force-scoped by clone_id, which these agency_id-scoped
 // tables do not have. Every query below scopes to access.id explicitly.
@@ -27,12 +27,14 @@ type CodeRow = {
 
 const dateOnly = (value: string | null) => (value ? value.slice(0, 10) : null);
 
-export default async function AgencyCreatorInvites({ searchParams }: { searchParams: Promise<{ result?: string; created?: string }> }) {
+export default async function AgencyCreatorInvites({ searchParams }: { searchParams: Promise<{ result?: string }> }) {
   const access = await getDashboardAccess();
   if (!access) redirect("/creator-management");
   if (access.creatorScope === "selected") redirect("/clones");
-  const { result, created } = await searchParams;
-  const newCode = created && INVITE_CODE_PATTERN.test(created) ? created : null;
+  const { result } = await searchParams;
+  // Only the cookie the generate route just set, never a query value.
+  const flash = result === "created" ? (await cookies()).get(INVITE_FLASH_COOKIE)?.value : undefined;
+  const newCode = flash && INVITE_CODE_PATTERN.test(flash) ? flash : null;
 
   const codes = await serviceClient()
     .from("creator_agency_codes")

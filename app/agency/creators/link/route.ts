@@ -31,6 +31,15 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (assignment.error || !assignment.data) return back();
 
+  // The RPC replaces (or, with no clone, deletes) the creator's CURRENT link, so
+  // that link must also be one of this agency's clones. A creator Twin linked to
+  // another clone stays put; an unreadable link refuses rather than guesses.
+  const current = await serviceClient()
+    .from("creator_clone_links")
+    .select("clone_id")
+    .eq("creator_account_id", creatorAccountId);
+  if (current.error || (current.data ?? []).some((row) => row.clone_id && !access.cloneIds.includes(row.clone_id))) return back();
+
   if (cloneId && (!isUuid(cloneId) || !access.cloneIds.includes(cloneId))) return back();
   await serviceClient().rpc("link_creator_platform_profile",{p_account_id:creatorAccountId,p_clone_id:cloneId||null});
   return back();
