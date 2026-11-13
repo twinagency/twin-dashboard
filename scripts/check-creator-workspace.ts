@@ -147,7 +147,10 @@ async function main() {
     // An existing operator cookie cannot turn a creator-page API read into a fleet read.
     const mixed = await middleware(request("/api/dashboard", "GET", { referer: origin + "/creator" }, `${CREATOR_SESSION_COOKIE}=${token}; twin_agency_access=unrelated-operator-cookie`));
     assert.equal(mixed.headers.get(`x-middleware-request-${CREATOR_AUDIENCE_HEADER}`), "creator");
-    assert.equal((await middleware(request("/api/dashboard", "GET", { referer: origin + "/creator" }, ""))).status, 403);
+    // A Referer alone is no credential: a cookieless request is refused exactly as it is without one (the admin login).
+    const anonymous = await middleware(request("/api/dashboard", "GET", { referer: origin + "/creator" }, ""));
+    assert.equal(anonymous.headers.get("x-middleware-next"), null);
+    assert.equal(new URL(anonymous.headers.get("location") ?? "", origin).pathname, "/twin");
     const publicResponse = await middleware(request("/tether", "GET", { [CREATOR_AUDIENCE_HEADER]: "creator", "x-pathname": "/creator" }, ""));
     assert.equal(publicResponse.headers.get(`x-middleware-request-${CREATOR_AUDIENCE_HEADER}`), null, "Caller header must be stripped");
     assert.equal(publicResponse.headers.get("x-middleware-request-x-pathname"), "/tether");

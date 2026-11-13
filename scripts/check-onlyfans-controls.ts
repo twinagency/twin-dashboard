@@ -14,7 +14,10 @@ async function main() {
   const ack = { schemaVersion: CONTROL_SCHEMA, ok: true, applied: true, commandKey: command.commandKey,
     accountId: command.accountId, conversationId: command.conversationId, action: command.action, recordedRevision: 8 };
   assert(parseControlAck(ack, command));
-  for (const changed of [{ schemaVersion: "future" }, { recordedRevision: 9 }, { accountId: "other" },
+  // A stop (pause_automation) may be recorded at any later revision, never at or below the expected one; a go stays exact.
+  assert(parseControlAck({ ...ack, recordedRevision: 9 }, command));
+  assert.equal(parseControlAck({ ...ack, action: "resume_automation", recordedRevision: 9 }, { ...command, action: "resume_automation" }), null);
+  for (const changed of [{ schemaVersion: "future" }, { recordedRevision: 7 }, { recordedRevision: 8.5 }, { recordedRevision: "9" }, { accountId: "other" },
     { conversationId: "acc-b:101" }, { action: "resume_automation" }, { commandKey: "f".repeat(64) }, { applied: false }]) {
     assert.equal(parseControlAck({ ...ack, ...changed }, command), null);
   }
@@ -38,7 +41,7 @@ async function main() {
     const result = await createControlBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: async () => new Response("refused", { status }) })(command);
     assert(!result.ok && result.outcome === "refused");
   }
-  for (const fake of [async () => { throw new Error("synthetic lost reply"); }, async () => Response.json({ ...ack, recordedRevision: 99 }),
+  for (const fake of [async () => { throw new Error("synthetic lost reply"); }, async () => Response.json({ ...ack, recordedRevision: 7 }),
     async () => new Response("server failed", { status: 500 }), async () => new Response("not json")]) {
     const result = await createControlBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: fake })(command);
     assert(!result.ok && result.outcome === "unconfirmed");

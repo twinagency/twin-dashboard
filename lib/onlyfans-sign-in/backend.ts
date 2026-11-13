@@ -24,16 +24,19 @@ export function busyMessage(body:unknown):string{
 }
 export function createSignInBackend({baseUrl,token,fetchImpl}:{baseUrl:string;token:string;fetchImpl?:typeof fetch}){
   const transport=createBackendTransport(fetchImpl),root=baseUrl.replace(/\/+$/,'')+'/v1/attempts';
+  // Fixed copy only: a transport error or an unparsable body can quote the wire, and a capture body is the OF session.
+  const unconfirmed=()=>new SignInBackendError(503,'Sign-in could not be confirmed. Please try again.');
+  const json=(r:Response)=>r.json().catch(()=>{throw unconfirmed();});
   const call=async(scope:SignInScope,path:string,body?:unknown)=>{
-    const r=await transport(root+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token,'X-Twin-Creator':scope.creatorId,'X-Twin-Actor':scope.actor,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)}),timeoutMs:10000});
+    const r=await transport(root+path,{method:body===undefined?'GET':'POST',headers:{Authorization:'Bearer '+token,'X-Twin-Creator':scope.creatorId,'X-Twin-Actor':scope.actor,...(body===undefined?{}:{'Content-Type':'application/json'})},...(body===undefined?{}:{body:JSON.stringify(body)}),timeoutMs:10000}).catch(()=>{throw unconfirmed();});
     if(!r.ok){
       if([404,410].includes(r.status))throw new SignInBackendError(410,'Your sign-in expired. Start again.');
       if(r.status===429)throw new SignInBackendError(429,busyMessage(await r.json().catch(()=>null)));
-      throw new SignInBackendError(503,'Sign-in could not be confirmed. Please try again.');
+      throw unconfirmed();
     }
     return r;
   };
-  const attempt=async(response:Response)=>{const body=await response.json();const value=body?.ok===true?parseSignInAttempt(body.attempt):null;if(!value)throw new Error('Your sign-in status could not be confirmed.');return value;};
+  const attempt=async(response:Response)=>{const body=await json(response);const value=body?.ok===true?parseSignInAttempt(body.attempt):null;if(!value)throw new Error('Your sign-in status could not be confirmed.');return value;};
   const suffix=(identity:string)=>{if(!uuid(identity))throw new Error('Your sign-in could not be found.');return '/'+identity;};
   return{
     start:(scope:SignInScope,startKey:string,network:SignInNetwork)=>call(scope,'',{startKey,network}).then(attempt),
@@ -42,7 +45,7 @@ export function createSignInBackend({baseUrl,token,fetchImpl}:{baseUrl:string;to
     cancel:(scope:SignInScope,identity:string)=>call(scope,suffix(identity)+'/cancel',{}).then(attempt),
     acknowledge:(scope:SignInScope,identity:string,enrollmentId:string)=>call(scope,suffix(identity)+'/acknowledge',{enrollmentId}).then(attempt),
     async capture(scope:SignInScope,identity:string):Promise<SignInCapture>{
-      const body=await(await call(scope,suffix(identity)+'/capture')).json();const c=body?.ok===true?body.capture:null;
+      const body=await json(await call(scope,suffix(identity)+'/capture'));const c=body?.ok===true?body.capture:null;
       if(!c||Object.keys(c).sort().join(',')!=='handle,profileId,session'||c.profileId!==scope.creatorId||typeof c.handle!=='string'||!/^[A-Za-z0-9_.-]{1,80}$/.test(c.handle)||!c.session||!/^\w{64}$/.test(c.session.networkFingerprint??''))throw new Error('Your sign-in could not be verified.');
       const {networkFingerprint,...session}=c.session;
       if(!/^[a-f0-9]{64}$/.test(networkFingerprint)||!validBrowserSession(session))throw new Error('Your sign-in could not be verified.');

@@ -50,6 +50,8 @@ export type AccountSelection = {
   conversations: RequestState<CursorPage<ConversationSummary>>;
   /** Detail cache, keyed by conversation id, scoped to this account only. */
   detail: Record<string, RequestState<ConversationDetail>>;
+  /** The newest sequence issued before this entry was created; every counter here starts above it. */
+  epoch: number;
 };
 
 export type PreviewSelectionState = {
@@ -63,6 +65,11 @@ export type PreviewSelectionState = {
    */
   scopeGeneration: number;
   byAccount: Record<string, AccountSelection>;
+  /**
+   * Per account: the newest sequence it was issued before it left scope. It survives the removal, so a re-added
+   * account's counters continue above it and a reply issued before the removal can never match a new request.
+   */
+  retired: Record<string, number>;
 };
 
 export function initialSelectionState(): PreviewSelectionState {
@@ -71,6 +78,7 @@ export function initialSelectionState(): PreviewSelectionState {
     accounts: { status: "loading" },
     scopeGeneration: 0,
     byAccount: {},
+    retired: {},
   };
 }
 
@@ -83,11 +91,12 @@ export function beginScope(state: PreviewSelectionState): PreviewSelectionState 
   return { ...initialSelectionState(), scopeGeneration: state.scopeGeneration + 1 };
 }
 
-function emptyAccountSelection(): AccountSelection {
+function emptyAccountSelection(epoch: number): AccountSelection {
   return {
+    epoch,
     selectedConversationId: null,
-    listSeq: 0,
-    appliedListSeq: 0,
+    listSeq: epoch,
+    appliedListSeq: epoch,
     detailSeq: {},
     appliedDetailSeq: {},
     loadingMore: false,
@@ -105,7 +114,30 @@ function withEntry(
 }
 
 function entryOf(state: PreviewSelectionState, accountId: string): AccountSelection {
-  return state.byAccount[accountId] ?? emptyAccountSelection();
+  return state.byAccount[accountId] ?? emptyAccountSelection(state.retired[accountId] ?? 0);
+}
+
+/** The accounts whose entries `next` dropped: a caller keyed on them (the workspace's requested reads) must forget them too. */
+export function accountsLeft(prev: PreviewSelectionState, next: PreviewSelectionState): string[] {
+  return Object.keys(prev.byAccount).filter((accountId) => !Object.hasOwn(next.byAccount, accountId));
+}
+
+/** Every account entry dropped from `byAccount`, recorded with the newest sequence it issued. */
+function retire(state: PreviewSelectionState, byAccount: Record<string, AccountSelection>): Record<string, number> {
+  const retired = { ...state.retired };
+  for (const [accountId, entry] of Object.entries(state.byAccount)) {
+    if (!Object.hasOwn(byAccount, accountId)) retired[accountId] = Math.max(entry.listSeq, ...Object.values(entry.detailSeq));
+  }
+  return retired;
+}
+
+/**
+ * Every read creates its account's entry when it is issued, and only a scope change (applyAccounts dropping the account,
+ * or beginScope) removes it. A response for an account with no entry, or issued at or before the entry's epoch (before a
+ * removal and re-add), belongs to an account that left scope: it is refused, so it can never recreate or overwrite a cache.
+ */
+function leftScope(state: PreviewSelectionState, accountId: string, seq: number): boolean {
+  return !Object.hasOwn(state.byAccount, accountId) || seq <= state.byAccount[accountId].epoch;
 }
 
 export function applyAccounts(
@@ -128,7 +160,7 @@ export function applyAccounts(
     // conversation all go with it. Keeping them is how an empty scope still
     // renders the conversation that used to be there, with a live send control
     // underneath it.
-    return { ...state, accounts, selectedAccountId: null, byAccount: {} };
+    return { ...state, accounts, selectedAccountId: null, byAccount: {}, retired: retire(state, {}) };
   }
 
   const inScope = new Set(accounts.data.map((account) => account.accountId));
@@ -145,6 +177,7 @@ export function applyAccounts(
     ...state,
     accounts,
     byAccount,
+    retired: retire(state, byAccount),
     selectedAccountId:
       state.selectedAccountId && inScope.has(state.selectedAccountId)
         ? state.selectedAccountId
@@ -171,7 +204,7 @@ export function selectAccount(
   state: PreviewSelectionState,
   accountId: string,
 ): PreviewSelectionState {
-  const entry = state.byAccount[accountId] ?? emptyAccountSelection();
+  const entry = entryOf(state, accountId);
   return { ...withEntry(state, accountId, entry), selectedAccountId: accountId };
 }
 
@@ -239,7 +272,7 @@ export function applyConversations(
   seq: number,
   result: RequestState<CursorPage<ConversationSummary>>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId, seq)) return { state, applied: false };
   const entry = entryOf(state, accountId);
   if (seq < entry.listSeq) {
     // A newer list read is outstanding for this account. Dropping this keeps a
@@ -290,7 +323,7 @@ export function appendConversations(
   seq: number,
   result: RequestState<CursorPage<ConversationSummary>>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId, seq)) return { state, applied: false };
   const entry = entryOf(state, accountId);
   const current = entry.conversations;
   const hadRows = current.status === "ready" || current.status === "stale";
@@ -361,7 +394,7 @@ export function requestConversation(
   // Sequenced on the newest request *issued*, not the newest applied. Deriving
   // it from what has been applied hands two outstanding reads the same number,
   // and the older one then looks current.
-  const seq = (entry.detailSeq[conversationId] ?? 0) + 1;
+  const seq = (entry.detailSeq[conversationId] ?? entry.epoch) + 1;
   return {
     seq,
     generation: state.scopeGeneration,
@@ -382,12 +415,12 @@ export function applyConversation(
   seq: number,
   result: RequestState<ConversationDetail>,
 ): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId, seq)) return { state, applied: false };
   // A payload naming another account or thread is never cached under this one; the thread shows an error instead of loading forever.
   if ((result.status === "ready" || result.status === "stale") && (result.data.accountId !== accountId || result.data.conversationId !== conversationId))
     result = { status: "error", message: "This conversation could not be loaded. Reopen it to retry." };
   const entry = entryOf(state, accountId);
-  const issued = entry.detailSeq[conversationId] ?? 0;
+  const issued = entry.detailSeq[conversationId] ?? entry.epoch;
   if (seq < issued) {
     // An older read of this same thread cannot replace a newer one. A read of a
     // different thread is cached under its own key and is never displayed while
@@ -466,9 +499,9 @@ function mergeHistory(older: ConversationDetail["messages"], newer: Conversation
 
 export function appendOlderConversation(state: PreviewSelectionState, accountId: string, conversationId: string,
   generation: number, seq: number, result: RequestState<ConversationDetail>): ApplyResult {
-  if (generation !== state.scopeGeneration) return { state, applied: false };
+  if (generation !== state.scopeGeneration || leftScope(state, accountId, seq)) return { state, applied: false };
   const entry = entryOf(state, accountId);
-  if (seq < (entry.detailSeq[conversationId] ?? 0)) return { state, applied: false };
+  if (seq < (entry.detailSeq[conversationId] ?? entry.epoch)) return { state, applied: false };
   const cached = entry.detail[conversationId];
   if ((result.status === "ready" || result.status === "stale") && (cached?.status === "ready" || cached?.status === "stale")) {
     if (result.data.accountId !== accountId || result.data.conversationId !== conversationId) return { state, applied: false };

@@ -57,7 +57,7 @@ try{
  for(const path of ['/api/dashboard?clone='+DEMO_CLONE_ID,'/api/dashboard?clone='+real,'/api/dashboard?clone='+DEMO_CLONE_ID+'&clone='+real,'/api/avatar?clone='+DEMO_CLONE_ID+'&tg=-1','/api/media-sign?clone='+DEMO_CLONE_ID,'/api/models','/settings','/clones/'+real,'/api/dashboard/day-insight?clone='+DEMO_CLONE_ID])assert.equal((await middleware(req(path))).status,403,path);
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'POST'))).status,403);
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'GET',`${CREATOR_SESSION_COOKIE}=${otherToken}`))).status,403,'A different account also named ZANE gets no demo access');
- assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'GET',''))).status,403,'Unauthenticated access denied');
+ const unauth=await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'GET',''));assert.equal(unauth.status,307,'Unauthenticated access denied');assert.equal(new URL(unauth.headers.get('location')).pathname,'/twin','A creator Referer alone does not select the creator branch: admin sign-in');
  const before=calls;
  await withDashboardAccess(identity,async()=>{
   const r=await revenueGET(req('/api/dashboard?period=1W&clone='+DEMO_CLONE_ID));assert.equal(r.status,403);assert.equal(r.headers.get('x-data-mode'),null);assert.match((await r.json()).error,/not connected/);
