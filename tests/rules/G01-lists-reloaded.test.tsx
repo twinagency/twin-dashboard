@@ -1,9 +1,6 @@
-// RULE G01 (promoted from known-red) (W1 lane 7a finding 6, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "No false success" and
-// "Known failure modes: UI claims that outrun backend evidence"). PlanCConsole.tsx:174 sets the confirmation
-// "... Lists reloaded." on `result.ok` after reload() whatever the reads returned, so a failed re-read is still claimed as
-// reloaded. Team's Claude owns the fix.
-// Not wired into npm scripts. Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy); the
-// second GET .../drafts fails at the backend wire with a 503. No network.
+// RULE G01 (REVIEW.md inv 7 "No false success"): a command's confirmation says "Lists reloaded" only when the re-read succeeded.
+// Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy); the second GET .../drafts answers 503
+// at the backend wire. No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { seedDraft } from "../contracts/plan-c-mock-backend";

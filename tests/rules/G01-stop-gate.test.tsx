@@ -1,12 +1,6 @@
-// RULE G01 (promoted from known-red) (W1 lane 7a finding 2, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "Holds and STOP": a STOP is
-// never harder to trigger than a go, no fingerprint/revision gate on stop). PlanCConsole.tsx:30 hides every conversation
-// control, Stop included, when the backend did not report the conversation's revision, and :32-38 make Stop two clicks
-// (button, then "Confirm stop"); :189 refuses a stop without a revision. Approve is one click with no conversation revision
-// (:105). "Two clicks = harder" is our reading of REVIEW inv 7 [i]; the click test counts clicks until each command leaves,
-// so any fix that makes Stop no harder than Approve goes green. tests/components/plan-c-ui.test.tsx:178,201-207 (two-click
-// stop) and :290-295 (revision gate) enshrine the current design (lane 9b, TEST-CHANGE when fixed); the client and
-// route side is lane 1 finding 2 (plan-c-client.ts:86-87, plan-c-route.ts:66). Team's Claude owns the fix.
-// Not wired into npm scripts. Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy). No network.
+// RULE G01 (REVIEW.md inv 7 "Holds and STOP"): a STOP is never harder to trigger than a go. Stop is offered for every listed
+// conversation, with or without a revision, and takes no more clicks than Approve to send its command.
+// Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy). No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { seedDraft, type PlanCMock } from "../contracts/plan-c-mock-backend";

@@ -1,13 +1,7 @@
-// RULE G01 (promoted from known-red) (W1 lane 7a finding 13, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "Stale work" and
-// "No send, no auto-retry"). PlanCConsole.tsx:49 decides expiry from `now`, which only moves on the 30 s tick (:167) or a
-// reload, so a draft whose expiresAt passes after the page rendered keeps a live approve for up to 30 s and a click sends
-// the command; the backend is left to refuse it (409). Design-neutral: the red goes green if approve is disabled at
-// expiry, removed, OR a click on it sends nothing (a render scheduled at expiresAt, a click-time check, a shorter tick under 1.5 s).
-// The expiry-409 copy ("changed") is lane 1's (plan-c-backend 409 text): note only. Team's Claude owns the fix.
-// Basis: the UI's own claim, canApprove's comment plan-c.ts:259-260 "Approve is offered only for a draft that is ... not
-// past its expiry"; REVIEW does not itself require client-side expiry (codex final check), so this is LOW.
-// Not wired into npm scripts. Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy). The
-// draft expires 1.5 s after seeding and the test waits 1.7 s of real time, so the 30 s tick is never reached. No network.
+// RULE G01 (REVIEW.md inv 7 "Stale work"; canApprove in lib/onlyfans/plan-c.ts): once a draft's expiresAt passes, its approve
+// is off or sends nothing, without waiting for the 30 s tick. Design-neutral: disabled, removed or no POST all pass.
+// Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy). The draft expires 1.5 s after seeding
+// and the test waits 1.7 s of real time. No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { seedDraft } from "../contracts/plan-c-mock-backend";

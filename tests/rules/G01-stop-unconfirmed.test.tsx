@@ -1,11 +1,7 @@
-// RULE G01 (promoted from known-red) (W1 lane 7a finding 3, docs/review/W1/preview-plan-c-status-ui.md; REVIEW.md inv 7 "Holds and STOP": a STOP
-// whose relay is unconfirmed shows "stop unconfirmed" and keeps approve and send disabled). PlanCConsole.tsx:24 and
-// :170-176 show only the generic unconfirmed notice; there is no per-conversation stop state, and approve for that fan
-// stays live (:105, gate = canApprove status+expiry). The fault is dropBeforeCommit: the stop is never applied, the draft
-// is genuinely still awaiting and the result is still unconfirmed, so this does not depend on mock bug R5.
-// Fixed looks like: the stop-unconfirmed state survives the automatic post-command reload; it clears only on backend
-// evidence of the stop (draft invalidated or conversation reported stopped) or a confirmed re-stop. Team's Claude owns the fix.
-// Not wired into npm scripts. Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy). No network.
+// RULE G01 (REVIEW.md inv 7 "Holds and STOP"): a STOP whose outcome is unconfirmed says "stop unconfirmed", and that fan's
+// approve stays off and sends nothing, through the automatic reload after the command.
+// Offline: 7a-harness (jsdom, the typed Plan C mock behind the real client and proxy); dropBeforeCommit, so the stop is never
+// applied. No network.
 import assert from "node:assert/strict";
 import test from "node:test";
 import { MOCK_ACCOUNT, seedDraft } from "../contracts/plan-c-mock-backend";

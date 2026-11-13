@@ -14,14 +14,21 @@ const CONVERSATION_COPY: Record<PlanCConversationAction, { label: string; confir
   takeover: { label: "Take over", confirm: "Confirm take over", help: "You write from now on. Pending drafts for this fan are invalidated." },
   handback: { label: "Hand back to engine", confirm: "Confirm hand back", help: "The engine may plan a new draft under the current pilot checks. It never sends an old draft." } };
 
-/** What this session last saw of a STOP on a conversation. Any of them keeps approve and edit off for that fan. */
+/** What this page last saw of a STOP on a conversation. Any of them keeps approve and edit off for that fan. A recorded stop stays recorded. */
 type StopState = "unconfirmed" | "refused" | "recorded";
 const STOP_STATE: Record<StopState, string> = {
-  unconfirmed: "Stop unconfirmed. Approve and edit are off for this fan until a stop is recorded.",
-  refused: "Stop not recorded. Approve and edit are off for this fan until a stop is recorded.",
-  recorded: "Stopped. Approve and edit are off for this fan until you hand back." };
+  unconfirmed: "Stop unconfirmed. Approve and edit are off for this fan in this view.",
+  refused: "Stop not recorded. Approve and edit are off for this fan in this view.",
+  recorded: "Stop recorded. Approve and edit are off for this fan in this view." };
+const STOP_HINT = "Kept in this page only. Reloading the page clears it.";
+/** This page's record of a conversation: the newest revision a command recorded, and any stop. Cleared once, by a hand back. */
+type SessionRecord = { revision: number | null; stop?: StopState };
 
-/** Stop is one click and never needs a revision. Take over and hand back need the button, then an explicit confirmation. */
+/**
+ * Stop is one click with no revision gate in the UI. Take over and hand back need the button, then an explicit confirmation.
+ * Limits (lane 1): the wire still needs a revision (the proxy requires expectedRevision), so a Stop on a conversation without
+ * one sends nothing and says so; and the stop hold is page-local until the backend holds it.
+ */
 function ConversationControls({ conversation, canAct, stop, onCommand }: { conversation: PlanCConversation; canAct: boolean; stop: StopState | undefined;
   onCommand: (conversation: PlanCConversation, action: PlanCConversationAction) => Promise<PlanCCommandResult> }) {
   const [confirming, setConfirming] = useState<PlanCConversationAction | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
@@ -35,7 +42,7 @@ function ConversationControls({ conversation, canAct, stop, onCommand }: { conve
   };
   return <li className="rounded-lg border border-line p-3 text-sm" data-plan-c-conversation={conversation.conversationId}>
     <p className="font-semibold">{conversation.label} <span className="font-normal text-muted">({conversation.conversationId}{conversation.revision === null ? "" : `, revision ${conversation.revision}`})</span></p>
-    {stop ? <p className="mt-1 text-xs font-semibold" data-plan-c-stop-state={stop}>{STOP_STATE[stop]}</p> : null}
+    {stop ? <p className="mt-1 flex items-center gap-1 text-xs font-semibold" data-plan-c-stop-state={stop}>{STOP_STATE[stop]}<Info text={STOP_HINT} /></p> : null}
     <div className="mt-2 flex flex-wrap gap-2">
       <button type="button" className="of-control-button of-primary" disabled={busy || !canAct} data-plan-c-conversation-action="stop" onClick={() => void run("stop")}>{CONVERSATION_COPY.stop.label}</button>
       {conversation.revision === null ? <span className="flex items-center gap-1 text-xs">Take over and hand back are unavailable<Info text="The backend did not report this conversation's revision, so it cannot be taken over or handed back from here." /></span> :
@@ -56,8 +63,9 @@ function DraftCard({ draft, accountId, now, canAct, autonomous, hold, onApprove,
   onEdit: (draft: PlanCDraft, parts: string[]) => Promise<PlanCCommandResult> }) {
   const [mode, setMode] = useState<"reject" | "edit" | null>(null), [reason, setReason] = useState(""), [texts, setTexts] = useState(() => draft.parts.map(part => part.text));
   const [busy, setBusy] = useState(false), [message, setMessage] = useState<string | null>(null);
-  const expired = isExpired(draft, now), left = minutesLeft(draft.expiresAt, now);
+  const expired = isExpired(draft, now), left = minutesLeft(draft.expiresAt, now), held = !!hold;
   const inflight = useRef(false);
+  useEffect(() => { if (held) setMode(current => current === "edit" ? null : current); }, [held]);
   const run = async (action: () => Promise<PlanCCommandResult>, done: string) => {
     if (busy || inflight.current) return;
     inflight.current = true; setBusy(true); setMessage(null);
@@ -107,15 +115,15 @@ function DraftCard({ draft, accountId, now, canAct, autonomous, hold, onApprove,
       {texts.map((value, index) => <label key={index} className="block text-xs">Part {index + 1} text{draft.parts[index].action === "offer" ? " (lead-in; the card line is rebuilt by the system)" : ""}
         <textarea aria-label={`Part ${index + 1} text`} className="mt-1 w-full rounded border border-line px-2 py-1 text-base" rows={3} maxLength={2000} value={value}
           onChange={event => setTexts(current => current.map((item, at) => at === index ? event.target.value : item))} /></label>)}
-      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), autonomous ? "Edit saved. Reloading for policy checks." : "Edit saved. Reloading the new version for approval.")}>Save edit</button>
+      <div className="flex gap-2"><button type="button" data-plan-c-edit-confirm className="of-control-button of-primary" disabled={busy || !canAct || held || !!editProblem} onClick={() => void run(() => onEdit(draft, texts), autonomous ? "Edit saved. Reloading for policy checks." : "Edit saved. Reloading the new version for approval.")}>Save edit</button>
         <button type="button" className="of-control-button of-secondary" disabled={busy} onClick={() => { setMode(null); setTexts(draft.parts.map(part => part.text)); }}>Cancel</button></div>
       {editProblem && texts.some((value, index) => value !== draft.parts[index].text) ? <p className="text-xs text-muted">{editProblem}</p> : null}
     </div> : null}
 
     {mode === null ? <div className="mt-2 flex flex-wrap gap-2">
-      {!autonomous ? <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || !!hold || !canApprove(draft, now)}
+      {!autonomous ? <button type="button" data-plan-c-approve className="of-control-button of-primary" disabled={busy || !canAct || held || !canApprove(draft, now)}
         onClick={() => void (canApprove(draft, Date.now()) ? run(() => onApprove(draft), `Approved version ${draft.draftVersion}. Delivery checks run before anything is sent.`) : setMessage("This draft has expired. Nothing was sent."))}>{draft.status === "approved" ? "Already approved" : "Approve this version"}</button> : null}
-      <button type="button" data-plan-c-edit className="of-control-button of-secondary" disabled={busy || !canAct || !!hold} onClick={() => setMode("edit")}>Edit</button>
+      <button type="button" data-plan-c-edit className="of-control-button of-secondary" disabled={busy || !canAct || held} onClick={() => setMode("edit")}>Edit</button>
       <button type="button" data-plan-c-reject className="of-control-button of-secondary" disabled={busy || !canAct} onClick={() => setMode("reject")}>Reject</button>
     </div> : null}
     {message ? <p role="status" className="mt-1 text-xs" data-plan-c-message-status>{message}</p> : null}
@@ -162,7 +170,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
   const autonomous = authorizationMode === "autonomous";
   const client = useMemo(() => injected ?? createPlanCClient({ accountId, fetchImpl }), [injected, accountId, fetchImpl]);
   const [drafts, setDrafts] = useState<Load<PlanCDraft[]>>({ kind: "loading" }), [receipts, setReceipts] = useState<Load<PlanCReceipt[]>>({ kind: "loading" }), [unresolved, setUnresolved] = useState<Load<PlanCUnresolvedItem[]>>({ kind: "loading" });
-  const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [held, setHeld] = useState<Record<string, number>>({}), [stops, setStops] = useState<Record<string, StopState>>({}), [now, setNow] = useState(() => Date.now());
+  const [notice, setNotice] = useState<string | null>(null), [confirmation, setConfirmation] = useState<string | null>(null), [session, setSession] = useState<Record<string, SessionRecord>>({}), [now, setNow] = useState(() => Date.now());
   const generation = useRef(0);
   /** True only when both lists were read and are now on screen. */
   const reload = useCallback(async () => {
@@ -197,39 +205,41 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
     const byId = new Map<string, PlanCConversation>();
     const add = (conversationId: string, revision: number | null) => { const existing = byId.get(conversationId);
       if (!existing) byId.set(conversationId, { conversationId, revision, label: place(conversationId, accountId) });
-      else if (existing.revision === null && revision !== null) existing.revision = revision; };
+      else if (revision !== null && (existing.revision === null || revision > existing.revision)) existing.revision = revision; };
     if (drafts.kind === "ready") for (const draft of drafts.value) add(draft.conversationId, draft.conversationRevision);
     if (unresolved.kind === "ready") for (const item of unresolved.value) if (item.conversationId) add(item.conversationId, item.conversationRevision);
-    for (const [conversationId, revision] of Object.entries(held)) add(conversationId, revision);
-    for (const conversationId of Object.keys(stops)) add(conversationId, null);
+    for (const [conversationId, record] of Object.entries(session)) add(conversationId, record.revision);
     return [...byId.values()];
-  }, [drafts, unresolved, held, stops, accountId]);
+  }, [drafts, unresolved, session, accountId]);
 
   /** Why approve and edit are off for a fan: a stop this session sent, unresolved work for that fan, or unresolved work that could not be read. */
   const holdFor = (conversationId: string): string | null => {
-    const stop = stops[conversationId];
+    const stop = session[conversationId]?.stop;
     if (stop) return STOP_STATE[stop];
     if (unresolved.kind !== "ready") return "Unresolved work could not be read, so approve and edit are off.";
-    return unresolved.value.some(item => item.conversationId === conversationId || (item.conversationId === null && item.kind === "unknown_send"))
-      ? "This fan has unresolved work, so approve and edit are off until it is resolved." : null;
+    if (unresolved.value.some(item => item.conversationId === conversationId)) return "This fan has unresolved work, so approve and edit are off until it is resolved.";
+    return unresolved.value.some(item => item.conversationId === null && item.kind === "unknown_send")
+      ? "An unknown send for this account is unresolved, so approve and edit are off for every fan until it is resolved." : null;
   };
-  const markStop = (conversationId: string, state: StopState) => setStops(current => ({ ...current, [conversationId]: state }));
+  /** Update this page's record of a conversation. A recorded stop never downgrades; a revision only moves forward. */
+  const record = (conversationId: string, stop: StopState | undefined, revision: number | null = null) => setSession(current => {
+    const was = current[conversationId];
+    return { ...current, [conversationId]: { revision: revision !== null && (was?.revision ?? -1) < revision ? revision : was?.revision ?? null,
+      stop: was?.stop === "recorded" ? "recorded" : stop ?? was?.stop } };
+  });
 
   const onConversation = async (conversation: PlanCConversation, action: PlanCConversationAction) => {
     // A stop holds this fan's approve from the click on, until the backend records it (or a hand back clears it).
-    if (action === "stop") markStop(conversation.conversationId, "unconfirmed");
+    if (action === "stop") record(conversation.conversationId, "unconfirmed");
     if (conversation.revision === null) {
-      if (action === "stop") markStop(conversation.conversationId, "refused");
+      if (action === "stop") record(conversation.conversationId, "refused");
       return { ok: false, outcome: "refused", reload: false, error: "Stop not sent: the backend did not report this conversation's revision. Reload, then stop again." } as PlanCCommandResult;
     }
     const result = await settle(await client.conversationCommand(conversation.conversationId, action, conversation.revision), `${CONVERSATION_COPY[action].label} recorded for ${conversation.conversationId}`);
-    if (action === "stop") markStop(conversation.conversationId, result.ok ? "recorded" : result.outcome === "unconfirmed" ? "unconfirmed" : "refused");
-    // A takeover leaves no draft to hang the hand back on, so remember it for this session. A hand back clears it.
-    if (result.ok && action === "takeover" && result.recordedRevision !== null) setHeld(current => ({ ...current, [conversation.conversationId]: result.recordedRevision! }));
-    if (result.ok && action === "handback") {
-      setHeld(current => { const next = { ...current }; delete next[conversation.conversationId]; return next; });
-      setStops(current => { const next = { ...current }; delete next[conversation.conversationId]; return next; });
-    }
+    // A stop or takeover may leave no draft carrying the new revision, so this page keeps the one the backend recorded. A hand back clears it.
+    if (action === "stop") record(conversation.conversationId, result.ok ? "recorded" : result.outcome === "unconfirmed" ? "unconfirmed" : "refused", result.ok ? result.recordedRevision : null);
+    if (result.ok && action === "takeover") record(conversation.conversationId, undefined, result.recordedRevision);
+    if (result.ok && action === "handback") setSession(current => { const next = { ...current }; delete next[conversation.conversationId]; return next; });
     return result;
   };
 
@@ -263,7 +273,7 @@ export default function PlanCConsole({ accountId, canAct, authorizationMode = "s
     </section>
 
     <section aria-label="Conversation controls"><h2 className="font-semibold">Conversation controls</h2>
-      {conversations.length ? <ul className="mt-2 space-y-2">{conversations.map(conversation => <ConversationControls key={`${conversation.conversationId}:${conversation.revision}`} conversation={conversation} canAct={canAct} stop={stops[conversation.conversationId]} onCommand={onConversation} />)}</ul>
+      {conversations.length ? <ul className="mt-2 space-y-2">{conversations.map(conversation => <ConversationControls key={`${conversation.conversationId}:${conversation.revision}`} conversation={conversation} canAct={canAct} stop={session[conversation.conversationId]?.stop} onCommand={onConversation} />)}</ul>
         : <p className="mt-2 text-sm text-muted">No conversation has a draft or unresolved work right now.</p>}
     </section>
 
