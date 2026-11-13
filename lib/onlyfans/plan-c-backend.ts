@@ -37,16 +37,23 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
   const root = (accountId: string) => options.baseUrl.replace(/\/+$/, "") + `/onlyfans/control/v2/accounts/${encodeURIComponent(accountId)}/`;
   const headers = { Authorization: `Bearer ${options.token}`, [PLAN_C_HEADER]: PLAN_C_SCHEMA };
 
-  async function read<T>(url: string, parse: (value: unknown) => T | null, what: string, actor?: string): Promise<PlanCReadResult<T>> {
+  /** One GET: the parsed JSON body of a 2xx, or the failure that answer amounts to. */
+  async function get(url: string, what: string, actor?: string): Promise<{ ok: true; value: unknown } | PlanCReadFailure> {
     try {
       const response = await call(url, { method: "GET", headers: { ...headers, ...(actor ? { "X-Plan-C-Actor": actor } : {}) } });
       if (response.status === 404) { await response.body?.cancel(); return { ok: false, status: 404, error: `${what} is not available.` }; }
       if (response.status === 401 || response.status === 403) { await response.body?.cancel(); return { ok: false, status: 403, error: `${what} is not available to this session.` }; }
-      if (response.ok) { const data = parse(await response.json()); return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` }; }
+      if (response.ok) return { ok: true, value: await response.json() };
       await response.body?.cancel();
     } catch { /* fall through */ }
     return { ok: false, status: 503, error: `${what} is unavailable.` };
   }
+  function outcome<T>(fetched: { ok: true; value: unknown } | PlanCReadFailure, parse: (value: unknown) => T | null, what: string): PlanCReadResult<T> {
+    if (!fetched.ok) return fetched;
+    const data = parse(fetched.value);
+    return data ? { ok: true, data } : { ok: false, status: 502, error: `${what} could not be read.` };
+  }
+  const read = async <T>(url: string, parse: (value: unknown) => T | null, what: string, actor?: string) => outcome(await get(url, what, actor), parse, what);
 
   async function write(url: string, body: Record<string, unknown>, expect: { commandKey: string; accountId: string; action: string; requestId?: string; conversationId?: string; id?: string }): Promise<PlanCCommandResult> {
     try {
@@ -77,9 +84,9 @@ export function createPlanCBackend(options: { baseUrl: string; token: string; fe
         return mode === "supervised" || mode === "autonomous" ? { authorizationMode: mode } : null;
       }, "Pilot configuration", actor),
     drafts: async (accountId: string, actor?: string): Promise<PlanCDraftsResult> => {
-      let body: unknown;
-      const result = await read(root(accountId) + "drafts", value => parsePlanCDrafts(body = value, accountId), "Drafts awaiting approval", actor);
-      return result.ok ? result : { ...result, stopTargets: planCStopTargets(body, accountId) };
+      const what = "Drafts awaiting approval", fetched = await get(root(accountId) + "drafts", what, actor);
+      const result = outcome(fetched, value => parsePlanCDrafts(value, accountId), what);
+      return result.ok ? result : { ...result, stopTargets: planCStopTargets(fetched.ok ? fetched.value : undefined, accountId) };
     },
     unresolved: (accountId: string, actor?: string): Promise<PlanCReadResult<PlanCUnresolvedList>> =>
       read(root(accountId) + "unresolved", value => parsePlanCUnresolved(value, accountId), "Unresolved work", actor),

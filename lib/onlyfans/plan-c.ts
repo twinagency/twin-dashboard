@@ -58,7 +58,7 @@ export type PlanCDraft = {
   parts: PlanCPart[];
   offer: PlanCOffer | null;
   expiresAt: string;
-  fanId: string | null;
+  fanId: string;
   conversationId: string;
   conversationRevision: number | null;
   messages: PlanCMessage[];
@@ -90,8 +90,6 @@ const PLAN_C_PRICE_MIN_CENTS = 300;
 const PLAN_C_PRICE_MAX_CENTS = 20_000;
 const PLAN_C_CURRENCY = "USD";
 const absent = (value: unknown) => value === undefined || value === null;
-/** Every alias that is set, for the draft-level terms, which are each checked against the offer part. */
-const every = (source: Record<string, unknown>, ...keys: string[]): unknown[] => keys.map(key => source[key]).filter(value => value !== undefined);
 const productId = (value: unknown): string | null | undefined =>
   absent(value) ? null : typeof value === "string" && ID.test(value) ? value : intIn(value, 0, 2 ** 53 - 1) ? String(value) : undefined;
 
@@ -183,10 +181,11 @@ function parseOfferTerms(raw: Record<string, unknown>, parts: PlanCPart[]): Plan
   const blocks = [raw.offer, raw.product];
   if (!blocks.every(block => absent(block) || record(block))) return undefined;
   const sources = [...blocks.filter(record), raw];
-  const declared = (...keys: string[]) => sources.flatMap(source => every(source, ...keys));
+  // One value per source (CONFLICT when its own aliases disagree), each checked against the offer part.
+  const declared = (...keys: string[]) => sources.map(source => pick(source, ...keys)).filter(value => value !== undefined);
   const price = declared("priceCents", "price_cents"), currency = declared("currency"), count = declared("mediaCount", "media_count");
-  const media = declared("mediaIds", "media_ids"), product = [...blocks.filter(record).flatMap(block => every(block, "productId", "product_id", "id")),
-    ...every(raw, "productId", "product_id")];
+  const media = declared("mediaIds", "media_ids"), product = [...blocks.filter(record).map(block => pick(block, "productId", "product_id", "id")), pick(raw, "productId", "product_id")]
+    .filter(value => value !== undefined);
   const head = offerParts[0];
   if (!head) return [...blocks, ...price, ...currency, ...count, ...media, ...product].every(absent) ? null : undefined;
   const offer: PlanCOffer = { productId: head.productId, mediaCount: head.mediaIds.length, mediaIds: head.mediaIds, priceCents: head.priceCents, currency: head.currency };
