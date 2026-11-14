@@ -4,6 +4,7 @@ import { CONTENT_HEADER, CONTENT_SCHEMA, type ContentFailure } from "./content";
 import { parseVault, parseVaultSyncAck, parseVaultCreateAck, type VaultProduct } from "./vault";
 import { validVaultResource, parseVaultResource, parseVaultEditAck, type AssetPatch, type FolderPatch } from "./vault-editing";
 import { readVaultPreview } from "./vault-preview";
+import { parseVaultProcessingRead, parseVaultProcessingAck, type VaultProcessingStatus } from "./vault-processing";
 type Identity = { actor: string; commandKey: string };
 export function createVaultBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
@@ -76,7 +77,19 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
         return { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The recorded vault could not be read." };
       } catch { return { ok: false as const, status: 503, error: "The recorded vault could not be read." }; }
     },
-    async sync(accountId: string, command: { expectedConnectionRevision: number } & Identity) {
+    async processing(accountId: string) {
+      try {
+        const response = await call(base(accountId) + "/vault/processing", { method: "GET", headers });
+        const data = response.ok ? parseVaultProcessingRead(await response.json(), accountId) : null;
+        return data ? { ok: true as const, data } : { ok: false as const, status: response.status === 404 ? 404 : 503, error: "The vault processing status could not be read." };
+      } catch { return { ok: false as const, status: 503, error: "The vault processing status could not be read." }; }
+    },
+    async processingCommand(accountId: string, command: { action: "pause" | "resume" | "retry" | "redescribe"; mediaIds?: string[] } & Identity) {
+      const result = await post(base(accountId) + "/vault/processing", command); if (!result.ok) return result;
+      const ack = parseVaultProcessingAck(result.body, { accountId, commandKey: command.commandKey });
+      return ack ? { ok: true as const, processing: ack.processing as VaultProcessingStatus | null } : { ok: false, status: 502, outcome: "unconfirmed", error: "The processing command outcome is not confirmed. Refresh the status before trying again." } as ContentFailure;
+    },
+    async sync(accountId: string, command: { expectedConnectionRevision: number; selectionVersion?: 3 | 4 } & Identity) {
       const result = await post(base(accountId) + "/vault/sync?progress=1", command); if (!result.ok) return result;
       const sync = parseVaultSyncAck(result.body, { accountId, commandKey: command.commandKey });
       return sync ? { ok: true as const, sync } : { ok: false, status: 502, outcome: "unconfirmed", error: "Vault sync outcome is not confirmed. Refresh or retry the same request." } as ContentFailure;

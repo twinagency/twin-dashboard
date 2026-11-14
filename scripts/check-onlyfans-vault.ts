@@ -58,6 +58,41 @@ async function main() {
   const lost = await backend.create("acc-a", { product, ...identity }); assert(!lost.ok && lost.outcome === "unconfirmed"); assert.equal(posted.length, 1);
   assert((await backend.create("acc-a", { product, ...identity })).ok); assert.equal(posted[0], posted[1]);
   assert((await backend.sync("acc-a", { expectedConnectionRevision: 3, ...identity })).ok);
-  console.log("PASS vault: account-scoped bounded reads, exact large media IDs, no URLs, curated paid terms, preview subset, nonce-scoped commands, immutable ACK and exact lost-reply retry");
+  // Full-vault (v4) sync: explicit selectionVersion reaches the backend, the v4 job view parses, and a window job never gains full coverage.
+  const fullJob = { ...job, status: "running", completedAt: null, pagesRead: 400, itemsSeen: 9600, retryAt: null, pageOffset: 0, refreshMode: "full", pageBudget: 2500, kindOffsets: { photo: 9000, video: 600 },
+    scope: { selection: "full_vault", version: 4, scope: "full", order: "created_at_desc_id_desc" },
+    coverage: { scope: "full", state: "in_progress", reason: null, established_by: null, providerTotal: { photo: null, video: null }, seen: { photo: 9000, video: 600 }, uniqueImported: { photo: 9000, video: 600 } } };
+  assert(parseVault({ ...read, vault: { ...read.vault, sync: fullJob } }, "acc-a")); assert(validVaultSyncRequest({ requestId, expectedConnectionRevision: 3, selectionVersion: 4 }));
+  assert.equal(validVaultSyncRequest({ requestId, expectedConnectionRevision: 3, selectionVersion: 5 }), false);
+  const sentSync: unknown[] = [];
+  const fullBackend = createVaultBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic-content-only", fetchImpl: async (url, init) => {
+    sentSync.push(JSON.parse(String(init?.body))); return Response.json({ schemaVersion: CONTENT_SCHEMA, ok: true, applied: true, accountId: "acc-a", commandKey: key, sync: fullJob });
+  } });
+  const fullResult = await fullBackend.sync("acc-a", { expectedConnectionRevision: 3, selectionVersion: 4, ...identity });
+  assert(fullResult.ok && fullResult.sync.coverage?.scope === "full" && fullResult.sync.coverage.state === "in_progress");
+  assert.deepEqual(sentSync[0], { expectedConnectionRevision: 3, selectionVersion: 4, ...identity });
+  // Processing status and commands: account-scoped reads, exact command body, refusal and lost-reply semantics.
+  const processingStatus = { account: "acc-a", paused: false, pauseReason: null, import: fullJob.coverage,
+    analysis: { eligible: 3, queued: 1, processing: 1, completed: 1, unresolved: 0, skippedOperator: 0, byKind: {}, unresolvedReasons: {} }, credential: { state: "ok" }, updatedAt: "2026-11-15T00:00:00Z" };
+  const seen: { url: string; method: string; body: unknown }[] = [];
+  let mode: "ok" | "lost" | "other" = "ok";
+  const proc = createVaultBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic-content-only", fetchImpl: async (url, init) => {
+    seen.push({ url: String(url), method: String(init?.method), body: init?.body ? JSON.parse(String(init.body)) : undefined });
+    if (mode === "lost") throw new Error("Synthetic lost reply");
+    const account = mode === "other" ? "acc-b" : "acc-a";
+    return Response.json(init?.method === "GET" ? { ok: true, processing: { ...processingStatus, account } } : { schemaVersion: CONTENT_SCHEMA, ok: true, applied: true, accountId: account, commandKey: key, processing: processingStatus });
+  } });
+  const status = await proc.processing("acc-a");
+  assert(status.ok && status.data.analysis?.queued === 1 && status.data.import?.scope === "full");
+  assert.deepEqual(seen[0], { url: "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault/processing", method: "GET", body: undefined });
+  assert.equal((await proc.processing("acc-a/../acc-b")).ok, false, "a status naming another account is refused"); assert.match(seen[1].url, /accounts\/acc-a%2F..%2Facc-b\/vault\/processing$/);
+  const command = { action: "redescribe" as const, mediaIds: ["11", "12"], ...identity };
+  const commandResult = await proc.processingCommand("acc-a", command);
+  assert(commandResult.ok && commandResult.processing?.paused === false); assert.deepEqual(seen.at(-1), { url: "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault/processing", method: "POST", body: command });
+  mode = "other"; assert.equal((await proc.processing("acc-a")).ok, false);
+  const wrongAccount = await proc.processingCommand("acc-a", command); assert(!wrongAccount.ok && wrongAccount.outcome === "unconfirmed");
+  mode = "lost"; const lostCommand = await proc.processingCommand("acc-a", command); assert(!lostCommand.ok && lostCommand.outcome === "unconfirmed" && lostCommand.status === 502);
+  assert.equal((await proc.processing("acc-a")).ok, false);
+  console.log("PASS vault: account-scoped bounded reads, exact large media IDs, no URLs, curated paid terms, preview subset, nonce-scoped commands, immutable ACK and exact lost-reply retry, full-vault v4 sync and processing status/commands");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
