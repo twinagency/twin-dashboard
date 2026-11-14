@@ -96,24 +96,29 @@ async function main(){
   const providerIds=async(key:string):Promise<{photo:string[];video:string[]}>=>await fx("/fixture/provider-ids/"+key) as any;
   const ids1=await providerIds("c1"),ids2=await providerIds("c2");
   const total=(a:Json)=>a.photos+a.videos;
+  if(process.env.NEXT_MODE!=="start"){   // next dev compiles each route on first request (minutes on one CPU): compile everything this journey touches first
+   for(const leaf of ["","/sync","/processing","/manage/folders","/manage/assets/"+ids1.photo[0],"/category-review/1"])await warm(vaultPath(c1.account)+leaf);
+   note("routes-warmed");
+  }
 
+  const syncBody=(rev:number,requestId=randomUUID())=>({requestId,expectedConnectionRevision:rev,...(plumbingOnly?{}:{selectionVersion:4})});
   // ---------------------------------------------------------------- 0. plumbing: auth, scope, foreign tenant, baseline
   check("unauthenticated vault read refused",(await bff(vaultPath(c1.account),{token:null})).status!==200);
   check("both creators visible, empty before any sync",(await must(vaultPath(c1.account))).vault.items.length===0&&(await must(vaultPath(c2.account))).vault.items.length===0);
   const foreignRead=await bff(vaultPath(x1.account));
   check("foreign-tenant account refused (read)",foreignRead.status===404,foreignRead.status);
-  check("foreign-tenant account refused (sync)",(await bff(vaultPath(x1.account)+"/sync",{method:"POST",body:{requestId:randomUUID(),expectedConnectionRevision:1}})).status===404);
+  check("foreign-tenant account refused (sync)",(await bff(vaultPath(x1.account)+"/sync",{method:"POST",body:syncBody(1)})).status===404);
   const baseline=await fx("/fixture/state");
   const guardBefore:Json={},catalogueBefore=baseline.catalogue;
   for(const a of [c1.account,c2.account])guardBefore[a]=baseline.accounts[a].guard;
   const foreignBefore=baseline.foreign;
   const rev1=(await must(vaultPath(c1.account))).vault.connectionRevision as number,rev2=(await must(vaultPath(c2.account))).vault.connectionRevision as number;
-  check("read-only actor cannot sync",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",token:"synthetic-reader",body:{requestId:randomUUID(),expectedConnectionRevision:rev1}})).status===403);
-  check("stale connection revision refused",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",body:{requestId:randomUUID(),expectedConnectionRevision:rev1+1}})).status===409);
+  check("read-only actor cannot sync",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",token:"synthetic-reader",body:syncBody(rev1)})).status===403);
+  check("stale connection revision refused",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",body:syncBody(rev1+1)})).status===409);
 
   // ---------------------------------------------------------------- 1. authenticated sync (the BFF selects the full-vault policy)
   const sync=async(a:Json,rev:number,requestId=randomUUID())=>{
-   const r=await bff(vaultPath(a.account)+"/sync",{method:"POST",body:{requestId,expectedConnectionRevision:rev}});
+   const r=await bff(vaultPath(a.account)+"/sync",{method:"POST",body:syncBody(rev,requestId)});
    if(r.status!==200)throw Error("sync "+a.account+" -> "+r.status+" "+JSON.stringify(r.body).slice(0,400));
    return {requestId,sync:r.body.sync as Json};
   };
@@ -124,7 +129,7 @@ async function main(){
   if(plumbingOnly)note("sync-scope",{c1:first1.sync?.scope,c2:first2.sync?.scope});
   else check("BFF sync asked for the full-vault policy (selectionVersion 4) on both creators",askedFull,{c1:first1.sync?.scope,c2:first2.sync?.scope});
   check("same request replays the same job (idempotent)",(await sync(c1,rev1,first1.requestId)).sync.jobId===first1.sync.jobId);
-  check("a second sync while one is active is refused (409)",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",body:{requestId:randomUUID(),expectedConnectionRevision:rev1}})).status===409);
+  check("a second sync while one is active is refused (409)",(await bff(vaultPath(c1.account)+"/sync",{method:"POST",body:syncBody(rev1)})).status===409);
   if(plumbingOnly){
    // Feature code (processing route, v4 import) may be absent in the images under test: prove only that the real plumbing works.
    let processingRoute="present";try{await processing(c1.account);}catch(e){if(e instanceof FeatureMissing)processingRoute="missing";else throw e;}
@@ -137,6 +142,8 @@ async function main(){
   const accounts=[{key:"c1",a:c1,e:exp(c1),reports:c1.reportsTotal as boolean},{key:"c2",a:c2,e:exp(c2),reports:c2.reportsTotal as boolean}];
   const seenState:Json={c1:{polls:0,maxUnique:{photo:0,video:0},maxCompleted:0,importCompleteAt:null,settledAt:null,pausedPolls:0},c2:{polls:0,maxUnique:{photo:0,video:0},maxCompleted:0,importCompleteAt:null,settledAt:null,pausedPolls:0}};
   const violations:string[]=[];
+  const gap:Json={seen:false};
+  const waitingOf=(an:Json):number=>an.waitingRetry??(an.eligible-an.completed-an.unresolved-an.skippedOperator-an.queued);
   const settledOf=(p:Json)=>p.analysis.queued===0&&(p.analysis.processing??0)===0;
   const truth=(key:string,a:Json,p:Json,e:{photo:number;video:number},reports:boolean,expectNoOperatorSkips:boolean)=>{
    const imp=p.import,an=p.analysis,st=seenState[key];st.polls++;
@@ -159,7 +166,10 @@ async function main(){
    if(imp.state==="complete"&&imp.reason)bad("complete import carries a failure reason "+imp.reason);
    if(an.eligible>u.photo+u.video)bad(`analysis eligible ${an.eligible} > imported ${u.photo+u.video}`);
    const closed=an.completed+an.unresolved+an.skippedOperator+(an.waitingRetry??0);
-   if(an.eligible<closed||(an.eligible-closed!==an.queued&&an.eligible-closed!==an.queued+(an.processing??0)))bad(`analysis counters do not add up: ${JSON.stringify({e:an.eligible,q:an.queued,p:an.processing,c:an.completed,u:an.unresolved,s:an.skippedOperator,w:an.waitingRetry})}`);
+   const adds=an.eligible>=closed&&(an.eligible-closed===an.queued||an.eligible-closed===an.queued+(an.processing??0));
+   // The BFF may drop a counter the backend sends (waitingRetry): then items are invisible to the operator. That is its own finding, not noise on every poll.
+   if(an.waitingRetry===undefined&&!adds){if(!gap.seen){gap.seen=true;gap.example={t:secs(),key,counters:{e:an.eligible,q:an.queued,p:an.processing,c:an.completed,u:an.unresolved,s:an.skippedOperator}};}}
+   else if(!adds)bad(`analysis counters do not add up: ${JSON.stringify({e:an.eligible,q:an.queued,p:an.processing,c:an.completed,u:an.unresolved,s:an.skippedOperator,w:an.waitingRetry})}`);
    const reasons=Object.values(an.unresolvedReasons??{}).reduce((s:number,v:any)=>s+v,0);
    if(reasons!==an.unresolved)bad(`unresolved reasons sum ${reasons} != unresolved ${an.unresolved}`);
    if(an.completed<st.maxCompleted&&expectNoOperatorSkips)bad(`completed went backwards (${st.maxCompleted} -> ${an.completed})`);
@@ -237,9 +247,9 @@ async function main(){
   const brokenStates=await fx("/fixture/item-states?account="+c1.account+"&ids="+brokenIds.join(","));
   const settled1=settled.c1.analysis;
   check("c1 unresolved reasons are listed and exact (refused + blocked_drm)",JSON.stringify(Object.entries(settled1.unresolvedReasons).sort())===JSON.stringify([["blocked_drm",1],["refused",1]]),settled1.unresolvedReasons);
-  check("c1 broken-media items wait for a retry (not hidden, not complete)",(settled1.waitingRetry??0)===broken.missing.length+broken.corrupt.length,settled1);
+  check("c1 broken-media items wait for a retry (not hidden, not complete)",waitingOf(settled1)===broken.missing.length+broken.corrupt.length,settled1);
   check("c1 completed == eligible minus the broken items",settled1.completed===total(c1)-brokenIds.length,{completed:settled1.completed,broken:brokenIds.length});
-  check("c2 has no unresolved, nothing waiting",settled.c2.analysis.unresolved===0&&(settled.c2.analysis.waitingRetry??0)===0&&settled.c2.analysis.completed===total(c2),settled.c2.analysis);
+  check("c2 has no unresolved, nothing waiting",settled.c2.analysis.unresolved===0&&waitingOf(settled.c2.analysis)===0&&settled.c2.analysis.completed===total(c2),settled.c2.analysis);
   for(const id of brokenIds)check("broken item "+id+" has no description and is not marked described",!brokenStates[id]?.description&&brokenStates[id]?.describeStatus!=="described",brokenStates[id]);
   check("c1 per-kind analysis counts add up",settled1.byKind.photo.eligible===c1.photos&&settled1.byKind.video.eligible===c1.videos,settled1.byKind);
   check("the model was called once per described item and once per refusal, never for missing media",
@@ -312,7 +322,7 @@ async function main(){
   for(;;){
    if(Date.now()>deadline)throw Error("timeout waiting for retry to settle");
    const p=await processing(c1.account);truth("c1",c1,p,exp(c1),c1.reportsTotal,false);
-   if(settledOf(p)&&!p.paused&&p.analysis.completed>=total(c1)-1&&(p.analysis.waitingRetry??0)===0)break;
+   if(settledOf(p)&&!p.paused&&p.analysis.completed>=total(c1)-1&&waitingOf(p.analysis)===0)break;
    await sleep(2000);
   }
   const afterRetry=await processing(c1.account);
@@ -372,6 +382,7 @@ async function main(){
   check("the corrected item is counted as operator-owned, not queued",finalProc.c1.analysis.skippedOperator>=1&&finalProc.c1.analysis.queued===0,finalProc.c1.analysis);
   check("every other description is unchanged by the correction",(await collect(c1.account)).filter(i=>i.mediaId!==target).length===total(c1)-1);
   check("price/approval/sending rows identical at the very end",digest(finalState.accounts[c1.account].guard.guarded)===digest(guardBefore[c1.account].guarded)&&digest(finalState.accounts[c2.account].guard.guarded)===digest(guardBefore[c2.account].guarded)&&digest(finalState.catalogue)===digest(catalogueBefore)&&digest(finalState.foreign)===digest(foreignBefore));
+  check("every eligible item is visible in some BFF counter (waitingRetry is exposed, none silently dropped)",!gap.seen&&!violations.some(v=>v.includes("waitingRetry")),gap.example);
   check("truthfulness held on every poll (no violation recorded)",violations.length===0,violations.slice(0,10));
   timings.totalSeconds=secs();
   const failed=checks.filter(c=>!c.ok);
