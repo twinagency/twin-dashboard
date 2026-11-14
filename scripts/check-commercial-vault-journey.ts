@@ -247,7 +247,8 @@ async function main(){
   const brokenIds=[...broken.missing,...broken.corrupt,...broken.refused,...broken.posterOnly];
   const brokenStates=await fx("/fixture/item-states?account="+c1.account+"&ids="+brokenIds.join(","));
   const settled1=settled.c1.analysis;
-  check("c1 unresolved reasons are listed and exact (refused + blocked_drm)",JSON.stringify(Object.entries(settled1.unresolvedReasons).sort())===JSON.stringify([["blocked_drm",1],["refused",1]]),settled1.unresolvedReasons);
+  const sumOf=(m:Json)=>Object.values(m).reduce((s:number,v:any)=>s+v,0) as number;
+  check(`c1 unresolved reasons are listed and exact (${Object.keys(scenario.unresolvedReasons).join(" + ")}, media mode ${expect.media})`,JSON.stringify(Object.entries(settled1.unresolvedReasons).sort())===JSON.stringify(Object.entries(scenario.unresolvedReasons).sort()),{shown:settled1.unresolvedReasons,expected:scenario.unresolvedReasons});
   check("c1 broken-media items wait for a retry (not hidden, not complete)",waitingOf(settled1)===broken.missing.length+broken.corrupt.length,settled1);
   check("c1 completed == eligible minus the broken items",settled1.completed===total(c1)-brokenIds.length,{completed:settled1.completed,broken:brokenIds.length});
   check("c2 has no unresolved, nothing waiting",settled.c2.analysis.unresolved===0&&waitingOf(settled.c2.analysis)===0&&settled.c2.analysis.completed===total(c2),settled.c2.analysis);
@@ -255,6 +256,16 @@ async function main(){
   check("c1 per-kind analysis counts add up",settled1.byKind.photo.eligible===c1.photos&&settled1.byKind.video.eligible===c1.videos,settled1.byKind);
   check("the model was called once per described item and once per refusal, never for missing media",
    (afterRun.model.calls[c1.account]??0)>=settled1.completed+1&&afterRun.model.badKey===0,{calls:afterRun.model.calls,completed:settled1.completed});
+
+  if(expect.media==="cdn"){
+   // the real media-preparation code did the downloading: the worker wrote no cache; the synthetic CDN saw every read
+   const cdn=afterRun.cdn,expiring=scenario.scenario.expiringPhoto as string[];
+   const expiringStates=await fx("/fixture/item-states?account="+c1.account+"&ids="+expiring.join(","));
+   check("media came through the real preparation code from the synthetic CDN (reads and bytes recorded)",cdn.reads>=total(c1)-brokenIds.length&&cdn.bytes>0,cdn);
+   check("an expired CDN signature (403) was refreshed once through a provider point read and the item then described",(cdn.byStatus["403"]??0)>=1&&afterRun.accounts[c1.account].providerReadsByKind.item>=1&&expiring.every(id=>expiringStates[id]?.describeStatus==="described"&&String(expiringStates[id]?.description).includes(" "+id+" ")),{cdn:cdn.byStatus,itemReads:afterRun.accounts[c1.account].providerReadsByKind.item,expiringStates});
+   check("missing media produced 404s from the CDN, not a silent skip",(cdn.byStatus["404"]??0)>=1,cdn.byStatus);
+   check("poster-only video: no full-file URL, so the real media code made it unresolved (never described from its poster)",!brokenStates[broken.posterOnly[0]]?.description&&brokenStates[broken.posterOnly[0]]?.exhausted===true,brokenStates[broken.posterOnly[0]]);
+  }
 
   // descriptions through the existing vault list route
   const list1=await collect(c1.account),list2=await collect(c2.account);
@@ -308,7 +319,7 @@ async function main(){
   check("foreign tenant rows byte-identical",digest(guardAfterState.foreign)===digest(foreignBefore));
 
   // ---------------------------------------------------------------- 5. retry: the operator repairs the broken media, then asks for a retry through the BFF
-  const retryable=[...broken.missing,...broken.corrupt,...broken.posterOnly];
+  const retryable:string[]=scenario.retryIds;
   const callsBeforeRetry=guardAfterState.model.calls[c1.account]??0;
   const deniedRetry=await operate(c1.account,"retry",retryable,"synthetic-reader");
   check("read-only actor cannot retry",deniedRetry.status===403);
@@ -323,11 +334,12 @@ async function main(){
   for(;;){
    if(Date.now()>deadline)throw Error("timeout waiting for retry to settle");
    const p=await processing(c1.account);truth("c1",c1,p,exp(c1),c1.reportsTotal,false);
-   if(settledOf(p)&&!p.paused&&p.analysis.completed>=total(c1)-1&&waitingOf(p.analysis)===0)break;
+   if(settledOf(p)&&!p.paused&&p.analysis.completed>=total(c1)-sumOf(scenario.finalUnresolvedReasons)&&waitingOf(p.analysis)===0)break;
    await sleep(2000);
   }
   const afterRetry=await processing(c1.account);
-  check("after retry the repaired items are described; only the model-refused one stays unresolved (and says why)",afterRetry.analysis.completed===total(c1)-1&&JSON.stringify(afterRetry.analysis.unresolvedReasons)===JSON.stringify({refused:1}),afterRetry.analysis);
+  const finalOpen=sumOf(scenario.finalUnresolvedReasons);
+  check("after retry the repaired items are described; only the items that cannot be repaired stay unresolved (and say why)",afterRetry.analysis.completed===total(c1)-finalOpen&&JSON.stringify(Object.entries(afterRetry.analysis.unresolvedReasons).sort())===JSON.stringify(Object.entries(scenario.finalUnresolvedReasons).sort()),{shown:afterRetry.analysis,expected:scenario.finalUnresolvedReasons});
   const retriedStates=await fx("/fixture/item-states?account="+c1.account+"&ids="+retryable.join(","));
   check("every retried item now has its own description",retryable.every(id=>retriedStates[id]?.describeStatus==="described"&&String(retriedStates[id]?.description).includes(" "+id+" ")),retriedStates);
   const callsAfterRetry=(await fx("/fixture/state")).model.calls[c1.account]??0;
@@ -353,9 +365,10 @@ async function main(){
   const afterResync=await fx("/fixture/state"),pResync=await pollAll(false);
   check("second sync: no model call at all on unchanged media",afterResync.model.total===stateBeforeResync.model.total&&JSON.stringify(afterResync.model.calls)===JSON.stringify(stateBeforeResync.model.calls),{before:stateBeforeResync.model.calls,after:afterResync.model.calls});
   check("second sync: same unique imported counts, same rows, same descriptions",accounts.every(x=>pResync[x.key].import.uniqueImported.photo===x.e.photo&&pResync[x.key].import.uniqueImported.video===x.e.video&&JSON.stringify(afterResync.accounts[x.a.account].items)===JSON.stringify(stateBeforeResync.accounts[x.a.account].items))&&await descriptionDigest()===descBefore);
-  check("second sync: nothing queued and the broken-then-repaired items stay described",pResync.c1.analysis.queued===0&&pResync.c1.analysis.completed===total(c1)-1,pResync.c1.analysis);
+  check("second sync: nothing queued and the broken-then-repaired items stay described",pResync.c1.analysis.queued===0&&pResync.c1.analysis.completed===total(c1)-finalOpen,pResync.c1.analysis);
   check("second sync: price/approval/sending rows still identical",digest(afterResync.accounts[c1.account].guard.guarded)===digest(guardBefore[c1.account].guarded));
-  note("resync",{modelCalls:afterResync.model.total-stateBeforeResync.model.total});
+  if(expect.media==="cdn")check("second sync: no media is downloaded again for unchanged items (CDN reads unchanged)",afterResync.cdn.reads===stateBeforeResync.cdn.reads,{before:stateBeforeResync.cdn,after:afterResync.cdn});
+  note("resync",{modelCalls:afterResync.model.total-stateBeforeResync.model.total,cdnReads:afterResync.cdn.reads-stateBeforeResync.cdn.reads});
 
   // ---------------------------------------------------------------- 7. a manual operator correction survives re-processing
   const target=ids1.photo[20];
