@@ -116,23 +116,25 @@ const UNRESOLVED_LABELS: Record<string, string> = {
   media_too_large: "Media too large", timeout: "Timed out", unsupported_kind: "Unsupported media kind", other: "Other reasons",
 };
 const unresolvedLabel = (code: string) => UNRESOLVED_LABELS[code] ?? `Reason code: ${safeText(code)}`;
-const done = (c: VaultAnalysisCounts) => c.queued === 0 && c.processing === 0 && c.unresolved === 0 && c.eligible > 0 && c.completed + c.skippedOperator >= c.eligible;
+const done = (c: VaultAnalysisCounts) => c.queued === 0 && c.processing === 0 && c.unresolved === 0 && c.waitingRetry === 0 && c.eligible > 0 && c.completed + c.skippedOperator >= c.eligible;
 export function analysisView(analysis: VaultAnalysis | null | undefined, importIsFull: boolean): AnalysisView {
   const empty = { totals: [], rows: [], unresolved: [], skippedOperator: 0 };
   if (!analysis) return { state: "not_reported", tone: "unknown", headline: "Analysis status is not reported.", coverageNote: null, ...empty };
-  const sum = analysis.completed + analysis.queued + analysis.processing + analysis.unresolved;
+  const sum = analysis.completed + analysis.queued + analysis.processing + analysis.unresolved + analysis.waitingRetry;
   const kindSum = (field: keyof VaultAnalysisCounts) => KINDS.reduce((n, k) => n + (analysis.byKind[k]?.[field] ?? 0), 0);
   const kindsReported = KINDS.every(k => analysis.byKind[k]);
   const inconsistent = sum > analysis.eligible || (kindsReported && (["eligible", "queued", "processing", "completed", "unresolved"] as const).some(f => kindSum(f) !== analysis[f]));
-  const totals = [["Eligible", analysis.eligible], ["Queued", analysis.queued], ["Processing", analysis.processing], ["Completed", analysis.completed], ["Unresolved", analysis.unresolved]]
+  const totals = [["Eligible", analysis.eligible], ["Queued", analysis.queued], ["Processing", analysis.processing], ["Completed", analysis.completed], ["Unresolved", analysis.unresolved], ["Waiting to retry", analysis.waitingRetry]]
+    .filter(([label, value]) => label !== "Waiting to retry" || (value as number) > 0)
     .map(([label, value]) => ({ label: label as string, value: value as number }));
   const rows = KINDS.flatMap(kind => { const c = analysis.byKind[kind]; return c ? [{ kind, label: kind === "photo" ? "Photos" : "Videos",
-    text: `${c.eligible.toLocaleString("en-US")} eligible: ${c.queued.toLocaleString("en-US")} queued, ${c.processing.toLocaleString("en-US")} processing, ${c.completed.toLocaleString("en-US")} completed, ${c.unresolved.toLocaleString("en-US")} unresolved${c.skippedOperator ? `, ${c.skippedOperator.toLocaleString("en-US")} skipped by operator` : ""}` }] : []; });
+    text: `${c.eligible.toLocaleString("en-US")} eligible: ${c.queued.toLocaleString("en-US")} queued, ${c.processing.toLocaleString("en-US")} processing, ${c.completed.toLocaleString("en-US")} completed, ${c.unresolved.toLocaleString("en-US")} unresolved${c.waitingRetry ? `, ${c.waitingRetry.toLocaleString("en-US")} waiting to retry` : ""}${c.skippedOperator ? `, ${c.skippedOperator.toLocaleString("en-US")} skipped by operator` : ""}` }] : []; });
   const unresolved = Object.entries(analysis.unresolvedReasons).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([code, count]) => ({ code, label: unresolvedLabel(code), count }));
   const base = { totals, rows, unresolved, skippedOperator: analysis.skippedOperator };
   if (inconsistent) return { state: "inconsistent", tone: "warning", headline: "Analysis counts do not add up. Treat them as unreliable and refresh.", coverageNote: null, ...base };
   if (analysis.queued + analysis.processing > 0) return { state: "active", tone: "progress", headline: `Describing: ${analysis.processing.toLocaleString("en-US")} processing, ${analysis.queued.toLocaleString("en-US")} queued.`, coverageNote: importIsFull ? null : "Only items imported so far are described. The vault import is not full.", ...base };
   if (analysis.unresolved > 0) return { state: "attention", tone: "problem", headline: `${analysis.unresolved.toLocaleString("en-US")} items could not be described. Fix the cause, then retry.`, coverageNote: null, ...base };
+  if (analysis.waitingRetry > 0) return { state: "waiting", tone: "warning", headline: `${analysis.waitingRetry.toLocaleString("en-US")} items wait for an automatic retry (media not readable yet).`, coverageNote: null, ...base };
   if (analysis.eligible === 0) return { state: "idle", tone: "unknown", headline: "No eligible items to describe yet.", coverageNote: null, ...base };
   if (!done(analysis)) return { state: "waiting", tone: "warning", headline: `${Math.max(0, analysis.eligible - analysis.completed - analysis.skippedOperator).toLocaleString("en-US")} eligible items are not queued yet.`, coverageNote: null, ...base };
   return importIsFull

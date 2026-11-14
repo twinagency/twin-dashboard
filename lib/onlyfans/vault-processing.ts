@@ -3,7 +3,7 @@
 import { CONTENT_SCHEMA } from "./content";
 import { parseVaultCoverage, type VaultCoverage } from "./vault";
 
-export type VaultAnalysisCounts = { eligible: number; queued: number; processing: number; completed: number; unresolved: number; skippedOperator: number };
+export type VaultAnalysisCounts = { eligible: number; queued: number; processing: number; completed: number; unresolved: number; skippedOperator: number; waitingRetry: number };
 export type VaultAnalysis = VaultAnalysisCounts & { byKind: { photo: VaultAnalysisCounts | null; video: VaultAnalysisCounts | null }; unresolvedReasons: Record<string, number> };
 export type VaultCredentialState = "ok" | "missing" | "invalid" | "budget" | "unknown";
 export type VaultProcessingStatus = {
@@ -18,7 +18,9 @@ const safeCode = (value: unknown): string | null => typeof value === "string" &&
 function counts(value: unknown): VaultAnalysisCounts | null {
   if (!object(value) || !count(value.eligible) || !count(value.queued) || !count(value.processing) || !count(value.completed) || !count(value.unresolved)) return null;
   if (value.skippedOperator !== undefined && !count(value.skippedOperator)) return null;
-  return { eligible: value.eligible, queued: value.queued, processing: value.processing, completed: value.completed, unresolved: value.unresolved, skippedOperator: (value.skippedOperator as number | undefined) ?? 0 };
+  if (value.waitingRetry !== undefined && !count(value.waitingRetry)) return null;
+  return { eligible: value.eligible, queued: value.queued, processing: value.processing, completed: value.completed, unresolved: value.unresolved,
+    skippedOperator: (value.skippedOperator as number | undefined) ?? 0, waitingRetry: (value.waitingRetry as number | undefined) ?? 0 };
 }
 function parseAnalysis(value: unknown): VaultAnalysis | null {
   const total = counts(value); if (!total || !object(value)) return null;

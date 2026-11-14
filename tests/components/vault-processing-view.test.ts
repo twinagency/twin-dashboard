@@ -224,3 +224,14 @@ test("processing request: nonce + action; media IDs bounded, unique, decimal, re
 test("the eligibility note says description is not sale permission", () => {
   assert.match(ELIGIBILITY_NOTE, /does not make a file sellable/); assert.match(ELIGIBILITY_NOTE, /approval/i); assert.match(ELIGIBILITY_NOTE, /price/i);
 });
+
+
+test("items waiting for an automatic media retry are counted and block completion", () => {
+  const analysis = { eligible: 10, queued: 0, processing: 0, completed: 7, unresolved: 0, skippedOperator: 0, waitingRetry: 3,
+    byKind: { photo: null, video: null }, unresolvedReasons: {} };
+  const view = analysisView(analysis as never, true);
+  assert.equal(view.state, "waiting");
+  assert.match(view.headline, /3 items wait for an automatic retry/);
+  assert.ok(view.totals.some(t => t.label === "Waiting to retry" && t.value === 3));
+  assert.notEqual(view.state, "done");
+});
