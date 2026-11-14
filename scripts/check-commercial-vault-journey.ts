@@ -164,7 +164,8 @@ async function main(){
     if(st.importCompleteAt===null)st.importCompleteAt=secs();
    }else if(st.importCompleteAt!==null)bad("import went from complete back to "+imp.state);
    if(imp.state==="complete"&&imp.reason)bad("complete import carries a failure reason "+imp.reason);
-   if(an.eligible>u.photo+u.video)bad(`analysis eligible ${an.eligible} > imported ${u.photo+u.video}`);
+   // Across a re-sync the import view follows the NEW job while analysis still covers everything the earlier jobs observed: only the first job bounds eligibility.
+   if(!st.resync&&an.eligible>u.photo+u.video)bad(`analysis eligible ${an.eligible} > imported ${u.photo+u.video}`);
    const closed=an.completed+an.unresolved+an.skippedOperator+(an.waitingRetry??0);
    const adds=an.eligible>=closed&&(an.eligible-closed===an.queued||an.eligible-closed===an.queued+(an.processing??0));
    // The BFF may drop a counter the backend sends (waitingRetry): then items are invisible to the operator. That is its own finding, not noise on every poll.
@@ -177,7 +178,7 @@ async function main(){
    if(p.paused)st.pausedPolls++;
    if(imp.state==="complete"&&settledOf(p)&&!p.paused&&st.settledAt===null)st.settledAt=secs();
   };
-  const resetImportTracking=()=>{for(const k of ["c1","c2"]){seenState[k].importCompleteAt=null;seenState[k].maxUnique={photo:0,video:0};}};
+  const resetImportTracking=()=>{for(const k of ["c1","c2"]){seenState[k].importCompleteAt=null;seenState[k].maxUnique={photo:0,video:0};seenState[k].resync=true;}};
   let pauseDone=false,pausePhase:Json={};
   const pollAll=async(expectNoOperatorSkips=true):Promise<Json>=>{
    const out:Json={};
