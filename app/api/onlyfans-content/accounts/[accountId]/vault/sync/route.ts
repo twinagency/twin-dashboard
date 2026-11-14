@@ -11,7 +11,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ac
   const accountId = requestId((await context.params).accountId); if (!accountId || !validVaultSyncRequest(ctx.body)) return vaultRefusal(400, "That vault sync request is invalid.");
   const backend = configuredVaultBackend(ctx.fetch); if (!backend) return vaultRefusal(503, "Vault management is not configured.");
   const identity = ctx.identity(accountId, "sync");
-  const result = await backend.sync(accountId, { expectedConnectionRevision: ctx.body.expectedConnectionRevision, ...identity });
+  const result = await backend.sync(accountId, { expectedConnectionRevision: ctx.body.expectedConnectionRevision, ...(ctx.body.selectionVersion === undefined ? {} : { selectionVersion: ctx.body.selectionVersion }), ...identity });
   return result.ok ? vaultAnswer({ schemaVersion: CONTENT_SCHEMA, ok: true, applied: true, accountId, commandKey: identity.commandKey, sync: result.sync })
     : vaultAnswer({ schemaVersion: CONTENT_SCHEMA, ...result }, result.status);
 }

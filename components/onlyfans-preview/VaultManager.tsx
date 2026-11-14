@@ -18,6 +18,8 @@ import ContentEditor from "./ContentEditor";
 import CategoryDrafts from "./CategoryDrafts";
 import Preparation from "./Preparation";
 import CommercialScope from "./CommercialScope";
+import VaultProcessingPanel from "./VaultProcessingPanel";
+import { importView } from "@/lib/onlyfans/vault-processing-view";
 import HistoryPreparation from "./HistoryPreparation";
 import VaultMetadataEditor from "./VaultMetadataEditor";
 import { vaultAvailability, vaultDuration, vaultSelectionLabel } from "@/lib/onlyfans/vault";
@@ -141,7 +143,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
       }
       const value: unknown = response.ok ? await response.json() : null;
       if (command.kind === "sync" && response.ok && parseVaultSyncAck(value, { accountId })) {
-        nextRetry = null; message = "Vault sync started. Progress updates automatically while this page is open.";
+        nextRetry = null; message = command.body.selectionVersion === 4 ? "Full vault sync started. Coverage updates automatically and stays partial until every page is read." : "Vault sync started. Progress updates automatically while this page is open.";
       } else if (command.kind === "create" && response.ok) {
         const item = parseVaultCreateAck(value, { accountId, product: command.body.product });
         if (item) { nextRetry = null; setCreated(item.itemId); clearSelection(); setLabel(""); setDescription(""); setPrice(""); setEnabled(false); message = `Catalogue item #${item.itemId} recorded. The catalogue has been refreshed.`; }
@@ -203,6 +205,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
     <Preparation key={accountId} accountId={accountId} readOnly={readOnly}/>
     <HistoryPreparation accountId={accountId} readOnly={readOnly}/>
     <CommercialScope accountId={accountId} readOnly={readOnly}/>
+    {!denied ? <VaultProcessingPanel key={accountId} accountId={accountId} readOnly={readOnly} selectedIds={[...selected.keys()]} sync={data?.sync ?? null}/> : null}
     {data && !denied ? <>
       <div ref={libraryTop} className="scroll-mt-24" />
       <div className="of-library-layout">
@@ -223,7 +226,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
         <button type="button" data-of-vault-refresh disabled={busy} onClick={() => void refresh(null, true)}><RefreshCw size={15} aria-hidden="true" />Refresh vault</button>
         <details className="of-sync-tools" open={data.sync?.status === "failed"}><summary>{data.sync ? syncStatusLine(data.sync) : "Sync details"}</summary>
       <div className="of-vault-sync-copy text-xs" data-of-vault-sync-status>
-        {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? "Vault sync complete" : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
+        {data.sync ? <><p><strong>{["pending", "running"].includes(data.sync.status) ? "Importing your OnlyFans vault…" : data.sync.status === "complete" ? ((data.sync.scope || data.sync.coverage) && !importView(data.sync.coverage, data.sync).isFull ? "Vault sync finished: partial import, not the full vault" : "Vault sync complete") : `Vault sync: ${SYNC_STATUS[data.sync.status]}`}</strong></p>
           <p className="mt-1 text-muted">{data.sync.itemsSeen.toLocaleString()} files checked in this sync. {["pending", "running"].includes(data.sync.status) ? "Totals may increase. This page updates automatically." : `Last updated ${new Date(data.sync.updatedAt).toLocaleString()}.`}</p>
           {data.sync.scope ? <p data-of-vault-selection>{vaultSelectionLabel(data.sync)}</p> : null}
           {data.sync.lastError ? <p className="mt-2">{["pending", "running"].includes(data.sync.status)
@@ -235,6 +238,7 @@ export default function VaultManager({ accountId, readOnly = false, actionsTarge
           <div data-of-vault-summary className="of-library-totals">{[["All media", data.summary?.total], ["Photos", data.summary?.photos], ["Videos", data.summary?.videos], ["Folders", data.summary?.folders]].map(([label, count]) => <span key={label}>{label} <strong>{typeof count === "number" ? count.toLocaleString() : "Unavailable"}</strong></span>)}</div>
           <p className="of-panel-footnote">{data.summary ? "Totals cover this account’s imported library, across every page." : "Library totals are unavailable. Refresh to try again."}{data.summary?.other ? ` Includes ${data.summary.other} other-format assets.` : ""}</p>
           <button type="button" className={buttonClass} data-of-vault-sync disabled={readOnly || busy || !!retry || data.connectionRevision == null || data.sync?.status === "pending" || data.sync?.status === "running"} onClick={() => { if (data.connectionRevision) void execute({ kind: "sync", body: { requestId: crypto.randomUUID(), expectedConnectionRevision: data.connectionRevision } }); }}>Sync vault</button>
+          <button type="button" className={buttonClass} data-of-vault-full-sync title="Imports every photo and video from the provider (FansAPI accounts). Other accounts refuse this." disabled={readOnly || busy || !!retry || data.connectionRevision == null || data.sync?.status === "pending" || data.sync?.status === "running"} onClick={() => { if (data.connectionRevision) void execute({ kind: "sync", body: { requestId: crypto.randomUUID(), expectedConnectionRevision: data.connectionRevision, selectionVersion: 4 } }); }}>Full vault sync</button>
         </details>
         {data.connectionRevision == null ? <Link className="of-text-link" href={`/onlyfans/accounts?account=${encodeURIComponent(accountId)}`}>Configure account connection →</Link> : null}
       </div>

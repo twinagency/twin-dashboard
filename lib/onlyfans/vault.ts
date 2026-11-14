@@ -2,18 +2,26 @@ import { CONTENT_SCHEMA, parseContentItem, type ContentItem } from "./content";
 export type VaultItem = { mediaId: string; kind: string; durationSeconds: number | null;
   width: number | null; height: number | null; ready: boolean; reason: string | null; description: string | null };
 type MediaCounts = { photo: number; video: number };
+type NullableCounts = { photo: number | null; video: number | null };
+/** What a sync job proves about the provider vault (backend job_view coverage). Only scope "full" + state "complete" is a full import. */
+export type VaultCoverage = { scope: "full" | "window" | "legacy"; state: "complete" | "in_progress" | "unresolved" | "partial"; reason: string | null;
+  established_by: "provider_total" | "traversal" | null; providerTotal: NullableCounts; seen: NullableCounts; uniqueImported: NullableCounts };
 export type VaultSelectionProgress = {
   scope?: { version: 1 | 3; selection: "newest_per_type"; photos: number; videos: number; order: string }
-    | { version: 2; selection: "newest_combined"; combined: number; order: string };
+    | { version: 2; selection: "newest_combined"; combined: number; order: string }
+    | { version: 4; selection: "full_vault"; scope: "full"; order: string };
   kindOffsets?: MediaCounts;
   selectedByKind?: MediaCounts;
 };
 export type VaultSync = VaultSelectionProgress & { commandKey: string; jobId: string; status: "pending" | "running" | "complete" | "failed" | "superseded";
-  pagesRead: number; itemsSeen: number; lastError: string | null; requestedAt: string; updatedAt: string; completedAt: string | null; pageOffset?: number; retryAt?: string | null; refreshMode?: "window" | "head"; selectedCount?: number };
+  pagesRead: number; itemsSeen: number; lastError: string | null; requestedAt: string; updatedAt: string; completedAt: string | null; pageOffset?: number; retryAt?: string | null; refreshMode?: "window" | "head" | "full"; selectedCount?: number; pageBudget?: number; coverage?: VaultCoverage };
 export type VaultSummary = { total: number; photos: number; videos: number; other: number; matching: number; folders: number };
 export type VaultRead = { items: VaultItem[]; nextCursor: string | null; sync: VaultSync | null; connectionRevision: number | null; summary?: VaultSummary };
 export type VaultProduct = { label: string; description: string; priceCents: number; enabled: boolean; mediaIds: string[]; previewMediaIds: string[] };
-export type VaultSyncRequest = { requestId: string; expectedConnectionRevision: number };
+/** selectionVersion is explicit only for the full-vault action (4) or the legacy per-type window (3); absent keeps the backend default. */
+export type VaultSyncRequest = { requestId: string; expectedConnectionRevision: number; selectionVersion?: 3 | 4 };
+export type VaultProcessingAction = "pause" | "resume" | "retry" | "redescribe";
+export type VaultProcessingRequest = { requestId: string; action: VaultProcessingAction; mediaIds?: string[] };
 export type VaultCreateRequest = { requestId: string; product: VaultProduct };
 const object = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
 const exact = (value: Record<string, unknown>, keys: string[]) => Object.keys(value).sort().join(",") === [...keys].sort().join(",");
@@ -33,12 +41,14 @@ export function validVaultSelectionProgress(value: Record<string, unknown>, sele
     if (scope.version === 2) {
       if (!exact(scope, ["version", "selection", "combined", "order"]) || scope.selection !== "newest_combined" ||
           scope.combined !== 1000 || scope.order !== "created_at_desc_id_desc") return false;
+    } else if (scope.version === 4) {
+      if (!exact(scope, ["version", "selection", "scope", "order"]) || scope.selection !== "full_vault" || scope.scope !== "full" || scope.order !== "created_at_desc_id_desc") return false;
     } else if (!exact(scope, ["version", "selection", "photos", "videos", "order"]) || scope.selection !== "newest_per_type" ||
       !(scope.version === 1 && scope.photos === 1500 && scope.videos === 700 && scope.order === "recent" ||
         scope.version === 3 && scope.photos === 1000 && scope.videos === 1000 && scope.order === "created_at_desc_id_desc")) return false;
   }
-  if (value.kindOffsets !== undefined && (!object(scope) || scope.version === 2 || !counts(value.kindOffsets, 4800))) return false;
-  if (selected !== undefined && !integer(selected, 0, object(scope) && scope.version === 3 ? 2000 : 1000)) return false;
+  if (value.kindOffsets !== undefined && (!object(scope) || scope.version === 2 || !counts(value.kindOffsets, object(scope) && scope.version === 4 ? 100000 : 4800))) return false;
+  if (selected !== undefined && !integer(selected, 0, object(scope) && scope.version === 3 ? 2000 : object(scope) && scope.version === 4 ? 1000000 : 1000)) return false;
   return value.selectedByKind === undefined || (object(scope) && scope.version === 3 &&
     value.status === "complete" && counts(value.selectedByKind, 1000) &&
     value.selectedByKind.photo + value.selectedByKind.video === selected);
@@ -47,6 +57,7 @@ export function vaultSelectionLabel(progress: VaultSelectionProgress): string | 
   const { scope, selectedByKind, kindOffsets } = progress;
   if (!scope) return null;
   if (scope.version === 2) return "Up to 1,000 photos and videos combined (version 2).";
+  if (scope.version === 4) return `Full vault: every photo and video, no item cap.${kindOffsets ? ` ${kindOffsets.photo.toLocaleString()} photo rows and ${kindOffsets.video.toLocaleString()} video rows checked.` : ""}`;
   const limits = `Up to ${scope.photos.toLocaleString()} photos and ${scope.videos.toLocaleString()} videos.`;
   if (selectedByKind) {
     const { photo, video } = selectedByKind;
@@ -56,18 +67,33 @@ export function vaultSelectionLabel(progress: VaultSelectionProgress): string | 
   return limits;
 }
 export function parseVaultSync(value: unknown): VaultSync | null {
-  const progress = ["pageOffset", "retryAt", "scope", "refreshMode", "selectedCount", "kindOffsets", "selectedByKind"];
+  const progress = ["pageOffset", "retryAt", "scope", "refreshMode", "selectedCount", "kindOffsets", "selectedByKind", "pageBudget", "coverage"];
+  const full = object(value) && object(value.scope) && value.scope.version === 4;
   if (!object(value) || !exact(value, ["commandKey", "jobId", "status", "pagesRead", "itemsSeen", "lastError", "requestedAt", "updatedAt", "completedAt",
       ...progress.filter(key => Object.hasOwn(value, key))]) ||
     !hash(value.commandKey) || !uuid(value.jobId) || !["pending", "running", "complete", "failed", "superseded"].includes(value.status as string) ||
-    !integer(value.pagesRead, 0, 200) || !integer(value.itemsSeen, 0, 4800) || !(safeCode(value.lastError) || (typeof value.lastError === "string" && /^provider_read_deferred:[a-z0-9_:-]{1,41}$/.test(value.lastError))) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
+    !integer(value.pagesRead, 0, full ? 5000 : 200) || !integer(value.itemsSeen, 0, full ? 200000 : 4800) || !(safeCode(value.lastError) || (typeof value.lastError === "string" && /^provider_read_deferred:[a-z0-9_:-]{1,41}$/.test(value.lastError))) || !stamp(value.requestedAt) || !stamp(value.updatedAt) ||
     !(value.completedAt === null || stamp(value.completedAt)) ||
-    ("pageOffset" in value && !integer(value.pageOffset, 0, 4800)) ||
+    ("pageOffset" in value && !integer(value.pageOffset, 0, full ? 100000 : 4800)) ||
     ("retryAt" in value && value.retryAt !== null && !stamp(value.retryAt)) ||
-    ("refreshMode" in value && value.refreshMode !== "window" && value.refreshMode !== "head") ||
-    ("selectedCount" in value && !integer(value.selectedCount, 0, 2000)) ||
+    ("refreshMode" in value && value.refreshMode !== "window" && value.refreshMode !== "head" && !(full && value.refreshMode === "full")) ||
+    ("selectedCount" in value && !integer(value.selectedCount, 0, full ? 1000000 : 2000)) ||
+    ("pageBudget" in value && !(full && integer(value.pageBudget, 1, 10000))) ||
     !validVaultSelectionProgress(value, value.selectedCount as number | undefined)) return null;
-  return value as VaultSync;
+  // Coverage is advisory display data: a malformed block is dropped (shown as "not reported"), never promoted to a stronger claim.
+  if (!("coverage" in value)) return value as VaultSync;
+  const { coverage: raw, ...rest } = value, coverage = parseVaultCoverage(raw);
+  return (coverage ? { ...rest, coverage } : rest) as VaultSync;
+}
+const nullableCount = (value: unknown): number | null => integer(value, 0, 10_000_000) ? value : null;
+const nullableCounts = (value: unknown): NullableCounts => object(value) ? { photo: nullableCount(value.photo), video: nullableCount(value.video) } : { photo: null, video: null };
+/** Tolerant coverage parser: unknown extra keys are dropped, bad counts become null, bad scope/state means no coverage at all. */
+export function parseVaultCoverage(value: unknown): VaultCoverage | null {
+  if (!object(value) || !["full", "window", "legacy"].includes(value.scope as string) || !["complete", "in_progress", "unresolved", "partial"].includes(value.state as string)) return null;
+  const reason = typeof value.reason === "string" && /^[A-Za-z0-9_:.-]{1,120}$/.test(value.reason) ? value.reason : value.reason === null || value.reason === undefined ? null : "unreadable_reason";
+  const established = value.established_by === "provider_total" || value.established_by === "traversal" ? value.established_by : null;
+  return { scope: value.scope as VaultCoverage["scope"], state: value.state as VaultCoverage["state"], reason, established_by: established,
+    providerTotal: nullableCounts(value.providerTotal), seen: nullableCounts(value.seen), uniqueImported: nullableCounts(value.uniqueImported) };
 }
 export function parseVault(value: unknown, accountId: string): VaultRead | null {
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "vault"]) || value.schemaVersion !== CONTENT_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.vault)) return null;
@@ -93,7 +119,19 @@ export function parseVault(value: unknown, accountId: string): VaultRead | null 
   return vault as VaultRead;
 }
 export function validVaultSyncRequest(value: unknown): value is VaultSyncRequest {
-  return object(value) && exact(value, ["requestId", "expectedConnectionRevision"]) && uuid(value.requestId) && integer(value.expectedConnectionRevision, 1, 2 ** 31 - 1);
+  return object(value) && exact(value, ["requestId", "expectedConnectionRevision", ...(Object.hasOwn(value, "selectionVersion") ? ["selectionVersion"] : [])]) &&
+    uuid(value.requestId) && integer(value.expectedConnectionRevision, 1, 2 ** 31 - 1) && (!("selectionVersion" in value) || value.selectionVersion === 3 || value.selectionVersion === 4);
+}
+export const VAULT_PROCESSING_ACTIONS = ["pause", "resume", "retry", "redescribe"] as const;
+export const VAULT_PROCESSING_MEDIA_MAX = 200;
+/** Browser request: a client nonce, an action, and (retry/redescribe only) a bounded unique list of decimal media IDs. Redescribe is metered, so it always names its items. */
+export function validVaultProcessingRequest(value: unknown): value is VaultProcessingRequest {
+  if (!object(value) || !uuid(value.requestId) || !VAULT_PROCESSING_ACTIONS.includes(value.action as VaultProcessingAction)) return false;
+  const hasIds = Object.hasOwn(value, "mediaIds");
+  if (!exact(value, hasIds ? ["requestId", "action", "mediaIds"] : ["requestId", "action"])) return false;
+  if (!hasIds) return value.action !== "redescribe";
+  return (value.action === "retry" || value.action === "redescribe") && Array.isArray(value.mediaIds) && value.mediaIds.length >= 1 && value.mediaIds.length <= VAULT_PROCESSING_MEDIA_MAX &&
+    value.mediaIds.every(vaultMediaId) && new Set(value.mediaIds).size === value.mediaIds.length;
 }
 export function validVaultProduct(value: unknown): value is VaultProduct {
   if (!object(value) || !exact(value, ["label", "description", "priceCents", "enabled", "mediaIds", "previewMediaIds"]) ||
