@@ -23,9 +23,10 @@ export default function CommercialScope({accountId,readOnly=false}:{accountId:st
   }catch{if(active.current){setPending(command);setNotice("Outcome unconfirmed. Retry this same request.");}}
   finally{lock.current=false;if(active.current)setBusy(false);}
  }
+ const whole=!!config?.audience&&typeof config.audience==="object"&&(config.audience as {mode?:unknown}).mode==="all";
  const fans=Array.isArray(config?.fans)?config.fans:[],profile=config?.creator_profile as {name?:string}|undefined;
  return <details className="rounded-xl border border-line p-4" data-commercial-scope><summary className="cursor-pointer font-semibold">Commercial review and promotion</summary>
-  <p className="mt-2 text-sm">Review the saved products, approved prices, creator profile and explicit audience before promotion. The current contract permits at most 100 listed fans per creator.</p>
+  <p className="mt-2 text-sm">Review the saved products, approved prices, creator profile and audience before promotion. Choose a whole-account authority or up to 100 explicitly listed fans. Existing fan controls still apply.</p>
   <p className="mt-2 text-sm">{state?state.state+" · "+(state.status??"not promoted")+" · revision "+state.revision:"Status unavailable."}</p>
   <button type="button" disabled={busy} onClick={()=>void read()}>Refresh commercial status</button>
   {!readOnly&&state?.state==="preparation"?<fieldset disabled={busy||!!pending} className="mt-3 space-y-3">
@@ -36,10 +37,10 @@ export default function CommercialScope({accountId,readOnly=false}:{accountId:st
      setConfig(value);setNotice("");
     }catch{setNotice("Choose a reviewed commercial configuration JSON file, up to 16 KB.");}
    }}/></label>
-   {config?<div className="text-sm"><p>Creator: {profile?.name??"not supplied"}. Audience: {fans.length} explicitly listed fans.</p>
+   {config?<div className="text-sm"><p>Creator: {profile?.name??"not supplied"}. Audience: {whole?"whole account":fans.length+" explicitly listed fans"}.</p>
     <details><summary>Review exact configuration</summary><pre className="overflow-auto whitespace-pre-wrap">{JSON.stringify(config,null,2)}</pre></details>
     <label className="flex gap-2"><input type="checkbox" checked={reviewed} onChange={e=>setReviewed(e.target.checked)}/>I reviewed this creator, audience, approved products and limits.</label></div>:null}
-   <button type="button" disabled={!config||!reviewed||fans.length<1||fans.length>100} onClick={()=>config&&void send({action:"promote",expectedRevision:state.revision,requestId:crypto.randomUUID(),reason:"Agency reviewed the creator, audience, products and limits",config})}>Promote reviewed configuration</button>
+   <button type="button" disabled={!config||!reviewed||(whole?fans.length!==0:fans.length<1||fans.length>100)} onClick={()=>config&&void send({action:"promote",expectedRevision:state.revision,requestId:crypto.randomUUID(),reason:"Agency reviewed the creator, audience, products and limits",config})}>Promote reviewed configuration</button>
   </fieldset>:null}
   {!readOnly&&state?.state==="commercial"?<button type="button" className="mt-3" disabled={busy||!!pending||state.status==="stopped"} onClick={()=>void send({action:"stop",expectedRevision:state.revision,requestId:crypto.randomUUID(),reason:"Agency stopped commercial replies"})}>Stop commercial replies</button>:null}
   {pending?<button type="button" disabled={busy} onClick={()=>void send(pending)}>Retry same commercial request</button>:null}

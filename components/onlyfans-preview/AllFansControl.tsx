@@ -23,6 +23,19 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
     if (!response.ok) throw Error("The change could not be confirmed. Refresh the inbox and check current settings.");
     return response.json() as Promise<unknown>;
   }
+  const commercialPath = `/api/onlyfans-controls/accounts/${encodeURIComponent(accountId)}/plan-c/scope`;
+  async function commercialScope() {
+    const response = await fetch(commercialPath, { credentials: "same-origin", cache: "no-store", redirect: "error" });
+    if (response.status === 404) return null;
+    const body: unknown = await response.json();
+    if (!response.ok || !object(body) || body.ok !== true || !object(body.scope))
+      throw Error("Current account authority could not be verified. Refresh before changing it.");
+    const scope = body.scope;
+    if (!("audienceMode" in scope)) return null;
+    if (!["all", "selected"].includes(String(scope.audienceMode)) || typeof scope.status !== "string" || !Number.isSafeInteger(scope.revision))
+      throw Error("Current commercial authority could not be verified.");
+    return scope;
+  }
   async function readControl() {
     const body = await request(controlUrl);
     const value = object(body) && body.schemaVersion === "of-launch-b.v1" && body.ok === true && body.accountId === accountId
@@ -42,17 +55,25 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
     if (lock.current || !viewer.canManage) return;
     lock.current = true; stopped.current = false; setBusy(true); setProgress(null); setNotice("Checking current account settings...");
     try {
+      const commercial = await commercialScope();
       if (action === "pause") {
-        await changeAccount("pause");
+        if (commercial) {
+          const body = await request(commercialPath, { action: "stop", expectedRevision: commercial.revision,
+            commandKey: crypto.randomUUID().replaceAll("-", "") + crypto.randomUUID().replaceAll("-", ""),
+            reason: "Operator paused commercial replies from the inbox" });
+          if (!object(body) || body.ok !== true) throw Error("Commercial pause unconfirmed. Refresh before trying again.");
+        } else await changeAccount("pause");
         if (!stopped.current) setNotice("Account paused. Messages already being sent may still complete.");
       } else {
         const config = parseConfiguration(await request(configurationUrl), accountId);
-        const state = await readControl();
-        if (!config?.activation?.allFansAllowed || !config.activation.selectionValid || !config.activation.modelCredentialReady)
+        if (!config?.activation?.allFansAllowed || !config.activation.selectionValid || (!commercial && !config.activation.modelCredentialReady))
           throw Error("This account is not ready for eligible existing chats. Review its AI settings first.");
-        if (!state.autonomy.deliveryEnabled)
+        if (commercial && (commercial.status !== "active" || commercial.audienceMode !== "all"))
+          throw Error("Activate the reviewed whole-account commercial scope in Settings first.");
+        const state = commercial ? null : await readControl();
+        if (state && !state.autonomy.deliveryEnabled)
           throw Error("Enable outgoing messages in account settings first.");
-        if (!state.accountControl.enabled && !state.readyToEnable)
+        if (state && !state.accountControl.enabled && !state.readyToEnable)
           throw Error("This account needs attention before AI can resume. Review account readiness first.");
         if (config.activation.selection?.mode !== "all") {
           const command: ConfigurationRequest = { expectedRevision: config.configurationRevision, expectedFingerprint: config.fingerprint,
@@ -60,7 +81,11 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
           if (!parseConfigurationAck(await request(configurationUrl, command), { ...command, accountId }))
             throw Error("All-fan setting unconfirmed. Refresh before continuing.");
         }
-        if (!state.accountControl.enabled) await changeAccount("resume");
+        if (commercial) {
+          setNotice("Whole-account replies enabled for eligible fans as new messages arrive. Individual pauses, no-contact and human takeovers stay protected.");
+          return;
+        }
+        if (state && !state.accountControl.enabled) await changeAccount("resume");
         const result = await enableExistingFanChats({ account, viewer, source, cancelled: () => stopped.current,
           progress: value => { if (!stopped.current) setProgress(value); } });
         if (!stopped.current) setNotice(`Finished: ${result.enabled} chats enabled, ${result.alreadyOn} already enabled, ${result.protected} protected chats kept as they were. New conversations stay off until you enable each fan individually.`);
@@ -82,7 +107,7 @@ export default function AllFansControl({ account, viewer, source, onChanged }: {
         disabled={busy || !viewer.canManage} onClick={() => { if (window.confirm("Pause all outgoing activity for " + account.binding.creatorName + "? Queued sends will be cancelled and scheduled campaigns paused. Messages already being sent may finish.")) void run("pause"); }}>Pause account</button>
       {busy ? <button type="button" className="text-sm underline" onClick={() => { stopped.current = true; setBusy(false); setNotice("Stopped after the current request. Refresh to check recorded changes."); onChanged(); }}>Stop changes</button> : null}
     </div>
-    <p className="mt-2 text-xs text-muted">New fans stay off until individually enabled. Human takeovers, paused and no-contact conversations stay protected.</p>
+    <p className="mt-2 text-xs text-muted">Individual pauses, human takeovers and no-contact conversations stay protected. New chats follow this account’s automation settings.</p>
     {notice ? <p role="status" className="mt-2 text-xs">{notice}</p> : null}
     {busy && progress ? <p className="mt-1 text-xs">Checked {progress.checked} chats. Enabled {progress.enabled}.</p> : null}
   </section>;

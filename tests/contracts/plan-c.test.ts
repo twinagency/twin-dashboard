@@ -418,3 +418,20 @@ test("pilot lifecycle retains the reviewed config and treats ambiguous writes as
   if(oldToken===undefined)delete process.env.ONLYFANS_CONTROL_TOKEN;else process.env.ONLYFANS_CONTROL_TOKEN=oldToken;
  }
 });
+
+test("commercial account lifecycle reports whole-account authority without materializing fan ids", async () => {
+ const {lifecycle}=await import("../../lib/onlyfans/plan-c-lifecycle-backend");
+ const oldBase=process.env.ONLYFANS_API_BASE_URL,oldToken=process.env.ONLYFANS_CONTROL_TOKEN,oldFetch=globalThis.fetch;
+ process.env.ONLYFANS_API_BASE_URL="http://127.0.0.1:8787";process.env.ONLYFANS_CONTROL_TOKEN="offline-whole-account";
+ globalThis.fetch=async()=>Response.json({schemaVersion:PLAN_C_SCHEMA,accountId:MOCK_ACCOUNT,revision:7,status:"active",
+  config:{contract_version:"commercial.v1",authorization_mode:"autonomous",fans:[],audience:{mode:"all"}}});
+ try {
+  const result=await lifecycle(MOCK_ACCOUNT,OPERATOR_ACTOR);
+  assert.equal(result.status,200);
+  assert.deepEqual(result.body.scope,{mode:"autonomous",status:"active",revision:7,fanCount:0,audienceMode:"all"});
+ } finally {
+  globalThis.fetch=oldFetch;
+  if(oldBase===undefined)delete process.env.ONLYFANS_API_BASE_URL;else process.env.ONLYFANS_API_BASE_URL=oldBase;
+  if(oldToken===undefined)delete process.env.ONLYFANS_CONTROL_TOKEN;else process.env.ONLYFANS_CONTROL_TOKEN=oldToken;
+ }
+});

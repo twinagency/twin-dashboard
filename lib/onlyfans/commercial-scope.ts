@@ -5,7 +5,7 @@ export type CommercialCommand=
  {action:"promote";expectedRevision:number;requestId:string;reason:string;config:Record<string,unknown>}|
  {action:"stop";expectedRevision:number;requestId:string;reason:string};
 const REQUIRED=["fans","creator_profile","delivery_mode","operator","model","limits"];
-const OPTIONAL=["catalogue","coexistence"];
+const OPTIONAL=["catalogue","coexistence","audience"];
 const obj=(v:unknown):v is Record<string,unknown>=>v!==null&&typeof v==="object"&&!Array.isArray(v);
 const integer=(v:unknown,lo:number,hi:number):v is number=>Number.isSafeInteger(v)&&Number(v)>=lo&&Number(v)<=hi;
 export function validCommercialCommand(v:unknown):v is CommercialCommand{

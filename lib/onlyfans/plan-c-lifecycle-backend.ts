@@ -13,7 +13,7 @@ export async function lifecycle(account:string,actor:string,command?:LifecycleCo
   if(!object(value)||value.schemaVersion!==PLAN_C_SCHEMA||value.accountId!==account||!object(value.config)||!Number.isSafeInteger(value.revision))
    return {status:read.status===404?404:503,body:{ok:false,error:"Current pilot configuration is unavailable."}};
   const mode=value.config.authorization_mode,status=value.status,revision=value.revision;
-  if(!command)return {status:200,body:{ok:true,scope:{mode,status,revision,fanCount:Array.isArray(value.config.fans)?value.config.fans.length:0}}};
+  if(!command)return {status:200,body:{ok:true,scope:{mode,status,revision,fanCount:Array.isArray(value.config.fans)?value.config.fans.length:0,...(value.config.contract_version==="commercial.v1"?{audienceMode:object(value.config.audience)&&value.config.audience.mode==="all"?"all":"selected"}:{})}}};
   const changingMode=["autonomous","supervised"].includes(command.action);
   const payload={expectedRevision:command.expectedRevision,commandKey:command.commandKey,actor,reason:command.reason,
     ...(changingMode?{config:{...value.config,authorization_mode:command.action}}:{status:command.action==="activate"?"active":"stopped"})};
