@@ -1,4 +1,5 @@
-export type CreatorStudioBrand = "flirt" | "moxy";
+// "twin" = the Flirt creator studio layout in Twin blue with the Twin wordmark.
+export type CreatorStudioBrand = "flirt" | "moxy" | "twin";
 export type CreatorStudioPhase = "draft" | "submitted" | "reviewing" | "approved" | "changes" | "withdrawn" | "ready" | "paused" | "connected";
 export type CreatorStudioStatus = { phase: CreatorStudioPhase; label: string; linked: boolean };
 
