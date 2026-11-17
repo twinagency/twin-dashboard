@@ -5,5 +5,5 @@ import { flirtLayoutEnabled } from "@/lib/flirt-layout";
 export const dynamic = "force-dynamic";
 export default async function CreatorPayoutsPage() {
   const creator = await requireCreatorWorkspace();
-  return <PayoutDashboard audience="creator" brand={payoutBrand(creator.name)} bankDetails={flirtLayoutEnabled(creator.accountId)} />;
+  return <PayoutDashboard audience="creator" brand={payoutBrand(creator.name)} bankDetails={!creator.readOnly && flirtLayoutEnabled(creator.accountId)} />;
 }
