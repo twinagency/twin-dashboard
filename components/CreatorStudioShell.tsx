@@ -34,7 +34,7 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
     { href: "/creator/earnings", label: "Earnings", icon: Wallet },
     { href: "/creator/payouts", label: "Payouts", icon: CreditCard },
     { href: "/creator/help", label: "Help", icon: CircleHelp },
-  ];
+  ].filter(item => !(brand === "twin" && item.label === "My AI"));
   // A creator who leaves Home open sees server-side linking and review updates automatically.
   useEffect(() => {
     if (pathname !== "/creator") return;
@@ -52,11 +52,13 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
   // App Router preserves layouts during client navigation. Setup owns its
   // focused header, so never keep a second dashboard shell around it.
   if (brand === "moxy" && pathname === "/creator/onboarding") return <>{children}</>;
+  const brandName = brand === "moxy" ? "Moxy" : brand === "twin" ? "Twin" : "FLIRT";
+  const wordmarkAgency = brand === "twin" ? undefined : brandName;
   const navigation = (mobile = false) => (mobile && brand === "moxy" ? items.slice(0, 4) : items).map(({ href, label, icon: Icon }) => <Link key={label} href={href} aria-current={selected(href) ? "page" : undefined} className={styles.navLink} data-creator-content-access={label === "My Content" || label === "Content" ? "true" : undefined} data-creator-onboarding-access={label === "My AI" || label === "Profile" ? "true" : undefined}><Icon size={19} aria-hidden="true" /><span>{mobile && label === "My Content" ? "Content" : label}</span></Link>);
   return <div className={styles.root} data-creator-studio={brand} data-creator-workspace-shell="true">
     <a className={styles.skipLink} href="#creator-studio-main">Skip to content</a>
     <aside className={styles.sidebar}>
-      <Link className={styles.brand} href="/creator" aria-label={`${brand === "moxy" ? "Moxy" : "FLIRT"} home`}><TwinWordmark inverse agencyName={brand === "moxy" ? "Moxy" : "FLIRT"} /></Link>
+      <Link className={styles.brand} href="/creator" aria-label={`${brandName} home`}><TwinWordmark inverse agencyName={wordmarkAgency} /></Link>
       <p className={styles.brandCaption}>Creator studio</p>
       <p className={styles.navCaption}>YOUR WORKSPACE</p>
       <nav className={styles.nav} aria-label="Creator navigation">{navigation()}</nav>
@@ -68,14 +70,14 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
     <div className={styles.workspace}>
       <header className={styles.topbar}>
         <div className={styles.breadcrumb}><span>Your studio</span><ChevronRight size={13} /><strong>{label}</strong></div>
-        <Link className={styles.mobileBrand} href="/creator"><TwinWordmark agencyName={brand === "moxy" ? "Moxy" : "FLIRT"} /></Link>
+        <Link className={styles.mobileBrand} href="/creator"><TwinWordmark agencyName={wordmarkAgency} /></Link>
         <div className={styles.topActions}>
           <span className={styles.status} data-phase={status.phase}><i />{status.label}</span>
           <label className={styles.currency} hidden={brand === "moxy" && !["/creator/earnings", "/creator/payouts"].includes(pathname)}><span className={styles.srOnly}>Display currency</span><select value={currency} onChange={event => setCurrency(event.target.value as "AUD" | "USD")}><option>AUD</option><option>USD</option></select></label>
           {brand === "moxy" ? <details className={styles.accountMenu}><summary aria-label="Account menu"><StudioAvatar name={creatorName} photoUrl={photoUrl} /></summary><div><Link href="/creator/info">Account details</Link><Link href="/creator/earnings">Earnings</Link><Link href="/creator/payouts">Payouts</Link><Link href="/creator/help">Help & support</Link><form action="/creator-auth/logout" method="post"><button type="submit"><LogOut size={15} />Sign out</button></form></div></details> : <form className={styles.mobileLogout} action="/creator-auth/logout" method="post"><button aria-label="Sign out"><LogOut size={17} /></button></form>}
         </div>
       </header>
-      <main id="creator-studio-main" className={styles.main} tabIndex={-1}>{children}<footer className={styles.footer}>{brand === "moxy" ? <span>Moxy Creator Studio</span> : <><span>Made for you. Powered by Flirt.</span><span>Your space to grow ♡</span></>}</footer></main>
+      <main id="creator-studio-main" className={styles.main} tabIndex={-1}>{children}<footer className={styles.footer}>{brand === "moxy" ? <span>Moxy Creator Studio</span> : <><span>Made for you. Powered by {brand === "twin" ? "Twin" : "Flirt"}.</span><span>Your space to grow ♡</span></>}</footer></main>
     </div>
     <nav className={styles.mobileNav} style={{ gridTemplateColumns: `repeat(${brand === "moxy" ? 4 : items.length}, minmax(0, 1fr))` }} aria-label="Mobile creator navigation">{navigation(true)}</nav>
   </div>;

@@ -1,0 +1,10 @@
+import assert from "node:assert/strict";
+import { flirtLayoutEnabled } from "../lib/flirt-layout";
+const id = "00000000-0000-4000-8000-00000000f117";
+assert.equal(flirtLayoutEnabled(id, {}), false, "unset env = nobody");
+assert.equal(flirtLayoutEnabled(id, { CREATOR_FLIRT_LAYOUT_ACCOUNT_IDS: "" }), false);
+assert.equal(flirtLayoutEnabled(id, { CREATOR_FLIRT_LAYOUT_ACCOUNT_IDS: "  ," }), false);
+assert.equal(flirtLayoutEnabled(null, { CREATOR_FLIRT_LAYOUT_ACCOUNT_IDS: id }), false);
+assert.equal(flirtLayoutEnabled("other", { CREATOR_FLIRT_LAYOUT_ACCOUNT_IDS: id }), false);
+assert.equal(flirtLayoutEnabled(id, { CREATOR_FLIRT_LAYOUT_ACCOUNT_IDS: `x, ${id.toUpperCase()}` }), true);
+console.log("flirt-layout gate: ok");

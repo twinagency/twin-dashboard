@@ -10,6 +10,7 @@ import { getViewerTerms } from "@/lib/platform-cut";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isOnlyFansOnly } from "@/lib/app-mode";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
+import { flirtLayoutEnabled } from "@/lib/flirt-layout";
 import ViewAsBanner from "@/components/ViewAsBanner";
 export const dynamic = "force-dynamic";
 export default async function CreatorLayout({ children }: { children: React.ReactNode }) {
@@ -23,7 +24,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
         cloneId ? getHeaderAllTimeStars(cloneId) : Promise.resolve(0),
       ]));
   const { usdPerStar } = await withDashboardAccess(creator, () => getViewerTerms());
-  const studioBrand = isMoxy(creator.name) ? "moxy" : null;
+  const studioBrand = isMoxy(creator.name) ? "moxy" : flirtLayoutEnabled(creator.accountId) ? "twin" : null;
   const studioStatus = studioBrand ? await withDashboardAccess(creator, () => getCreatorStudioStatus(cloneId, creator.applicationState?.label || "Draft / unfinished")) : null;
   return (
     <CreatorWorkspaceShell
