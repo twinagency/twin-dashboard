@@ -180,3 +180,11 @@
   .root[data-creator-studio="moxy"] .mobileNav .navLink { font-size:11px; min-height:54px; border-radius:14px; }
 }
 @media(max-width:360px) { .root[data-creator-studio="moxy"] .main { padding-inline:16px; } }
+/* Twin: the Flirt creator studio layout in Twin blue (opt-in per account, see lib/flirt-layout.ts). */
+.root[data-creator-studio="twin"] { --studio-bg: #f5f8fc; --studio-ink: #0f1b2b; --studio-muted: #5f6f82; --studio-line: #e1e8f1; --studio-accent: #2f6fed; --studio-accent-deep: #0b2b4b; --studio-tint: #e6eefc; --studio-dark: #071a2f; }
+.root[data-creator-studio="twin"] .sidebar { background: linear-gradient(160deg, #0c2233, #06121d 70%); }
+.root[data-creator-studio="twin"] .brandCaption, .root[data-creator-studio="twin"] .navCaption, .root[data-creator-studio="twin"] .sidebarProfile small { color: #8fa6c0; }
+.root[data-creator-studio="twin"] .sidebar .navLink { color: #c3d2e4; }
+.root[data-creator-studio="twin"] .sidebar .navLink[aria-current="page"] { color: #fff; box-shadow: 0 4px 15px #2f6fed33; }
+.root[data-creator-studio="twin"] .helpNote p { color: #9fb3ca; }
+.root[data-creator-studio="twin"] .helpNote a { color: #a9c6f5; }
