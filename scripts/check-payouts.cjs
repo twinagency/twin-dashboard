@@ -7,6 +7,24 @@ const ts = require('typescript');
 const Module = require('node:module');
 let checks = 0;
 function check(name, fn) { fn(); checks++; console.log('PASS', name); }
+check('Payouts SQL uses the shared Star dedupe key and keeps every refund', () => {
+  const source = fs.readFileSync('lib/star-dedupe.ts', 'utf8');
+  const sql = fs.readFileSync('deployment/telegram-creator-payouts.sql', 'utf8');
+  const businessKey = source.match(/function businessKey\b[\s\S]*?return\s*\[([^\]]+)\]/);
+  assert.ok(businessKey, 'Unable to find the shared Star dedupe key');
+  const expectedColumns = Array.from(businessKey[1].matchAll(/\brow\.(\w+)/g), match => match[1]);
+  assert.equal(expectedColumns.length, 5, 'Expected five business-key fields');
+
+  const earnings = sql.match(/function public\.telegram_payout_earnings\s*\([^)]*\)[^$]*\$\$([\s\S]*?)\$\$;/i);
+  assert.ok(earnings, 'Unable to find the payout earnings SQL');
+  const projection = earnings[1].match(/\bselect\s+distinct\s+([^;]+?)\s+from\b/i);
+  assert.ok(projection, 'Payout earnings must deduplicate payment rows');
+  assert.deepEqual(projection[1].split(',').map(column => column.trim().replace(/^t\./, '')), expectedColumns);
+  assert.match(earnings[1], /t\.amount_stars\s*<\s*0[\s\S]*?=\s*'refund'\)\s+as\s+is_adjustment/i);
+  assert.match(earnings[1], /\bwhere\s+t\.is_adjustment\s+union\s+all\b/i);
+  assert.match(earnings[1], /\bwhere\s+not\s+t\.is_adjustment\b/i);
+});
+
 function loadModel() {
   const code = ts.transpileModule(fs.readFileSync('lib/payouts/model.ts', 'utf8'), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText;
   const compiled = new Module(path.resolve('lib/payouts/model.test.cjs'), module);

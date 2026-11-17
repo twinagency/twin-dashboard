@@ -8,6 +8,8 @@ on:
       - 'app/creator/payouts/**'
       - 'app/api/payouts/**'
       - 'scripts/check-payouts.cjs'
+      - 'deployment/telegram-creator-payouts.sql'
+      - 'lib/star-dedupe.ts'
       - '.github/workflows/telegram-payouts.yml'
   pull_request:
     paths:
@@ -17,6 +19,8 @@ on:
       - 'app/creator/payouts/**'
       - 'app/api/payouts/**'
       - 'scripts/check-payouts.cjs'
+      - 'deployment/telegram-creator-payouts.sql'
+      - 'lib/star-dedupe.ts'
 jobs:
   verify:
     runs-on: ubuntu-latest
