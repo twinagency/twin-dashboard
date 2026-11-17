@@ -29,12 +29,58 @@ create or replace function public.telegram_payout_earnings(p_clone_ids uuid[])
 returns table (clone_id uuid, stars numeric)
 language sql stable security invoker set search_path = public
 as $$
-  select c.id, coalesce(sum(t.amount_stars), 0)::numeric
+  with transactions as (
+    select t.clone_id, t.telegram_id, t.kind, t.amount_stars, t.paid_at,
+      -- PostgreSQL's default btrim removes only spaces. Match JavaScript trim().
+      (t.amount_stars < 0 or lower(btrim(coalesce(t.invoice_payload, ''),
+        U&'\0009\000A\000B\000C\000D\0020\00A0\1680\2000\2001\2002\2003\2004\2005\2006\2007\2008\2009\200A\2028\2029\202F\205F\3000\FEFF'
+      )) = 'refund') as is_adjustment
+    from public.star_transactions t
+    where t.clone_id = any(p_clone_ids)
+  ), kept as (
+    -- Keep each adjustment, including same-amount refunds at the same time.
+    select t.clone_id, t.amount_stars
+    from transactions t
+    where t.is_adjustment
+    union all
+    select d.clone_id, d.amount_stars
+    from (
+      select distinct t.clone_id, t.telegram_id, t.kind, t.amount_stars, t.paid_at
+      from transactions t
+      where not t.is_adjustment
+    ) d
+  )
+  select c.id, coalesce(sum(k.amount_stars), 0)::numeric as stars
   from public.clones c
-  left join public.star_transactions t on t.clone_id = c.id
+  left join kept k on k.clone_id = c.id
   where c.id = any(p_clone_ids)
   group by c.id;
 $$;
+
+-- The creator and agency header totals use the same Star accounting as Payouts.
+create or replace function public.revenue_all_time_stars(p_clone uuid default null)
+returns bigint
+language sql stable security invoker set search_path = public
+as $$
+  select coalesce(sum(e.stars), 0)::bigint
+  from public.telegram_payout_earnings(case
+    when p_clone is null then array(select c.id from public.clones c)
+    else array[p_clone]
+  end) e;
+$$;
+
+create or replace function public.agency_revenue_all_time_stars(p_clones uuid[], p_clone uuid default null)
+returns bigint
+language sql stable security invoker set search_path = public
+as $$
+  select coalesce(sum(e.stars), 0)::bigint
+  from public.telegram_payout_earnings(case
+    when p_clone is null then p_clones
+    when p_clone = any(p_clones) then array[p_clone]
+    else array[]::uuid[]
+  end) e;
+$$;
+
 create or replace function public.telegram_payout_summary(p_clone_ids uuid[])
 returns table (clone_id uuid, currency text, paid_cents bigint, last_paid_on date)
 language sql stable security invoker set search_path = public
@@ -45,6 +91,10 @@ as $$
   group by p.clone_id, p.currency;
 $$;
 revoke all on function public.telegram_payout_earnings(uuid[]) from public, anon, authenticated;
+revoke all on function public.revenue_all_time_stars(uuid) from public, anon, authenticated;
+grant execute on function public.revenue_all_time_stars(uuid) to service_role;
+revoke all on function public.agency_revenue_all_time_stars(uuid[], uuid) from public, anon, authenticated;
+grant execute on function public.agency_revenue_all_time_stars(uuid[], uuid) to service_role;
 revoke all on function public.telegram_payout_summary(uuid[]) from public, anon, authenticated;
 grant execute on function public.telegram_payout_earnings(uuid[]) to service_role;
 grant execute on function public.telegram_payout_summary(uuid[]) to service_role;
