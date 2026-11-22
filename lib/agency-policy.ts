@@ -6,7 +6,7 @@ export const isAgencyPath = (path: string) => path === "/agency" || path.startsW
 export function agencyRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (!isAgencyPath(path) || serverAction) return false;
   if (method === "GET" || method === "HEAD") return true;
-  return method === "POST" && ["/agency/team/manage", "/agency/join/email", "/agency/join/accept", "/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
+  return method === "POST" && ["/agency/team/manage", "/agency/join/email", "/agency/join/accept", "/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/create/manage", "/agency/creators/link", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
 }
 export function scopeAgencyClones(allowed: readonly string[], requested?: string): string[] {
   if (requested && !allowed.includes(requested)) throw new Error("Creator access denied");
@@ -21,7 +21,11 @@ export const isPartnerPreview = (agencyName?: string) => agencyName === PARTNER_
 // agencyRequestAllowed blocks every server action for agency sessions.
 const PREVIEW_PATHS = ["/", "/revenue", "/clones", "/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/fx", "/api/avatar", "/api/media-sign", "/api/models", "/api/voice", "/api/business-account", "/api/business-connection"];
 
+// Flirt Team (Latty Gilbert) has no "More" section: its pages are refused here, not just hidden in the sidebar.
+export const FLIRT_TEAM_NAME = "Flirt Team";
+const FLIRT_TEAM_REMOVED = /^\/(flows|sequences|info|logs)(\/|$)/;
 export function agencyDashboardPath(path: string, agencyName?: string, canManage = false): boolean {
+  if (agencyName?.trim() === FLIRT_TEAM_NAME && FLIRT_TEAM_REMOVED.test(path)) return false;
   if (path === '/api/agency-overview') return usesAgencyOverview(agencyName);
   if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path) || /^\/clones\/[0-9a-f-]{36}$/i.test(path);
   if (isMoxy(agencyName) && (path === "/api/models" || path === "/crm" || path.startsWith("/crm/"))) return false;
