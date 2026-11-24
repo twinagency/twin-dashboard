@@ -18,6 +18,7 @@ const CLONES = Object.freeze([
   "4994b010-f976-4cd1-b053-d72986fb455d", // Luna Skyee (@lunaskyee11)
   "fe60c5d0-9e80-44af-9356-6c14c193464b", // Clarissa Mason
   "dfcab3fc-a30b-44ad-868f-3cf20a877b90", // Katie Price (@katiepricex)
+  "46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d", // Victoria Waldrip (Woah Vicky)
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }

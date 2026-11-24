@@ -54,11 +54,12 @@ test('live access requires the complete verified assignment', () => {
     '4994b010-f976-4cd1-b053-d72986fb455d',
     'fe60c5d0-9e80-44af-9356-6c14c193464b',
       'dfcab3fc-a30b-44ad-868f-3cf20a877b90',
+      '46c2ee84-f7a4-4e5e-a81a-bc8b742b1e7d',
   ]);
   assert.equal(live.isLiveAccess(access), true);
   for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: [...access.cloneIds.slice(1), '11111111-1111-1111-1111-111111111111'] }, { ...access, cloneIds: Array(access.cloneIds.length).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
   access.cloneIds.length = 0;
-  assert.equal(live.identity().cloneIds.length, 13);
+  assert.equal(live.identity().cloneIds.length, 14);
 });
 test('configuration cannot connect to another project or an anonymous key', () => {
   const env = { FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', FLIRT_LIVE_TWIN_URL: `https://${live.PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) };
