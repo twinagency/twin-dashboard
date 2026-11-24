@@ -114,6 +114,11 @@ async function routeMiddleware(req: NextRequest) {
     if (!["GET", "POST"].includes(req.method) || req.headers.has("next-action") || (req.method === "POST" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }
+  if (pathname === "/creator-auth/telegram/feed") {
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    // The route verifies the signed creator session and the current bot assignment.
+    return privateResponse(withPathname(req));
+  }
   if (pathname === "/creator-auth/locale" || isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || (!trustedFormOrigin(req) && !trustedMiniAppCreatorSignup(req))) {
       return new NextResponse("Forbidden", { status: 403 });

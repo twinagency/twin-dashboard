@@ -5,7 +5,7 @@ import { useFlirtCreatorLocale } from "@/components/FlirtCreatorLocale";
 import Link from "@/components/NavigationLink";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
-import { ArrowRight, ChevronRight, Home, Images, Sparkles, Wallet, CreditCard, CircleHelp, LogOut } from "lucide-react";
+import { ArrowRight, ChevronRight, Home, Images, Sparkles, Wallet, CreditCard, CircleHelp, LogOut, MessageCircle } from "lucide-react";
 import TwinWordmark from "./TwinWordmark";
 import { useCreatorCurrency } from "./useCreatorCurrency";
 import { FlirtCreatorLanguageSwitch } from "./FlirtCreatorLocale";
@@ -17,7 +17,8 @@ export function StudioAvatar({ name, photoUrl }: { name: string; photoUrl?: stri
   return <span className={styles.avatar}>{photoUrl ? <img src={photoUrl} alt="" /> : name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase()}</span>;
 }
 
-export default function CreatorStudioShell({ brand, creatorName, photoUrl, status, contentHref, children }: {
+export default function CreatorStudioShell({ telegramFeedAvailable = false, brand, creatorName, photoUrl, status, contentHref, children }: {
+  telegramFeedAvailable?: boolean;
   brand: CreatorStudioBrand; creatorName: string; photoUrl?: string; status: CreatorStudioStatus; contentHref: string; children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -26,6 +27,7 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
   const { currency, setCurrency, brlRate } = useCreatorCurrency();
   const items = [
     { href: "/creator", label: t("Home", "Início"), icon: Home },
+    ...(telegramFeedAvailable ? [{ href: "/creator/telegram", label: t("Telegram", "Telegram"), icon: MessageCircle }] : []),
     { href: contentHref, label: t("My Content", "Meu conteúdo"), icon: Images },
     { href: status.linked ? "/creator/edit" : "/creator/onboarding?step=questionnaire", label: t("My AI", "Minha IA"), icon: Sparkles },
     { href: "/creator/earnings", label: t("Earnings", "Ganhos"), icon: Wallet },

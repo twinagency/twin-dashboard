@@ -21,6 +21,7 @@ type CreatorClone = { id: string; name: string; color: string; photoUrl?: string
 /** Brand-specific presentation inside the existing verified creator permission boundary.
  * Other agency workspaces retain their shared operator shell. */
 export default function CreatorWorkspaceShell({
+  telegramFeedAvailable = false,
   studioBrand,
   studioStatus,
   contentHref = "/creator/onboarding?step=content",
@@ -34,6 +35,7 @@ export default function CreatorWorkspaceShell({
   allTimeStars,
   children,
 }: {
+  telegramFeedAvailable?: boolean;
   studioBrand?: CreatorStudioBrand | null;
   studioStatus?: CreatorStudioStatus | null;
   contentHref?: string;
@@ -51,7 +53,7 @@ export default function CreatorWorkspaceShell({
   if (studioBrand && studioStatus) return (
     <DashboardAccessProvider agencyName={agencyName} audience="creator">
       <CurrencyProvider><BlurProvider>
-        <CreatorStudioShell brand={studioBrand} creatorName={creatorName} photoUrl={clones.find(clone => clone.id === activeCloneId)?.photoUrl} status={studioStatus} contentHref={contentHref}>{children}</CreatorStudioShell>
+        <CreatorStudioShell telegramFeedAvailable={telegramFeedAvailable} brand={studioBrand} creatorName={creatorName} photoUrl={clones.find(clone => clone.id === activeCloneId)?.photoUrl} status={studioStatus} contentHref={contentHref}>{children}</CreatorStudioShell>
       </BlurProvider></CurrencyProvider>
     </DashboardAccessProvider>
   );

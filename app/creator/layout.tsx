@@ -2,6 +2,7 @@ import { getCreatorStudioStatus } from "@/lib/creator-studio";
 import { headers } from "next/headers";
 import CreatorWorkspaceShell from "@/components/CreatorWorkspaceShell";
 import CreatorDemoBanner from "@/components/CreatorDemoBanner";
+import { getCreatorTelegramScope } from "@/lib/creator-telegram-access";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { creatorShare } from "@/lib/creator-share";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
@@ -27,6 +28,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
   const studioStatus = studioBrand ? await withDashboardAccess(creator, () => getCreatorStudioStatus(cloneId, creator.applicationState?.label || "Draft / unfinished")) : null;
   return (
     <CreatorWorkspaceShell
+      telegramFeedAvailable={!!(await getCreatorTelegramScope(creator))}
       studioBrand={studioBrand}
       studioStatus={studioStatus}
       contentHref={"/creator/onboarding?step=content"}
