@@ -1,0 +1,42 @@
+name: Build FLIRT Telegram feed candidate
+on:
+  push:
+    branches: [codex/flirt-telegram-build-20261124]
+permissions:
+  contents: read
+env:
+  SOURCE_SHA: 88e9b9a98815c856665bf6dabe122639c551a099
+  AWS_REGION: ap-southeast-2
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Verify source and build the dashboard
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          npm ci
+          node scripts/check-creator-telegram-feed.cjs
+          node --test deployment/flirt-live-twin.test.cjs
+          docker build --build-arg GIT_SHA="$SOURCE_SHA" -t "$ECR_REPO:flirt-$SOURCE_SHA" .
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Publish candidate image
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = '323149985112'
+          docker push "$ECR_REPO:flirt-$SOURCE_SHA"
+          docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:flirt-$SOURCE_SHA"
